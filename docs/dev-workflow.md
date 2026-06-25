@@ -18,12 +18,25 @@ Each developer owns a vertical slice — their own service files, DB migrations,
 
 ---
 
-## PR rules
+## PR workflow
+
+Every change goes through a PR — no direct pushes to `main`.
+
+1. **Branch** off `main` with a descriptive name: `dev-a/economy-xp-service`
+2. **Write code**, commit often with clear messages
+3. **Open a PR** on GitHub when ready for review
+4. **Run AI review** in Claude Code: `/code-review --comment`
+   - This posts inline findings directly on the PR
+   - Fix anything flagged before requesting a human review
+5. **Tag a teammate** to approve (any other team member)
+6. **Merge** once approved — squash merge preferred to keep history clean
+
+### PR rules
 
 - Migrations ship in their own PR, never bundled with logic changes
 - Rule pack schema changes are their own PR (they touch every domain)
 - Asset registry changes never touch game logic PRs
-- No PR merges without at least one review from another team member
+- AI review (`/code-review --comment`) must be run before requesting human approval
 
 ---
 
