@@ -53,26 +53,26 @@ Every change goes through a PR — no direct pushes to `main`.
 
 ## Staged roadmap
 
-### Milestone 1 — Pika-first foundation
+### Milestone 1 (M1) — Pika-first foundation
 - Event ingest API + idempotency
 - Basic rule pack (assignment.completed → XP + pet mood)
 - Economy table (XP, level, streak)
 - World state stub (stage field only)
 - Minimal student viewer (pet + XP bar)
 
-### Milestone 2 — World depth
+### Milestone 2 (M2) — World depth
 - World object unlocks + asset registry
 - Time-elapsed WORLD_TICK cron
 - World visual layers in viewer and widget
 - Rule preview endpoint for operators
 
-### Milestone 3 — Multi-integration
+### Milestone 3 (M3) — Multi-integration
 - Integration setup portal
 - `@codepetpal/widget` npm package
 - Read token mint flow
 - Teacher console (aggregate views, no PII)
 
-### Milestone 4 — Scheduling + ops
+### Milestone 4 (M4) — Scheduling + ops
 - Operator-defined semester/calendar schedules
 - Operator console: rule pack editor, asset uploads, failed event replay
 - Nudge/copy packs

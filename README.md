@@ -66,6 +66,6 @@ docs/           # Living architecture documents (start here)
 1. **Read [`docs/architecture.md`](docs/architecture.md)** — understand the system before writing any code
 2. **Find your domain** in [`docs/dev-workflow.md`](docs/dev-workflow.md) — each developer owns a vertical slice
 3. **Read your domain's doc** — linked from the workflow doc
-4. **Pick up Milestone 1 tasks** for your domain — the first goal is a working dev sandbox with event ingest and a visible pet reaction
+4. **Pick up Milestone 1 (M1) tasks** for your domain — the first goal is a working dev sandbox with event ingest and a visible pet reaction
 
 > Full setup instructions (install, env vars, local dev commands) will be added once the repo is scaffolded.
