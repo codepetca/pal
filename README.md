@@ -72,4 +72,12 @@ docs/           # Living architecture documents (start here)
 3. **Read your domain's doc** — linked from the workflow doc
 4. **Pick up Milestone 1 (M1) tasks** for your domain — the first goal is a working dev sandbox with event ingest and a visible pet reaction
 
-> Full setup instructions (install, env vars, local dev commands) will be added once the repo is scaffolded.
+This project uses **pnpm**. Do not use `npm install` — it will create conflicts.
+
+```bash
+npm install -g pnpm   # install pnpm if you don't have it
+pnpm install          # install all dependencies
+pnpm dev              # start the dev server
+```
+
+Then open [http://localhost:3000/sandbox](http://localhost:3000/sandbox) to see the dev sandbox.
