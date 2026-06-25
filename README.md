@@ -38,6 +38,10 @@ Any learning platform can integrate this way. Pika is the first.
 
 Developers working on CodePetPal use a built-in sandbox UI to fire test events and immediately see the pet react and world change — no Pika connection needed. It's the primary tool for building and testing game logic locally.
 
+## Team
+
+Design discussions, proposals, and feedback happen in **Discord**. Bring an idea to Discord first — once it's agreed on, update the relevant doc in this repo. The docs here are the source of truth for decisions already made, not a place to debate them.
+
 ## Quick links
 
 - [Architecture overview](docs/architecture.md)
