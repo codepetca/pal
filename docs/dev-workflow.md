@@ -7,7 +7,7 @@
 
 ## Team domains
 
-Each developer owns a vertical slice — their own service files, DB migrations, and tests. Minimize cross-domain coupling.
+The project is split into four domains. Pick the one that interests you most — discuss in Discord if there's overlap. Each domain is a vertical slice with its own files, DB migrations, and tests, so you won't block each other.
 
 | Branch prefix | Domain | Owns |
 |---|---|---|
@@ -15,6 +15,8 @@ Each developer owns a vertical slice — their own service files, DB migrations,
 | `world/` | **World & Assets** | World templates, object unlocks, environment state, asset registry, `WorldEngine`, cron tick |
 | `events/` | **Event Ingest & Rules** | Event API, idempotency, rule engine, rule pack parser, integration auth, `EventService`, `RuleEngine` |
 | `frontend/` | **Frontend & Widget** | Student viewer, dev sandbox, `@codepetpal/widget` package, teacher console read views |
+
+> Domains are a starting point. If two people want to pair on something, or the split needs adjusting after M1, bring it up in Discord.
 
 ---
 
