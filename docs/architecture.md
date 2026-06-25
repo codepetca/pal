@@ -42,6 +42,17 @@ Nothing mutates these directly. Only the rule engine produces mutations, and mut
 
 ---
 
+## Tech stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| Frontend + API | Next.js (App Router) | One framework for UI and API routes |
+| Hosting | Vercel | Serverless functions, zero config deploys |
+| Database | TBD — Postgres when needed | Neon is the likely choice when scale requires it |
+| Rule engine | TypeScript (`packages/engine`) | Pure functions, no infrastructure |
+| Widget | `@codepetpal/widget` | npm package, integrators render it themselves |
+| Auth | Deferred to Milestone 2 (M2) | Needed for teacher/operator consoles |
+
 ## System layers
 
 ```
