@@ -9,12 +9,12 @@
 
 Each developer owns a vertical slice — their own service files, DB migrations, and tests. Minimize cross-domain coupling.
 
-| Developer | Domain | Owns |
+| Branch prefix | Domain | Owns |
 |---|---|---|
-| Dev A | **Economy & Achievements** | XP, levels, streaks, badge unlocks, `EconomyService`, `AchievementService` |
-| Dev B | **World & Assets** | World templates, object unlocks, environment state, asset registry, `WorldEngine`, cron tick |
-| Dev C | **Event Ingest & Rules** | Event API, idempotency, rule engine, rule pack parser, integration auth, `EventService`, `RuleEngine` |
-| Dev D | **Frontend & Widget** | Student viewer, dev sandbox, `@codepetpal/widget` package, teacher console read views |
+| `economy/` | **Economy & Achievements** | XP, levels, streaks, badge unlocks, `EconomyService`, `AchievementService` |
+| `world/` | **World & Assets** | World templates, object unlocks, environment state, asset registry, `WorldEngine`, cron tick |
+| `events/` | **Event Ingest & Rules** | Event API, idempotency, rule engine, rule pack parser, integration auth, `EventService`, `RuleEngine` |
+| `frontend/` | **Frontend & Widget** | Student viewer, dev sandbox, `@codepetpal/widget` package, teacher console read views |
 
 ---
 
@@ -22,7 +22,7 @@ Each developer owns a vertical slice — their own service files, DB migrations,
 
 Every change goes through a PR — no direct pushes to `main`.
 
-1. **Branch** off `main` with a descriptive name: `dev-a/economy-xp-service`
+1. **Branch** off `main` using your domain prefix: `economy/xp-service`, `world/asset-registry`
 2. **Write code**, commit often with clear messages
 3. **Open a PR** on GitHub when ready for review
 4. **Run AI review** in Claude Code: `/code-review --comment`
