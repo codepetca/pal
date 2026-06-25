@@ -44,12 +44,24 @@ Every change goes through a PR — no direct pushes to `main`.
 
 ## Test strategy
 
-| Layer | Approach |
-|---|---|
-| Rule engine | Pure function → table-driven unit tests. High coverage required. |
-| World engine | Property-based: "after N days, stage should be ≥ M" |
-| Event ingest API | Integration tests against real DB. Always test idempotency key collision. |
-| Widget | Playwright component tests with a mock read API |
+TDD is **recommended for the rule engine**, optional everywhere else.
+
+The rule engine is a pure function — no database, no server, no setup. It's the easiest place to learn TDD and the most important place to have tests. Write the test first, then make it pass.
+
+For other domains, test what makes sense to you. Don't skip testing entirely, but don't force TDD if it slows you down.
+
+| Layer | Approach | TDD? |
+|---|---|---|
+| Rule engine | Unit tests — see `packages/engine/src/evaluate.test.ts` for examples | Recommended |
+| Economy service | Unit tests for XP/level/streak logic | Optional |
+| World service | Test mood expiry, stage transitions | Optional |
+| Event ingest API | Integration tests — test idempotency key collision | Optional |
+| Frontend | Manual testing via the dev sandbox is fine for M1 | N/A |
+
+Run engine tests:
+```bash
+pnpm --filter @pal/engine test
+```
 
 ---
 

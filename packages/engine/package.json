@@ -1,0 +1,14 @@
+{
+  "name": "@pal/engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3"
+  }
+}
