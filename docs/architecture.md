@@ -11,6 +11,40 @@ CodePetPal is a **game engine as a service**: external systems send it privacy-s
 
 ---
 
+## End-to-end example
+
+A student submits an assignment in Pika. Here is everything that happens:
+
+1. **Pika backend** sends a signal to CodePetPal:
+   ```json
+   POST /api/events
+   {
+     "idempotency_key": "pika-assignment-abc123",
+     "learner_id": "hashed-student-id",
+     "event_type": "assignment.completed",
+     "metadata": { "on_time": true }
+   }
+   ```
+
+2. **Event service** (`events/` domain) validates the request, checks the idempotency key hasn't been seen before, and saves the event to the database.
+
+3. **Rule engine** (`events/` domain) runs the rule pack against the event and current learner state. It produces a list of mutations:
+   ```
+   XP_GRANT: 50
+   XP_GRANT: 25   ← on_time bonus
+   PET_MOOD: happy for 30 minutes
+   ```
+
+4. **Economy service** (`economy/` domain) applies the XP grants — now at 75 XP. Checks if the learner crossed a level threshold. Updates streak because this is an event today.
+
+5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
+
+6. **Student loads their world** — the frontend (`frontend/` domain) calls `GET /api/world/:learner_id`. The pet is bouncing. XP bar has moved. If the student had hit a 7-day streak, a bird would have appeared in their world.
+
+That's the full loop. Each domain owns one step.
+
+---
+
 ## Three triggers for world change
 
 Everything in CodePetPal is driven by one of three trigger types:
