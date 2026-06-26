@@ -14,7 +14,7 @@ The project is split into four domains. Pick the one that interests you most —
 | `economy/` | **Economy & Achievements** | XP, levels, streaks, badge unlocks, `EconomyService`, `AchievementService` |
 | `world/` | **World & Assets** | World templates, object unlocks, environment state, asset registry, `WorldEngine`, cron tick |
 | `events/` | **Event Ingest & Rules** | Event API, idempotency, rule engine, rule pack parser, integration auth, `EventService`, `RuleEngine` |
-| `frontend/` | **Frontend & Widget** | Student viewer, dev sandbox, `@codepetpal/widget` package, teacher console read views |
+| `frontend/` | **Frontend & Widget** | Student viewer, dev sandbox, `@pal/widget` package, teacher console read views |
 
 > Domains are a starting point. If two people want to pair on something, or the split needs adjusting after M1, bring it up in Discord.
 
@@ -82,7 +82,7 @@ pnpm --filter @pal/engine test
 
 ### Milestone 3 (M3) — Multi-integration
 - Integration setup portal
-- `@codepetpal/widget` npm package
+- `@pal/widget` npm package
 - Read token mint flow
 - Teacher console (aggregate views, no PII)
 
