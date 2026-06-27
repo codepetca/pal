@@ -11,14 +11,14 @@
 2. Integration backend hashes student IDs before sending: `SHA256(salt + raw_student_id)`
 3. Integration backend sends learning signals to `/v1/events`
 4. On student page load, integration backend mints a short-lived read token via `/v1/integration/read-token`
-5. Integration frontend renders the `@codepetpal/widget` using that token
+5. Integration frontend renders the `@pal/widget` using that token
 
-The widget fetches pet and world state directly from CodePetPal. The integration secret never leaves the backend.
+The widget fetches pet and world state directly from Pal. The integration secret never leaves the backend.
 
 ## Widget usage
 
 ```tsx
-import { PalWidget } from '@codepetpal/widget'
+import { PalWidget } from '@pal/widget'
 
 <PalWidget
   readToken={tokenFromYourBackend}
@@ -42,9 +42,9 @@ Pika sends these event types:
 ## Adding a new integration
 
 Any learning platform can integrate by:
-1. Contacting the CodePetPal operator to register
+1. Contacting the Pal operator to register
 2. Agreeing to the pseudonymous ID spec and event allow-list
-3. Installing `@codepetpal/widget`
+3. Installing `@pal/widget`
 4. Implementing the three backend calls: ingest, read-token mint, and learner delete (for consent withdrawal)
 
 ---

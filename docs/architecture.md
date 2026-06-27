@@ -7,7 +7,7 @@
 
 ## The one-sentence version
 
-CodePetPal is a **game engine as a service**: external systems send it privacy-safe learning signals, and it maintains a persistent pet + evolving world per student.
+Pal is a **game engine as a service**: external systems send it privacy-safe learning signals, and it maintains a persistent pet + evolving world per student.
 
 ---
 
@@ -15,7 +15,7 @@ CodePetPal is a **game engine as a service**: external systems send it privacy-s
 
 A student submits an assignment in Pika. Here is everything that happens:
 
-1. **Pika backend** sends a signal to CodePetPal:
+1. **Pika backend** sends a signal to Pal:
    ```json
    POST /api/events
    {
@@ -47,12 +47,12 @@ That's the full loop. Each domain owns one step.
 
 ## Three triggers for world change
 
-Everything in CodePetPal is driven by one of three trigger types:
+Everything in Pal is driven by one of three trigger types:
 
 | Trigger | Who fires it | Example |
 |---|---|---|
 | **Event-driven** | Integration (e.g. Pika) | Student submits assignment → pet mood changes, XP added |
-| **Time-elapsed** | CodePetPal internally | Student active for 30 days → plants grow in world |
+| **Time-elapsed** | Pal internally | Student active for 30 days → plants grow in world |
 | **Scheduled** | Operator configures once | Semester month ends → new world region unlocks for all learners |
 
 All three routes pass through the same rule engine. From the engine's perspective they are identical — just events with different sources.
@@ -84,7 +84,7 @@ Nothing mutates these directly. Only the rule engine produces mutations, and mut
 | Hosting | Vercel | Serverless functions, zero config deploys |
 | Database | TBD — Postgres when needed | Neon is the likely choice when scale requires it |
 | Rule engine | TypeScript (`packages/engine`) | Pure functions, no infrastructure |
-| Widget | `@codepetpal/widget` | npm package, integrators render it themselves |
+| Widget | `@pal/widget` | npm package, integrators render it themselves |
 | Auth | Deferred to Milestone 2 (M2) | Needed for teacher/operator consoles |
 
 ## System layers
@@ -162,14 +162,14 @@ Schedules can be set at the **integration level** (all learners) or **group leve
 
 ## Privacy boundaries
 
-CodePetPal never receives:
+Pal never receives:
 - Student names, emails, or raw IDs
 - Grades, scores, or rankings
 - Student writing, messages, or browsing history
 
 Integrations must hash student IDs before sending. Each integration has an allow-list of permitted event types and metadata fields. Unknown fields are stripped on ingest.
 
-Consent and opt-in are managed by the integrating system (e.g. Pika), not by CodePetPal.
+Consent and opt-in are managed by the integrating system (e.g. Pika), not by Pal.
 
 ---
 
