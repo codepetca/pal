@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Pal",
+  title: "CodePetPal",
   description: "A gamified learning companion",
 };
 

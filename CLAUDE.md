@@ -1,8 +1,8 @@
-# Pal — Claude Code context
+# CodePetPal — Claude Code context
 
 ## What this project is
 
-A game engine as a service. External systems (like Pika) send privacy-safe learning signals. Pal maintains a persistent pet and evolving world per student.
+A game engine as a service. External systems (like Pika) send privacy-safe learning signals. CodePetPal maintains a persistent pet and evolving world per student.
 
 ## Monorepo structure
 

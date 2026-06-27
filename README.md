@@ -1,4 +1,4 @@
-# Pal
+# CodePetPal
 
 A gamified learning companion that connects to platforms like Pika. Students earn a living pet and an evolving world just by doing their schoolwork — submitting assignments, maintaining streaks, hitting milestones. The more they engage, the more their world grows.
 
@@ -6,9 +6,9 @@ A gamified learning companion that connects to platforms like Pika. Students ear
 
 A student submits an assignment in Pika. Their pet bounces with excitement. A plant sprouts in their world. After a month of consistent work, the sun appears. After a semester, their world looks completely different from the one they started with — built entirely from their own effort.
 
-They can see their world embedded inside Pika, or visit Pal directly. Either way, it's their world, shaped by their work.
+They can see their world embedded inside Pika, or visit CodePetPal directly. Either way, it's their world, shaped by their work.
 
-## What Pal owns
+## What CodePetPal owns
 
 1. **Pet state** — mood, animation, energy (reacts to events in real time)
 2. **World state** — an environment that grows through time, effort, and milestones
@@ -20,23 +20,23 @@ They can see their world embedded inside Pika, or visit Pal directly. Either way
 - Grades, scores, or raw learning data
 - Classroom management
 
-Privacy is a first-class constraint. Pal receives only pseudonymous IDs and low-risk signals — never names, grades, or student content.
+Privacy is a first-class constraint. CodePetPal receives only pseudonymous IDs and low-risk signals — never names, grades, or student content.
 
 ## How it connects to Pika (and other platforms)
 
-Pika sends Pal privacy-safe learning signals:
+Pika sends CodePetPal privacy-safe learning signals:
 - Assignment completed
 - Daily check-in
 - Streak milestone
 - Calendar event (end of month, end of semester)
 
-Pal processes those signals through a rule engine and updates the student's pet and world. Pika then renders the result — either as an embedded widget or by linking to the standalone student viewer.
+CodePetPal processes those signals through a rule engine and updates the student's pet and world. Pika then renders the result — either as an embedded widget or by linking to the standalone student viewer.
 
 Any learning platform can integrate this way. Pika is the first.
 
 ## The dev sandbox
 
-Developers working on Pal use a built-in sandbox UI to fire test events and immediately see the pet react and world change — no Pika connection needed. It's the primary tool for building and testing game logic locally.
+Developers working on CodePetPal use a built-in sandbox UI to fire test events and immediately see the pet react and world change — no Pika connection needed. It's the primary tool for building and testing game logic locally.
 
 ## Team
 
@@ -60,7 +60,7 @@ apps/
 packages/
   api/          # Hono API server
   engine/       # Rule engine (pure functions, no DB)
-  widget/       # @pal/widget npm package
+  widget/       # @codepetpal/widget npm package
   db/           # Drizzle schema + migrations
 docs/           # Living architecture documents (start here)
 ```
