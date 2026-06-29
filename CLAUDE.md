@@ -35,6 +35,16 @@ If you are writing code that changes XP, pet mood, or world state without going 
 - `POST /api/events` — ingest a learning signal from an integration
 - `GET /api/world/[learnerId]` — return pet + world + economy state
 
+## How to make changes
+
+All code changes must be made in a git worktree on a feature branch and land via PR. Never commit directly to `main`.
+
+```bash
+git worktree add -b <branch> ../pal-<short-name> main
+# work in that directory, then:
+gh pr create --repo codepetca/pal --base main --head <branch>
+```
+
 ## Running tests
 
 ```bash
