@@ -17,7 +17,7 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 1. **Pika backend** sends a signal to Pal:
    ```json
-   POST /api/events
+   POST /api/v1/events
    {
      "idempotency_key": "pika-assignment-abc123",
      "learner_id": "hashed-student-id",
@@ -39,7 +39,7 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
-6. **Student loads their world** — the frontend (`frontend/` domain) calls `GET /api/world/:learner_id`. The pet is bouncing. XP bar has moved. If the student had hit a 7-day streak, a bird would have appeared in their world.
+6. **Student loads their world** — the frontend (`frontend/` domain) calls `GET /api/v1/world/:learner_id`. The pet is bouncing. XP bar has moved. If the student had hit a 7-day streak, a bird would have appeared in their world.
 
 That's the full loop. Each domain owns one step.
 

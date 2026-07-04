@@ -9,8 +9,8 @@
 
 1. Operator registers the integration in the admin console → receives a `secret`
 2. Integration backend hashes student IDs before sending: `SHA256(salt + raw_student_id)`
-3. Integration backend sends learning signals to `/v1/events`
-4. On student page load, integration backend mints a short-lived read token via `/v1/integration/read-token`
+3. Integration backend sends learning signals to `/api/v1/events`
+4. On student page load, integration backend mints a short-lived read token via `/api/v1/integration/read-token`
 5. Integration frontend renders the `@pal/widget` using that token
 
 The widget fetches pet and world state directly from Pal. The integration secret never leaves the backend.

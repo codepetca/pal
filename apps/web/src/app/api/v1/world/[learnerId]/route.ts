@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// GET /api/world/:learnerId
+// GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
 // See docs/api.md for the full contract.
 export async function GET(
