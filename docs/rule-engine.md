@@ -57,7 +57,7 @@ Rules are JSON config — operators can tune gameplay without code changes.
 | `WORLD_UNLOCK` | Unlock a world object by asset ref |
 | `WORLD_STAGE` | Advance world to a specific stage |
 | `ACHIEVEMENT` | Award a badge |
-| `NUDGE` | Trigger a copy/nudge message |
+| `NUDGE` | Trigger a nudge message referencing a copy pack entry (`copy_id`) |
 
 ---
 

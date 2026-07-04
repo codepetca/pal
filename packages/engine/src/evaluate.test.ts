@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { evaluate } from "./evaluate";
 import { defaultRulePack } from "./default-rules";
-import type { LearnerState } from "./types";
+import type { LearnerState, RulePack } from "./types";
 
 const baseState: LearnerState = {
   economy: { xp: 0, level: 1, streak_current: 0, last_event_at: null },
@@ -64,5 +64,25 @@ describe("evaluate", () => {
       defaultRulePack
     );
     assert.equal(mutations.length, 0);
+  });
+
+  it("produces a NUDGE mutation when a rule's effects include one", () => {
+    const nudgePack: RulePack = {
+      id: "nudge-test",
+      rules: [
+        {
+          id: "inactivity-nudge",
+          trigger: { event_type: "resource.viewed" },
+          conditions: [],
+          effects: [{ type: "NUDGE", copy_id: "welcome-back-v1" }],
+        },
+      ],
+    };
+    const mutations = evaluate(
+      { event_type: "resource.viewed", occurred_at: new Date().toISOString(), metadata: {} },
+      baseState,
+      nudgePack
+    );
+    assert.deepEqual(mutations, [{ type: "NUDGE", copy_id: "welcome-back-v1" }]);
   });
 });
