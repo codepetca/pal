@@ -31,8 +31,7 @@ import { PalWidget } from '@pal/widget'
 ## Pika integration (first integration)
 
 Pika sends these event types:
-- `assignment.completed`
-- `assignment.completed_on_time`
+- `assignment.completed` — on-time submissions carry `metadata.on_time: true`
 - `daily_checkin.created`
 - `resource.viewed`
 - `streak.milestone`
