@@ -1,7 +1,7 @@
 # Architecture Overview
 
 > Living document. Update this as decisions are made and designs evolve.
-> Last updated: 2026-06-25
+> Last updated: 2026-07-04
 
 ---
 
@@ -140,6 +140,32 @@ The rule engine is a **pure function**:
 - All state changes flow through here — nothing else mutates state
 
 Rule packs are JSON config. Operators can tune gameplay (XP amounts, unlock thresholds, world progression) without code changes.
+
+---
+
+## Applying mutations
+
+The engine *produces* mutations; a single **mutation applier** *applies* them. It is the only code that writes learner state, and it owns exactly one database transaction per event:
+
+```
+applyMutations(learnerId, mutations)
+  → open transaction (locks the learner row — see data-model.md)
+  → dispatch each mutation to its domain handler
+  → write AuditLog entry
+  → commit (or roll back everything)
+```
+
+Domains don't apply their own mutations ad hoc — they **register handlers** with the applier:
+
+| Handler | Domain | Mutation types |
+|---|---|---|
+| Economy handler | `economy/` | `XP_GRANT` |
+| Pet handler | `world/` | `PET_MOOD` |
+| World handler | `world/` | `WORLD_STAGE`, `WORLD_UNLOCK` |
+| Achievement handler | `economy/` | `ACHIEVEMENT` |
+| Nudge handler | `frontend/` | `NUDGE` |
+
+One owner for the transaction means partial application is impossible: either every mutation from an evaluation lands, or none do. Handlers may return **derived events** (see [rule-engine.md](rule-engine.md)), which the applier feeds back through the engine within the same transaction.
 
 ---
 
