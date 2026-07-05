@@ -1,7 +1,7 @@
 # Rule Engine
 
 > Living document. Update as rule pack schema evolves.
-> Last updated: 2026-06-25
+> Last updated: 2026-07-04
 
 ---
 
@@ -58,6 +58,20 @@ Rules are JSON config — operators can tune gameplay without code changes.
 | `WORLD_STAGE` | Advance world to a specific stage |
 | `ACHIEVEMENT` | Award a badge |
 | `NUDGE` | Trigger a nudge message referencing a copy pack entry (`copy_id`) |
+
+---
+
+## Derived events
+
+Applying a mutation can create a new fact that rules care about. The canonical example: an `XP_GRANT` updates the streak, the streak crosses 7, and the `streak-7-world` rule should now fire — but that rule triggers on `STREAK_MILESTONE`, an event no integration ever sends.
+
+**How it works:** mutation handlers may return derived events (e.g. the economy handler returns `STREAK_MILESTONE` when a streak crosses a milestone). The applier feeds each derived event back through `evaluate()` and applies the resulting mutations, inside the same transaction as the original event.
+
+Rules of the cascade:
+
+- **The engine stays pure.** It never emits events and never knows about the cascade — only the applier orchestrates re-evaluation.
+- **Depth limit: 3.** Original event → derived → derived → stop. A rule pack that cascades deeper is a config bug; the applier logs it to the AuditLog and stops, rather than looping forever.
+- **Derived events are synthetic** — they carry `SCREAMING_SNAKE` event types (`STREAK_MILESTONE`, `LEVEL_UP`) to distinguish them from integration events (`assignment.completed`), and they are never accepted on the ingest API.
 
 ---
 
