@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// POST /api/events
+// POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
 // See docs/api.md for the full contract.
 export async function POST(req: NextRequest) {
