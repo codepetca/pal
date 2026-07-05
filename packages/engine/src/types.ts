@@ -29,7 +29,8 @@ export type Mutation =
   | { type: "PET_MOOD"; mood: string; duration_minutes: number }
   | { type: "WORLD_STAGE"; stage: number }
   | { type: "WORLD_UNLOCK"; asset_ref_id: string }
-  | { type: "ACHIEVEMENT"; badge_id: string };
+  | { type: "ACHIEVEMENT"; badge_id: string }
+  | { type: "NUDGE"; copy_id: string };
 
 // A single rule in a rule pack
 export type Rule = {
