@@ -1,0 +1,79 @@
+.world {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background: linear-gradient(to bottom, #5B9BD5 0%, #A8CCE8 55%, #D9EAF5 100%);
+  overflow: hidden;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 36%;
+  pointer-events: none;
+}
+
+.pet {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.hudRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.levelBadge {
+  background: rgba(255,255,255,0.9);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2D1B0E;
+}
+
+.streak {
+  background: rgba(255,255,255,0.9);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2D1B0E;
+}
+
+.sandboxLink {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+}
+.sandboxLink:hover { color: white; }
