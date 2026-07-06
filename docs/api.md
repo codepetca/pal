@@ -32,6 +32,7 @@ Authorization: Bearer <integration_secret>
 ```
 
 Responses:
+- `401` — missing or invalid integration secret
 - `200 { "status": "processed" }` — rule engine ran, mutations applied
 - `200 { "status": "duplicate" }` — idempotency key already seen, no reprocessing
 - `422` — unknown event type or disallowed metadata field
