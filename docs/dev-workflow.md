@@ -1,7 +1,41 @@
 # Development Workflow
 
 > Living document. Update this as the team evolves.
-> Last updated: 2026-06-25
+> Last updated: 2026-07-06
+
+---
+
+## Local setup (once per machine)
+
+```bash
+git clone https://github.com/codepetca/pal.git && cd pal
+pnpm install
+```
+
+Then create your local env file. **It goes in `apps/web/`, not the repo root** — Next.js only reads env files from the app directory:
+
+```bash
+cp .env.example apps/web/.env.local
+```
+
+Open `apps/web/.env.local` and set:
+
+| Variable | What to put there | Needed when |
+|---|---|---|
+| `SANDBOX_INTEGRATION_SECRET` | Any long random string — generate one with `openssl rand -hex 24`. It's yours alone; it does not need to match anyone else's. | Now — the sandbox can't fire events without it |
+| `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
+
+`.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
+
+**Check it works:**
+
+```bash
+pnpm dev
+```
+
+Open [localhost:3000/sandbox](http://localhost:3000/sandbox), click **Assignment completed**, and you should see `→ assignment.completed: processed` in the event log. If you get a 500 with `sandbox_not_configured`, the env file is missing or in the wrong folder.
+
+Why the secret exists: the ingest API (`POST /api/v1/events`) rejects unauthenticated requests, exactly as it will for real integrations. Your browser never sees the secret — the sandbox posts through a server-side proxy (`/api/sandbox/events`) that attaches it, playing the role of an integration's backend.
 
 ---
 

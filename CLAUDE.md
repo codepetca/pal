@@ -32,8 +32,8 @@ If you are writing code that changes XP, pet mood, or world state without going 
 
 ## API routes (apps/web/src/app/api/)
 
-- `POST /api/events` — ingest a learning signal from an integration
-- `GET /api/world/[learnerId]` — return pet + world + economy state
+- `POST /api/v1/events` — ingest a learning signal from an integration
+- `GET /api/v1/world/[learnerId]` — return pet + world + economy state
 
 ## How to make changes
 

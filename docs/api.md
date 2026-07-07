@@ -9,16 +9,16 @@
 
 | Method | Path | Who calls it | Purpose |
 |---|---|---|---|
-| POST | `/v1/events` | Integration backend | Ingest a learning signal |
-| GET | `/v1/world/:learner_id` | Widget (via read token) | Fetch pet + world state |
-| POST | `/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
-| POST | `/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
-| POST | `/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
+| POST | `/api/v1/events` | Integration backend | Ingest a learning signal |
+| GET | `/api/v1/world/:learner_id` | Widget (via read token) | Fetch pet + world state |
+| POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
+| POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
+| POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
 ## Event ingest contract
 
 ```
-POST /v1/events
+POST /api/v1/events
 Authorization: Bearer <integration_secret>
 {
   "idempotency_key": "pika-assignment-abc123",
@@ -32,6 +32,7 @@ Authorization: Bearer <integration_secret>
 ```
 
 Responses:
+- `401` — missing or invalid integration secret
 - `200 { "status": "processed" }` — rule engine ran, mutations applied
 - `200 { "status": "duplicate" }` — idempotency key already seen, no reprocessing
 - `422` — unknown event type or disallowed metadata field

@@ -22,7 +22,9 @@ export default function SandboxPage() {
 
   async function fireEvent(event_type: string, metadata: Record<string, unknown>) {
     const idempotency_key = `sandbox-${Date.now()}`;
-    const res = await fetch("/api/events", {
+    // The sandbox posts via a server-side proxy that holds the integration
+    // secret — browsers never see it. See /api/sandbox/events.
+    const res = await fetch("/api/sandbox/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -39,7 +41,7 @@ export default function SandboxPage() {
   }
 
   async function refreshWorld() {
-    const res = await fetch(`/api/world/${TEST_LEARNER_ID}`);
+    const res = await fetch(`/api/v1/world/${TEST_LEARNER_ID}`);
     const data = await res.json();
     setWorld(data);
   }
