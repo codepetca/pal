@@ -1,43 +1,42 @@
-**Economy design**
+# Economy Design
 
-When a student completes an assignment / their daily logs / a practice test, they will gain a certain amount of points.
+Students will earn points when they complete assignments, daily logs, or practice tests.
 
-There will be a streak to keep track of the student’s consistency on daily logs.
+A streak counter will track how consistently a student completes their daily logs.
 
-After gaining a certain amount of points, the student will have their level increased and the points will be expended.
+Once a student accumulates enough points, they will level up, and the required points will be deducted. 
 
-Each level increase should correspond to some changes in the world or pet.
+Each level-up should trigger visual or progression changes in the virtual world or for their pet.
 
-**Numbers** (can be changed)
+---
 
-Assignments / practice quiz (on time): 200pt
+## Numbers (Subject to Change)
 
-Assignments / practice quiz (late): 50pt
+*   **Assignments / practice quizzes (on time):** 200 pt
+*   **Assignments / practice quizzes (late):** 50 pt
+*   **Daily logs:** 10 pt * max(3, daily_logs_streak / 5)
+*   **Level-up cost:** 500 pt * current_level
 
-Daily logs: 10pt \* max(3, daily\_logs\_streak / 5\)
+---
 
-Level up cost: 500pt \* current\_level
+## Calculations
 
-**Calculations**
+*   **Approximate total EXP possible:** 200 pt * 15 + 30 pt * 150 = 7,500 pt
+*   **Maximum level achievable:** Level 5 with 1,500 pt remaining
 
-Total exp possible (approximately): 200pt \* 15 \+ 30pt \* 150 \= 7500pt
+---
 
-Total level possible: level 5 \+ 1500pt left
+## Visuals
 
-**Visuals**
+*   A progress bar should display the student's current level and the EXP required to reach the next level.
+*   The daily log streak should be visually integrated into the progress bar.
+*   Ideally, custom animations will play when gaining EXP and leveling up.
 
-There should be a progress bar indicating the level and exp needed to reach the next level.
+---
 
-There should be a visual representation of the streak in the progress bar.
+## Concerns & Potential Improvements
 
-Ideally, there should be animations for gaining exp and leveling up.
-
-**Concerns / Improvements**
-
-\- Can consider adding achievements
-
-\- Can consider adding expendable resources (e.g. food to feed pets, coins to buy cosmetics, etc)
-
-\- How can we ensure that students actually completed their assignments? Since the Pika system is not linked to codeHS / Github, the students can submit without actually finishing the lessons.
-
-\- How do we detect when a student has finished writing their daily log? We can’t have the exp gain trigger when the student types a letter.
+*   Consider introducing achievement milestones.
+*   Consider implementing expendable resources, such as food to feed pets or coins to purchase cosmetic items.
+*   How can we verify that students have actually completed their assignments? Since the Pika system is not integrated with CodeHS or GitHub, students could currently submit completions without actually finishing the lessons.
+*   How do we detect when a student has completed writing their daily log? The EXP reward should not trigger prematurely (e.g., as soon as they type a single character).
