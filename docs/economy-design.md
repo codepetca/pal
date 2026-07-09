@@ -1,10 +1,10 @@
 # Economy Design
 
-Students will earn points when they complete assignments, daily logs, or practice tests.
+Students will earn exp when they complete assignments, daily logs, or practice tests.
 
 A streak counter will track how consistently a student completes their daily logs.
 
-Once a student accumulates enough points, they will level up, and the required points will be deducted. 
+Once a student accumulates enough exp, they will level up, and the required exp will be deducted. 
 
 Each level-up should trigger visual or progression changes in the virtual world or for their pet.
 
@@ -12,17 +12,17 @@ Each level-up should trigger visual or progression changes in the virtual world 
 
 ## Numbers (Subject to Change)
 
-*   **Assignments / practice quizzes (on time):** 200 pt
-*   **Assignments / practice quizzes (late):** 50 pt
-*   **Daily logs:** 10 pt * max(3, daily_logs_streak / 5)
-*   **Level-up cost:** 500 pt * current_level
+*   **Assignments / practice quizzes:** 150 xp
+*   **Assignments / practice quizzes (on time bonus):** 50 xp
+*   **Daily logs:** 10 xp * max(3, daily_logs_streak / 5)
+*   **Level-up cost:** 500 xp * current_level
 
 ---
 
 ## Calculations
 
-*   **Approximate total EXP possible:** 200 pt * 15 + 30 pt * 150 = 7,500 pt
-*   **Maximum level achievable:** Level 5 with 1,500 pt remaining
+*   **Approximate total EXP possible:** 200 xp * 15 + 30 xp * 150 = 7,500 xp
+*   **Maximum level achievable:** Level 5 with 1,500 xp remaining
 
 ---
 
