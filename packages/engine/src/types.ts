@@ -26,6 +26,8 @@ export type LearnerState = {
 // A single change produced by the rule engine
 export type Mutation =
   | { type: "XP_GRANT"; amount: number }
+  | { type: "LEVEL_UP" }
+  | { type: "STREAK"; continue_streak: boolean }
   | { type: "PET_MOOD"; mood: string; duration_minutes: number }
   | { type: "WORLD_STAGE"; stage: number }
   | { type: "WORLD_UNLOCK"; asset_ref_id: string }
@@ -35,7 +37,8 @@ export type Mutation =
 // A single rule in a rule pack
 export type Rule = {
   id: string;
-  trigger: { event_type: string };
+  trigger: {
+    event_type: string };
   conditions: Array<{ field: string; op: "eq" | "gte" | "lte"; value: unknown }>;
   effects: Mutation[];
 };

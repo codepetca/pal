@@ -10,7 +10,7 @@ export const defaultRulePack: RulePack = {
       trigger: { event_type: "assignment.completed" },
       conditions: [],
       effects: [
-        { type: "XP_GRANT", amount: 50 },
+        { type: "XP_GRANT", amount: 150 },
         { type: "PET_MOOD", mood: "happy", duration_minutes: 30 },
       ],
     },
@@ -18,13 +18,68 @@ export const defaultRulePack: RulePack = {
       id: "assignment-on-time-bonus",
       trigger: { event_type: "assignment.completed" },
       conditions: [{ field: "metadata.on_time", op: "eq", value: true }],
-      effects: [{ type: "XP_GRANT", amount: 25 }],
+      effects: [{ type: "XP_GRANT", amount: 50 }],
     },
     {
       id: "daily-checkin-xp",
       trigger: { event_type: "daily_checkin.created" },
       conditions: [],
-      effects: [{ type: "XP_GRANT", amount: 10 }],
+      effects: [
+        { type: "XP_GRANT", amount: 10 }, 
+        { type: "STREAK", continue_streak: true }
+      ],
+    },
+    {
+      id: "daily-checkin-2-streak-bonus",
+      trigger: { event_type: "daily_checkin.created" },
+      conditions: [{ field: "economy.streak_current", op: "gte", value: 2 }],
+      effects: [{ type: "XP_GRANT", amount: 3 }, ],
+    },
+        {
+      id: "daily-checkin-4-streak-bonus",
+      trigger: { event_type: "daily_checkin.created" },
+      conditions: [{ field: "economy.streak_current", op: "gte", value: 4 }],
+      effects: [{ type: "XP_GRANT", amount: 3 }, ],
+    },
+    {
+      id: "daily-checkin-6-streak-bonus",
+      trigger: { event_type: "daily_checkin.created" },
+      conditions: [{ field: "economy.streak_current", op: "gte", value: 6 }],
+      effects: [{ type: "XP_GRANT", amount: 3 }, ],
+    },
+        {
+      id: "daily-checkin-8-streak-bonus",
+      trigger: { event_type: "daily_checkin.created" },
+      conditions: [{ field: "economy.streak_current", op: "gte", value: 8 }],
+      effects: [{ type: "XP_GRANT", amount: 3 }, ],
+    },
+        {
+      id: "daily-checkin-10-streak-bonus",
+      trigger: { event_type: "daily_checkin.created" },
+      conditions: [{ field: "economy.streak_current", op: "gte", value: 10 }],
+      effects: [{ type: "XP_GRANT", amount: 3 }, ],
+    },
+    {
+      id: "daily-streak-break",
+      trigger: { event_type: "calendar.day_end" },
+      conditions: [
+        { field: "economy.completed_today", op: "eq", value: false }
+      ],
+      effects: [
+        { type: "STREAK", continue_streak: false }
+      ],
+    },
+    {
+      id: "level-up",
+      trigger: { event_type: "calendar.day_end" },
+      conditions: [
+        { field: "economy.completed_today", op: "gte", value: 500 }
+      ],
+      effects: [
+        { type: "STREAK", continue_streak: false },
+        { type: "XP_GRANT", amount: -500 },
+        { type: "LEVEL_UP" }
+      ],
     },
     {
       id: "streak-7-world-unlock",
