@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedIngest } from "@/lib/ingest-auth";
+import { applyEvent } from "@/lib/learner-store";
 
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
@@ -19,8 +20,8 @@ export async function POST(req: NextRequest) {
 
   // TODO: check idempotency key against DB — return "duplicate" if seen
   // TODO: validate event_type against integration allow-list
-  // TODO: save event to DB
-  // TODO: run rule engine → apply mutations
+  // TODO: save the raw event to DB (only derived state is persisted, in-memory, for now)
+  applyEvent(learner_id, { event_type, occurred_at, metadata: metadata ?? {} });
 
   return NextResponse.json({ status: "processed" });
 }
