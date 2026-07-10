@@ -1,4 +1,15 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import styles from "./page.module.css";
+
+const TEST_LEARNER_ID = "test-learner-001";
+
+const PANEL_EVENTS = [
+  { label: "Assignment completed", event_type: "assignment.completed", metadata: { on_time: false } },
+  { label: "Assignment completed (on time)", event_type: "assignment.completed", metadata: { on_time: true } },
+  { label: "Daily check-in", event_type: "daily_checkin.created", metadata: {} },
+];
 
 function Pet() {
   return (
@@ -22,6 +33,49 @@ function Pet() {
 }
 
 export default function WorldView() {
+  const [streak, setStreak] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  useEffect(() => {
+    refreshWorld();
+  }, []);
+
+  async function refreshWorld() {
+    const res = await fetch(`/api/v1/world/${TEST_LEARNER_ID}`);
+    const data = await res.json();
+    setStreak(data.economy.streak);
+  }
+
+  async function fireEvent(event_type: string, metadata: Record<string, unknown>) {
+    const idempotency_key = `sandbox-${Date.now()}`;
+    const res = await fetch("/api/sandbox/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idempotency_key,
+        learner_id: TEST_LEARNER_ID,
+        event_type,
+        occurred_at: new Date().toISOString(),
+        metadata,
+      }),
+    });
+    const data = await res.json();
+    const status = res.ok ? data.status : "error";
+    setLog((prev) => [`→ ${event_type}: ${status}`, ...prev]);
+    await refreshWorld();
+  }
+
+  async function resetDemo() {
+    await fetch("/api/sandbox/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
+    });
+    setLog([]);
+    await refreshWorld();
+  }
+
   return (
     <div className={styles.world}>
       <svg
@@ -42,10 +96,53 @@ export default function WorldView() {
         <span className={styles.logo}>PAL</span>
         <div className={styles.hudRight}>
           <span className={styles.levelBadge}>Lv 3</span>
-          <span className={styles.streak}>🔥 5</span>
-          <a href="/sandbox" className={styles.sandboxLink}>sandbox →</a>
+          <span className={styles.streak}>🔥 {streak}</span>
         </div>
       </div>
+
+      <button
+        className={styles.panelToggle}
+        onClick={() => setPanelOpen((open) => !open)}
+        aria-label="Toggle event control panel"
+      >
+        ⚡
+      </button>
+
+      {panelOpen && (
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <span>Fire an event</span>
+            <button className={styles.panelClose} onClick={() => setPanelOpen(false)} aria-label="Close panel">
+              ✕
+            </button>
+          </div>
+
+          <div className={styles.panelButtons}>
+            {PANEL_EVENTS.map((e) => (
+              <button
+                key={e.event_type + e.label}
+                className={styles.panelButton}
+                onClick={() => fireEvent(e.event_type, e.metadata)}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.panelLogLabel}>Log</div>
+          <div className={styles.panelLog}>
+            {log.length === 0 ? (
+              <div className={styles.panelLogEmpty}>No events yet.</div>
+            ) : (
+              log.map((line, i) => <div key={i}>{line}</div>)
+            )}
+          </div>
+
+          <button className={styles.panelReset} onClick={resetDemo}>
+            Reset
+          </button>
+        </div>
+      )}
     </div>
   );
 }
