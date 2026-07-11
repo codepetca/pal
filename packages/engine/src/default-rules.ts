@@ -61,9 +61,9 @@ export const defaultRulePack: RulePack = {
     },
     {
       id: "daily-streak-break",
-      trigger: { event_type: "economy.xp_increase" },
+      trigger: { event_type: "calendar.day_end" },
       conditions: [
-        { field: "economy.completed_today", op: "eq", value: false }
+        { field: "metadata.completed_today", op: "eq", value: false }
       ],
       effects: [
         { type: "STREAK", continue_streak: false }
@@ -71,7 +71,7 @@ export const defaultRulePack: RulePack = {
     },
     {
       id: "level-up",
-      trigger: { event_type: "calendar.day_end" },
+      trigger: { event_type: "economy.xp_increase" },
       conditions: [
         { field: "economy.xp", op: "gte", value: 500 }
       ],
