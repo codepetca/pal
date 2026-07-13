@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 
 const TEST_LEARNER_ID = "test-learner-001";
@@ -36,14 +36,20 @@ export default function WorldView() {
   const [streak, setStreak] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const refreshSeq = useRef(0);
 
   useEffect(() => {
     refreshWorld();
   }, []);
 
   async function refreshWorld() {
+    const seq = ++refreshSeq.current;
     const res = await fetch(`/api/v1/world/${TEST_LEARNER_ID}`);
     const data = await res.json();
+    // A later refreshWorld() call can have its response arrive first.
+    // Drop this one if a newer request has since been issued, so a
+    // stale response can't overwrite the current streak count.
+    if (seq !== refreshSeq.current) return;
     setStreak(data.economy.streak);
   }
 
