@@ -1,7 +1,7 @@
 # Architecture Overview
 
 > Living document. Update this as decisions are made and designs evolve.
-> Last updated: 2026-07-04
+> Last updated: 2026-07-14
 
 ---
 
@@ -30,12 +30,12 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 3. **Rule engine** (`events/` domain) runs the rule pack against the event and current learner state. It produces a list of mutations:
    ```
-   XP_GRANT: 50
-   XP_GRANT: 25   ← on_time bonus
+   XP_GRANT: 150
+   XP_GRANT: 50   ← on_time bonus
    PET_MOOD: happy for 30 minutes
    ```
 
-4. **Economy service** (`economy/` domain) applies the XP grants — now at 75 XP. Checks if the learner crossed a level threshold. Updates streak because this is an event today.
+4. **Economy service** (`economy/` domain) applies the XP grants — now at 200 XP — and emits an `XP_CHANGED` derived event. The applier feeds that back through the rule engine, where the `level-up` rule decides whether the learner crossed a threshold. The *threshold lives in the rule pack*, not in this handler: operators tune levelling without a deploy. See [rule-engine.md](rule-engine.md).
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
@@ -148,22 +148,27 @@ Rule packs are JSON config. Operators can tune gameplay (XP amounts, unlock thre
 The engine *produces* mutations; a single **mutation applier** *applies* them. It is the only code that writes learner state, and it owns exactly one database transaction per event:
 
 ```
-applyMutations(learnerId, mutations)
-  → open transaction (locks the learner row — see data-model.md)
+processEvent(event, state, rulePack)
+  → evaluate the event against the rule pack
   → dispatch each mutation to its domain handler
-  → write AuditLog entry
-  → commit (or roll back everything)
+  → collect the derived events the handlers emit
+  → re-evaluate each derived event, up to the depth limit
+  → return the settled state + the full trace
 ```
+
+`processEvent` is pure — state in, state out — so the whole cascade is unit-testable with no infrastructure. The caller owns persistence and wraps it in one transaction that locks the learner row (see [data-model.md](data-model.md)) and writes the trace to the AuditLog.
+
+> **M1 status:** the ingest route calls `processEvent` today, but persistence is a process-local in-memory store (`apps/web/src/lib/learner-store.ts`) standing in for `@pal/db`. It does not survive a cold start and is not shared across function instances. Replacing it with the real transaction is M1 work; the route and the applier do not change when it lands.
 
 Domains don't apply their own mutations ad hoc — they **register handlers** with the applier:
 
-| Handler | Domain | Mutation types |
-|---|---|---|
-| Economy handler | `economy/` | `XP_GRANT` |
-| Pet handler | `world/` | `PET_MOOD` |
-| World handler | `world/` | `WORLD_STAGE`, `WORLD_UNLOCK` |
-| Achievement handler | `economy/` | `ACHIEVEMENT` |
-| Nudge handler | `frontend/` | `NUDGE` |
+| Handler | Domain | Mutation types | Derived events it emits |
+|---|---|---|---|
+| Economy handler | `economy/` | `XP_GRANT`, `LEVEL_GRANT`, `STREAK` | `XP_CHANGED`, `LEVEL_UP`, `STREAK_MILESTONE` |
+| Pet handler | `world/` | `PET_MOOD` | — |
+| World handler | `world/` | `WORLD_STAGE`, `WORLD_UNLOCK` | — |
+| Achievement handler | `economy/` | `ACHIEVEMENT` | — |
+| Nudge handler | `frontend/` | `NUDGE` | — |
 
 One owner for the transaction means partial application is impossible: either every mutation from an evaluation lands, or none do. Handlers may return **derived events** (see [rule-engine.md](rule-engine.md)), which the applier feeds back through the engine within the same transaction.
 
