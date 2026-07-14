@@ -11,8 +11,9 @@ import * as schema from "./schema";
 // HTTP-based drivers (e.g. Neon's @neondatabase/serverless HTTP client) issue
 // each statement as a separate request and cannot hold a transaction open — the
 // lock would silently do nothing and concurrent events for one learner would
-// lose updates. If you swap this driver, the concurrency test is the only thing
-// standing between you and that bug.
+// lose updates. Nothing in the test suite catches that yet: the concurrency test
+// arrives with the applier, in the ingest PR. Until then this comment is the
+// only guard, so do not swap the driver on the strength of a green CI run.
 
 export type Db = NodePgDatabase<typeof schema>;
 

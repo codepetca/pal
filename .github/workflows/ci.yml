@@ -49,10 +49,23 @@ jobs:
       - name: Migrate from zero
         run: pnpm --filter @pal/db migrate
 
-      # Fails if the committed SQL and the TypeScript schema have drifted apart
-      # — e.g. someone edited schema.ts without regenerating the migration.
-      - name: Check migrations match schema
+      # drizzle-kit check only validates the drizzle/ folder against itself —
+      # stale snapshot format, malformed snapshots, two migrations claiming the
+      # same parent (a bad merge). It never reads schema.ts.
+      - name: Check migration history is consistent
         run: pnpm --filter @pal/db check
+
+      # This is what catches drift: regenerate from schema.ts and fail if that
+      # produces anything new. A column added to schema.ts without a matching
+      # `generate` would otherwise pass every other check in this job — the
+      # migrations still apply, they just don't contain the column.
+      - name: Check schema.ts matches committed migrations
+        run: |
+          pnpm --filter @pal/db generate
+          # Staged, not a bare `git diff`: a forgotten `generate` shows up partly
+          # as a brand-new untracked .sql file, which a bare diff would not see.
+          git add -A packages/db/drizzle
+          git diff --cached --exit-code packages/db/drizzle
 
       - name: Rule engine tests
         run: pnpm --filter @pal/engine test
