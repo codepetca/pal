@@ -39,9 +39,14 @@ events and all three state rows, so consent withdrawal is a single `DELETE`.
 ## Local setup
 
 ```bash
+cp .env.example apps/web/.env.local    # if you haven't already
 docker compose up -d postgres          # from the repo root; Postgres on :5433
 pnpm --filter @pal/db migrate          # apply migrations
 ```
+
+Commands here read `DATABASE_URL` from `apps/web/.env.local` (that's where
+Next.js wants it — see `docs/dev-workflow.md`), so you don't need to export
+anything. A real environment variable, as in CI, takes precedence over the file.
 
 `DATABASE_URL` must be a **pooled** connection string. Event ingest holds an
 interactive transaction (`SELECT ... FOR UPDATE` on the learner row, then read,

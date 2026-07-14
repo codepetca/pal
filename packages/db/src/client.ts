@@ -1,5 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { loadLocalEnv } from "./env";
 import * as schema from "./schema";
 
 // IMPORTANT: this uses node-postgres over a pooled connection, NOT a
@@ -15,31 +16,54 @@ import * as schema from "./schema";
 
 export type Db = NodePgDatabase<typeof schema>;
 
-let pool: Pool | undefined;
-let db: Db | undefined;
+export type DbOptions = {
+  // Caps how long a single statement may run, so a stuck event transaction
+  // cannot hold a learner's row lock indefinitely. Pass 0 to disable — the
+  // migrator does, since a long index build is not a stuck transaction.
+  statementTimeoutMs?: number;
+};
 
-export function getPool(connectionString = process.env.DATABASE_URL): Pool {
-  if (!pool) {
-    if (!connectionString) throw new Error("DATABASE_URL is not set");
-    pool = new Pool({
-      connectionString,
-      // Serverless invocations multiply connections; keep each pool small.
-      max: 5,
-      // A stuck transaction must not hold a learner's row lock indefinitely.
-      statement_timeout: 10_000,
-    });
+const DEFAULT_STATEMENT_TIMEOUT_MS = 10_000;
+
+// Creates an isolated pool + db. Callers that need several live connections at
+// once (tests exercising concurrency, the migrator) use this rather than the
+// process-wide singleton below.
+export function createDb(
+  connectionString: string,
+  { statementTimeoutMs = DEFAULT_STATEMENT_TIMEOUT_MS }: DbOptions = {}
+): { pool: Pool; db: Db } {
+  const pool = new Pool({
+    connectionString,
+    // Serverless invocations multiply connections; keep each pool small.
+    max: 5,
+    ...(statementTimeoutMs > 0 ? { statement_timeout: statementTimeoutMs } : {}),
+  });
+  return { pool, db: drizzle(pool, { schema }) };
+}
+
+let singleton: { pool: Pool; db: Db } | undefined;
+
+// The process-wide connection, built from DATABASE_URL. Takes no arguments on
+// purpose: an earlier version accepted a connection string and silently ignored
+// it once the singleton existed. Use createDb() for anything else.
+export function getDb(): Db {
+  return getSingleton().db;
+}
+
+export function getPool(): Pool {
+  return getSingleton().pool;
+}
+
+function getSingleton() {
+  if (!singleton) {
+    loadLocalEnv();
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error(
+        "DATABASE_URL is not set. Copy .env.example to apps/web/.env.local, or export it."
+      );
+    }
+    singleton = createDb(connectionString);
   }
-  return pool;
-}
-
-export function getDb(connectionString?: string): Db {
-  if (!db) db = drizzle(getPool(connectionString), { schema });
-  return db;
-}
-
-// Creates an isolated pool + db, bypassing the module-level singletons.
-// Tests use this to hold several real connections at once.
-export function createDb(connectionString: string): { pool: Pool; db: Db } {
-  const p = new Pool({ connectionString, max: 5, statement_timeout: 10_000 });
-  return { pool: p, db: drizzle(p, { schema }) };
+  return singleton;
 }

@@ -1,12 +1,12 @@
-version: "3.9"
-
 # Local Postgres for development and tests.
 #
 #   docker compose up -d postgres
 #
-# Port 5433 (not 5432) so this never collides with a Postgres already running
-# on your machine. Connection strings live in apps/web/.env.local — see
-# .env.example.
+# Creates two databases: `pal` (development) and `pal_test` (integration tests,
+# which truncate tables between cases). Port 5433 (not 5432) so this never
+# collides with a Postgres already running on your machine.
+#
+# Connection strings live in apps/web/.env.local — see .env.example.
 services:
   postgres:
     image: postgres:16
@@ -23,6 +23,9 @@ services:
       retries: 15
     volumes:
       - pal_pgdata:/var/lib/postgresql/data
+      # Init scripts run only on a fresh volume. If you already have one and
+      # pal_test is missing, recreate it: docker compose down -v && docker compose up -d
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-create-test-db.sql:ro
 
 volumes:
   pal_pgdata:
