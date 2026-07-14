@@ -8,6 +8,25 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pal
+          POSTGRES_PASSWORD: pal
+          POSTGRES_DB: pal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pal -d pal"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgres://pal:pal@localhost:5432/pal
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +43,16 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # The service container starts empty, so this proves the committed
+      # migrations take a database from zero to the full schema.
+      - name: Migrate from zero
+        run: pnpm --filter @pal/db migrate
+
+      # Fails if the committed SQL and the TypeScript schema have drifted apart
+      # — e.g. someone edited schema.ts without regenerating the migration.
+      - name: Check migrations match schema
+        run: pnpm --filter @pal/db check
 
       - name: Rule engine tests
         run: pnpm --filter @pal/engine test
