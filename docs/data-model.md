@@ -11,7 +11,11 @@
 - **Learner** — a pseudonymous student. No name, no email, no raw ID.
 - **LearnerGroup** — a pseudonymous classroom or cohort.
 - **Event** — a learning signal received from an integration. Immutable once written.
-- **Economy** — XP, level, streak, and event counts per learner.
+- **Economy** — XP, level, streak, and event counts per learner. Two XP columns, and the distinction matters:
+  - `xp` — the **balance** toward the next level. A level-up spends it (a negative `XP_GRANT`), so it goes down as well as up. This is what a progress bar renders.
+  - `xp_lifetime` — every point ever earned, never spent. This is what lifetime achievements key on. Without it, levelling would erase the only record that the XP existed.
+
+  Streak continuity is anchored on `streak_last_day` (the UTC calendar day the streak last advanced), not on `last_event_at` — otherwise any event, like an assignment, would stand in for a daily check-in.
 - **PetState** — current mood, animation, and energy per learner.
 - **WorldState** — current stage, unlocked objects, and environment per learner.
 - **UnlockLedger** — append-only record of every achievement, badge, and world object unlocked.

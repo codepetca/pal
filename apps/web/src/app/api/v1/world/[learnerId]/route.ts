@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { loadLearner } from "@/lib/learner-store";
 
 // GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
@@ -10,13 +11,26 @@ export async function GET(
   const { learnerId } = await params;
 
   // TODO: validate read token from Authorization header
-  // TODO: fetch pet state, world state, economy from DB
-  // TODO: resolve pet mood (check expiry, fall back to "neutral")
+
+  const state = loadLearner(learnerId);
+  const moodExpired =
+    state.pet.mood_expires_at !== null && Date.parse(state.pet.mood_expires_at) <= Date.now();
 
   return NextResponse.json({
     learnerId,
-    pet: { mood: "neutral", animation_state: "idle" },
-    world: { stage: 0, objects: [] },
-    economy: { xp: 0, level: 1, streak: 0 },
+    pet: {
+      mood: moodExpired ? "neutral" : state.pet.mood,
+      animation_state: "idle",
+    },
+    world: {
+      stage: state.world.stage,
+      objects: state.world.unlocked_object_ids,
+    },
+    economy: {
+      xp: state.economy.xp,
+      xp_lifetime: state.economy.xp_lifetime,
+      level: state.economy.level,
+      streak: state.economy.streak_current,
+    },
   });
 }

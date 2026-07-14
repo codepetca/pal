@@ -33,9 +33,11 @@ Authorization: Bearer <integration_secret>
 
 Responses:
 - `401` — missing or invalid integration secret
-- `200 { "status": "processed" }` — rule engine ran, mutations applied
+- `200 { "status": "processed", "mutations": [...] }` — rule engine ran, mutations applied. `mutations` is the full list the cascade applied, in order; the dev sandbox renders it.
 - `200 { "status": "duplicate" }` — idempotency key already seen, no reprocessing
 - `422` — unknown event type or disallowed metadata field
+
+`event_type` must be on the integration's allow-list. Derived events (`XP_CHANGED`, `LEVEL_UP`, `STREAK_MILESTONE` — see [rule-engine.md](rule-engine.md)) are produced inside the engine cascade and are **never ingestable**: an integration that could POST `LEVEL_UP` could grant its own students levels. They are rejected with `422 unknown_event_type`.
 
 ---
 
