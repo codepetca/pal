@@ -1,0 +1,149 @@
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #33415c;
+}
+
+.canvasWrap {
+  position: absolute;
+  inset: 0;
+}
+
+/* Subtle vignette for a photographed, premium feel. */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 120% at 50% 42%,
+    rgba(51, 65, 92, 0) 58%,
+    rgba(51, 65, 92, 0.12) 100%
+  );
+}
+
+/* Sky-coloured flash that masks the instant content swap during a fly. */
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #cfe0f4;
+  opacity: 0;
+  animation: flash 700ms ease;
+}
+
+@keyframes flash {
+  0% { opacity: 0; }
+  22% { opacity: 0.65; }
+  100% { opacity: 0; }
+}
+
+/* Overview title, top-left */
+.title {
+  position: absolute;
+  top: 34px;
+  left: 40px;
+  pointer-events: none;
+  animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.titleMain {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.titleSub {
+  margin-top: 4px;
+  font-size: 15px;
+  color: #8a97ad;
+}
+
+/* Expanded HUD */
+.backButton {
+  position: absolute;
+  top: 34px;
+  left: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(51, 65, 92, 0.12);
+  color: #33415c;
+  font-size: 15px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.backButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 26px rgba(51, 65, 92, 0.18);
+}
+
+.infoPanel {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  padding: 20px 24px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgba(51, 65, 92, 0.14);
+  min-width: 240px;
+  animation: rise 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 120ms;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.infoHandle {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.infoRow {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #8a97ad;
+}
+
+.infoAssignment {
+  margin-top: 2px;
+  font-size: 15px;
+  color: #33415c;
+  font-weight: 500;
+}
+
+.progressTrack {
+  margin-top: 14px;
+  height: 6px;
+  width: 100%;
+  border-radius: 999px;
+  background: #e2e8f2;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6b8afd, #a78bfa);
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
