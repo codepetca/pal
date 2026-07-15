@@ -11,139 +11,167 @@
   inset: 0;
 }
 
-/* Subtle vignette for a photographed, premium feel. */
 .vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    120% 120% at 50% 42%,
-    rgba(51, 65, 92, 0) 58%,
-    rgba(51, 65, 92, 0.12) 100%
+    130% 130% at 50% 40%,
+    rgba(30, 45, 80, 0) 60%,
+    rgba(30, 45, 80, 0.16) 100%
   );
 }
 
-/* Sky-coloured flash that masks the instant content swap during a fly. */
-.flash {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: #cfe0f4;
-  opacity: 0;
-  animation: flash 700ms ease;
-}
-
-@keyframes flash {
-  0% { opacity: 0; }
-  22% { opacity: 0.65; }
-  100% { opacity: 0; }
-}
-
-/* Overview title, top-left */
+/* title */
 .title {
   position: absolute;
-  top: 34px;
-  left: 40px;
+  top: 30px;
+  left: 34px;
   pointer-events: none;
   animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  text-shadow: 0 1px 10px rgba(255, 255, 255, 0.55);
 }
-
 .titleMain {
-  font-size: 26px;
-  font-weight: 650;
+  font-size: 25px;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
-
+.pick {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
 .titleSub {
-  margin-top: 4px;
-  font-size: 15px;
-  color: #8a97ad;
+  margin-top: 3px;
+  font-size: 14px;
+  color: #4a5a78;
 }
 
-/* Expanded HUD */
-.backButton {
+/* roster (right side) */
+.roster {
   position: absolute;
-  top: 34px;
-  left: 40px;
-  display: inline-flex;
+  top: 30px;
+  right: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  animation: rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.rosterItem {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  justify-content: space-between;
+  padding: 9px 13px;
   border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(51, 65, 92, 0.12);
+  box-shadow: 0 3px 14px rgba(30, 45, 80, 0.1);
   color: #33415c;
-  font-size: 15px;
-  font-weight: 550;
+  font-size: 13.5px;
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.rosterItem:hover {
+  transform: translateX(-2px);
+  background: rgba(255, 255, 255, 0.82);
+}
+.rosterActive {
+  background: rgba(107, 138, 253, 0.92);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(107, 138, 253, 0.4);
+}
+.rosterHandle {
+  font-weight: 550;
+}
+.rosterPct {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  font-size: 12.5px;
 }
 
-.backButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 26px rgba(51, 65, 92, 0.18);
-}
-
+/* selected student panel (bottom-left) */
 .infoPanel {
   position: absolute;
-  bottom: 40px;
-  left: 40px;
-  padding: 20px 24px;
+  bottom: 34px;
+  left: 34px;
+  padding: 18px 22px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 10px 40px rgba(51, 65, 92, 0.14);
-  min-width: 240px;
+  box-shadow: 0 12px 44px rgba(30, 45, 80, 0.18);
+  min-width: 268px;
   animation: rise 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: 120ms;
+  animation-delay: 100ms;
 }
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .infoHandle {
   font-size: 20px;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
-
 .infoRow {
-  margin-top: 10px;
-  font-size: 14px;
-  color: #8a97ad;
+  margin-top: 9px;
+  font-size: 13px;
+  color: #6a778f;
+  font-variant-numeric: tabular-nums;
 }
-
-.infoAssignment {
-  margin-top: 2px;
-  font-size: 15px;
-  color: #33415c;
-  font-weight: 500;
-}
-
 .progressTrack {
-  margin-top: 14px;
-  height: 6px;
+  margin-top: 12px;
+  height: 7px;
   width: 100%;
   border-radius: 999px;
   background: #e2e8f2;
   overflow: hidden;
 }
-
 .progressFill {
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, #6b8afd, #a78bfa);
   transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.actions {
+  margin-top: 15px;
+  display: flex;
+  gap: 9px;
+}
+.grow,
+.strike {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+.grow {
+  background: #4caf6e;
+  color: #fff;
+  box-shadow: 0 5px 16px rgba(76, 175, 110, 0.36);
+}
+.strike {
+  background: #e0674f;
+  color: #fff;
+  box-shadow: 0 5px 16px rgba(224, 103, 79, 0.34);
+}
+.grow:hover:not(:disabled),
+.strike:hover {
+  transform: translateY(-1px);
+}
+.grow:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

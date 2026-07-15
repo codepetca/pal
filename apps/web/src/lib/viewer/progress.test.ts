@@ -8,7 +8,6 @@ import {
   nodeStatus,
   progressT,
 } from "./progress";
-import { layoutNodes, makeRng, hashSeed } from "./path-curve";
 import { pose, jumpPose, gaitForSpeed } from "./animation";
 
 describe("progress", () => {
@@ -43,36 +42,6 @@ describe("progress", () => {
     assert.equal(progressT(0, 5), 0);
     assert.equal(progressT(4, 5), 1); // 4 finished of 5 → last of 4 segments
     assert.equal(progressT(2, 5), 0.5);
-  });
-});
-
-describe("path-curve", () => {
-  it("is deterministic for a given seed and count", () => {
-    const a = layoutNodes(10, 1234);
-    const b = layoutNodes(10, 1234);
-    assert.deepEqual(a, b);
-    assert.equal(a.length, 10);
-  });
-
-  it("changes with the seed", () => {
-    const a = layoutNodes(10, 1);
-    const b = layoutNodes(10, 2);
-    assert.notDeepEqual(a, b);
-  });
-
-  it("advances forward in +z row over row", () => {
-    // perRow default is 4; row 0 stations should sit ahead of row 2 stations.
-    const n = layoutNodes(12, 42);
-    assert.ok(n[0].z < n[8].z, "later rows should have larger z");
-  });
-
-  it("hashSeed is stable and makeRng stays in [0,1)", () => {
-    assert.equal(hashSeed("otter-7f3"), hashSeed("otter-7f3"));
-    const rng = makeRng(7);
-    for (let i = 0; i < 100; i++) {
-      const v = rng();
-      assert.ok(v >= 0 && v < 1);
-    }
   });
 });
 

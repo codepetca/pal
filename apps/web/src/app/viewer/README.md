@@ -1,56 +1,66 @@
-# Journey — 3D assignment roadmap viewer
+# SkyBlock Classroom — voxel progress islands
 
-A student viewer that renders a class as a sky of floating islands. Each island
-is one student's roadmap through a shared course; click it and the camera flies
-in, the island opens into a winding 3D path, and a Minecraft-style character
-walks / runs / jumps along it to exactly where that student's progress stands.
+A student viewer where each student's progress is a **floating voxel island**
+that grows as they complete assignments. Pick a student from the roster to visit
+their island; complete an assignment to grow the island (with a block-pop
+flourish), or miss a deadline to call down an asteroid that craters it.
 
 Route: **`/viewer`**
 
-## How it's built
+## The look
 
-- **React Three Fiber** (`@react-three/fiber`, `@react-three/drei`, `three`),
-  client-only (`dynamic(..., { ssr: false })`).
-- The **character** is a boxel Minecraft model built from a 64×64 skin PNG
-  (from the `final-final-abhijit` LibGDX game). Skin UVs are mapped per-face in
-  `lib/viewer/skin.ts`; animations are procedural, driven by pure functions in
-  `lib/viewer/animation.ts` — the same "animations built in code" approach the
-  original game uses.
-- The **path** is generated from the assignment list, not hardcoded: a seeded
-  winding layout (`lib/viewer/path-curve.ts`) sampled into a Catmull-Rom curve.
-  The completed portion is lit, the rest is dim; the character sits at the
-  progress point (`lib/viewer/progress.ts`).
+Real Minecraft rendering, ported from the "SkyBlock Classroom" three.js
+prototype into this app:
 
-## Data
+- **Unlit vanilla shading**: blocks use `MeshBasicMaterial` (no dynamic lights)
+  with per-face brightness × **per-vertex smooth-lighting / ambient occlusion**
+  recomputed on every world change — the same model the game uses.
+- **Real block textures** (grass/dirt/stone/logs/leaves/flowers), grass tints
+  composited on a canvas, `NearestFilter` for crisp pixels.
+- **Seeded terrain**: value-noise fBm + an archipelago mask, generated ring by
+  ring, so every student's island is unique and stable (seed = student id).
+- Oak & cherry trees, cross-plane plants, a gradient sky dome, drifting clouds,
+  falling petals, block-break particles, and the classic procedural fire.
 
-`lib/viewer/demo-data.ts` holds a self-contained class of **pseudonymous**
-students (no names/emails/real IDs) at varying progress. The data interface is
-kept clean so it can later be fed from pal's `GET /api/v1/world/[learnerId]`
-instead of the demo module — a data-source swap, not a rewrite.
+The Minecraft character (built from a 64×64 skin, `lib/viewer/skin.ts`) stands
+on the island; it uses a lit material, so the scene adds lights just for it —
+the unlit blocks ignore them.
 
-## Read-only
+## Progress → island
 
-The viewer never mutates learner state; it only draws a snapshot, so it respects
-pal's rule that only the engine changes state.
+`ringsFor(completedCount)` maps a student's progress to how many rings of
+terrain are pre-generated, so more progress ⇒ a bigger island. Completing an
+assignment live calls `expandIsland` (grow outward); missing one calls
+`launchAsteroid` (crater + fire).
+
+## Data & privacy
+
+`lib/viewer/demo-data.ts` — a self-contained class of **pseudonymous** students
+(no names/emails/real IDs) at varying progress. The viewer is **read-only** and
+mutates no learner state.
 
 ## Layout
 
 ```
 app/viewer/
   page.tsx                 route entry (client, no SSR)
-  viewer.module.css        HUD / overlay styles
-  _components/             R3F scene: ViewerApp, CameraRig, Overview/Expanded,
-                           Island, Roadmap, AssignmentNode, MinecraftCharacter,
-                           GradientSky
-lib/viewer/                pure logic (progress, path-curve, animation) + tests,
-                           skin builder, theme, demo data, types
-public/viewer/skins/       skin PNGs
+  viewer.module.css        HUD styles (title, roster, progress, actions)
+  _components/
+    ViewerApp.tsx          shell: Canvas + roster + HUD + interactions
+    VoxelWorld.tsx         R3F host — builds sky/island/clouds, drives effects
+    CameraFrame.tsx        frames the camera to the island's size
+    MinecraftCharacter.tsx boxel character from a skin
+lib/viewer/
+    voxel-world.ts         the ported engine (textures, terrain, AO, effects)
+    skin.ts, animation.ts  character model + procedural animation (unit-tested)
+    progress.ts            progress math (unit-tested)
+    demo-data.ts, types.ts
+public/viewer/
+    textures/blocks/*.png  Minecraft block textures
+    sounds/*.ogg           pop / dig / explode
+    skins/*.png            character skins
 ```
 
 ## Tests
 
-Pure logic is unit-tested with `node:test`:
-
-```
-pnpm --filter @pal/web test
-```
+`pnpm --filter @pal/web test` — pure logic (progress + animation) via `node:test`.
