@@ -52,7 +52,10 @@ export async function POST(req: NextRequest) {
 
   // Record the key only after the state change is persisted. If anything above threw,
   // the key was never recorded and a retry reprocesses the event instead of getting a
-  // spurious "duplicate" and losing the update. Keep this immediately after the save.
+  // spurious "duplicate" and losing the update. Keep this immediately after the save,
+  // and keep the whole stretch from `hasProcessedEvent` to here free of `await` — the
+  // check/record pair is not atomic, and only the synchronous path prevents two
+  // concurrent deliveries of the same key from both applying (see learner-store.ts).
   recordProcessedEvent(idempotency_key);
 
   if (result.truncated.length > 0) {

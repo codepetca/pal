@@ -104,8 +104,13 @@ export function applyMutations(
     }
   }
 
-  // Never let an out-of-order (backdated) event move the clock backward.
-  if (next.economy.last_event_at === null || event.occurred_at > next.economy.last_event_at) {
+  // Never let an out-of-order (backdated) event move the clock backward. Compare as
+  // timestamps, not strings: occurred_at is any ISO-8601 string here, and an offset
+  // form ("+05:00") would sort lexicographically against a Zulu form incorrectly.
+  if (
+    next.economy.last_event_at === null ||
+    Date.parse(event.occurred_at) > Date.parse(next.economy.last_event_at)
+  ) {
     next.economy.last_event_at = event.occurred_at;
   }
 

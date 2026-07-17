@@ -42,9 +42,14 @@ export function saveLearner(learnerId: string, state: LearnerState): void {
 // mid-processing is not marked seen and a retry reprocesses it rather than being
 // silently dropped as a duplicate.
 //
-// The real implementation is a unique constraint on the events table, written in
-// the same transaction as the state change — which makes "persist then record"
-// atomic. This two-call seam approximates that ordering for the in-memory store.
+// ⚠️ This check-then-record pair is NOT atomic. It is only safe because the route's
+// path from `hasProcessedEvent` to `recordProcessedEvent` is synchronous — Node
+// cannot interleave a second request in between. Two concurrent deliveries of the
+// same key with an `await` on that path would both pass the check and both apply.
+// When @pal/db lands, do NOT keep this seam and swap the internals: replace both
+// calls with an INSERT on the events table's unique key inside the same transaction
+// as the state write, and treat a conflict as "duplicate". That is atomic and
+// failure-safe at once; this seam is only failure-safe.
 export function hasProcessedEvent(key: string): boolean {
   return seenIdempotencyKeys.has(key);
 }
