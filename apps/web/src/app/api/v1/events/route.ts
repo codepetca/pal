@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { defaultRulePack, processEvent, type IncomingEvent } from "@pal/engine";
 import { isAuthorizedIngest } from "@/lib/ingest-auth";
 import { isIngestableEventType } from "@/lib/event-types";
-import { claimIdempotencyKey, loadLearner, saveLearner } from "@/lib/learner-store";
+import {
+  hasProcessedEvent,
+  loadLearner,
+  recordProcessedEvent,
+  saveLearner,
+} from "@/lib/learner-store";
 
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_occurred_at" }, { status: 422 });
   }
 
-  if (!claimIdempotencyKey(idempotency_key)) {
+  if (hasProcessedEvent(idempotency_key)) {
     return NextResponse.json({ status: "duplicate" });
   }
 
@@ -44,6 +49,11 @@ export async function POST(req: NextRequest) {
   const state = loadLearner(learner_id);
   const result = processEvent(event, state, defaultRulePack);
   saveLearner(learner_id, result.state);
+
+  // Record the key only after the state change is persisted. If anything above threw,
+  // the key was never recorded and a retry reprocesses the event instead of getting a
+  // spurious "duplicate" and losing the update. Keep this immediately after the save.
+  recordProcessedEvent(idempotency_key);
 
   if (result.truncated.length > 0) {
     // Belongs in the AuditLog once M1 lands. Until then it at least surfaces a rule

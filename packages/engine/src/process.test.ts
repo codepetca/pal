@@ -88,14 +88,41 @@ describe("processEvent", () => {
     assert.deepEqual(state.world.unlocked_object_ids, ["world-bird-v1"]);
   });
 
-  it("gives nothing extra for a second check-in on the same day", () => {
+  it("gives nothing at all for a second check-in on the same day", () => {
     let state = processEvent(checkin("2026-03-01"), baseState, defaultRulePack).state;
     const afterFirst = structuredClone(state);
 
     state = processEvent(checkin("2026-03-01"), state, defaultRulePack).state;
-    assert.equal(state.economy.streak_current, afterFirst.economy.streak_current);
-    // The base check-in XP is still granted; only the streak (and its bonus) holds.
-    assert.equal(state.economy.xp, afterFirst.economy.xp + 10);
+    // Neither the streak nor any XP moves: the day's reward is paid exactly once,
+    // because both base and bonus hang off the streak advance, not the check-in.
+    assert.deepEqual(state.economy, afterFirst.economy);
+  });
+
+  it("does not let repeated same-day check-ins farm XP", () => {
+    // Regression: base check-in XP used to fire on every check-in event, so N
+    // same-day check-ins paid 10*N. It now fires on the once-per-day streak advance.
+    let state = baseState;
+    for (let i = 0; i < 50; i++) {
+      state = processEvent(checkin("2026-03-01"), state, defaultRulePack).state;
+    }
+    assert.equal(state.economy.xp, 10); // one day's base reward, not 500
+    assert.equal(state.economy.streak_current, 1);
+  });
+
+  it("does not advance the streak on a backdated, out-of-order check-in", () => {
+    // A check-in for an earlier day than the streak's last day (a delayed delivery
+    // or a spoofed occurred_at) must not reset a legitimate streak or move it back.
+    let state = processEvent(
+      checkin("2026-03-05"),
+      withEconomy({ streak_current: 4, streak_last_day: "2026-03-04" }),
+      defaultRulePack
+    ).state;
+    assert.equal(state.economy.streak_current, 5);
+    assert.equal(state.economy.streak_last_day, "2026-03-05");
+
+    state = processEvent(checkin("2026-03-02"), state, defaultRulePack).state;
+    assert.equal(state.economy.streak_current, 5); // unchanged, not reset to 1
+    assert.equal(state.economy.streak_last_day, "2026-03-05"); // not moved backward
   });
 
   it("resets the streak to 1 when a day is missed", () => {

@@ -57,9 +57,14 @@ export function applyMutations(
           break;
         }
         const today = utcDay(event.occurred_at);
-        // Same day: the streak already advanced, so a second check-in is a no-op.
-        // This is what stops a learner banking a day's bonus twice.
-        if (next.economy.streak_last_day === today) break;
+        // Same day: the streak already advanced, so a second check-in is a no-op —
+        // this is what stops a learner banking a day's bonus twice. Earlier day:
+        // the event is out of order (a retry or a backdated occurred_at), and
+        // advancing off it would move `streak_last_day` backward and could reset a
+        // legitimate streak to 1. Streak continuity only ever moves forward.
+        if (next.economy.streak_last_day !== null && today <= next.economy.streak_last_day) {
+          break;
+        }
         next.economy.streak_current =
           next.economy.streak_last_day === previousUtcDay(today)
             ? next.economy.streak_current + 1
@@ -99,7 +104,10 @@ export function applyMutations(
     }
   }
 
-  next.economy.last_event_at = event.occurred_at;
+  // Never let an out-of-order (backdated) event move the clock backward.
+  if (next.economy.last_event_at === null || event.occurred_at > next.economy.last_event_at) {
+    next.economy.last_event_at = event.occurred_at;
+  }
 
   const derived: IncomingEvent[] = [...derivedTypes].map((event_type) => ({
     event_type,

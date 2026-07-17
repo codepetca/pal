@@ -37,10 +37,18 @@ export function saveLearner(learnerId: string, state: LearnerState): void {
   learners.set(learnerId, state);
 }
 
-// Dedupes retries of the same event. Returns true the first time a key is seen.
-// The real implementation is a unique constraint on the events table.
-export function claimIdempotencyKey(key: string): boolean {
-  if (seenIdempotencyKeys.has(key)) return false;
+// Dedupes retries of the same event. The key is recorded only *after* the event's
+// state change has been persisted (see the ingest route), so an event that fails
+// mid-processing is not marked seen and a retry reprocesses it rather than being
+// silently dropped as a duplicate.
+//
+// The real implementation is a unique constraint on the events table, written in
+// the same transaction as the state change — which makes "persist then record"
+// atomic. This two-call seam approximates that ordering for the in-memory store.
+export function hasProcessedEvent(key: string): boolean {
+  return seenIdempotencyKeys.has(key);
+}
+
+export function recordProcessedEvent(key: string): void {
   seenIdempotencyKeys.add(key);
-  return true;
 }

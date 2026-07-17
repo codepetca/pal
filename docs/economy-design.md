@@ -42,7 +42,8 @@ The streak bonus tiers land on days 2, 4, 6, 8, and 10, and they stack: a 10-day
 
 ## How it behaves today
 
-- **Streaks are derived, never reported.** A check-in on the day after the last one advances the streak; a gap resets it to 1; a second check-in on the same day does not advance it twice. No "streak broken" event is needed, and an integration cannot invent a streak for a student.
+- **Streaks are derived, never reported.** A check-in on the day after the last one advances the streak; a gap resets it to 1; a second check-in on the same day (or a backdated one for an earlier day) does not advance it. No "streak broken" event is needed, and an integration cannot invent a streak for a student.
+- **Check-in XP is paid once per day, on the streak advance.** The base 10 xp and the streak bonus both hang off the derived `STREAK_MILESTONE`, not the raw `daily_checkin.created` event. Because the milestone only fires when the streak actually advances, repeated check-ins on the same day earn the day's reward exactly once — they cannot farm the 10 xp base.
 - **Levelling runs in the engine's derived-event cascade:** xp is granted → `XP_CHANGED` → the `level-up` rule spends 500 xp and grants a level → the pet celebrates. Banking several levels' worth of xp in one event levels up to three times; any surplus stays banked and levels on the next event.
 
 ---
