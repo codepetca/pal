@@ -13,9 +13,15 @@ export async function GET(
 
   // TODO: validate read token from Authorization header
 
+  // Moods are temporary: past mood_expires_at, present as "neutral". Read-side
+  // presentation only — stored state still changes exclusively via the engine.
+  const moodActive =
+    state.pet.mood_expires_at !== null && new Date(state.pet.mood_expires_at) > new Date();
+  const mood = moodActive ? state.pet.mood : "neutral";
+
   return NextResponse.json({
     learnerId,
-    pet: { mood: state.pet.mood, animation_state: "idle" },
+    pet: { mood, animation_state: "idle" },
     world: { stage: state.world.stage, objects: state.world.unlocked_object_ids },
     economy: { xp: state.economy.xp, level: state.economy.level, streak: state.economy.streak_current },
   });

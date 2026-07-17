@@ -6,6 +6,10 @@ import { resetLearner } from "@/lib/learner-store";
 // be replayed from scratch without restarting the dev server. Not part
 // of the real API contract in docs/api.md.
 export async function POST(req: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   const { learner_id } = await req.json();
 
   if (!learner_id) {

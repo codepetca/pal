@@ -5,6 +5,10 @@ import type { IncomingEvent, LearnerState } from "@pal/engine";
 // the dev server restarts. Keyed by learner_id.
 const store = new Map<string, LearnerState>();
 
+// Depth limit 3 per docs/rule-engine.md: original event (depth 0) ->
+// derived (1) -> derived (2) -> stop. Anything deeper is a rule-pack
+// config bug and is dropped.
+// TODO: log dropped cascades to the AuditLog once it exists (M1).
 const MAX_CASCADE_DEPTH = 3;
 
 function defaultState(): LearnerState {
@@ -21,9 +25,8 @@ function applyAtDepth(learnerId: string, event: IncomingEvent, depth: number): L
   const { state: nextState, derivedEvents } = applyMutations(state, mutations, event.occurred_at);
   store.set(learnerId, nextState);
 
-  // Depth limit matches the cascade rule in docs/rule-engine.md: original
-  // event -> derived -> derived -> stop.
-  if (depth < MAX_CASCADE_DEPTH) {
+  // Derived events run at depth 1 and 2; a cascade past that is dropped.
+  if (depth + 1 < MAX_CASCADE_DEPTH) {
     for (const derived of derivedEvents) {
       applyAtDepth(learnerId, derived, depth + 1);
     }
