@@ -9,6 +9,11 @@ import {
   saveLearner,
 } from "@/lib/learner-store";
 
+// How far ahead of the server clock an occurred_at may be before it is rejected.
+// Generous on purpose: it only needs to absorb clock drift between an integration
+// and us, not model timezones — occurred_at is an absolute instant.
+const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
 // See docs/api.md for the full contract.
@@ -29,8 +34,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unknown_event_type" }, { status: 422 });
   }
 
-  if (Number.isNaN(Date.parse(occurred_at))) {
+  const occurredAtMs = Date.parse(occurred_at);
+  if (Number.isNaN(occurredAtMs)) {
     return NextResponse.json({ error: "invalid_occurred_at" }, { status: 422 });
+  }
+
+  // Reject events dated in the future (beyond a generous clock-skew allowance).
+  // The engine's streak guard is forward-only and deliberately never self-heals, so a
+  // future-dated check-in that got in would pin `streak_last_day` ahead of every real
+  // day and freeze the learner's streak — and their check-in XP — until that date.
+  // The engine is pure and has no clock; keeping poisoned days out is ingest's job.
+  if (occurredAtMs > Date.now() + MAX_FUTURE_SKEW_MS) {
+    return NextResponse.json({ error: "future_occurred_at" }, { status: 422 });
   }
 
   if (hasProcessedEvent(idempotency_key)) {

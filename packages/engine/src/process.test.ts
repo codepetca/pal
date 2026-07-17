@@ -109,6 +109,24 @@ describe("processEvent", () => {
     assert.equal(state.economy.streak_current, 1);
   });
 
+  it("never self-heals a future streak_last_day — keeping future days out is ingest's job", () => {
+    // The forward-only guard cannot tell "this event is backdated" from "the stored
+    // day is poisoned" — the engine is pure and has no clock. So if a future-dated
+    // check-in ever got in, every real check-in before that day would be swallowed:
+    // no streak, no milestone, no XP. This test pins that contract so the coupling
+    // is visible: the ingest route MUST reject future occurred_at (see the
+    // future_occurred_at 422 in apps/web/src/app/api/v1/events/route.ts).
+    const poisoned = withEconomy({ streak_current: 1, streak_last_day: "2099-01-01" });
+    const { state, mutations } = processEvent(checkin("2026-07-18"), poisoned, defaultRulePack);
+    assert.equal(state.economy.streak_current, 1);
+    assert.equal(state.economy.streak_last_day, "2099-01-01");
+    assert.equal(state.economy.xp, 0); // no STREAK_MILESTONE → no check-in XP
+    assert.deepEqual(
+      mutations.filter((m) => m.type === "XP_GRANT"),
+      []
+    );
+  });
+
   it("does not advance the streak on a backdated, out-of-order check-in", () => {
     // A check-in for an earlier day than the streak's last day (a delayed delivery
     // or a spoofed occurred_at) must not reset a legitimate streak or move it back.
