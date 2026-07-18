@@ -50,6 +50,7 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [Rule engine](docs/rule-engine.md)
 - [Integration guide](docs/integration.md)
 - [Development workflow](docs/dev-workflow.md)
+- [Roadmap](docs/roadmap.md)
 
 ## Repo structure
 
