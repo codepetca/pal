@@ -7,12 +7,8 @@
 }
 
 .backdrop {
-  position: absolute;
-  inset: 0;
-  background-image: url("/assets/mockups/pika-student/pika-student-dashboard-expanded.jpg");
-  background-size: cover;
-  background-position: top center;
-  background-repeat: no-repeat;
+  object-fit: cover;
+  object-position: top center;
   z-index: 0;
 }
 
