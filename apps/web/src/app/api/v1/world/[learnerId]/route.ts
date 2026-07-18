@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getLearnerState } from "@/lib/learner-store";
 
 // GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
@@ -8,15 +9,20 @@ export async function GET(
   { params }: { params: Promise<{ learnerId: string }> }
 ) {
   const { learnerId } = await params;
+  const state = getLearnerState(learnerId);
 
   // TODO: validate read token from Authorization header
-  // TODO: fetch pet state, world state, economy from DB
-  // TODO: resolve pet mood (check expiry, fall back to "neutral")
+
+  // Moods are temporary: past mood_expires_at, present as "neutral". Read-side
+  // presentation only — stored state still changes exclusively via the engine.
+  const moodActive =
+    state.pet.mood_expires_at !== null && new Date(state.pet.mood_expires_at) > new Date();
+  const mood = moodActive ? state.pet.mood : "neutral";
 
   return NextResponse.json({
     learnerId,
-    pet: { mood: "neutral", animation_state: "idle" },
-    world: { stage: 0, objects: [] },
-    economy: { xp: 0, level: 1, streak: 0 },
+    pet: { mood, animation_state: "idle" },
+    world: { stage: state.world.stage, objects: state.world.unlocked_object_ids },
+    economy: { xp: state.economy.xp, level: state.economy.level, streak: state.economy.streak_current },
   });
 }
