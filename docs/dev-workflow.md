@@ -130,7 +130,39 @@ pnpm --filter @pal/engine test
 
 ## Key conventions
 
+These four are invariants — breaking one breaks production or leaks data:
+
 - Never mutate learner state outside the rule engine
 - All DB mutations are transactional
 - Migrations are append-only (no destructive changes without a plan)
 - No raw student PII ever enters the DB — enforce at the API boundary
+
+## Naming conventions
+
+- **Files and directories** — lowercase kebab-case, no spaces: `rule-pack.ts`, `cat-sleeping.png`.
+  React components are the exception: `PascalCase.tsx`, matching the component they export.
+- **Branches** — `<domain-prefix>/<short-description>`, kebab-case: `world/asset-registry`.
+  Prefixes are listed under [Team domains](#team-domains); use `infra/` for repo-wide changes.
+- **Asset ref IDs** — kebab-case with a version suffix: `world-bird-v1`. These are stable
+  identifiers referenced by rule packs, so never rename one in place — add a new version.
+
+## Static assets
+
+Game art lives under `apps/web/public/assets/<category>/` and is served by Next.js at
+`/assets/<category>/<file>`. Categories mirror the `AssetBundle` kinds in the
+[data model](data-model.md#asset-registry-entities):
+
+```
+apps/web/public/assets/pets/    — pet states and animation frames
+apps/web/public/assets/world/   — stage backgrounds, unlockable objects
+apps/web/public/assets/badges/  — achievement art
+```
+
+- Animation frames are numbered with a hyphen: `eating-1.png`, `eating-2.png`.
+- Source art is often much larger than display size. Serve through `next/image` so it is
+  resized on demand, and downscale before shipping anything to the widget.
+- Asset changes ship in their own PR — never bundled with game logic.
+
+This is the M1/M2 arrangement. Once the asset registry lands (M2), these files move to object
+storage and are addressed by `asset_ref_id`; keeping the categories aligned now makes that a
+path swap rather than a reorganization.
