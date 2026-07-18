@@ -8,6 +8,7 @@ A game engine as a service. External systems (like Pika) send privacy-safe learn
 
 ```
 apps/web/          — Next.js app: student viewer, dev sandbox, all API routes
+apps/web/public/assets/ — Static game art (see "Static assets" below)
 packages/engine/   — Rule engine: pure TypeScript functions, no DB, no side effects
 packages/db/       — Database schema and migrations (Drizzle, coming in M1)
 packages/widget/   — Embeddable widget npm package (coming in M3)
@@ -44,6 +45,25 @@ git worktree add -b <branch> ../pal-<short-name> main
 # work in that directory, then:
 gh pr create --repo codepetca/pal --base main --head <branch>
 ```
+
+## Static assets
+
+Game art lives under `apps/web/public/assets/<category>/` and is served by Next.js at
+`/assets/<category>/<file>`. Categories mirror the `AssetBundle` kinds in the data model:
+
+```
+apps/web/public/assets/pets/    — pet states and animation frames
+apps/web/public/assets/world/   — stage backgrounds, unlockable objects
+apps/web/public/assets/badges/  — achievement art
+```
+
+- Filenames are lowercase kebab-case, no spaces: `cat-sleeping.png`, not `catsleeping.png`.
+- Animation frames are numbered with a hyphen: `eating-1.png`, `eating-2.png`.
+- Asset changes ship in their own PR — never bundled with game logic.
+
+This is the M1/M2 arrangement. Once the asset registry lands (M2), these files move to object
+storage and are addressed by `asset_ref_id`; keeping the categories aligned now makes that a
+path swap rather than a reorganization.
 
 ## Running tests
 
