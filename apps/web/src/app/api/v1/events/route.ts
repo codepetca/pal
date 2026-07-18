@@ -18,6 +18,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_required_fields" }, { status: 422 });
   }
 
+  // Derived events (STREAK_MILESTONE, LEVEL_UP, ...) are synthetic and never
+  // accepted on the ingest API — see "Rules of the cascade" in docs/rule-engine.md.
+  if (/^[A-Z0-9_]+$/.test(event_type)) {
+    return NextResponse.json({ error: "synthetic_event_type" }, { status: 422 });
+  }
+
+  if (Number.isNaN(Date.parse(occurred_at))) {
+    return NextResponse.json({ error: "invalid_occurred_at" }, { status: 422 });
+  }
+
   // TODO: check idempotency key against DB — return "duplicate" if seen
   // TODO: validate event_type against integration allow-list
   // TODO: save the raw event to DB (only derived state is persisted, in-memory, for now)
