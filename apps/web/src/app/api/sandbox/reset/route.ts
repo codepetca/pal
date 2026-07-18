@@ -6,7 +6,13 @@ import { resetLearner } from "@/lib/learner-store";
 // be replayed from scratch without restarting the dev server. Not part
 // of the real API contract in docs/api.md.
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
+  // Blocked on production only. Vercel preview builds also run with
+  // NODE_ENV=production, and the panel's Reset must keep working there —
+  // so check VERCEL_ENV first and fall back to NODE_ENV off-Vercel.
+  const isProduction = process.env.VERCEL_ENV
+    ? process.env.VERCEL_ENV === "production"
+    : process.env.NODE_ENV === "production";
+  if (isProduction) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
