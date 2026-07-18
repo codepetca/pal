@@ -141,11 +141,16 @@ These four are invariants — breaking one breaks production or leaks data:
 ## Naming conventions
 
 - **Files and directories** — lowercase kebab-case, no spaces: `rule-pack.ts`, `cat-sleeping.png`.
-  React components are the exception: `PascalCase.tsx`, matching the component they export.
+  Two exceptions: React components are `PascalCase.tsx`, matching the component they export,
+  and conventional root files keep their usual uppercase (`README.md`, `CLAUDE.md`, `LICENSE`).
 - **Branches** — `<domain-prefix>/<short-description>`, kebab-case: `world/asset-registry`.
   Prefixes are listed under [Team domains](#team-domains); use `infra/` for repo-wide changes.
-- **Asset ref IDs** — kebab-case with a version suffix: `world-bird-v1`. These are stable
-  identifiers referenced by rule packs, so never rename one in place — add a new version.
+- **Asset ref IDs** — kebab-case with a version suffix: `world-bird-v1`, matching the example in
+  [rule-engine.md](rule-engine.md#effect-types).
+
+> **Proposed, not yet agreed:** treat asset ref IDs as immutable — never rename one in place,
+> publish a new version instead. Rule packs reference these IDs, so a rename silently breaks
+> live worlds. Needs a Discord decision before it becomes a rule.
 
 ## Static assets
 

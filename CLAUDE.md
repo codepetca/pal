@@ -10,7 +10,7 @@ A game engine as a service. External systems (like Pika) send privacy-safe learn
 apps/web/          — Next.js app: student viewer, dev sandbox, all API routes
 apps/web/public/assets/ — Static game art (see "Conventions" below)
 packages/engine/   — Rule engine: pure TypeScript functions, no DB, no side effects
-packages/db/       — Database schema and migrations (Drizzle, coming in M1)
+packages/db/       — Database schema and migrations (Drizzle)
 packages/widget/   — Embeddable widget npm package (coming in M3)
 docs/              — Architecture and domain docs — read these first
 ```
