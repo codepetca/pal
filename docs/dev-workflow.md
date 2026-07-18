@@ -110,6 +110,7 @@ pnpm --filter @pal/engine test
 
 ### Milestone 2 (M2) — World depth
 - World object unlocks + asset registry
+- Asset resolver: `asset_ref_id` → URL, so nothing hardcodes an asset path
 - Time-elapsed WORLD_TICK cron
 - World visual layers in viewer and widget
 - Rule preview endpoint for operators
@@ -163,6 +164,18 @@ apps/web/public/assets/badges/  — achievement art
   resized on demand, and downscale before shipping anything to the widget.
 - Asset changes ship in their own PR — never bundled with game logic.
 
-This is the M1/M2 arrangement. Once the asset registry lands (M2), these files move to object
-storage and are addressed by `asset_ref_id`; keeping the categories aligned now makes that a
-path swap rather than a reorganization.
+### Where assets live, and when that changes
+
+In the repo through M2 — free, no infrastructure, and art deploys atomically with the code that
+uses it. Two things trigger the move to object storage, neither of them file size:
+
+- An operator uploads art without opening a PR (M4 console, seasonal packs)
+- Widget embed bandwidth becomes a billed line item (M3)
+
+That move is a config change **only if** every consumer resolves `asset_ref_id` → URL. Build the
+resolver with the M2 registry and never hardcode a path — especially not in the widget, where
+integrators pin a version you cannot retroactively change.
+
+Still open: Vercel Blob vs Cloudflare R2 (R2's zero egress matters only once widget traffic is
+real). Whichever wins, remote assets need `images.remotePatterns` in `next.config.ts`, and
+versioned ref IDs avoid CDN staleness since a new version is a new path.
