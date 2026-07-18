@@ -13,6 +13,9 @@ export async function GET(
   // TODO: validate read token from Authorization header
 
   const state = loadLearner(learnerId);
+
+  // Moods are temporary: past mood_expires_at, present as "neutral". Read-side
+  // presentation only — stored state still changes exclusively via the engine.
   const moodExpired =
     state.pet.mood_expires_at !== null && Date.parse(state.pet.mood_expires_at) <= Date.now();
 

@@ -8,8 +8,9 @@ A game engine as a service. External systems (like Pika) send privacy-safe learn
 
 ```
 apps/web/          — Next.js app: student viewer, dev sandbox, all API routes
+apps/web/public/assets/ — Static game art (see "Conventions" below)
 packages/engine/   — Rule engine: pure TypeScript functions, no DB, no side effects
-packages/db/       — Database schema and migrations (Drizzle, coming in M1)
+packages/db/       — Database schema and migrations (Drizzle)
 packages/widget/   — Embeddable widget npm package (coming in M3)
 docs/              — Architecture and domain docs — read these first
 ```
@@ -45,6 +46,14 @@ git worktree add -b <branch> ../pal-<short-name> main
 gh pr create --repo codepetca/pal --base main --head <branch>
 ```
 
+## Conventions
+
+Naming rules (files, branches, asset ref IDs) and the static asset layout live in
+[dev-workflow.md](docs/dev-workflow.md#naming-conventions) — that doc is the source of truth,
+don't restate it here. The short version: lowercase kebab-case for files and directories
+(`cat-sleeping.png`), `PascalCase.tsx` for React components, and game art under
+`apps/web/public/assets/<category>/`.
+
 ## Running tests
 
 ```bash
@@ -64,3 +73,4 @@ Learner IDs must be pre-hashed by the integration before sending.
 - [Data model](docs/data-model.md)
 - [API contracts](docs/api.md)
 - [Dev workflow](docs/dev-workflow.md)
+- [Roadmap](docs/roadmap.md)

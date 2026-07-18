@@ -37,6 +37,13 @@ export function saveLearner(learnerId: string, state: LearnerState): void {
   learners.set(learnerId, state);
 }
 
+// Dev-only, used by POST /api/sandbox/reset so the sandbox panel can replay a
+// learner from scratch. Clears state only — idempotency keys are deliberately
+// kept, so a replayed event needs a fresh key, exactly as a real retry would.
+export function resetLearner(learnerId: string): void {
+  learners.delete(learnerId);
+}
+
 // Dedupes retries of the same event. The key is recorded only *after* the event's
 // state change has been persisted (see the ingest route), so an event that fails
 // mid-processing is not marked seen and a retry reprocesses it rather than being

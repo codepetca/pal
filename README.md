@@ -50,20 +50,29 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [Rule engine](docs/rule-engine.md)
 - [Integration guide](docs/integration.md)
 - [Development workflow](docs/dev-workflow.md)
+- [Roadmap](docs/roadmap.md)
 
 ## Repo structure
 
 ```
 apps/
-  web/          # Student world viewer + dev sandbox (Next.js)
-  admin/        # Operator + teacher console (Next.js)
+  web/          # Student viewer, dev sandbox, and all API routes (Next.js)
+    public/assets/   # Static game art — pets/, world/, badges/
 packages/
-  api/          # Hono API server
   engine/       # Rule engine (pure functions, no DB)
-  widget/       # @pal/widget npm package
   db/           # Drizzle schema + migrations
 docs/           # Living architecture documents (start here)
 ```
+
+Planned, not yet in the repo:
+
+```
+apps/admin/       # Operator + teacher console (M2)
+packages/widget/  # @pal/widget npm package (M3)
+```
+
+Next.js serves both the UI and the API — there is no separate API server. See
+[Tech stack](docs/architecture.md#tech-stack).
 
 ## Getting started
 
