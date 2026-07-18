@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import styles from "./page.module.css";
 
 const TEST_LEARNER_ID = "test-learner-001";
@@ -84,6 +85,15 @@ export default function WorldView() {
 
   return (
     <div className={styles.world}>
+      <Image
+        src="/assets/mockups/pika-student/pika-student-dashboard-expanded.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className={styles.backdrop}
+      />
+
       <svg
         className={styles.ground}
         viewBox="0 0 1440 200"
