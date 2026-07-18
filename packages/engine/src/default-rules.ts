@@ -59,13 +59,23 @@ export const defaultRulePack: RulePack = {
       effects: [{ type: "XP_GRANT", amount: ASSIGNMENT_ON_TIME_BONUS_XP }],
     },
     {
-      id: "daily-checkin-xp",
+      // The check-in event only advances the streak; it grants no XP itself. The
+      // XP is paid on the derived STREAK_MILESTONE below, which fires once per UTC
+      // day — so a learner POSTing several check-ins in one day earns the day's XP
+      // exactly once. Paying XP here instead would let repeated same-day check-ins
+      // farm DAILY_CHECKIN_XP without limit.
+      id: "daily-checkin-streak",
       trigger: { event_type: "daily_checkin.created" },
       conditions: [],
-      effects: [
-        { type: "XP_GRANT", amount: DAILY_CHECKIN_XP },
-        { type: "STREAK", continue_streak: true },
-      ],
+      effects: [{ type: "STREAK", continue_streak: true }],
+    },
+    {
+      // The once-per-day base reward. STREAK_MILESTONE is derived only when the
+      // streak actually advanced, so this cannot double-pay within a day.
+      id: "daily-checkin-xp",
+      trigger: { event_type: STREAK_MILESTONE },
+      conditions: [],
+      effects: [{ type: "XP_GRANT", amount: DAILY_CHECKIN_XP }],
     },
     ...streakBonusRules,
     {

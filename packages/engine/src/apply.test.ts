@@ -201,4 +201,28 @@ describe("applyMutations", () => {
     const { state } = applyMutations(baseState, [], checkin("2026-03-01"));
     assert.equal(state.economy.last_event_at, "2026-03-01T12:00:00.000Z");
   });
+
+  it("does not move last_event_at backward on an out-of-order event", () => {
+    const { state } = applyMutations(
+      withEconomy({ last_event_at: "2026-03-05T12:00:00.000Z" }),
+      [],
+      checkin("2026-03-02")
+    );
+    assert.equal(state.economy.last_event_at, "2026-03-05T12:00:00.000Z");
+  });
+
+  it("orders last_event_at as timestamps, not strings", () => {
+    // "+05:00" sorts lexicographically after any "…Z" string, but as an instant
+    // this is 07:00Z — an hour *before* the recorded 08:00Z. It must not win.
+    const { state } = applyMutations(
+      withEconomy({ last_event_at: "2026-03-01T08:00:00.000Z" }),
+      [],
+      {
+        event_type: "daily_checkin.created",
+        occurred_at: "2026-03-01T12:00:00.000+05:00",
+        metadata: {},
+      }
+    );
+    assert.equal(state.economy.last_event_at, "2026-03-01T08:00:00.000Z");
+  });
 });

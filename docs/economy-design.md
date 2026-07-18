@@ -42,7 +42,8 @@ The streak bonus tiers land on days 2, 4, 6, 8, and 10, and they stack: a 10-day
 
 ## How it behaves today
 
-- **Streaks are derived, never reported.** A check-in on the day after the last one advances the streak; a gap resets it to 1; a second check-in on the same day does not advance it twice. No "streak broken" event is needed, and an integration cannot invent a streak for a student.
+- **Streaks are derived, never reported.** A check-in on the day after the last one advances the streak; a gap resets it to 1; a second check-in on the same day (or a backdated one for an earlier day) does not advance it. No "streak broken" event is needed, and an integration cannot invent a streak for a student.
+- **Check-in XP is paid once per day, on the streak advance.** The base 10 xp and the streak bonus both hang off the derived `STREAK_MILESTONE`, not the raw `daily_checkin.created` event. Because the milestone only fires when the streak actually advances, repeated check-ins on the same day earn the day's reward exactly once — they cannot farm the 10 xp base.
 - **Levelling runs in the engine's derived-event cascade:** xp is granted → `XP_CHANGED` → the `level-up` rule spends 500 xp and grants a level → the pet celebrates. Banking several levels' worth of xp in one event levels up to three times; any surplus stays banked and levels on the next event.
 
 ---
@@ -54,4 +55,5 @@ The streak bonus tiers land on days 2, 4, 6, 8, and 10, and they stack: a 10-day
 - How can we verify that students have actually completed their assignments? Since the Pika system is not integrated with CodeHS or GitHub, students could currently submit completions without actually finishing the lessons.
 - How do we detect when a student has completed writing their daily log? The EXP reward should not trigger prematurely (e.g., as soon as they type a single character).
 - A student's streak day is currently UTC, so a student checking in late in the evening west of UTC can be credited to the next day and lose a streak they earned. Revisit when integrations can declare a timezone.
+- A check-in that arrives out of order — its `occurred_at` on or before the day the streak last advanced — earns **nothing**: no streak movement and no XP, since all check-in XP hangs off the streak advance. This is deliberate (it is what stops backdated events from farming XP or corrupting streaks), but it means a genuinely delayed delivery of a real check-in is silently unrewarded. If integrations turn out to deliver days late in practice, this needs a smarter reconciliation than "first day wins".
 - A broken streak is only noticed on the student's _next_ check-in, so a stale `streak_current` can display for days. If the streak needs to visibly reset the moment it breaks, that requires a per-learner scheduled event.

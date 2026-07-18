@@ -120,40 +120,45 @@ describe("evaluate", () => {
   });
 
   // --- Daily check-in ---
+  //
+  // The check-in event only advances the streak. Both the base XP and the streak
+  // bonus are paid on the derived STREAK_MILESTONE, which fires once per day — so a
+  // second same-day check-in advances nothing and earns nothing.
 
-  it("grants 10 XP and continues the streak on a daily check-in", () => {
+  it("only continues the streak on a daily check-in, granting no XP directly", () => {
     const mutations = evaluate(
       { event_type: "daily_checkin.created", occurred_at: AT, metadata: {} },
       baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 10);
+    assert.equal(totalXp(mutations), 0);
     assert.deepEqual(
       mutations.find((m) => m.type === "STREAK"),
       { type: "STREAK", continue_streak: true }
     );
   });
 
-  it("does not pay a streak bonus on the check-in event itself", () => {
-    // The bonus belongs to STREAK_MILESTONE, which is derived after the streak
-    // advances. Paying it here would read yesterday's streak and be a day late.
+  it("does not pay any check-in XP on the check-in event itself", () => {
+    // Both base and bonus belong to STREAK_MILESTONE, derived after the streak
+    // advances. Paying here would read yesterday's streak and let repeated same-day
+    // check-ins farm XP, since the streak's same-day guard wouldn't gate the XP.
     const mutations = evaluate(
       { event_type: "daily_checkin.created", occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 9 }),
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 10);
+    assert.equal(totalXp(mutations), 0);
   });
 
-  // --- Streak bonus tiers (on the derived milestone, so streak includes today) ---
+  // --- Check-in XP on the derived milestone (base + tiered bonus, streak includes today) ---
 
-  it("pays no streak bonus on day 1", () => {
+  it("pays only the base check-in XP on day 1", () => {
     const mutations = evaluate(
       { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 1 }),
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 0);
+    assert.equal(totalXp(mutations), 10); // base 10, no streak bonus yet
   });
 
   for (const [streak, bonus] of [
@@ -167,23 +172,23 @@ describe("evaluate", () => {
     [9, 12],
     [10, 15],
   ] as const) {
-    it(`pays +${bonus} streak bonus on day ${streak}`, () => {
+    it(`pays 10 base + ${bonus} streak bonus on day ${streak}`, () => {
       const mutations = evaluate(
         { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
         withEconomy({ streak_current: streak }),
         defaultRulePack
       );
-      assert.equal(totalXp(mutations), bonus);
+      assert.equal(totalXp(mutations), 10 + bonus);
     });
   }
 
-  it("caps the streak bonus at +15 beyond day 10", () => {
+  it("caps the streak bonus at +15 (25 total) beyond day 10", () => {
     const mutations = evaluate(
       { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 40 }),
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 15);
+    assert.equal(totalXp(mutations), 25); // base 10 + capped bonus 15
   });
 
   // --- Level up (on the derived XP_CHANGED, so XP is post-grant) ---
