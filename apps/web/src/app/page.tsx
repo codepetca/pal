@@ -84,6 +84,8 @@ export default function WorldView() {
 
   return (
     <div className={styles.world}>
+      <div className={styles.backdrop} aria-hidden="true" />
+
       <svg
         className={styles.ground}
         viewBox="0 0 1440 200"

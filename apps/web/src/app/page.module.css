@@ -2,9 +2,18 @@
   position: relative;
   width: 100%;
   height: 100vh;
-  background: linear-gradient(to bottom, #5B9BD5 0%, #A8CCE8 55%, #D9EAF5 100%);
   overflow: hidden;
   font-family: system-ui, -apple-system, sans-serif;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background-image: url("/assets/mockups/pika-student/pika-student-dashboard-expanded.jpg");
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  z-index: 0;
 }
 
 .ground {
@@ -14,6 +23,7 @@
   width: 100%;
   height: 36%;
   pointer-events: none;
+  z-index: 1;
 }
 
 .pet {
