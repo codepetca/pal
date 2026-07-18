@@ -1,63 +1,137 @@
 import type { IncomingEvent, LearnerState, Mutation } from "./types";
 
-const STREAK_MILESTONE = 7;
+// Derived events are synthetic: SCREAMING_SNAKE, emitted by mutation handlers,
+// never accepted on the ingest API. See docs/rule-engine.md.
+export const XP_CHANGED = "XP_CHANGED";
+export const LEVEL_UP = "LEVEL_UP";
+export const STREAK_MILESTONE = "STREAK_MILESTONE";
 
-// Applies a batch of mutations produced by one evaluate() call to a
-// learner's state. Pure — no DB, no side effects. The only place
-// economy/pet/world fields are allowed to change.
+export type ApplyResult = {
+  state: LearnerState;
+  derived: IncomingEvent[];
+};
+
+// Applies a list of mutations to learner state and reports the derived events
+// the change created. Pure: no DB, no clock, no side effects — the caller owns
+// persistence and the transaction.
 export function applyMutations(
   state: LearnerState,
   mutations: Mutation[],
-  occurredAt: string
-): { state: LearnerState; derivedEvents: IncomingEvent[] } {
+  event: IncomingEvent
+): ApplyResult {
   const next: LearnerState = {
     economy: { ...state.economy },
     pet: { ...state.pet },
-    world: { ...state.world, unlocked_object_ids: [...state.world.unlocked_object_ids] },
+    world: {
+      ...state.world,
+      unlocked_object_ids: [...state.world.unlocked_object_ids],
+    },
   };
 
-  let grantedXp = false;
+  const derivedTypes = new Set<string>();
 
   for (const mutation of mutations) {
     switch (mutation.type) {
-      case "XP_GRANT":
-        next.economy.xp += mutation.amount;
-        grantedXp = true;
-        break;
-      case "PET_MOOD": {
-        next.pet.mood = mutation.mood;
-        const expiresAt = new Date(occurredAt);
-        expiresAt.setMinutes(expiresAt.getMinutes() + mutation.duration_minutes);
-        next.pet.mood_expires_at = expiresAt.toISOString();
+      case "XP_GRANT": {
+        // XP is a balance toward the next level, so a level-up spends it via a
+        // negative grant. It can never go below zero.
+        const xp = Math.max(0, next.economy.xp + mutation.amount);
+        if (mutation.amount > 0) next.economy.xp_lifetime += mutation.amount;
+        if (xp !== next.economy.xp) {
+          next.economy.xp = xp;
+          derivedTypes.add(XP_CHANGED);
+        }
         break;
       }
-      case "WORLD_UNLOCK":
+
+      case "LEVEL_GRANT": {
+        next.economy.level += mutation.levels;
+        derivedTypes.add(LEVEL_UP);
+        break;
+      }
+
+      case "STREAK": {
+        if (!mutation.continue_streak) {
+          next.economy.streak_current = 0;
+          next.economy.streak_last_day = null;
+          break;
+        }
+        const today = utcDay(event.occurred_at);
+        // Same day: the streak already advanced, so a second check-in is a no-op —
+        // this is what stops a learner banking a day's bonus twice. Earlier day:
+        // the event is out of order (a retry or a backdated occurred_at), and
+        // advancing off it would move `streak_last_day` backward and could reset a
+        // legitimate streak to 1. Streak continuity only ever moves forward.
+        if (next.economy.streak_last_day !== null && today <= next.economy.streak_last_day) {
+          break;
+        }
+        next.economy.streak_current =
+          next.economy.streak_last_day === previousUtcDay(today)
+            ? next.economy.streak_current + 1
+            : 1;
+        next.economy.streak_last_day = today;
+        derivedTypes.add(STREAK_MILESTONE);
+        break;
+      }
+
+      case "PET_MOOD": {
+        next.pet.mood = mutation.mood;
+        next.pet.mood_expires_at = new Date(
+          new Date(event.occurred_at).getTime() + mutation.duration_minutes * 60_000
+        ).toISOString();
+        break;
+      }
+
+      case "WORLD_STAGE": {
+        next.world.stage = mutation.stage;
+        break;
+      }
+
+      case "WORLD_UNLOCK": {
+        // Unlock rules use `gte` thresholds, so they re-fire on every later
+        // milestone. Unlocking is idempotent by design.
         if (!next.world.unlocked_object_ids.includes(mutation.asset_ref_id)) {
           next.world.unlocked_object_ids.push(mutation.asset_ref_id);
         }
         break;
-      case "WORLD_STAGE":
-        next.world.stage = mutation.stage;
-        break;
+      }
+
       case "ACHIEVEMENT":
       case "NUDGE":
-        // Not modeled in LearnerState yet — no-op until badges/nudges exist.
+        // Both are records for other domains (UnlockLedger, nudge delivery) and
+        // carry no learner-state change. The caller persists them.
         break;
     }
   }
 
-  // A single evaluate() call can contain multiple XP_GRANT mutations
-  // (e.g. assignment-xp + assignment-on-time-bonus both fire for one
-  // event) — that must still only count as one streak tick.
-  if (grantedXp) {
-    next.economy.streak_current += 1;
-  }
-  next.economy.last_event_at = occurredAt;
-
-  const derivedEvents: IncomingEvent[] = [];
-  if (state.economy.streak_current < STREAK_MILESTONE && next.economy.streak_current >= STREAK_MILESTONE) {
-    derivedEvents.push({ event_type: "STREAK_MILESTONE", occurred_at: occurredAt, metadata: {} });
+  // Never let an out-of-order (backdated) event move the clock backward. Compare as
+  // timestamps, not strings: occurred_at is any ISO-8601 string here, and an offset
+  // form ("+05:00") would sort lexicographically against a Zulu form incorrectly.
+  if (
+    next.economy.last_event_at === null ||
+    Date.parse(event.occurred_at) > Date.parse(next.economy.last_event_at)
+  ) {
+    next.economy.last_event_at = event.occurred_at;
   }
 
-  return { state: next, derivedEvents };
+  const derived: IncomingEvent[] = [...derivedTypes].map((event_type) => ({
+    event_type,
+    occurred_at: event.occurred_at,
+    metadata: {},
+  }));
+
+  return { state: next, derived };
+}
+
+// A learner's streak day is UTC. A student checking in at 9pm local time west of
+// UTC lands on the next UTC day, which can cost them a streak — acceptable for M1,
+// revisit when integrations can declare a timezone.
+function utcDay(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function previousUtcDay(day: string): string {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
 }

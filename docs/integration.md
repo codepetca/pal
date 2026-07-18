@@ -34,9 +34,10 @@ Pika sends these event types:
 - `assignment.completed` — on-time submissions carry `metadata.on_time: true`
 - `daily_checkin.created`
 - `resource.viewed`
-- `streak.milestone`
 - `calendar.month_end` (via schedule, not Pika API)
 - `calendar.semester_end` (via schedule)
+
+Streaks are **not** sent by the integration. Pal derives them from `daily_checkin.created`: consecutive calendar days advance the streak, a missed day resets it. An integration cannot report a streak milestone, because an integration that could report one could also invent one.
 
 ## Adding a new integration
 

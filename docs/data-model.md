@@ -16,7 +16,13 @@ These exist as tables today:
 - **Integration** — a registered external system (e.g. Pika). Owns its secret hash, allowed event types, and rule pack ID.
 - **Learner** — a pseudonymous student. No name, no email, no raw ID. `learners.id` is ours; `external_learner_id` is the integration's pre-hashed token, unique only within that integration.
 - **Event** — a learning signal received from an integration. Immutable once written. `UNIQUE (integration_id, idempotency_key)` *is* the idempotency mechanism: ingest inserts with `ON CONFLICT DO NOTHING` and reads "no row returned" as a duplicate.
-- **Economy** — XP, level, and streak per learner.
+- **Economy** — XP, level, and streak per learner. The engine tracks two XP numbers, and the distinction matters:
+  - `xp` — the **balance** toward the next level. A level-up spends it (a negative `XP_GRANT`), so it goes down as well as up. This is what a progress bar renders.
+  - `xp_lifetime` — every point ever earned, never spent. This is what lifetime achievements key on. Without it, levelling would erase the only record that the XP existed.
+
+  Streak continuity is anchored on `streak_last_day` (the UTC calendar day the streak last advanced), not on `last_event_at` — otherwise any event, like an assignment, would stand in for a daily check-in.
+
+  > Schema gap: the `economy` table does not yet have `xp_lifetime` or `streak_last_day` columns, so the engine's economy state cannot be fully persisted until they are added.
 - **PetState** — mood, mood expiry, and animation per learner.
 - **WorldState** — stage and unlocked objects per learner.
 
