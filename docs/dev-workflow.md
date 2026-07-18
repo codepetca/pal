@@ -110,6 +110,7 @@ pnpm --filter @pal/engine test
 
 ### Milestone 2 (M2) — World depth
 - World object unlocks + asset registry
+- Asset resolver: `asset_ref_id` → URL, so nothing hardcodes an asset path
 - Time-elapsed WORLD_TICK cron
 - World visual layers in viewer and widget
 - Rule preview endpoint for operators
@@ -130,7 +131,56 @@ pnpm --filter @pal/engine test
 
 ## Key conventions
 
+These four are invariants — breaking one breaks production or leaks data:
+
 - Never mutate learner state outside the rule engine
 - All DB mutations are transactional
 - Migrations are append-only (no destructive changes without a plan)
 - No raw student PII ever enters the DB — enforce at the API boundary
+
+## Naming conventions
+
+- **Files and directories** — lowercase kebab-case, no spaces: `rule-pack.ts`, `cat-sleeping.png`.
+  Two exceptions: React components are `PascalCase.tsx`, matching the component they export,
+  and conventional root files keep their usual uppercase (`README.md`, `CLAUDE.md`, `LICENSE`).
+- **Branches** — `<domain-prefix>/<short-description>`, kebab-case: `world/asset-registry`.
+  Prefixes are listed under [Team domains](#team-domains); use `infra/` for repo-wide changes.
+- **Asset ref IDs** — kebab-case with a version suffix: `world-bird-v1`, matching the example in
+  [rule-engine.md](rule-engine.md#effect-types).
+
+> **Proposed, not yet agreed:** treat asset ref IDs as immutable — never rename one in place,
+> publish a new version instead. Rule packs reference these IDs, so a rename silently breaks
+> live worlds. Needs a Discord decision before it becomes a rule.
+
+## Static assets
+
+Game art lives under `apps/web/public/assets/<category>/` and is served by Next.js at
+`/assets/<category>/<file>`. Categories mirror the `AssetBundle` kinds in the
+[data model](data-model.md#asset-registry-entities):
+
+```
+apps/web/public/assets/pets/    — pet states and animation frames
+apps/web/public/assets/world/   — stage backgrounds, unlockable objects
+apps/web/public/assets/badges/  — achievement art
+```
+
+- Animation frames are numbered with a hyphen: `eating-1.png`, `eating-2.png`.
+- Source art is often much larger than display size. Serve through `next/image` so it is
+  resized on demand, and downscale before shipping anything to the widget.
+- Asset changes ship in their own PR — never bundled with game logic.
+
+### Where assets live, and when that changes
+
+In the repo through M2 — free, no infrastructure, and art deploys atomically with the code that
+uses it. Two things trigger the move to object storage, neither of them file size:
+
+- An operator uploads art without opening a PR (M4 console, seasonal packs)
+- Widget embed bandwidth becomes a billed line item (M3)
+
+That move is a config change **only if** every consumer resolves `asset_ref_id` → URL. Build the
+resolver with the M2 registry and never hardcode a path — especially not in the widget, where
+integrators pin a version you cannot retroactively change.
+
+Still open: Vercel Blob vs Cloudflare R2 (R2's zero egress matters only once widget traffic is
+real). Whichever wins, remote assets need `images.remotePatterns` in `next.config.ts`, and
+versioned ref IDs avoid CDN staleness since a new version is a new path.
