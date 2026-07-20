@@ -17,6 +17,7 @@ function Pet() {
 }
 
 export default function WorldView() {
+  const [level, setLevel] = useState(1);
   const [streak, setStreak] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [log, setLog] = useState<string[]>([]);
@@ -32,8 +33,9 @@ export default function WorldView() {
     const data = await res.json();
     // A later refreshWorld() call can have its response arrive first.
     // Drop this one if a newer request has since been issued, so a
-    // stale response can't overwrite the current streak count.
+    // stale response can't overwrite the current economy values.
     if (seq !== refreshSeq.current) return;
+    setLevel(data.economy.level);
     setStreak(data.economy.streak);
   }
 
@@ -96,7 +98,7 @@ export default function WorldView() {
       </div>
 
       <div className={styles.groundHud}>
-        <span className={styles.levelBadge}>Lv 3</span>
+        <span className={styles.levelBadge}>Lv {level}</span>
         <span className={styles.streak}>🔥 {streak}</span>
       </div>
 
