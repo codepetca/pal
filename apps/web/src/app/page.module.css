@@ -17,14 +17,14 @@
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 36%;
+  height: 18%;
   pointer-events: none;
   z-index: 1;
 }
 
 .pet {
   position: absolute;
-  bottom: 22%;
+  bottom: 5%;
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
@@ -50,10 +50,14 @@
   text-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 
-.hudRight {
+.groundHud {
+  position: absolute;
+  bottom: 14px;
+  right: 16px;
   display: flex;
   align-items: center;
   gap: 8px;
+  z-index: 3;
 }
 
 .levelBadge {
@@ -82,7 +86,7 @@
   height: 36px;
   border: none;
   border-radius: 50%;
-  background: rgba(20,24,32,0.55);
+  background: rgba(15,18,26,0.85);
   color: white;
   font-size: 16px;
   cursor: pointer;
@@ -97,7 +101,7 @@
   width: clamp(280px, 25vw, 360px);
   max-height: 70vh;
   overflow: hidden;
-  background: rgba(20,24,32,0.62);
+  background: rgba(15,18,26,0.92);
   backdrop-filter: blur(6px);
   border-radius: 10px;
   color: #eef1f6;
