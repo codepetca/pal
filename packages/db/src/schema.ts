@@ -1,5 +1,6 @@
 import {
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -90,11 +91,19 @@ export const economy = pgTable(
     learnerId: uuid("learner_id")
       .primaryKey()
       .references(() => learners.id, { onDelete: "cascade" }),
+    // xp is the balance toward the next level — a level-up spends it. xp_lifetime
+    // is every point ever earned, never spent; lifetime achievements key on it.
+    // See the Economy entity in docs/data-model.md.
     xp: integer("xp").notNull().default(0),
+    xpLifetime: integer("xp_lifetime").notNull().default(0),
     level: integer("level").notNull().default(1),
     // Streaks are not computed in the M1 slice; the column exists because the
     // engine's LearnerState type reads it.
     streakCurrent: integer("streak_current").notNull().default(0),
+    // UTC calendar day (YYYY-MM-DD) the streak last advanced. Anchors day-over-day
+    // continuity and the engine's forward-only streak guard; null until the first
+    // check-in or after a rule breaks the streak.
+    streakLastDay: date("streak_last_day"),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -102,6 +111,9 @@ export const economy = pgTable(
     check("economy_xp_non_negative", sql`${t.xp} >= 0`),
     check("economy_level_positive", sql`${t.level} >= 1`),
     check("economy_streak_non_negative", sql`${t.streakCurrent} >= 0`),
+    // Spending never touches lifetime and earning raises both, so the balance can
+    // never exceed lifetime. A write that violates this is a persistence bug.
+    check("economy_xp_lifetime_gte_xp", sql`${t.xpLifetime} >= ${t.xp}`),
   ]
 );
 
