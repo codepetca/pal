@@ -1,0 +1,124 @@
+import type { RoadmapData } from "./types";
+
+/**
+ * Demo data for the `/viewer` route. In production this shape is served
+ * per-learner from an API route; the components never depend on it being
+ * static. Two tracks prove the path is fully data-driven (switch them in
+ * the header and the whole roadmap re-renders).
+ */
+export const sampleRoadmap: RoadmapData = {
+  tracks: [
+    {
+      id: "cs",
+      name: "Intro to CS",
+      accent: "#1CB0F6",
+      subtitle: "12 nodes · 2 units",
+      learner: {
+        level: 12,
+        rank: "Circuit Adept",
+        xp: 3480,
+        xpToNext: 4200,
+        streak: 12,
+        gems: 540,
+        week: [true, true, true, false, true, true, true],
+      },
+      leaderboard: [
+        { alias: "SwiftOtter", level: 15, xp: 5120, color: "#CE82FF" },
+        { alias: "CalmFox", level: 14, xp: 4680, color: "#FFC800" },
+        { alias: "BraveMoth", level: 13, xp: 3990, color: "#58CC02" },
+        { alias: "Your Pal", level: 12, xp: 3480, color: "#3DE6A6", you: true },
+        { alias: "QuietWren", level: 12, xp: 3210, color: "#1CB0F6" },
+        { alias: "BoldNewt", level: 11, xp: 2870, color: "#FF4B4B" },
+      ],
+      units: [
+        {
+          id: "u1",
+          kind: "Unit 1",
+          title: "Foundations",
+          subtitle: "Variables, loops & logic",
+          color: "#1CB0F6",
+          icon: "log",
+          nodes: [
+            { id: "n1", type: "assignment", title: "Hello, World", xp: 20, status: "done", crown: 2 },
+            { id: "n2", type: "log", title: "Daily log", xp: 10, status: "done", crown: 1 },
+            { id: "n3", type: "assignment", title: "Loops & counters", xp: 30, status: "done", crown: 3 },
+            { id: "n4", type: "chest", title: "Bonus chest", xp: 60, status: "done" },
+            { id: "n5", type: "project", title: "Number Guesser", xp: 220, status: "current" },
+            { id: "n6", type: "assignment", title: "Functions", xp: 35, status: "locked" },
+            { id: "n7", type: "test", title: "Unit 1 Test", xp: 400, status: "locked" },
+          ],
+        },
+        {
+          id: "u2",
+          kind: "Unit 2",
+          title: "Data & Structure",
+          subtitle: "Lists, maps & files",
+          color: "#CE82FF",
+          icon: "project",
+          nodes: [
+            { id: "n8", type: "assignment", title: "Lists", xp: 35, status: "locked" },
+            { id: "n9", type: "log", title: "Daily log", xp: 10, status: "locked" },
+            { id: "n10", type: "assignment", title: "Dictionaries", xp: 40, status: "locked" },
+            { id: "n11", type: "project", title: "Contact Book App", xp: 260, status: "locked" },
+            { id: "n12", type: "test", title: "Unit 2 Test", xp: 450, status: "locked" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "sci",
+      name: "Grade 10 Science",
+      accent: "#58CC02",
+      subtitle: "10 nodes · 2 units",
+      learner: {
+        level: 8,
+        rank: "Field Researcher",
+        xp: 1620,
+        xpToNext: 2000,
+        streak: 5,
+        gems: 210,
+        week: [false, true, true, true, true, true, false],
+      },
+      leaderboard: [
+        { alias: "KeenHeron", level: 11, xp: 2740, color: "#CE82FF" },
+        { alias: "SharpVole", level: 10, xp: 2410, color: "#FFC800" },
+        { alias: "WiseMink", level: 9, xp: 1980, color: "#58CC02" },
+        { alias: "Your Pal", level: 8, xp: 1620, color: "#3DE6A6", you: true },
+        { alias: "SlyMartin", level: 8, xp: 1490, color: "#1CB0F6" },
+        { alias: "FairPika", level: 7, xp: 1180, color: "#FF4B4B" },
+      ],
+      units: [
+        {
+          id: "s1",
+          kind: "Unit 1",
+          title: "The Cell",
+          subtitle: "Structure & function",
+          color: "#58CC02",
+          icon: "assignment",
+          nodes: [
+            { id: "m1", type: "log", title: "Lab safety log", xp: 10, status: "done", crown: 1 },
+            { id: "m2", type: "assignment", title: "Cell parts quiz", xp: 30, status: "done", crown: 2 },
+            { id: "m3", type: "assignment", title: "Osmosis worksheet", xp: 30, status: "current" },
+            { id: "m4", type: "chest", title: "Bonus chest", xp: 50, status: "locked" },
+            { id: "m5", type: "project", title: "Microscope Lab Report", xp: 240, status: "locked" },
+            { id: "m6", type: "test", title: "Unit 1 Test", xp: 400, status: "locked" },
+          ],
+        },
+        {
+          id: "s2",
+          kind: "Unit 2",
+          title: "Chemistry",
+          subtitle: "Atoms, bonds & reactions",
+          color: "#FF4B4B",
+          icon: "test",
+          nodes: [
+            { id: "m7", type: "assignment", title: "Periodic table", xp: 35, status: "locked" },
+            { id: "m8", type: "log", title: "Daily log", xp: 10, status: "locked" },
+            { id: "m9", type: "project", title: "Reaction Poster", xp: 250, status: "locked" },
+            { id: "m10", type: "test", title: "Midterm Boss", xp: 600, status: "locked" },
+          ],
+        },
+      ],
+    },
+  ],
+};

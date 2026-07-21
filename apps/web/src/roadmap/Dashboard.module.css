@@ -1,0 +1,134 @@
+.layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr) 344px;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--canvas);
+}
+.sidebarWrap,
+.railWrap {
+  height: 100%;
+  min-height: 0;
+}
+
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(20, 22, 31, 0.94), rgba(20, 22, 31, 0.74));
+  backdrop-filter: blur(14px);
+  font-family: var(--font-display);
+}
+.crumb b {
+  display: block;
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+.crumb span {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+.trackChip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.trackChip:hover {
+  border-color: var(--ink-faint);
+  transform: translateY(-1px);
+}
+.trackChip .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.trackChip svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-dim);
+}
+.spacer {
+  flex: 1;
+}
+.tbStats {
+  display: none;
+  gap: 10px;
+}
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+}
+.stat svg {
+  width: 18px;
+  height: 18px;
+}
+.streak {
+  color: var(--streak);
+}
+.gem {
+  color: var(--gem);
+}
+.lvl {
+  color: var(--xp);
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.roadmapPane {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+  .railWrap {
+    display: none;
+  }
+  .tbStats {
+    display: flex;
+  }
+}
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebarWrap {
+    display: none;
+  }
+  .topbar {
+    padding: 12px 16px;
+  }
+}

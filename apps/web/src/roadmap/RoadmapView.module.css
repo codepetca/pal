@@ -1,0 +1,105 @@
+.scroll {
+  height: 100%;
+  overflow: auto;
+  padding: 24px 20px 100px;
+  /* faint "worksheet" dot grid so the vibrant nodes sit on texture, not void */
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1.5px, transparent 1.5px);
+  background-size: 26px 26px;
+  background-position: -13px -13px;
+}
+
+.board {
+  position: relative;
+  margin: 0 auto;
+}
+
+.spine {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+.remain {
+  fill: none;
+  stroke: #2b3040;
+  stroke-width: 13;
+  stroke-linecap: round;
+  stroke-dasharray: 1 28;
+}
+.done {
+  fill: none;
+  stroke-width: 13;
+  stroke-linecap: round;
+  filter: drop-shadow(0 3px 10px rgba(61, 230, 166, 0.35));
+}
+
+.banner {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  z-index: 3;
+  padding: 14px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-display);
+}
+.bannerKind {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.bannerTitle {
+  font-weight: 900;
+  font-size: 19px;
+  letter-spacing: -0.3px;
+  margin-top: 2px;
+}
+.bannerSub {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  margin-top: 2px;
+}
+.bannerIcon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.22;
+}
+.bannerIcon svg {
+  width: 66px;
+  height: 66px;
+}
+
+.mascot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  animation: float 2.4s ease-in-out infinite;
+}
+.mascot svg {
+  width: 62px;
+  height: 62px;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  50% {
+    transform: translate(-50%, calc(-50% - 5px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot {
+    animation: none;
+  }
+}
