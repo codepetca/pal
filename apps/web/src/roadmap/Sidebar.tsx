@@ -9,6 +9,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { icon: "route", label: "Roadmap" },
+  { icon: "pencil", label: "Unit Editor" },
   { icon: "world", label: "My World" },
   { icon: "trophy", label: "Leaderboard" },
   { icon: "gift", label: "Rewards", tag: "3" },

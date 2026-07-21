@@ -1,0 +1,46 @@
+/* Pixel-art calico mascot from an 8x8, 128px-per-frame sprite sheet
+   (public/pixel-cat.png). Framed as a retro sticker so its white sheet
+   background reads as an intentional pop against the dark UI. */
+
+.sticker {
+  --fs: 64px;
+  display: inline-grid;
+  place-items: center;
+  padding: 6px;
+  background: #fdfdfb;
+  border: 3px solid #101218;
+  border-radius: 12px;
+  box-shadow: 3px 4px 0 rgba(0, 0, 0, 0.4);
+}
+.tilt {
+  transform: rotate(-4deg);
+}
+
+.sprite {
+  width: var(--fs);
+  height: var(--fs);
+  background-image: url("/pixel-cat.png");
+  background-repeat: no-repeat;
+  background-size: calc(var(--fs) * 8) calc(var(--fs) * 8);
+  image-rendering: pixelated;
+}
+
+/* idle wave: step through the 8 frames of row 0 */
+.wave {
+  animation: wave 1s steps(8) infinite;
+}
+@keyframes wave {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: calc(var(--fs) * -8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave {
+    animation: none;
+    background-position-x: 0;
+  }
+}

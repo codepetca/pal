@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import { computeLayout, findCurrent, type LayoutOptions } from "./layout";
+import { readyChestIds } from "./progress";
 import { Icon } from "./icons";
 import { NODE_STYLE } from "./node-styles";
 import { Node } from "./Node";
-import { PalMascot } from "./icons";
+import { PixelCat } from "./PixelCat";
 import type { RoadmapNode, Track } from "./types";
 import styles from "./RoadmapView.module.css";
 
@@ -17,12 +18,13 @@ interface RoadmapViewProps {
 }
 
 /**
- * The snaking roadmap board. Computes node/banner/spine positions from
- * the track data and renders them. This is the star of the page —
- * everything it draws is derived from `track`, nothing is hardcoded.
+ * The snaking roadmap board, tilted back in 3D. Computes node/banner/spine
+ * positions from the track data and renders them; everything it draws is
+ * derived from `track`, nothing is hardcoded.
  */
 export function RoadmapView({ track, onSelect, layout }: RoadmapViewProps) {
   const board = useMemo(() => computeLayout(track, layout), [track, layout]);
+  const readyChests = useMemo(() => readyChestIds(track), [track]);
   const current = findCurrent(board);
 
   const donePath = board.segments.filter((s) => s.done).map((s) => s.d).join(" ");
@@ -51,25 +53,19 @@ export function RoadmapView({ track, onSelect, layout }: RoadmapViewProps) {
           <div
             key={unit.id}
             className={styles.banner}
-            style={{
-              top,
-              background: `linear-gradient(135deg, ${unit.color}2e, ${unit.color}12)`,
-              borderColor: `${unit.color}44`,
-            }}
+            style={{ top, background: `linear-gradient(160deg, ${unit.color}, ${unit.color}cc)` }}
           >
-            <div className={styles.bannerIcon} style={{ color: unit.color }}>
+            <div className={styles.bannerIcon}>
               <Icon name={unit.icon} />
             </div>
-            <div className={styles.bannerKind} style={{ color: unit.color }}>
-              {unit.kind}
-            </div>
+            <div className={styles.bannerKind}>{unit.kind}</div>
             <div className={styles.bannerTitle}>{unit.title}</div>
             {unit.subtitle && <div className={styles.bannerSub}>{unit.subtitle}</div>}
           </div>
         ))}
 
         {board.nodes.map(({ node, x, y }) => (
-          <Node key={node.id} node={node} x={x} y={y} onSelect={onSelect} />
+          <Node key={node.id} node={node} x={x} y={y} ready={readyChests.has(node.id)} onSelect={onSelect} />
         ))}
 
         {current && (
@@ -77,10 +73,12 @@ export function RoadmapView({ track, onSelect, layout }: RoadmapViewProps) {
             className={styles.mascot}
             style={{
               left: clampMascotX(current.x, board.width, NODE_STYLE[current.node.type].size),
-              top: current.y + 10,
+              top: current.y,
             }}
           >
-            <PalMascot />
+            <div className={styles.mascotFloat}>
+              <PixelCat pose="wave" size={54} tilt />
+            </div>
           </div>
         )}
       </div>
@@ -91,6 +89,6 @@ export function RoadmapView({ track, onSelect, layout }: RoadmapViewProps) {
 /** Keep the mascot next to the current node but inside the lane. */
 function clampMascotX(nodeX: number, boardWidth: number, nodeSize: number) {
   const side = nodeX > boardWidth / 2 ? -1 : 1;
-  const x = nodeX + side * (nodeSize / 2 + 54);
-  return Math.max(46, Math.min(boardWidth - 46, x));
+  const x = nodeX + side * (nodeSize / 2 + 58);
+  return Math.max(52, Math.min(boardWidth - 52, x));
 }

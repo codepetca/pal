@@ -40,12 +40,12 @@ export interface LayoutOptions {
 }
 
 const DEFAULTS: Required<LayoutOptions> = {
-  width: 560,
-  amplitude: 132,
-  gap: 60,
+  width: 540,
+  amplitude: 176,
+  gap: 68,
   top: 24,
-  bannerHeight: 78,
-  bannerGap: 40,
+  bannerHeight: 84,
+  bannerGap: 44,
 };
 
 export function computeLayout(track: Track, options: LayoutOptions = {}): RoadmapLayout {
@@ -71,7 +71,7 @@ export function computeLayout(track: Track, options: LayoutOptions = {}): Roadma
       const half = style.size / 2;
       y += prevHalf + o.gap + half;
       // Boss nodes anchor to center so they read as milestones on-axis.
-      const x = style.boss ? center : center + Math.sin(seq * 0.72) * o.amplitude;
+      const x = style.boss ? center : center + Math.sin(seq * 1.2) * o.amplitude;
       const placed: PlacedNode = { node, x, y };
       nodes.push(placed);
       unitPoints.push(placed);

@@ -1,134 +1,234 @@
 .layout {
-  display: grid;
-  grid-template-columns: 248px minmax(0, 1fr) 344px;
+  position: relative;
   height: 100vh;
   height: 100dvh;
-  background: var(--canvas);
+  overflow: hidden;
+  background: var(--canvas-2);
 }
-.sidebarWrap,
-.railWrap {
-  height: 100%;
-  min-height: 0;
+
+/* Full-bleed photographic backdrop. Drop the artwork at
+   /public/roadmap-bg.jpg — the layered gradients give a legible dark
+   scrim on top and a pleasant fallback if the file is missing. */
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(11, 20, 15, 0.45), rgba(12, 14, 25, 0.82)),
+    url("/roadmap-bg.jpg") center / cover no-repeat fixed,
+    linear-gradient(180deg, #163324, #0f111a);
 }
 
 .main {
-  min-width: 0;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
 }
-.topbar {
-  flex: none;
+
+/* Bottom control dock — progress + teacher/test actions. */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 28px;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(20, 22, 31, 0.94), rgba(20, 22, 31, 0.74));
-  backdrop-filter: blur(14px);
+  gap: 18px;
+  max-width: calc(100vw - 24px);
+  padding: 12px 14px;
+  border-radius: 20px;
+  background: rgba(16, 18, 27, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   font-family: var(--font-display);
 }
-.crumb b {
-  display: block;
-  font-weight: 900;
-  font-size: 20px;
-  letter-spacing: -0.4px;
+
+.progress {
+  min-width: 150px;
 }
-.crumb span {
+.progressTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 800;
   font-size: 12.5px;
-  color: var(--ink-dim);
-  font-weight: 600;
 }
-.trackChip {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 13px;
-  border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+.progressLabel {
   color: var(--ink);
-  cursor: pointer;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 14px;
-  transition: transform 0.12s, border-color 0.12s;
 }
-.trackChip:hover {
-  border-color: var(--ink-faint);
-  transform: translateY(-1px);
-}
-.trackChip .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-}
-.trackChip svg {
-  width: 15px;
-  height: 15px;
-  color: var(--ink-dim);
-}
-.spacer {
-  flex: 1;
-}
-.tbStats {
-  display: none;
-  gap: 10px;
-}
-.stat {
-  display: flex;
+.progressXp {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
-  border-radius: 11px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 15px;
-}
-.stat svg {
-  width: 18px;
-  height: 18px;
-}
-.streak {
-  color: var(--streak);
-}
-.gem {
+  gap: 5px;
   color: var(--gem);
-}
-.lvl {
-  color: var(--xp);
-}
-.tnum {
   font-variant-numeric: tabular-nums;
 }
-
-.roadmapPane {
-  flex: 1;
-  min-height: 0;
+.progressXp svg {
+  width: 14px;
+  height: 14px;
+}
+.progressBar {
+  margin-top: 6px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
   overflow: hidden;
 }
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3de6a6, #1cb0f6);
+  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
-@media (max-width: 1180px) {
-  .layout {
-    grid-template-columns: 248px minmax(0, 1fr);
+.dockBtns {
+  display: flex;
+  gap: 10px;
+}
+.dockBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14px;
+  color: #07110c;
+  transition: transform 0.1s, box-shadow 0.1s, filter 0.1s;
+}
+.dockBtn svg {
+  width: 16px;
+  height: 16px;
+}
+.dockBtn:active {
+  transform: translateY(3px);
+}
+.dockBtn:disabled {
+  filter: grayscale(0.7) brightness(0.7);
+  cursor: not-allowed;
+}
+.complete {
+  background: linear-gradient(180deg, #48f0b0, #25c98a);
+  box-shadow: 0 5px 0 #159068;
+}
+.complete:active {
+  box-shadow: 0 2px 0 #159068;
+}
+.anim {
+  background: linear-gradient(180deg, #ffd54a, #f0a828);
+  box-shadow: 0 5px 0 #b9791a;
+}
+.anim:active {
+  box-shadow: 0 2px 0 #b9791a;
+}
+.edit {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.3);
+}
+.edit:active {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.editorOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow: auto;
+  background: var(--canvas);
+}
+
+/* Collectables shelf — the designated place items drop to. Bottom-left,
+   clear of the centered dock. */
+.tray {
+  position: fixed;
+  left: 16px;
+  bottom: 20px;
+  z-index: 41;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 220px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(16, 18, 27, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.slot {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffd54a, #f0a828);
+  border: 2px solid rgba(120, 70, 0, 0.3);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.4);
+  color: #6a4b00;
+  animation: slotIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.slotGlyph {
+  width: 62%;
+  height: 62%;
+  font-size: 24px;
+}
+@keyframes slotIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.5) rotate(-12deg);
   }
-  .railWrap {
-    display: none;
+  60% {
+    transform: translateY(4px) scale(1.08);
   }
-  .tbStats {
-    display: flex;
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
-@media (max-width: 860px) {
-  .layout {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: reduce) {
+  .slot {
+    animation: none;
   }
-  .sidebarWrap {
-    display: none;
+}
+
+@media (max-width: 640px) {
+  .tray {
+    left: 12px;
+    right: 12px;
+    bottom: 150px;
+    max-width: none;
   }
-  .topbar {
-    padding: 12px 16px;
+}
+
+@media (max-width: 640px) {
+  .dock {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
+  .dockBtns {
+    justify-content: space-between;
+  }
+  .dockBtn {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 10px;
   }
 }

@@ -21,6 +21,15 @@ export interface RoadmapNode {
   status: NodeStatus;
   /** Mastery level 0–3. Renders a crown badge when > 0. */
   crown?: number;
+  /** Per-node blurb shown in the detail modal. Falls back to the type blurb. */
+  description?: string;
+  /** Link to the actual assignment page. Opens from the detail modal. */
+  href?: string;
+  /**
+   * Custom icon override. A known icon name, an emoji, or an image URL
+   * (http/https, "/path", or data:). Falls back to the node type's icon.
+   */
+  icon?: string;
   /**
    * Free-form, integration-supplied metadata (due date, weight, unit
    * of the source assignment, …). Never put PII here — see CLAUDE.md.
@@ -65,6 +74,17 @@ export interface LeaderboardEntry {
   you?: boolean;
 }
 
+/**
+ * A reward hidden in a chest. The pool is authored behind the scenes
+ * (teacher / backend); each chest hands out one the learner hasn't got yet,
+ * so there are never duplicates. `icon` is an emoji or image URL.
+ */
+export interface Collectable {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export interface Track {
   id: string;
   name: string;
@@ -74,6 +94,8 @@ export interface Track {
   learner: Learner;
   leaderboard?: LeaderboardEntry[];
   units: Unit[];
+  /** Reward pool for this track's chests. Authored by the teacher/backend. */
+  collectables?: Collectable[];
 }
 
 export interface RoadmapData {

@@ -14,9 +14,15 @@ export type IconName =
   | "lock"
   | "check"
   | "crown"
+  | "star"
   | "flame"
   | "gem"
   | "chevron"
+  | "pencil"
+  | "plus"
+  | "trash"
+  | "arrowUp"
+  | "arrowDown"
   | "route"
   | "world"
   | "trophy"
@@ -61,6 +67,12 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   check: <path {...stroke} strokeWidth={3.2} d="M4 12.5 9.5 18 20 6" />,
   crown: <path fill="currentColor" d="M3 7l4 4 5-6 5 6 4-4-2 12H5Z" />,
+  star: <path fill="currentColor" d="M12 2.2l2.95 6.02 6.65.95-4.82 4.66 1.15 6.6L12 18.3l-5.08 2.13 1.15-6.6L3.25 9.17l6.65-.95z" />,
+  pencil: <path {...stroke} d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  plus: <path {...stroke} strokeWidth={2.4} d="M12 5v14M5 12h14" />,
+  trash: <path {...stroke} d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />,
+  arrowUp: <path {...stroke} strokeWidth={2.4} d="M12 19V6M6 11l6-6 6 6" />,
+  arrowDown: <path {...stroke} strokeWidth={2.4} d="M12 5v13M6 13l6 6 6-6" />,
   flame: (
     <path
       fill="currentColor"
@@ -103,6 +115,29 @@ export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGEle
     <svg viewBox="0 0 24 24" aria-hidden {...props}>
       {PATHS[name]}
     </svg>
+  );
+}
+
+/** True when `s` is one of the built-in icon names. */
+export function isIconName(s: string): s is IconName {
+  return Object.prototype.hasOwnProperty.call(PATHS, s);
+}
+
+/**
+ * Renders any icon value: a built-in icon name, an image URL
+ * (http/https, "/path", or data:), or an emoji / short text as a fallback.
+ * Lets nodes carry custom art without the renderers caring which kind.
+ */
+export function Glyph({ icon, className }: { icon: string; className?: string }) {
+  if (isIconName(icon)) return <Icon name={icon} className={className} />;
+  if (/^(https?:\/\/|\/|data:)/.test(icon)) {
+    return <img src={icon} alt="" className={className} style={{ objectFit: "contain" }} />;
+  }
+  // Emoji / text: size comes from the container's font-size (set per usage).
+  return (
+    <span className={className} aria-hidden style={{ display: "grid", placeItems: "center", lineHeight: 1 }}>
+      {icon}
+    </span>
   );
 }
 

@@ -1,12 +1,14 @@
 "use client";
 
-import { Icon, type IconName } from "./icons";
+import { Glyph } from "./icons";
 import { NODE_STYLE } from "./node-styles";
 import type { NodeStatus, RoadmapNode } from "./types";
 import styles from "./NodeSheet.module.css";
 
 interface NodeSheetProps {
   node: RoadmapNode;
+  /** Fire a completion for this specific assignment (the backend's job). */
+  onComplete: (id: string) => void;
   onClose: () => void;
 }
 
@@ -20,13 +22,12 @@ const STATUS: Record<
 };
 
 /** Detail modal for a tapped node. Copy + action derive from status. */
-export function NodeSheet({ node, onClose }: NodeSheetProps) {
+export function NodeSheet({ node, onComplete, onClose }: NodeSheetProps) {
   const style = NODE_STYLE[node.type];
   const status = STATUS[node.status];
+  const isDone = node.status === "done";
   const isLocked = node.status === "locked";
-  const glyph: IconName = isLocked ? "lock" : node.type;
-  const ctaLabel =
-    node.status === "current" ? (style.boss ? "Start challenge" : "Start now") : status.cta;
+  const emblemIcon = node.icon || node.type;
 
   return (
     <div className={styles.scrim} onClick={onClose} role="presentation">
@@ -47,7 +48,7 @@ export function NodeSheet({ node, onClose }: NodeSheetProps) {
               color: isLocked ? "var(--locked-ink)" : "#fff",
             }}
           >
-            <Icon name={glyph} />
+            <Glyph icon={emblemIcon} />
           </div>
           <div style={{ minWidth: 0 }}>
             <h3 className={styles.title}>{node.title}</h3>
@@ -66,16 +67,29 @@ export function NodeSheet({ node, onClose }: NodeSheetProps) {
           </div>
         </div>
 
-        <p className={styles.body}>{style.blurb}</p>
+        <p className={styles.body}>{node.description ?? style.blurb}</p>
 
-        <button
-          type="button"
-          className={`${styles.cta} ${status.ctaClass ?? ""}`}
-          disabled={isLocked}
-          onClick={onClose}
-        >
-          {ctaLabel}
-        </button>
+        <div className={styles.actions}>
+          {node.href && (
+            <a
+              className={`${styles.cta} ${styles.review}`}
+              href={node.href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open assignment page
+            </a>
+          )}
+          {isDone ? (
+            <button type="button" className={`${styles.cta} ${styles.review}`} onClick={onClose}>
+              Completed
+            </button>
+          ) : (
+            <button type="button" className={styles.cta} onClick={() => onComplete(node.id)}>
+              Complete
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
