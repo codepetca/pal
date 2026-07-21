@@ -1,0 +1,135 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(6, 7, 10, 0.62);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: fade 0.18s ease;
+}
+.card {
+  width: min(440px, 100%);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-display);
+  animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.emblem {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.4);
+}
+.emblem svg {
+  width: 28px;
+  height: 28px;
+}
+.title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+}
+.pills {
+  display: flex;
+  gap: 8px;
+  margin-top: 5px;
+}
+.pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.xp {
+  margin-left: auto;
+  text-align: right;
+}
+.xpNum {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--xp);
+  font-variant-numeric: tabular-nums;
+}
+.xpLabel {
+  display: block;
+  font-size: 10px;
+  color: var(--ink-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.body {
+  margin-top: 16px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+.cta {
+  margin-top: 18px;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.3px;
+  padding: 14px;
+  border-radius: 14px;
+  color: #07110c;
+  background: linear-gradient(180deg, #48f0b0, #25c98a);
+  box-shadow: 0 6px 0 #159068;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.cta:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #159068;
+}
+.review {
+  color: var(--ink);
+  background: linear-gradient(180deg, #3a4152, #2b313d);
+  box-shadow: 0 6px 0 #191d26;
+}
+.review:active {
+  box-shadow: 0 2px 0 #191d26;
+}
+.locked {
+  color: var(--locked-ink);
+  background: linear-gradient(180deg, #2b303c, #22262f);
+  box-shadow: 0 6px 0 #14171f;
+  cursor: not-allowed;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .card {
+    animation: none;
+  }
+}
