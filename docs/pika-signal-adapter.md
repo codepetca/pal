@@ -164,6 +164,10 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 - Global achievements such as First Pika Login, One Month In, and Halfway Point appear in the relevant week as a larger full-width milestone, not as an ordinary weekly slot.
 - Status always uses an icon and text in addition to color.
 
+![Concept mockup of the Pal vertical weekly achievement roadmap embedded in Pika's content pane](assets/pika-pal-roadmap-concept.png)
+
+*Concept mockup only. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
+
 The roadmap is achievement state, not a raw event feed. Pal renders persisted progress and awards; the browser does not count signals.
 
 ## Selected Pika presentation boundary
