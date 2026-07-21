@@ -82,7 +82,7 @@ Pal does not receive assignment names, student content, grades, scores, raw stud
 
 Events and achievements are not one-to-one.
 
-1. A retry of the same event uses the same idempotency key and Pal drops it.
+1. A retry of the same event uses the same idempotency key, and Pal drops it within the authenticated integration. The durable uniqueness scope is `(integration_id, idempotency_key)`.
 2. An edit after a completed log does not create another completion transition.
 3. Multiple legitimate Pika logs on one date can produce only one outbound `reflection_day.completed` fact for that learner/date. Pal independently enforces the same uniqueness.
 4. A recurring achievement is unique within its scope, not across the learner's lifetime.
@@ -102,19 +102,39 @@ The Pal UI renders stored achievement progress. It does not count raw events in 
 
 Weekly Rhythm is earned once per eligible academic week. A new scoped instance is created for the next week, and the collection may summarize the result as `Weekly Rhythm x 7`.
 
-Pika sends the week context automatically:
+Pika sends learner-specific week context automatically. Every revision has a new event idempotency key and a monotonically increasing `config_version`:
 
 ```json
 {
+  "idempotency_key": "pika:reflection-week:opaque-config-revision-token",
+  "learner_id": "pseudonymous-learner-token",
   "event_type": "reflection_week.configured",
+  "occurred_at": "2026-09-14T11:00:00Z",
   "metadata": {
     "period_key": "2026-fall-week-03",
+    "config_version": 2,
+    "period_status": "open",
     "eligible_days": 3
   }
 }
 ```
 
-Pika then sends at most one qualifying `reflection_day.completed` fact per learner/activity date. Pal calculates the target:
+Pika then sends at most one qualifying `reflection_day.completed` fact per learner/activity date. The fact names both the activity date and its academic-week instance, so delivery order does not determine where it counts:
+
+```json
+{
+  "idempotency_key": "pika:reflection-day:opaque-completion-token",
+  "learner_id": "pseudonymous-learner-token",
+  "event_type": "reflection_day.completed",
+  "occurred_at": "2026-09-16T18:20:00Z",
+  "metadata": {
+    "period_key": "2026-fall-week-03",
+    "activity_day": "2026-09-16"
+  }
+}
+```
+
+Pal calculates the target:
 
 | Eligible reflection days | Target |
 |---:|---:|
@@ -127,7 +147,9 @@ Pika then sends at most one qualifying `reflection_day.completed` fact per learn
 
 Weeks with three or more opportunities therefore allow one grace day. The UI communicates the actual week, for example: `2 of 3 scheduled reflection days`, never a fixed `3 of 5` when five opportunities did not exist.
 
-The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. If Pika changes the eligible-day count before the week closes, it sends a revision using the same period identity. Pal does not revoke an achievement already awarded.
+The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. Configuration is unique by learner and `period_key`. Pal keeps the highest `config_version`, ignores older versions that arrive later, and recomputes provisional progress when an open-period revision arrives. A final higher version sets `period_status` to `closed`; later configuration revisions are rejected for that period.
+
+Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure when its `period_key` and `activity_day` identify a qualifying day. Pika, not Pal, determines whether a day qualifies; the count in the configuration supplies the opportunity total without disclosing a learner's detailed schedule. Pal does not revoke an achievement already awarded if an open-period revision raises the target.
 
 ## Selected roadmap presentation
 
@@ -160,7 +182,7 @@ Pika navigation
     -> Pal /embed/roadmap
 ```
 
-Pika obtains a short-lived, learner-scoped embed/read token from its backend. An initial iframe can receive that token through an origin-checked `postMessage` handshake after the embed loads; the token is not placed in the iframe URL. The integration secret, raw learner ID, and long-lived credentials never enter the browser. The embedded route contains no duplicate Pika header, sidebar, or authentication screen.
+Pika obtains a short-lived, learner-scoped embed/read token from its backend. An initial iframe can receive that token through a `postMessage` handshake after the embed loads; the token is not placed in the iframe URL. The contract must use fixed allowed origins and an exact `targetOrigin`, verify both `event.origin` and `event.source`, and bind the exchange to a per-load nonce. The integration secret, raw learner ID, and long-lived credentials never enter the browser. The embedded route contains no duplicate Pika header, sidebar, or authentication screen.
 
 The overlay has a deliberately smaller role:
 
@@ -204,6 +226,6 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 
 ## Current implementation status
 
-Pal currently accepts the prototype `assignment.completed` and `daily_checkin.created` events. It already deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again.
+Pal currently accepts the prototype `assignment.completed` and `daily_checkin.created` events. Within one warm process, its in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
 
 The generalized event vocabulary, Pika adapter/outbox, qualified-fact layer, recurring achievement progress, and durable award ledger described here are target work and do not exist yet.

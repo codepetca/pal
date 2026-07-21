@@ -5,7 +5,7 @@
 
 ---
 
-## How an integration works
+## Target integration flow
 
 1. Operator registers the integration in the admin console → receives a `secret`
 2. Integration backend hashes student IDs before sending: `SHA256(salt + raw_student_id)`
@@ -14,6 +14,8 @@
 5. Integration frontend renders a Pal embed route or `@pal/widget` using that token
 
 The embed/widget fetches achievement, pet, and world state directly from Pal. The integration secret never leaves the backend.
+
+Steps 4–5 are target M3 behavior, not an implemented API flow. The current prototype has no read-token minting route, and its learner-world endpoint does not yet enforce reader authorization. Do not use the prototype endpoint as a production embed boundary.
 
 For Pika, the selected initial presentation is Pal's chrome-free `/embed/roadmap` route inside Pika's normal content pane. The full roadmap is not a page-covering overlay. A compact pet and brief reward celebration may remain overlay elements. See [Selected Pika presentation boundary](pika-signal-adapter.md#selected-pika-presentation-boundary).
 
