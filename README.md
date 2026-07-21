@@ -25,12 +25,12 @@ Privacy is a first-class constraint. Pal receives only pseudonymous IDs and low-
 ## How it connects to Pika (and other platforms)
 
 Pika sends Pal privacy-safe learning signals:
-- Assignment completed
+- Assignment completed (including Pika's on-time classification)
 - Daily check-in
-- Streak milestone
+- Resource viewed
 - Calendar event (end of month, end of semester)
 
-Pal processes those signals through a rule engine and updates the student's pet and world. Pika then renders the result — either as an embedded widget or by linking to the standalone student viewer.
+Pal derives streaks, achievements, and rewards from those signals, then updates the student's pet and world. Pika renders the result — either as an embedded widget or by linking to the standalone student viewer.
 
 Any learning platform can integrate this way. Pika is the first.
 
@@ -49,6 +49,7 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [API contracts](docs/api.md)
 - [Rule engine](docs/rule-engine.md)
 - [Integration guide](docs/integration.md)
+- [Pika signal adapter and achievement pipeline](docs/pika-signal-adapter.md)
 - [Development workflow](docs/dev-workflow.md)
 - [Roadmap](docs/roadmap.md)
 
