@@ -90,6 +90,7 @@ Events carry only allow-listed, low-cardinality metadata. Pika computes source-s
 
 ```json
 {
+  "schema_version": 1,
   "idempotency_key": "pika:assignment:opaque-item-token:completed",
   "learner_id": "pseudonymous-learner-token",
   "event_type": "learning_item.completed",
@@ -104,6 +105,37 @@ Events carry only allow-listed, low-cardinality metadata. Pika computes source-s
 ```
 
 Pal does not receive assignment names, student content, grades, scores, raw student IDs, or raw deadlines merely to calculate a classification.
+
+### Canonical version 1 contract
+
+Every initial fact uses this envelope. Fields are required unless the table below says otherwise, strings are UTF-8, and metadata keys not explicitly listed for that event type are rejected.
+
+| Envelope field | Version 1 rule |
+|---|---|
+| `schema_version` | Integer `1`. Pal rejects unsupported versions as a non-retryable contract error; Pika retains the failed outbox record for investigation. |
+| `idempotency_key` | Opaque string, 1–200 characters, stable for one source fact. Uniqueness is scoped to the authenticated integration. |
+| `learner_id` | Pseudonymous opaque token, 1–128 characters. Never a raw Pika user ID. |
+| `event_type` | One of the six exact initial fact names. |
+| `occurred_at` | UTC RFC 3339 timestamp for the authoritative behavior or configuration revision, not delivery time. |
+| `metadata` | JSON object containing exactly the allow-listed fields below. No names, content, grades, or arbitrary source payloads. |
+
+Shared value rules:
+
+- Opaque tokens are stable within an integration, contain 1–128 URL-safe characters, and cannot be reversed without Pika's private mapping.
+- `period_key` is a stable opaque academic-week identifier of 1–64 URL-safe characters. It is not derived by Pal from delivery time.
+- `activity_day` is an ISO `YYYY-MM-DD` calendar date determined in the classroom's authoritative timezone.
+- Idempotency keys may use readable prefixes, but their tokens remain opaque and contain no learner, classroom, or assignment names.
+
+| Event type | Required and only allowed metadata | Source fact identity / idempotency scope |
+|---|---|---|
+| `platform.session.started` | `{}` | One authenticated session; a stable source session token is used in the idempotency key. |
+| `classroom.joined` | `classroom_token` | One created learner enrolment in that classroom. Revisiting an existing enrolment is not a join. |
+| `daily_log_week.configured` | `period_key`, `config_version` (integer >= 1), `period_status` (`open` or `closed`), `eligible_days` (integer 0–5) | One configuration revision. The idempotency key includes a stable revision token, not merely the period. Version 1 models a Monday–Friday daily-log week. |
+| `daily_log.completed` | `period_key`, `activity_day` | One qualifying learner/date fact, even if several classroom logs were completed. |
+| `learning_item.viewed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`within_24h_of_release` or `later`) | The first genuine learner-initiated open of that item across its lifecycle. Background fetches, preload, and later reopens do not qualify. |
+| `learning_item.completed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`on_time` or `late`) | The first authoritative valid completion of that item. Unsubmit/resubmit does not create another version 1 fact. |
+
+Adding an event, metadata key, or enum value requires a new reviewed contract version unless version 1 explicitly allowed it. Pal must accept and test a new version before Pika begins producing it. During rollout, Pika keeps producing the last mutually supported version; unsupported-version failures are not retried indefinitely.
 
 ## Duplicate and aggregation semantics
 
@@ -133,6 +165,7 @@ At or before the start of every academic week, Pika automatically sends one lear
 
 ```json
 {
+  "schema_version": 1,
   "idempotency_key": "pika:daily-log-week:opaque-config-revision-token",
   "learner_id": "pseudonymous-learner-token",
   "event_type": "daily_log_week.configured",
@@ -150,6 +183,7 @@ Pika then sends at most one qualifying `daily_log.completed` fact per learner/ac
 
 ```json
 {
+  "schema_version": 1,
   "idempotency_key": "pika:daily-log:opaque-completion-token",
   "learner_id": "pseudonymous-learner-token",
   "event_type": "daily_log.completed",
@@ -174,9 +208,11 @@ Pal calculates the target:
 
 Weeks with three or more opportunities therefore allow one grace day. The UI communicates the actual week, for example: `2 of 3 scheduled daily-log days`, never a fixed `3 of 5` when five opportunities did not exist.
 
-The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. Configuration is unique by learner and `period_key`. Pal keeps the highest `config_version`, ignores older versions that arrive later, and recomputes provisional progress when an open-period revision arrives. A final higher version sets `period_status` to `closed`; later configuration revisions are rejected for that period.
+The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. Configuration is unique by learner and `period_key`. Pal keeps the highest `config_version`, ignores older versions that arrive later, and recomputes the target for unawarded progress when an open-period revision arrives. A final higher version sets `period_status` to `closed`; later configuration revisions are rejected for that period.
 
-Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure when its `period_key` and `activity_day` identify a qualifying day. Pika, not Pal, determines whether a day qualifies; the count in the configuration supplies the opportunity total without disclosing a learner's detailed schedule. Pal does not revoke an achievement already awarded if an open-period revision raises the target.
+Qualification is frozen when Pika emits `daily_log.completed`: that fact is Pika's permanent assertion that the date qualified at the time of the behavior. A later cancellation, waiver, withdrawal, or schedule edit may remove only an unmet opportunity; it does not invalidate an already-emitted completion, and Pika must not reduce `eligible_days` below the number of distinct completion dates it has emitted for the period. This preserves positive achievement history without sending the learner's detailed schedule to Pal.
+
+Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure because its emitted fact already confirms qualification. Pal recomputes the weekly target from the latest accepted configuration but never reclassifies or removes a stored completion date. If delivery order temporarily produces more distinct completion dates than the current `eligible_days`, Pal holds the period as pending reconciliation rather than awarding from contradictory inputs. Pal does not revoke an achievement already awarded if an open-period revision raises the target.
 
 ## Learning-item behavior without an assignment mirror
 
@@ -206,12 +242,12 @@ Do not introduce one-off `learning_item.available`, `learning_item.deadline_pass
 |---|---|
 | The same delivery is retried | Pika reuses the idempotency key; Pal processes it once. |
 | The learner completes logs in several classrooms on one date | The adapter emits at most one `daily_log.completed`; Pal also counts the activity date once. |
-| A week is shortened or the learner joins/withdraws midweek | Pika sends a higher weekly configuration version; Pal recomputes unawarded progress from the latest version. |
+| A week is shortened or the learner joins/withdraws midweek | Pika sends a higher weekly configuration version; Pal recomputes the unawarded target. Already-emitted completion dates remain qualified, and `eligible_days` cannot fall below their count. |
 | An event arrives late or out of order | Pal uses the fact's activity date and period rather than its delivery time. |
 | An assignment deadline changes | Pika uses its current authoritative deadline when it classifies a later view or completion; Pal stores no deadline to synchronize. |
 | An assignment is deleted after a qualifying behavior | The historical behavior and any earned award remain. If no behavior occurred, Pal knew nothing about the assignment. |
 | A class is archived | Pika stops new behavior facts for that class and revises or closes affected weekly context; Pal retains earned history. |
-| A learner unsubmits and resubmits | Pika may report each genuine completion transition, but Pal's learner/item/achievement uniqueness prevents a second reward. An already-earned award is not downgraded. |
+| A learner unsubmits and resubmits | Version 1 emits only the first authoritative valid completion for that learner/item. Pal retains the historical result and does not grant or downgrade another reward after resubmission. |
 | Pal is unavailable | Pika commits the academic action normally and retries delivery from its outbox. |
 | Pika sent an incorrect fact | Keep the event and award ledgers auditable; use an explicit operational correction process rather than silently rewriting history. |
 
