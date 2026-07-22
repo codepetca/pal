@@ -15,6 +15,8 @@ At a high level:
 - **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render a vertical weekly roadmap through `/embed/roadmap`.
 - **Teachers:** no additional Pal configuration or achievement maintenance.
 
+The initial workstream rewards completed behaviors and configured weekly opportunities. It does not mirror Pika's assignment catalog or infer that a silent assignment is incomplete. A complete assignment-status view is deferred unless the product later adopts a separate, versioned Pika-owned academic projection with reconciliation.
+
 The initial Pika presentation places the roadmap in Pika's content pane. Only the compact pet companion and brief reward celebrations may render as overlays.
 
 ## Milestone 1 (M1) — Pika-first foundation

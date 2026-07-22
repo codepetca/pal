@@ -9,6 +9,8 @@
 
 Pika remains the academic source of truth. Pal remains a platform-agnostic achievement and reward system. Teachers do not configure Pal events, badge rules, or achievement paths.
 
+The initial integration deliberately does not mirror Pika's assignment catalog or current classroom state into Pal. Pal records completed behavior and achievement history; it does not claim that an assignment currently exists, is still due, or is incomplete.
+
 ## Signal chain
 
 ```text
@@ -33,6 +35,7 @@ Pal being unavailable must never prevent a Pika login, log save, assignment edit
 | Decide whether a valid log, view, meaningful work session, submission, or revision occurred | Pika |
 | Determine the academic/activity date and source-specific classification such as early, on-time, or late | Pika |
 | Determine scheduled daily-log opportunities, enrolment, holidays, and shortened weeks | Pika |
+| Own whether a classroom or learning item is active, deleted, archived, restored, due, or excused | Pika |
 | Convert Pika-specific records into normalized events | Pika adapter |
 | Generate pseudonymous learner/item tokens and event idempotency keys | Pika adapter |
 | Persist and deliver events with retries | Pika adapter |
@@ -55,10 +58,8 @@ platform.session.started
 classroom.joined
 daily_log_week.configured
 daily_log.completed
-learning_item.available
 learning_item.viewed
 learning_item.completed
-learning_item.deadline_passed
 ```
 
 Later candidates, after their qualifying rules are defined, are:
@@ -70,7 +71,7 @@ learning_item.revised
 term.milestone
 ```
 
-Pika reports every genuine `platform.session.started`; Pal derives whether it is the learner's first login. `learning_item.available` and `learning_item.deadline_passed` let Pal represent an untouched item and distinguish it from an item that never existed.
+Pika reports every genuine `platform.session.started`; Pal derives whether it is the learner's first login. Learning-item facts describe behavior that actually occurred. The initial integration sends no event merely because an assignment exists or a deadline passed.
 
 Events carry only allow-listed, low-cardinality metadata. Pika computes source-specific classifications before sending them.
 
@@ -83,8 +84,7 @@ Events carry only allow-listed, low-cardinality metadata. Pika computes source-s
   "metadata": {
     "item_token": "opaque-item-token",
     "kind": "assignment",
-    "activity_period_key": "2026-fall-week-03",
-    "due_period_key": "2026-fall-week-03",
+    "period_key": "2026-fall-week-03",
     "timing": "on_time"
   }
 }
@@ -150,7 +150,7 @@ Pika then sends at most one qualifying `daily_log.completed` fact per learner/ac
 
 Pal calculates the target:
 
-| Eligible reflection days | Target |
+| Eligible daily-log days | Target |
 |---:|---:|
 | 0 | No Weekly Rhythm instance |
 | 1 | 1 |
@@ -159,26 +159,46 @@ Pal calculates the target:
 | 4 | 3 |
 | 5 | 4 |
 
-Weeks with three or more opportunities therefore allow one grace day. The UI communicates the actual week, for example: `2 of 3 scheduled reflection days`, never a fixed `3 of 5` when five opportunities did not exist.
+Weeks with three or more opportunities therefore allow one grace day. The UI communicates the actual week, for example: `2 of 3 scheduled daily-log days`, never a fixed `3 of 5` when five opportunities did not exist.
 
 The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. Configuration is unique by learner and `period_key`. Pal keeps the highest `config_version`, ignores older versions that arrive later, and recomputes provisional progress when an open-period revision arrives. A final higher version sets `period_status` to `closed`; later configuration revisions are rejected for that period.
 
 Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure when its `period_key` and `activity_day` identify a qualifying day. Pika, not Pal, determines whether a day qualifies; the count in the configuration supplies the opportunity total without disclosing a learner's detailed schedule. Pal does not revoke an achievement already awarded if an open-period revision raises the target.
 
-## Learning-item lifecycle and weekly placement
+## Learning-item behavior without an assignment mirror
 
-An assignment outcome node belongs to the week in which the item is due, while a behavior achievement such as Ready Early belongs to the week in which the behavior occurred. Events therefore distinguish `due_period_key` from `activity_period_key` rather than sending the raw release or deadline timestamp.
+Learning-item achievements belong to the week in which the qualifying behavior occurred. Pika uses its private release and deadline data to classify the behavior before sending it; Pal does not store the assignment's current lifecycle.
 
-For an assignment due in Week 3:
+For an assignment that happens to be due in Week 3:
 
-1. When the teacher releases it, Pika sends a learner-scoped `learning_item.available` with an opaque `item_token`, `kind: assignment`, `due_period_key: 2026-fall-week-03`, and a monotonically increasing `item_version`. Pal creates a generic assignment-opportunity node in Week 3.
-2. On the learner's first open, Pika sends `learning_item.viewed` with the same item token, the activity and due period keys, and a source-side timing classification such as `within_24h_of_release` or `later`. Pal may award Ready Early in the activity week and update the Week 3 item node to show that work has started.
-3. After an authoritative submission succeeds, Pika sends `learning_item.completed` with `timing: on_time` or `late`. Pal updates the Week 3 node and plays a positive reward only when the configured achievement rule is satisfied.
-4. If the deadline passes without a completion, Pika automatically sends `learning_item.deadline_passed`. Pal marks the known Week 3 node incomplete. A later completion changes the node from incomplete to late.
+1. On the learner's first genuine open, Pika sends `learning_item.viewed` with an opaque `item_token`, `kind: assignment`, the behavior's `period_key`, and a source-side timing classification such as `within_24h_of_release` or `later`. Pal may award Ready Early in the week when the open occurred.
+2. After an authoritative submission succeeds, Pika sends `learning_item.completed` with the behavior's `period_key` and `timing: on_time` or `late`. Pal may award On-Time Finish, or retain the late classification without granting the on-time reward.
+3. If the learner never opens or completes the assignment, Pal receives nothing about it and does not display an assignment-specific incomplete node.
 
-If the teacher changes the due week before the outcome is final, Pika sends a higher `item_version` of `learning_item.available` with the new `due_period_key`; Pal moves the unresolved node and ignores older versions that arrive later. If no assignment is ever released, Pika sends no learning-item fact and Pal keeps the future week generic.
+If the teacher later changes the deadline, deletes the assignment, or archives the class, Pika remains authoritative. A behavior that genuinely occurred remains historical: Pal does not claw back an earned Ready Early or On-Time Finish award because the academic object was later reorganized. An untouched deleted assignment never entered Pal and needs no cleanup.
 
-Pika sends no assignment title, instructions, student work, grade, raw deadline, or raw learner ID in this lifecycle. Pal needs only the pseudonymous learner and item tokens, item kind, period keys, version, and source-side classifications.
+Pika sends no assignment title, instructions, student work, grade, raw deadline, or raw learner ID. Pal needs only pseudonymous learner and item tokens, item kind, the activity period, and source-side classifications.
+
+### Deferred academic projection
+
+If the product later requires Pal to show every untouched or incomplete assignment, events alone are not sufficient. That feature requires a separate, versioned, rebuildable academic projection owned by Pika, with explicit deleted/archived/excused states and periodic reconciliation. If the projection and Pal disagree about current academic state, Pika wins; Pal remains authoritative only for achievement definitions, awarded badges, rewards, and pet/world state.
+
+Do not introduce one-off `learning_item.available`, `learning_item.deadline_passed`, or `learning_item.withdrawn` events into the initial behavior stream. Design the projection contract as a later phase if that product requirement is confirmed.
+
+## Initial edge-case behavior
+
+| Situation | Required behavior |
+|---|---|
+| The same delivery is retried | Pika reuses the idempotency key; Pal processes it once. |
+| The learner completes logs in several classrooms on one date | The adapter emits at most one `daily_log.completed`; Pal also counts the activity date once. |
+| A week is shortened or the learner joins/withdraws midweek | Pika sends a higher weekly configuration version; Pal recomputes unawarded progress from the latest version. |
+| An event arrives late or out of order | Pal uses the fact's activity date and period rather than its delivery time. |
+| An assignment deadline changes | Pika uses its current authoritative deadline when it classifies a later view or completion; Pal stores no deadline to synchronize. |
+| An assignment is deleted after a qualifying behavior | The historical behavior and any earned award remain. If no behavior occurred, Pal knew nothing about the assignment. |
+| A class is archived | Pika stops new behavior facts for that class and revises or closes affected weekly context; Pal retains earned history. |
+| A learner unsubmits and resubmits | Pika may report each genuine completion transition, but Pal's learner/item/achievement uniqueness prevents a second reward. An already-earned award is not downgraded. |
+| Pal is unavailable | Pika commits the academic action normally and retries delivery from its outbox. |
+| Pika sent an incorrect fact | Keep the event and award ledgers auditable; use an explicit operational correction process rather than silently rewriting history. |
 
 ## Selected roadmap presentation
 
@@ -187,10 +207,11 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 - Each row represents one academic week.
 - Past weeks collapse to a compact result.
 - The current week is expanded and shows live progress.
-- Future weeks remain generic until Pika supplies real facts; Pal does not invent future assignments.
+- Future weeks remain generic; Pal does not invent or mirror future assignments.
 - Weekly achievements such as Weekly Rhythm and Weekly Planner occupy normal positions in the row.
-- Learning-item outcome nodes appear dynamically in their due week; behavior achievements appear in the week where the qualifying behavior occurs.
+- Learning-item behavior achievements appear dynamically in the week where the qualifying behavior occurs.
 - Global achievements such as First Pika Login, One Month In, and Halfway Point appear in the relevant week as a larger full-width milestone, not as an ordinary weekly slot.
+- Incomplete status is shown only when Pal received explicit opportunity context, such as a configured Weekly Rhythm week; absence of a learning-item event is not treated as an incomplete assignment.
 - Status always uses an icon and text in addition to color.
 
 ![Concept mockup of the Pal vertical weekly achievement roadmap embedded in Pika's content pane](assets/pika-pal-roadmap-concept.png)
@@ -231,13 +252,16 @@ The current screenshot-backed overlay remains a development sandbox technique; i
 - [ ] Pseudonymous learner, group, and learning-item token generation
 - [ ] A durable transactional event outbox
 - [ ] An adapter delivery worker with authentication, idempotency, retry, and failure visibility
-- [ ] Hooks at authoritative write points for logs, item publication and deadline expiry, first views, meaningful progress, submissions, revisions, tests, surveys, enrolment, sessions, and term changes
+- [ ] Initial hooks at authoritative write points for sessions, enrolment, daily logs, first learning-item views, and successful submissions
+- [ ] Later hooks for planning-surface visits, meaningful progress, revisions, tests, surveys, and term changes after their qualifying rules are defined
 - [ ] Source-side classification for activity date, eligible daily-log days, and early/on-time/late outcomes
-- [ ] Instrumentation for successful session starts and calendar/planning-surface visits
+- [ ] Guards so background fetches, retries, and page preloading cannot masquerade as genuine sessions or first learning-item views
 - [ ] A Pal navigation destination and content-pane embed host
 - [ ] A secure short-lived embed/read-token handoff
 - [ ] Reconciliation tools for events that were committed in Pika but not yet delivered
 - [ ] Contract and integration tests against Pal's ingest API
+
+The initial Pika work does not publish an assignment catalog or maintain assignment deletion/archive state in Pal.
 
 Most raw timestamps and state already exist in Pika. The new work is reliable normalization and delivery, not a second achievement engine.
 
@@ -255,7 +279,7 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [ ] A responsive, chrome-free `/embed/roadmap` route
 - [ ] An optional compact companion overlay contract separate from the roadmap
 - [ ] Roadmap UI, badge status, accessibility treatment, and reward celebrations
-- [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, and repeated weekly awards
+- [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 
 ## Current implementation status
 

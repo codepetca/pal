@@ -19,6 +19,7 @@ They can see their world embedded inside Pika, or visit Pal directly. Either way
 - Student identity or authentication (that's Pika's)
 - Grades, scores, or raw learning data
 - Classroom management
+- The current assignment catalog, deadlines, deletion/archive state, or assignment-specific incomplete status
 
 Privacy is a first-class constraint. Pal receives only pseudonymous IDs and low-risk signals — never names, grades, or student content.
 
@@ -31,6 +32,8 @@ Pika sends Pal privacy-safe learning signals:
 - Calendar event (end of month, end of semester)
 
 Pal derives streaks, achievements, and rewards from those signals, then updates the student's pet and world. Pika renders the result — either as an embedded widget or by linking to the standalone student viewer.
+
+The initial integration rewards behavior that actually occurred; it does not mirror Pika's assignment system. Showing every untouched or incomplete assignment would require a separate, later Pika-owned academic projection with reconciliation.
 
 Any learning platform can integrate this way. Pika is the first.
 
