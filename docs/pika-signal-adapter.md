@@ -269,6 +269,12 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 
 *Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
 
+An earned roadmap node may open a focused achievement-detail view inside the same content pane. A claimable reward remains explicit and applies once; opening the detail does not grant it automatically.
+
+![Concept mockup of an earned Weekly Rhythm achievement detail and a claimable feed-the-pet reward](assets/pika-pal-achievement-detail-concept.png)
+
+*Achievement-detail concept only. Exact reward copy, values, badge art, and interaction design remain subject to implementation testing.*
+
 The roadmap is achievement state, not a raw event feed. Pal renders persisted progress and awards; the browser does not count signals.
 
 ## Selected Pika presentation boundary
@@ -296,6 +302,21 @@ The overlay has a deliberately smaller role:
 - The full roadmap does not render as a page-covering overlay.
 
 The current screenshot-backed overlay remains a development sandbox technique; it is not the production content architecture.
+
+## Selected development sandbox
+
+The sandbox uses a compact, collapsible semester-simulator control panel over the live Pal sandbox rather than a separate control dashboard. The achievements and pet/world remain visible while a tester selects actions, so every injected fact produces immediate observable feedback.
+
+- The fictional semester contains 16 weeks and can move by day or week.
+- One event selector exposes the six version 1 normalized facts and only the fields allowed for the selected fact.
+- Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
+- Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
+- Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
+- The overlay is a development tool and never appears in the learner-facing `/embed/roadmap` route.
+
+![Concept mockup of a minimal semester-simulator control panel overlaying the live Pal sandbox achievements and pet](assets/pika-pal-sandbox-overlay-concept.png)
+
+*Sandbox concept only. The selected event and week are fictional; the important boundary is that the small control overlay leaves the reactive achievement and pet experience visible.*
 
 ## What must be built in Pika
 
@@ -330,10 +351,11 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [ ] A responsive, chrome-free `/embed/roadmap` route
 - [ ] An optional compact companion overlay contract separate from the roadmap
 - [ ] Roadmap UI, badge status, accessibility treatment, and reward celebrations
+- [ ] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
 - [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 
 ## Current implementation status
 
-Pal's prototype ingest allow-list currently accepts the five legacy event types documented in the integration guide. The developer control panel exercises assignment completion and daily check-in, while the default rule pack also handles `calendar.month_end`; accepted resource-view and semester-end facts currently have no default effect. Within one warm process, the in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
+Pal's prototype ingest allow-list currently accepts the five legacy event types documented in the integration guide. The developer control panel exercises assignment completion and daily check-in, while the default rule pack also handles `calendar.month_end`; accepted resource-view and semester-end facts currently have no default effect. It does not yet provide the target 16-week clock, version 1 fact selector, scenario fixtures, or visible expected-versus-actual semester progression. Within one warm process, the in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
 
 The generalized event vocabulary, Pika adapter/outbox, qualified-fact layer, recurring achievement progress, and durable award ledger described here are target work and do not exist yet.
