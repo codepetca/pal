@@ -62,6 +62,19 @@ learning_item.viewed
 learning_item.completed
 ```
 
+### Initial MVP at a glance
+
+| Pika fact | What Pika has confirmed | Pal responsibility | Achievement scope |
+|---|---|---|---|
+| `platform.session.started` | A genuine authenticated learner session started | Award First Pika Login on the first qualifying fact | Learner lifetime |
+| `classroom.joined` | A new classroom enrolment was created | Award Joined the Class once for that classroom | Learner + opaque classroom token |
+| `daily_log_week.configured` | The learner has a known number of eligible daily-log days that week | Store the latest configuration and calculate the Weekly Rhythm target | Learner + academic week |
+| `daily_log.completed` | At least one qualifying daily log was completed on that activity date | Count the date once and update Weekly Rhythm progress | Learner + activity date |
+| `learning_item.viewed` | The learner genuinely opened an item for the first time | Evaluate Ready Early from Pika's timing classification | Learner + opaque item token |
+| `learning_item.completed` | A valid completion occurred and Pika classified its timing | Evaluate On-Time Finish and store the historical on-time/late outcome | Learner + opaque item token |
+
+Pal never decides whether the source behavior happened. It decides whether a confirmed fact satisfies an achievement rule, persists the result, applies any one-time reward, and renders it in the roadmap or companion UI.
+
 Later candidates, after their qualifying rules are defined, are:
 
 ```text
@@ -175,6 +188,8 @@ For an assignment that happens to be due in Week 3:
 2. After an authoritative submission succeeds, Pika sends `learning_item.completed` with the behavior's `period_key` and `timing: on_time` or `late`. Pal may award On-Time Finish, or retain the late classification without granting the on-time reward.
 3. If the learner never opens or completes the assignment, Pal receives nothing about it and does not display an assignment-specific incomplete node.
 
+The `late` value is a historical classification attached to the completion fact. It does not mean Pal believes the assignment is currently late, still active, or still exists.
+
 If the teacher later changes the deadline, deletes the assignment, or archives the class, Pika remains authoritative. A behavior that genuinely occurred remains historical: Pal does not claw back an earned Ready Early or On-Time Finish award because the academic object was later reorganized. An untouched deleted assignment never entered Pal and needs no cleanup.
 
 Pika sends no assignment title, instructions, student work, grade, raw deadline, or raw learner ID. Pal needs only pseudonymous learner and item tokens, item kind, the activity period, and source-side classifications.
@@ -216,7 +231,7 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 
 ![Concept mockup of the Pal vertical weekly achievement roadmap embedded in Pika's content pane](assets/pika-pal-roadmap-concept.png)
 
-*Concept mockup only. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
+*Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
 
 The roadmap is achievement state, not a raw event feed. Pal renders persisted progress and awards; the browser does not count signals.
 
@@ -283,6 +298,6 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 
 ## Current implementation status
 
-Pal currently accepts the prototype `assignment.completed` and `daily_checkin.created` events. Within one warm process, its in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
+Pal's prototype ingest allow-list currently accepts the five legacy event types documented in the integration guide. The developer control panel exercises assignment completion and daily check-in, while the default rule pack also handles `calendar.month_end`; accepted resource-view and semester-end facts currently have no default effect. Within one warm process, the in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
 
 The generalized event vocabulary, Pika adapter/outbox, qualified-fact layer, recurring achievement progress, and durable award ledger described here are target work and do not exist yet.
