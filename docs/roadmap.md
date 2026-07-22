@@ -7,7 +7,7 @@ Milestones are sequential but not dated. A milestone is done when everything und
 
 ## Achievement-system workstream (sequencing TBD)
 
-The project's target direction is a recurring achievement roadmap driven automatically by integrations. The cross-project ownership boundary, signal flow, duplicate semantics, Weekly Rhythm example, and detailed Pika/Pal build checklists live in [Pika Signal Adapter and Achievement Pipeline](pika-signal-adapter.md).
+The project's target direction is a recurring achievement roadmap driven automatically by integrations. The cross-project ownership boundary, signal flow, duplicate semantics, Weekly Rhythm example, and detailed Pika/Pal build checklists live in [Pika Signal Adapter and Achievement Pipeline](pika-signal-adapter.md). The time-bound week 4–8 scope, ownership, delivery gates, and pilot definition of done live in the [Pika–Pal Achievement Pilot Plan](pilot-plan.md).
 
 At a high level:
 

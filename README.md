@@ -56,6 +56,7 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [Rule engine](docs/rule-engine.md)
 - [Integration guide](docs/integration.md)
 - [Pika signal adapter and achievement pipeline](docs/pika-signal-adapter.md)
+- [Pika–Pal achievement pilot plan](docs/pilot-plan.md)
 - [Development workflow](docs/dev-workflow.md)
 - [Roadmap](docs/roadmap.md)
 

@@ -265,7 +265,7 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 - Incomplete status is shown only when Pal received explicit opportunity context, such as a configured Weekly Rhythm week; absence of a learning-item event is not treated as an incomplete assignment.
 - Status always uses an icon and text in addition to color.
 
-![Concept mockup of the Pal vertical weekly achievement roadmap embedded in Pika's content pane](assets/pika-pal-roadmap-concept.png)
+![Concept mockup with Achievements selected in Pika's sidebar and the Pal vertical weekly roadmap embedded in the content pane](assets/pika-pal-roadmap-concept.png)
 
 *Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
 
@@ -279,7 +279,7 @@ Pal exposes a chrome-free route for the complete roadmap:
 /embed/roadmap
 ```
 
-Pika adds a Pal navigation destination and loads this route inside its normal content pane. The initial integration may use an iframe; `@pal/widget` can replace or wrap the embed later without changing achievement ownership or API contracts.
+Pika adds an **Achievements** navigation destination and loads this route inside its normal content pane. The initial integration may use an iframe; `@pal/widget` can replace or wrap the embed later without changing achievement ownership or API contracts.
 
 ```text
 Pika navigation
