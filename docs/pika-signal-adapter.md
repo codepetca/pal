@@ -269,12 +269,6 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 
 *Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
 
-An earned roadmap node may open a focused achievement-detail view inside the same content pane. A claimable reward remains explicit and applies once; opening the detail does not grant it automatically.
-
-![Concept mockup of an earned Weekly Rhythm achievement detail and a claimable feed-the-pet reward](assets/pika-pal-achievement-detail-concept.png)
-
-*Achievement-detail concept only. Exact reward copy, values, badge art, and interaction design remain subject to implementation testing.*
-
 The roadmap is achievement state, not a raw event feed. Pal renders persisted progress and awards; the browser does not count signals.
 
 ## Selected Pika presentation boundary
@@ -313,10 +307,6 @@ The sandbox uses a compact, collapsible semester-simulator control panel over th
 - Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
 - Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
 - The overlay is a development tool and never appears in the learner-facing `/embed/roadmap` route.
-
-![Concept mockup of a minimal semester-simulator control panel overlaying the live Pal sandbox achievements and pet](assets/pika-pal-sandbox-overlay-concept.png)
-
-*Sandbox concept only. The selected event and week are fictional; the important boundary is that the small control overlay leaves the reactive achievement and pet experience visible.*
 
 ## What must be built in Pika
 
