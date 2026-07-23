@@ -1,11 +1,12 @@
 // Event types an integration is allowed to send. Per docs/integration.md this is the
 // set Pika sends; it becomes a per-integration allow-list column in M1.
 const ALLOWED_INGEST_EVENT_TYPES = new Set([
-  "assignment.completed",
-  "daily_checkin.created",
-  "resource.viewed",
-  "calendar.month_end",
-  "calendar.semester_end",
+  "platform.session.started",
+  "classroom.joined",
+  "daily_log_week.configured",
+  "daily_log.completed",
+  "learning_item.viewed",
+  "learning_item.completed",
 ]);
 
 // Derived events (XP_CHANGED, LEVEL_UP, STREAK_MILESTONE) are produced by mutation
