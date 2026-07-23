@@ -131,6 +131,10 @@ export default function WorldView() {
             ))}
           </div>
 
+          <a className={styles.panelLink} href="/viewer">
+            Open roadmap viewer →
+          </a>
+
           <div className={styles.panelLogLabel}>Log</div>
           <div className={styles.panelLog}>
             {log.length === 0 ? (
