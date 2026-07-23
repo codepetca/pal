@@ -17,9 +17,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@pal/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@pal/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      drizzle-orm:
+        specifier: ^0.44.2
+        version: 0.44.7(@types/pg@8.20.0)(pg@8.22.0)
       next:
         specifier: ^15.3.4
         version: 15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

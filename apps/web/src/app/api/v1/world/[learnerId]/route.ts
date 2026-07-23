@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadLearner } from "@/lib/learner-store";
+import { getDb } from "@pal/db";
+import { loadLearnerState } from "@/lib/db-learner";
+import { learners } from "@pal/db";
+import { eq } from "drizzle-orm";
 
 // GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
@@ -12,7 +15,22 @@ export async function GET(
 
   // TODO: validate read token from Authorization header
 
-  const state = loadLearner(learnerId);
+  const db = getDb();
+
+  // Resolve the external learner ID to an internal UUID. Without auth we
+  // assume the sandbox integration; this becomes a proper lookup once the
+  // read token is validated and the integration is resolved from it.
+  const learnerRows = await db
+    .select({ id: learners.id })
+    .from(learners)
+    .where(eq(learners.externalLearnerId, learnerId))
+    .limit(1);
+
+  if (learnerRows.length === 0) {
+    return NextResponse.json({ error: "learner_not_found" }, { status: 404 });
+  }
+
+  const state = await loadLearnerState(db, learnerRows[0].id);
 
   // Moods are temporary: past mood_expires_at, present as "neutral". Read-side
   // presentation only — stored state still changes exclusively via the engine.

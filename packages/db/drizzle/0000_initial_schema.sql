@@ -1,13 +1,16 @@
 CREATE TABLE "economy" (
 	"learner_id" uuid PRIMARY KEY NOT NULL,
 	"xp" integer DEFAULT 0 NOT NULL,
+	"xp_lifetime" integer DEFAULT 0 NOT NULL,
 	"level" integer DEFAULT 1 NOT NULL,
 	"streak_current" integer DEFAULT 0 NOT NULL,
+	"streak_last_day" date,
 	"last_event_at" timestamp with time zone,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "economy_xp_non_negative" CHECK ("economy"."xp" >= 0),
 	CONSTRAINT "economy_level_positive" CHECK ("economy"."level" >= 1),
-	CONSTRAINT "economy_streak_non_negative" CHECK ("economy"."streak_current" >= 0)
+	CONSTRAINT "economy_streak_non_negative" CHECK ("economy"."streak_current" >= 0),
+	CONSTRAINT "economy_xp_lifetime_gte_xp" CHECK ("economy"."xp_lifetime" >= "economy"."xp")
 );
 --> statement-breakpoint
 CREATE TABLE "events" (

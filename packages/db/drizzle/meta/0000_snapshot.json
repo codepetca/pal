@@ -21,6 +21,13 @@
           "notNull": true,
           "default": 0
         },
+        "xp_lifetime": {
+          "name": "xp_lifetime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "level": {
           "name": "level",
           "type": "integer",
@@ -34,6 +41,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "streak_last_day": {
+          "name": "streak_last_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
         },
         "last_event_at": {
           "name": "last_event_at",
@@ -80,6 +93,10 @@
         "economy_streak_non_negative": {
           "name": "economy_streak_non_negative",
           "value": "\"economy\".\"streak_current\" >= 0"
+        },
+        "economy_xp_lifetime_gte_xp": {
+          "name": "economy_xp_lifetime_gte_xp",
+          "value": "\"economy\".\"xp_lifetime\" >= \"economy\".\"xp\""
         }
       },
       "isRLSEnabled": false
