@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:session:ses-6d1f9a3c72b48e05",
+  "learner_id": "lrn-8f2c1a9b4e7d3056",
+  "event_type": "platform.session.started",
+  "occurred_at": "2026-09-14T13:02:11Z",
+  "metadata": {
+    "ip_address": "203.0.113.14"
+  }
+}

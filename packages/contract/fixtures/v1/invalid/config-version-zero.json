@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:daily-log-week:cfg-5c8a1d9e32",
+  "learner_id": "lrn-8f2c1a9b4e7d3056",
+  "event_type": "daily_log_week.configured",
+  "occurred_at": "2026-09-14T11:00:00Z",
+  "metadata": {
+    "period_key": "2026-fall-week-03",
+    "config_version": 0,
+    "period_status": "open",
+    "eligible_days": 3
+  }
+}
