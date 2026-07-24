@@ -148,6 +148,19 @@
   cursor: pointer;
 }
 
+.panelLink {
+  display: block;
+  font-size: 16px;
+  padding: 14px 16px;
+  background: rgba(88, 204, 2, 0.32);
+  border: 1px solid rgba(88, 204, 2, 0.5);
+  border-radius: 8px;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .panelLogLabel {
   opacity: 0.6;
   font-size: 13px;

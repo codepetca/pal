@@ -1,2 +1,36 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
+
+/* ------------------------------------------------------------------
+   Design tokens for the gamified roadmap (frontend/roadmap).
+   Kept on :root so CSS Modules can read them via var().
+   ------------------------------------------------------------------ */
+:root {
+  --font-display: "SF Pro Rounded", ui-rounded, "Segoe UI Rounded", "Nunito", system-ui, -apple-system, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --canvas: #14161F;
+  --canvas-2: #0F111A;
+  --surface: #1B1E2A;
+  --surface-2: #232838;
+  --surface-3: #2B3040;
+  --line: #2C3242;
+  --line-soft: #232838;
+
+  --ink: #F0F2F8;
+  --ink-dim: #99A0B4;
+  --ink-faint: #5B6072;
+
+  --xp: #3DE6A6;
+  --xp-edge: #1F9E6E;
+  --xp-glow: rgba(61, 230, 166, .45);
+  --streak: #FF9A3D;
+  --gem: #5ED5FF;
+  --gold: #FFC800;
+
+  --locked: #2B303C;
+  --locked-edge: #171A22;
+  --locked-ink: #565C6E;
+}
+
+body { background: var(--canvas-2); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
