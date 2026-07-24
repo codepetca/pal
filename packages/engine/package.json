@@ -5,11 +5,14 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "node --import tsx --test src/**/*.test.ts",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "eslint": "^9.39.5",
     "tsx": "^4.22.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.65.0"
   }
 }
