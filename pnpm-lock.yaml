@@ -69,12 +69,18 @@ importers:
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.0
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.5
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.9.3
+      typescript-eslint:
+        specifier: 'catalog:'
+        version: 8.65.0(eslint@9.39.5)(typescript@5.9.3)
 
   packages/db:
     dependencies:
