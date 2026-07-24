@@ -63,6 +63,8 @@ don't restate it here. The short version: lowercase kebab-case for files and dir
 
 ```bash
 pnpm --filter @pal/engine test   # rule engine unit tests
+pnpm lint                         # eslint, every package — a CI gate, warnings fail
+pnpm typecheck                    # tsc --noEmit, every package — a CI gate
 pnpm dev                          # start dev server at localhost:3000
 ```
 

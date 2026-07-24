@@ -44,6 +44,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # After typecheck: a step failure ends the job, and a type error is the
+      # higher-signal failure of the two. Lint first would let a style nit mask it.
+      - name: Lint
+        run: pnpm lint
+
       # The service container starts empty, so this proves the committed
       # migrations take a database from zero to the full schema.
       - name: Migrate from zero
