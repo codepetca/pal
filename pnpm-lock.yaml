@@ -4,6 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    eslint:
+      specifier: ^9.39.5
+      version: 9.39.5
+    typescript:
+      specifier: ^5.8.3
+      version: 5.9.3
+    typescript-eslint:
+      specifier: ^8.65.0
+      version: 8.65.0
+
 importers:
 
   .:
@@ -12,7 +24,7 @@ importers:
         specifier: ^2.5.4
         version: 2.10.0
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.9.3
 
   apps/web:
@@ -43,13 +55,13 @@ importers:
         specifier: ^19
         version: 19.2.3(@types/react@19.2.17)
       eslint:
-        specifier: ^9.39.5
+        specifier: 'catalog:'
         version: 9.39.5
       eslint-config-next:
         specifier: ^15.5.21
         version: 15.5.21(eslint@9.39.5)(typescript@5.9.3)
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/db:
@@ -71,16 +83,16 @@ importers:
         specifier: ^0.31.4
         version: 0.31.10
       eslint:
-        specifier: ^9.39.5
+        specifier: 'catalog:'
         version: 9.39.5
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-eslint:
-        specifier: ^8.65.0
+        specifier: 'catalog:'
         version: 8.65.0(eslint@9.39.5)(typescript@5.9.3)
 
   packages/engine:
@@ -89,16 +101,16 @@ importers:
         specifier: ^22.20.0
         version: 22.20.0
       eslint:
-        specifier: ^9.39.5
+        specifier: 'catalog:'
         version: 9.39.5
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
       typescript:
-        specifier: ^5.8.3
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-eslint:
-        specifier: ^8.65.0
+        specifier: 'catalog:'
         version: 8.65.0(eslint@9.39.5)(typescript@5.9.3)
 
 packages:
