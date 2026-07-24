@@ -110,6 +110,11 @@ Pal does not receive assignment names, student content, grades, scores, raw stud
 
 Every initial fact uses this envelope. Fields are required unless the table below says otherwise, strings are UTF-8, and metadata keys not explicitly listed for that event type are rejected.
 
+> This section is implemented in [`packages/contract`](../packages/contract/README.md) as
+> executable schemas and shared test fixtures. The tables below explain the contract; the
+> package enforces it. **Where the two disagree, the package is correct and this document
+> is a bug.**
+
 | Envelope field | Version 1 rule |
 |---|---|
 | `schema_version` | Integer `1`. Pal rejects unsupported versions as a non-retryable contract error; Pika retains the failed outbox record for investigation. |
@@ -135,7 +140,16 @@ Shared value rules:
 | `learning_item.viewed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`within_24h_of_release` or `later`) | The first genuine learner-initiated open of that item across its lifecycle. Background fetches, preload, and later reopens do not qualify. |
 | `learning_item.completed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`on_time` or `late`) | The first authoritative valid completion of that item. Unsubmit/resubmit does not create another version 1 fact. |
 
-Adding an event, metadata key, or enum value requires a new reviewed contract version unless version 1 explicitly allowed it. Pal must accept and test a new version before Pika begins producing it. During rollout, Pika keeps producing the last mutually supported version; unsupported-version failures are not retried indefinitely.
+Every contract change is reviewed, but not every change bumps `schema_version`. Adding an
+event type or an optional metadata key is additive — no existing producer emits it and no
+existing consumer expects it — so it ships as a minor release of the contract package with
+`schema_version` unchanged, and which event types an integration may send stays governed by
+that integration's allow-list. `schema_version` moves only for a breaking change: renaming
+or removing a field, tightening a constraint, changing a required field's type, or changing
+an identity rule. The full policy, including how the path `v1` differs from the body's
+`schema_version`, is in [@pal/contract](../packages/contract/README.md#versioning).
+
+Pal must accept and test a new version before Pika begins producing it. During rollout, Pika keeps producing the last mutually supported version; unsupported-version failures are not retried indefinitely.
 
 ## Duplicate and aggregation semantics
 
