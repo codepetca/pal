@@ -30,9 +30,12 @@
   z-index: 2;
   /* Every frame shares a 2048px canvas height but not its width, so the box is
      sized from the height and the widest frame's ratio (excited, 2502/2048).
-     Fixing the box stops the layout shifting as poses swap. */
-  height: 210px;
-  width: 257px;
+     Fixing the box stops the layout shifting as poses swap.
+
+     The height is set to sit on the ground band rather than tower over it; the
+     width follows from it (130 * 2502/2048). */
+  height: 130px;
+  width: 159px;
 }
 
 .petFrame {
