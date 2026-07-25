@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:session:ses-6d1f9a3c72b48e06",
+  "learner_id": "student@example.school",
+  "event_type": "platform.session.started",
+  "occurred_at": "2026-09-14T13:02:11Z",
+  "metadata": {}
+}

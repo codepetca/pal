@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:daily-log:log-7e2a9c4b21",
+  "learner_id": "lrn-8f2c1a9b4e7d3056",
+  "event_type": "daily_log.completed",
+  "occurred_at": "2026-02-28T18:20:00Z",
+  "metadata": {
+    "period_key": "2026-winter-week-08",
+    "activity_day": "2026-02-30"
+  }
+}

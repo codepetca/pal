@@ -71,6 +71,10 @@ Applying a mutation can create a new fact that rules care about. The canonical e
 
 **How it works:** mutation handlers may return derived events. The applier feeds each derived event back through `evaluate()` and applies the resulting mutations, inside the same transaction as the original event.
 
+![One event flows through evaluate(), produces mutations, and the applier feeds derived events back in for up to four rounds before state settles.](images/rule-cascade.svg)
+
+This diagram is a snapshot, not a source of truth — if the cascade shape changes, redraw it rather than trust it. It walks a single `assignment.completed` through one round: `evaluate()` returns the XP and mood mutations, the applier commits them, and the XP grant derives `XP_CHANGED`, which is fed back into `evaluate()` for the next round (the loop at the top right). A level-up would extend the same loop by one more round.
+
 | Derived event | Emitted when |
 |---|---|
 | `XP_CHANGED` | An `XP_GRANT` actually changed the learner's XP balance |

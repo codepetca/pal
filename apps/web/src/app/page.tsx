@@ -163,7 +163,6 @@ export default function WorldView() {
       await refreshWorld();
     }
     startFresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshWorld() {
@@ -236,16 +235,17 @@ export default function WorldView() {
 
       <div className={styles.hud}>
         <span className={styles.logo}>PAL</span>
-        <div className={styles.hudRight}>
-          <span className={styles.moodBadge} data-mood={mood}>
-            {mood}
-          </span>
-          <span className={styles.levelBadge}>Lv {level}</span>
-          <span className={styles.xpBadge}>
-            ⭐ {xp} / {LEVEL_UP_COST_XP}
-          </span>
-          <span className={styles.streak}>🔥 {streak}</span>
-        </div>
+      </div>
+
+      <div className={styles.groundHud}>
+        <span className={styles.moodBadge} data-mood={mood}>
+          {mood}
+        </span>
+        <span className={styles.levelBadge}>Lv {level}</span>
+        <span className={styles.xpBadge}>
+          ⭐ {xp} / {LEVEL_UP_COST_XP}
+        </span>
+        <span className={styles.streak}>🔥 {streak}</span>
       </div>
 
       <button

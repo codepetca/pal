@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:forged:level-up-1",
+  "learner_id": "lrn-8f2c1a9b4e7d3056",
+  "event_type": "level_up",
+  "occurred_at": "2026-09-16T18:20:00Z",
+  "metadata": {}
+}
