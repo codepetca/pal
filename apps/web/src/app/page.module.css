@@ -28,6 +28,26 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
+  /* Every frame shares a 2048px canvas height but not its width, so the box is
+     sized from the height and the widest frame's ratio (excited, 2502/2048).
+     Fixing the box stops the layout shifting as poses swap. */
+  height: 210px;
+  width: 257px;
+}
+
+.petFrame {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: 100%;
+  width: auto;
+  /* `transform` is set per frame in page.tsx: centring plus a measured per-canvas
+     nudge, so every pose lands on the same spot on screen. Vertically the canvases
+     already agree — bottom-flush is correct for every frame, confirmed by the same
+     overlap measurement that produced the horizontal nudges.
+
+     No transition: a crossfade would show two poses at once, and the point of the
+     two-frame loop is that each drawing reads on its own. */
 }
 
 .hud {
@@ -63,6 +83,38 @@
   font-size: 12px;
   font-weight: 700;
   color: #2D1B0E;
+}
+
+.xpBadge {
+  background: rgba(255,255,255,0.9);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2D1B0E;
+}
+
+/* The mood the engine currently has the pet in — the sprite is the point, but
+   the label makes it unambiguous which pose you should be looking at. */
+.moodBadge {
+  background: rgba(255,255,255,0.9);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2D1B0E;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.moodBadge[data-mood="happy"] {
+  background: #F4A261;
+  color: #2D1B0E;
+}
+
+.moodBadge[data-mood="excited"] {
+  background: #E76F51;
+  color: #FFF6F0;
 }
 
 .streak {

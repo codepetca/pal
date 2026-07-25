@@ -6,52 +6,175 @@ import styles from "./page.module.css";
 
 const TEST_LEARNER_ID = "test-learner-001";
 
+// What the engine charges for one level (LEVEL_UP_COST_XP in @pal/engine's default
+// rule pack). Mirrored here only to render the HUD's progress readout — the engine
+// remains the sole authority on when a level-up actually fires.
+const LEVEL_UP_COST_XP = 500;
+
+// The two frames of a mood alternate at this interval. Deliberately slow for a
+// sprite animation: each pose has to register as its own drawing rather than
+// blending into the next.
+const MOOD_FRAME_MS = 600;
+
+// A blink plays blinking-1..5 in sequence, then rests. The art is authored as a
+// ping-pong — frame 5 is byte-identical to frame 1 and frame 4 to frame 2, with
+// frame 3 the closed-eye peak — and frame 1 matches default.png, so the sequence
+// enters and leaves the resting pose without a visible cut.
+const BLINK_FRAME_MS = 70;
+const BLINK_EVERY_MS = 4000;
+
+// `dx` is a horizontal nudge in the frame's own canvas pixels, applied on top of
+// centring the canvas. The poses are drawn on canvases of different widths and the
+// cat does not sit identically centred on each, so centring the canvas alone — the
+// obvious thing — leaves the happy poses visibly right of the resting one. The
+// values were measured by maximising alpha-mask overlap against default.png; the
+// two frames of a mood share one value, which is what confirms the offset belongs
+// to the canvas rather than the pose. Vertically the canvases already agree, so
+// bottom-flush needs no correction.
+type Frame = { src: string; w: number; h: number; dx: number };
+
+// Every frame shares a 2048px canvas height; the widths differ because the wider
+// poses (excited most of all) need the room. Declaring the true intrinsic size
+// per frame keeps next/image from guessing an aspect ratio before load.
+const REST: Frame = { src: "/assets/pets/default.png", w: 1952, h: 2048, dx: 0 };
+
+const BLINK_FRAMES: Frame[] = [1, 2, 3, 4, 5].map((n) => ({
+  src: `/assets/pets/blinking-${n}.png`,
+  w: 1952,
+  h: 2048,
+  dx: 0,
+}));
+
+// Moods the engine can put the pet in, mapped to their animation frames. A mood
+// with no entry here (currently only "neutral") falls back to the resting pose.
+const MOOD_FRAMES: Record<string, Frame[]> = {
+  happy: [1, 2].map((n) => ({ src: `/assets/pets/happy-${n}.png`, w: 2126, h: 2048, dx: -64 })),
+  excited: [1, 2].map((n) => ({ src: `/assets/pets/excited-${n}.png`, w: 2502, h: 2048, dx: -16 })),
+};
+
+// Every frame is mounted at once and switched by opacity. Swapping the `src` of a
+// single <img> instead would fetch mid-animation and flash an empty box on the
+// first pass through each pose.
+const ALL_FRAMES: Frame[] = [REST, ...BLINK_FRAMES, ...Object.values(MOOD_FRAMES).flat()];
+
 const PANEL_EVENTS = [
   { label: "Assignment completed", event_type: "assignment.completed", metadata: { on_time: false } },
   { label: "Assignment completed (on time)", event_type: "assignment.completed", metadata: { on_time: true } },
   { label: "Daily check-in", event_type: "daily_checkin.created", metadata: {} },
 ];
 
-function Pet() {
+type WorldResponse = {
+  pet: { mood: string; animation_state: string };
+  world: { stage: number; objects: string[] };
+  economy: { xp: number; xp_lifetime: number; level: number; streak: number };
+};
+
+function PetSprite({ mood }: { mood: string }) {
+  const frames = MOOD_FRAMES[mood];
+  const [moodFrame, setMoodFrame] = useState(0);
+  const [blinkFrame, setBlinkFrame] = useState(-1);
+
+  // The two-frame mood loop. Restarting at frame 0 on every mood change means a
+  // new mood always opens on its first pose.
+  useEffect(() => {
+    setMoodFrame(0);
+    if (!frames) return;
+    const id = setInterval(() => setMoodFrame((f) => (f + 1) % frames.length), MOOD_FRAME_MS);
+    return () => clearInterval(id);
+  }, [frames]);
+
+  // Idle blinking, and only idle — the happy and excited art has no blink frames,
+  // and a pet already animating a mood does not need a second animation on top.
+  useEffect(() => {
+    setBlinkFrame(-1);
+    if (frames) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    // One chained timeout rather than an interval per frame, so a mood change
+    // mid-blink cancels the whole sequence instead of leaving strays queued.
+    const step = (i: number) => {
+      if (cancelled) return;
+      if (i >= BLINK_FRAMES.length) {
+        setBlinkFrame(-1);
+        timer = setTimeout(() => step(0), BLINK_EVERY_MS);
+        return;
+      }
+      setBlinkFrame(i);
+      timer = setTimeout(() => step(i + 1), BLINK_FRAME_MS);
+    };
+
+    timer = setTimeout(() => step(0), BLINK_EVERY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [frames]);
+
+  const activeSrc = frames
+    ? frames[moodFrame].src
+    : blinkFrame >= 0
+      ? BLINK_FRAMES[blinkFrame].src
+      : REST.src;
+
   return (
-    <svg viewBox="0 0 120 125" xmlns="http://www.w3.org/2000/svg" width="90" height="94">
-      <path d="M 88 100 Q 108 76 100 58" stroke="#E76F51" strokeWidth="10" fill="none" strokeLinecap="round" />
-      <ellipse cx="60" cy="96" rx="36" ry="30" fill="#F4A261" />
-      <ellipse cx="60" cy="96" rx="22" ry="18" fill="#FBBF8A" />
-      <circle cx="60" cy="56" r="34" fill="#F4A261" />
-      <polygon points="38,30 31,4 56,22" fill="#E76F51" />
-      <polygon points="82,30 89,4 64,22" fill="#E76F51" />
-      <polygon points="40,28 35,11 54,23" fill="#FFBBA0" />
-      <polygon points="80,28 85,11 66,23" fill="#FFBBA0" />
-      <circle cx="47" cy="51" r="6" fill="#2D1B0E" />
-      <circle cx="73" cy="51" r="6" fill="#2D1B0E" />
-      <circle cx="50" cy="48" r="2.5" fill="white" />
-      <circle cx="76" cy="48" r="2.5" fill="white" />
-      <ellipse cx="60" cy="62" rx="3.5" ry="3" fill="#E76F51" />
-      <path d="M 52 67 Q 60 74 68 67" stroke="#2D1B0E" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-    </svg>
+    // The stack as a whole is the image; the individual frames are an
+    // implementation detail, so they carry an empty alt and the label lives here.
+    <div className={styles.pet} role="img" aria-label={`Pet mood: ${mood}`}>
+      {ALL_FRAMES.map((frame) => (
+        <Image
+          key={frame.src}
+          src={frame.src}
+          alt=""
+          width={frame.w}
+          height={frame.h}
+          priority
+          className={styles.petFrame}
+          style={{
+            opacity: frame.src === activeSrc ? 1 : 0,
+            // Both terms are percentages of the frame's own width, so the nudge
+            // stays correct at any rendered size.
+            transform: `translateX(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%))`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
 export default function WorldView() {
-  const [streak, setStreak] = useState(0);
+  const [world, setWorld] = useState<WorldResponse | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const refreshSeq = useRef(0);
 
   useEffect(() => {
-    refreshWorld();
+    // Each page load starts a fresh experiment. The learner store is in-memory and
+    // process-local, so without this a refresh would silently inherit the XP, level
+    // and mood left behind by the previous session and the run-up to a level-up
+    // would be impossible to observe from a known starting point.
+    async function startFresh() {
+      await fetch("/api/sandbox/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
+      });
+      await refreshWorld();
+    }
+    startFresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshWorld() {
     const seq = ++refreshSeq.current;
     const res = await fetch(`/api/v1/world/${TEST_LEARNER_ID}`);
-    const data = await res.json();
+    const data: WorldResponse = await res.json();
     // A later refreshWorld() call can have its response arrive first.
     // Drop this one if a newer request has since been issued, so a
-    // stale response can't overwrite the current streak count.
+    // stale response can't overwrite the current world state.
     if (seq !== refreshSeq.current) return;
-    setStreak(data.economy.streak);
+    setWorld(data);
   }
 
   async function fireEvent(event_type: string, metadata: Record<string, unknown>) {
@@ -83,6 +206,11 @@ export default function WorldView() {
     await refreshWorld();
   }
 
+  const mood = world?.pet.mood ?? "neutral";
+  const level = world?.economy.level ?? 1;
+  const xp = world?.economy.xp ?? 0;
+  const streak = world?.economy.streak ?? 0;
+
   return (
     <div className={styles.world}>
       <Image
@@ -104,14 +232,18 @@ export default function WorldView() {
         <path d="M0,120 Q360,60 720,100 Q1080,140 1440,80 L1440,200 L0,200Z" fill="#4E8B3A" />
       </svg>
 
-      <div className={styles.pet}>
-        <Pet />
-      </div>
+      <PetSprite mood={mood} />
 
       <div className={styles.hud}>
         <span className={styles.logo}>PAL</span>
         <div className={styles.hudRight}>
-          <span className={styles.levelBadge}>Lv 3</span>
+          <span className={styles.moodBadge} data-mood={mood}>
+            {mood}
+          </span>
+          <span className={styles.levelBadge}>Lv {level}</span>
+          <span className={styles.xpBadge}>
+            ⭐ {xp} / {LEVEL_UP_COST_XP}
+          </span>
           <span className={styles.streak}>🔥 {streak}</span>
         </div>
       </div>

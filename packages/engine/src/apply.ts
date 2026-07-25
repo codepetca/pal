@@ -11,6 +11,25 @@ export type ApplyResult = {
   derived: IncomingEvent[];
 };
 
+// How strongly a mood holds the pet. A mood that is still inside its window can
+// only be replaced by one of equal or greater strength, so the `excited` a level-up
+// sets runs its full hour instead of being downgraded to `happy` by the next
+// assignment a minute later. Equal strength still replaces, so repeated assignments
+// keep refreshing `happy`.
+//
+// `mood` is a free-form string by design (rule packs may introduce their own), so
+// anything absent here ranks 0 — it behaves like `neutral` and yields to whatever
+// is currently running.
+const MOOD_STRENGTH: Record<string, number> = {
+  neutral: 0,
+  happy: 1,
+  excited: 2,
+};
+
+function moodStrength(mood: string): number {
+  return MOOD_STRENGTH[mood] ?? 0;
+}
+
 // Applies a list of mutations to learner state and reports the derived events
 // the change created. Pure: no DB, no clock, no side effects — the caller owns
 // persistence and the transaction.
@@ -75,6 +94,19 @@ export function applyMutations(
       }
 
       case "PET_MOOD": {
+        // The engine has no clock, so "still running" is judged against the event's
+        // own occurred_at — the same instant the new expiry would be measured from.
+        const runningUntil = next.pet.mood_expires_at
+          ? Date.parse(next.pet.mood_expires_at)
+          : 0;
+        const stillRunning = runningUntil > Date.parse(event.occurred_at);
+        if (stillRunning && moodStrength(next.pet.mood) > moodStrength(mutation.mood)) {
+          // Deliberately does not extend the running mood's window either: it ends
+          // when the event that set it said it would. Only the mood is skipped —
+          // any XP or unlocks in the same cascade still apply.
+          break;
+        }
+
         next.pet.mood = mutation.mood;
         next.pet.mood_expires_at = new Date(
           new Date(event.occurred_at).getTime() + mutation.duration_minutes * 60_000
