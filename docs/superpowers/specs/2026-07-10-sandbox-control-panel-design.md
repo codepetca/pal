@@ -24,7 +24,7 @@ This change moves event-firing onto the main page itself, as a small floating co
 applyMutations(state: LearnerState, mutations: Mutation[]): { state: LearnerState; derivedEvents: IncomingEvent[] }
 ```
 
-- `XP_GRANT` → adds to `economy.xp`. `economy.streak_current` increments by at most 1 **per `applyMutations` call**, not per `XP_GRANT` mutation — a single `assignment.completed (on_time: true)` event matches two rules (`assignment-xp` + `assignment-on-time-bonus`) and yields two `XP_GRANT` mutations in one batch, which must still only count as one streak tick.
+- `XP_GRANT` → adds to `economy.xp`. `economy.streak_current` increments by at most 1 **per `applyMutations` call**, not per `XP_GRANT` mutation — a single `learning_item.completed (timing: "on_time")` event matches two rules (`learning-item-xp` + `learning-item-on-time-bonus`) and yields two `XP_GRANT` mutations in one batch, which must still only count as one streak tick.
 - `PET_MOOD` → sets `pet.mood` and computes `pet.mood_expires_at` from `duration_minutes`.
 - `WORLD_UNLOCK` → appends `asset_ref_id` to `world.unlocked_object_ids` (de-duped).
 - `WORLD_STAGE` → sets `world.stage`.
@@ -62,8 +62,8 @@ Dev-only POST endpoint (not part of the real API contract — stays under `/api/
 - On mount, fetches `GET /api/v1/world/test-learner-001` and stores `economy.streak` in state; the `🔥` badge renders this value live (replacing the hardcoded `5`). `Lv 3` stays literal text.
 - Adds a small ⚡ icon button, fixed near the top-left (below the HUD), that toggles a floating glass panel (~170px wide, translucent dark blurred background, matching the approved mockup) — sized and positioned so it never overlaps the centered pet.
 - Panel contents:
-  - 3 buttons: "Assignment completed", "Assignment completed (on time)", "Daily check-in" — same event types/metadata the old `/sandbox` page used.
-  - A compact scrolling event log (e.g. `→ assignment.completed: processed`).
+  - 3 buttons: "Learning item completed", "Learning item completed (on time)", "Daily log completed" — same event types/metadata the old `/sandbox` page used.
+  - A compact scrolling event log (e.g. `→ learning_item.completed: processed`).
   - A "Reset" button.
 - Firing an event: `POST /api/sandbox/events` (existing proxy, unchanged — still the only thing holding `SANDBOX_INTEGRATION_SECRET`) → on response, append to the log → refetch world state → update the streak badge.
 - Reset: `POST /api/sandbox/reset` → clear the log → refetch world state (streak badge goes back to 0).
@@ -75,7 +75,7 @@ Because the in-memory store starts fresh, the streak badge shows **🔥 0** on f
 
 ## Error handling
 
-- If `SANDBOX_INTEGRATION_SECRET` isn't configured, the existing proxy already returns a `500` with a hint; the panel surfaces this as a log line (e.g. `→ assignment.completed: error`) rather than crashing.
+- If `SANDBOX_INTEGRATION_SECRET` isn't configured, the existing proxy already returns a `500` with a hint; the panel surfaces this as a log line (e.g. `→ learning_item.completed: error`) rather than crashing.
 - Local dev requires `apps/web/.env.local` with `SANDBOX_INTEGRATION_SECRET` set (already created for this session).
 
 ## Testing

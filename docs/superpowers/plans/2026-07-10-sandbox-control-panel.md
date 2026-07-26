@@ -448,9 +448,9 @@ import styles from "./page.module.css";
 const TEST_LEARNER_ID = "test-learner-001";
 
 const PANEL_EVENTS = [
-  { label: "Assignment completed", event_type: "assignment.completed", metadata: { on_time: false } },
-  { label: "Assignment completed (on time)", event_type: "assignment.completed", metadata: { on_time: true } },
-  { label: "Daily check-in", event_type: "daily_checkin.created", metadata: {} },
+  { label: "Learning item completed", event_type: "learning_item.completed", metadata: { timing: "late" } },
+  { label: "Learning item completed (on time)", event_type: "learning_item.completed", metadata: { timing: "on_time" } },
+  { label: "Daily log completed", event_type: "daily_log.completed", metadata: {} },
 ];
 
 function Pet() {
@@ -806,7 +806,7 @@ Click the ⚡ icon near the top-left. Confirm the glass panel appears without sh
 
 - [ ] **Step 4: Confirm firing an event updates the streak badge and log**
 
-Open the panel, click "Daily check-in". Confirm: a `→ daily_checkin.created: processed` line appears in the log, and the `🔥` badge in the HUD increments from `0` to `1`.
+Open the panel, click "Daily log completed". Confirm: a `→ daily_log.completed: processed` line appears in the log, and the `🔥` badge in the HUD increments from `0` to `1`.
 
 - [ ] **Step 5: Confirm the on-time bonus still counts as one streak tick**
 

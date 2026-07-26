@@ -33,7 +33,7 @@ Open `apps/web/.env.local` and set:
 pnpm dev
 ```
 
-Open [localhost:3000/sandbox](http://localhost:3000/sandbox), click **Assignment completed**, and you should see `→ assignment.completed: processed` in the event log. If you get a 500 with `sandbox_not_configured`, the env file is missing or in the wrong folder.
+Open [localhost:3000/sandbox](http://localhost:3000/sandbox), click **Learning item completed**, and you should see `→ learning_item.completed: processed` in the event log. If you get a 500 with `sandbox_not_configured`, the env file is missing or in the wrong folder.
 
 Why the secret exists: the ingest API (`POST /api/v1/events`) rejects unauthenticated requests, exactly as it will for real integrations. Your browser never sees the secret — the sandbox posts through a server-side proxy (`/api/sandbox/events`) that attaches it, playing the role of an integration's backend.
 

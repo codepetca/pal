@@ -7,9 +7,9 @@ import styles from "./page.module.css";
 const TEST_LEARNER_ID = "test-learner-001";
 
 const PANEL_EVENTS = [
-  { label: "Assignment completed", event_type: "assignment.completed", metadata: { on_time: false } },
-  { label: "Assignment completed (on time)", event_type: "assignment.completed", metadata: { on_time: true } },
-  { label: "Daily check-in", event_type: "daily_checkin.created", metadata: {} },
+  { label: "Learning item completed", event_type: "learning_item.completed", metadata: { timing: "late" } },
+  { label: "Learning item completed (on time)", event_type: "learning_item.completed", metadata: { timing: "on_time" } },
+  { label: "Daily log completed", event_type: "daily_log.completed", metadata: {} },
 ];
 
 function Pet() {

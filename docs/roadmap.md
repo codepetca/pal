@@ -7,7 +7,7 @@ Milestones are sequential but not dated. A milestone is done when everything und
 
 ## Milestone 1 (M1) — Pika-first foundation
 - Event ingest API + idempotency
-- Basic rule pack (assignment.completed → XP + pet mood)
+- Basic rule pack (learning_item.completed → XP + pet mood)
 - Economy table (XP, level, streak)
 - World state stub (stage field only)
 - Minimal student viewer (pet + XP bar)

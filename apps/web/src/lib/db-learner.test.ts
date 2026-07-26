@@ -49,11 +49,12 @@ before(async () => {
       name: "Sandbox",
       secretHash: "unused-in-tests",
       allowedEventTypes: [
-        "assignment.completed",
-        "daily_checkin.created",
-        "resource.viewed",
-        "calendar.month_end",
-        "calendar.semester_end",
+        "learning_item.completed",
+        "daily_log.completed",
+        "learning_item.viewed",
+        "daily_log_week.configured",
+        "classroom.joined",
+        "platform.session.started",
       ],
     })
     .returning({ id: integrations.id });
@@ -71,7 +72,7 @@ const EXTERNAL_ID = "test-learner-abc123";
 
 function makeEvent(overrides?: Partial<IncomingEvent>): IncomingEvent {
   return {
-    event_type: "daily_checkin.created",
+    event_type: "daily_log.completed",
     occurred_at: "2026-07-01T12:00:00.000Z",
     metadata: {},
     ...overrides,
@@ -122,7 +123,7 @@ describe("insertEvent — idempotency", () => {
       integrationId,
       learnerId,
       idempotencyKey: IDEM_KEY,
-      eventType: "daily_checkin.created",
+      eventType: "daily_log.completed",
       occurredAt: new Date("2026-07-01T12:00:00Z"),
       metadata: {},
     });
@@ -136,7 +137,7 @@ describe("insertEvent — idempotency", () => {
       integrationId,
       learnerId,
       idempotencyKey: IDEM_KEY,
-      eventType: "daily_checkin.created",
+      eventType: "daily_log.completed",
       occurredAt: new Date("2026-07-01T12:00:00Z"),
       metadata: {},
     });
@@ -151,7 +152,7 @@ describe("insertEvent — idempotency", () => {
         slug: "other-test",
         name: "Other Test",
         secretHash: "other-hash",
-        allowedEventTypes: ["assignment.completed"],
+        allowedEventTypes: ["learning_item.completed"],
       })
       .returning({ id: integrations.id });
 
@@ -160,7 +161,7 @@ describe("insertEvent — idempotency", () => {
       integrationId: other.id,
       learnerId,
       idempotencyKey: IDEM_KEY, // same key, different integration
-      eventType: "assignment.completed",
+      eventType: "learning_item.completed",
       occurredAt: new Date("2026-07-01T12:00:00Z"),
       metadata: {},
     });
@@ -185,9 +186,9 @@ describe("loadLearnerState / saveLearnerState round-trip", () => {
     const state = await loadLearnerState(db, learnerId);
 
     const event: IncomingEvent = {
-      event_type: "assignment.completed",
+      event_type: "learning_item.completed",
       occurred_at: "2026-07-01T12:00:00.000Z",
-      metadata: { on_time: true },
+      metadata: { timing: "on_time" },
     };
     const result = processEvent(event, state, defaultRulePack);
     await saveLearnerState(db, learnerId, result.state);
@@ -209,7 +210,7 @@ describe("resetLearner", () => {
       integrationId,
       learnerId,
       idempotencyKey: "reset-key",
-      eventType: "daily_checkin.created",
+      eventType: "daily_log.completed",
       occurredAt: new Date(),
       metadata: {},
     });
@@ -250,7 +251,7 @@ describe("concurrent deduplication", () => {
           integrationId,
           learnerId,
           idempotencyKey: "concurrent-key",
-          eventType: "daily_checkin.created",
+          eventType: "daily_log.completed",
           occurredAt: new Date(),
           metadata: {},
         });
@@ -263,7 +264,7 @@ describe("concurrent deduplication", () => {
           integrationId,
           learnerId,
           idempotencyKey: "concurrent-key",
-          eventType: "daily_checkin.created",
+          eventType: "daily_log.completed",
           occurredAt: new Date(),
           metadata: {},
         });

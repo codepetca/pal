@@ -7,7 +7,7 @@ import type { IncomingEvent, LearnerState, Mutation, RulePack } from "./types";
 // forever.
 //
 // Four is the depth the default pack needs to settle a levelling cascade:
-//   assignment.completed → XP_CHANGED → XP_CHANGED → XP_CHANGED
+//   learning_item.completed → XP_CHANGED → XP_CHANGED → XP_CHANGED
 // Levelling deducts XP, which changes XP again, which can level again — so an
 // unbounded cascade would keep going. The limit caps a single event at three
 // levels and leaves any surplus XP banked for the learner's next event.

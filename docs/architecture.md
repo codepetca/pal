@@ -13,16 +13,16 @@ Pal is a **game engine as a service**: external systems send it privacy-safe lea
 
 ## End-to-end example
 
-A student submits an assignment in Pika. Here is everything that happens:
+A student completes a learning item in Pika. Here is everything that happens:
 
 1. **Pika backend** sends a signal to Pal:
    ```json
    POST /api/v1/events
    {
-     "idempotency_key": "pika-assignment-abc123",
+     "idempotency_key": "pika-learning-item-token:completed",
      "learner_id": "hashed-student-id",
-     "event_type": "assignment.completed",
-     "metadata": { "on_time": true }
+     "event_type": "learning_item.completed",
+     "metadata": { "timing": "on_time" }
    }
    ```
 
@@ -180,12 +180,12 @@ Operators define a calendar of future events once during integration setup:
 
 ```
 Fall 2026 semester:
-  Oct 1  → fire "calendar.month_end" for all learners in this integration
-  Nov 1  → fire "calendar.month_end"
-  Jan 15 → fire "calendar.semester_end"
+  Oct 1  → fire "daily_log_week.configured: period_key=2026-wk40" for all learners
+  Oct 8  → fire "daily_log_week.configured: period_key=2026-wk41"
+  Jan 15 → fire "daily_log_week.configured: period_key=2026-wk42"
 ```
 
-A background job fires these automatically. The rule pack defines what each calendar event means for the world. Operators and rule pack authors never need to coordinate after initial setup.
+A background job fires these automatically. The rule pack defines what each scheduled event means for the world. Operators and rule pack authors never need to coordinate after initial setup.
 
 Schedules can be set at the **integration level** (all learners) or **group level** (per classroom), with group taking precedence.
 

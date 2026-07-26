@@ -21,12 +21,12 @@
 POST /api/v1/events
 Authorization: Bearer <integration_secret>
 {
-  "idempotency_key": "pika-assignment-abc123",
+  "idempotency_key": "pika-learning-item-abc123",
   "learner_id": "<pseudonymous_hashed_id>",
-  "event_type": "assignment.completed",
+  "event_type": "learning_item.completed",
   "occurred_at": "2026-06-25T10:00:00Z",
   "metadata": {
-    "on_time": true
+    "timing": "on_time"
   }
 }
 ```

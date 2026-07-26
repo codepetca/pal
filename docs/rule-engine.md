@@ -24,8 +24,8 @@ Rules are JSON config — operators can tune gameplay without code changes.
 {
   "rules": [
     {
-      "id": "assignment-xp",
-      "trigger": { "event_type": "assignment.completed" },
+      "id": "learning-item-xp",
+      "trigger": { "event_type": "learning_item.completed" },
       "conditions": [],
       "effects": [
         { "type": "XP_GRANT", "amount": 150 },
@@ -34,8 +34,8 @@ Rules are JSON config — operators can tune gameplay without code changes.
     },
     {
       "id": "on-time-bonus",
-      "trigger": { "event_type": "assignment.completed" },
-      "conditions": [{ "field": "metadata.on_time", "op": "eq", "value": true }],
+      "trigger": { "event_type": "learning_item.completed" },
+      "conditions": [{ "field": "metadata.timing", "op": "eq", "value": "on_time" }],
       "effects": [{ "type": "XP_GRANT", "amount": 50 }]
     },
     {
@@ -67,13 +67,13 @@ Effects are **literal** mutations — the engine does no arithmetic. A rule cann
 
 ## Derived events
 
-Applying a mutation can create a new fact that rules care about. The canonical example: a check-in advances the streak, the streak reaches 7, and the `streak-7-world` rule should now fire — but that rule triggers on `STREAK_MILESTONE`, an event no integration ever sends.
+Applying a mutation can create a new fact that rules care about. The canonical example: a daily log advances the streak, the streak reaches 7, and the `streak-7-world` rule should now fire — but that rule triggers on `STREAK_MILESTONE`, an event no integration ever sends.
 
 **How it works:** mutation handlers may return derived events. The applier feeds each derived event back through `evaluate()` and applies the resulting mutations, inside the same transaction as the original event.
 
 ![One event flows through evaluate(), produces mutations, and the applier feeds derived events back in for up to four rounds before state settles.](images/rule-cascade.svg)
 
-This diagram is a snapshot, not a source of truth — if the cascade shape changes, redraw it rather than trust it. It walks a single `assignment.completed` through one round: `evaluate()` returns the XP and mood mutations, the applier commits them, and the XP grant derives `XP_CHANGED`, which is fed back into `evaluate()` for the next round (the loop at the top right). A level-up would extend the same loop by one more round.
+This diagram is a snapshot, not a source of truth — if the cascade shape changes, redraw it rather than trust it. It walks a single `learning_item.completed` through one round: `evaluate()` returns the XP and mood mutations, the applier commits them, and the XP grant derives `XP_CHANGED`, which is fed back into `evaluate()` for the next round (the loop at the top right). A level-up would extend the same loop by one more round.
 
 | Derived event | Emitted when |
 |---|---|
@@ -87,7 +87,7 @@ Rules of the cascade:
 
 - **The engine stays pure.** It never emits events and never knows about the cascade — only the applier (`processEvent`) orchestrates re-evaluation.
 - **Depth limit: 4.** The original event plus three rounds of derived events, then stop. A rule pack that cascades deeper is usually a config bug; the applier reports what it dropped (`ProcessResult.truncated`) for the AuditLog and stops, rather than looping forever. The limit is *also* what bounds the economy: levelling spends XP, which changes XP, which can level again — so one event can raise a learner at most three levels, and any surplus XP stays banked for their next event.
-- **Derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`assignment.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` could hand itself a level; the ingest allow-list rejects them.
+- **Derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`learning_item.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` could hand itself a level; the ingest allow-list rejects them.
 
 ---
 

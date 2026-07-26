@@ -2,9 +2,9 @@ import { LEVEL_UP, STREAK_MILESTONE, XP_CHANGED } from "./apply";
 import type { Rule, RulePack } from "./types";
 
 // Economy numbers. See docs/economy-design.md — change them here, not in the rules.
-const ASSIGNMENT_XP = 150;
-const ASSIGNMENT_ON_TIME_BONUS_XP = 50;
-const DAILY_CHECKIN_XP = 10;
+const ITEM_XP = 150;
+const ITEM_ON_TIME_BONUS_XP = 50;
+const DAILY_LOG_XP = 10;
 const STREAK_BONUS_XP = 3;
 const STREAK_BONUS_EVERY_DAYS = 2;
 const STREAK_BONUS_MAX_XP = 15;
@@ -15,16 +15,16 @@ const LEVEL_UP_COST_XP = 500;
 // into one rule per tier (streak 2, 4, 6, 8, 10), each granting a flat +3. A
 // learner on a 10-day streak matches all five and earns the full +15.
 //
-// The tiers fire on STREAK_MILESTONE, not on the check-in event itself: the
+// The tiers fire on STREAK_MILESTONE, not on the daily-log event itself: the
 // milestone is derived *after* the streak advances, so `streak_current` is the
-// learner's streak including today. Reading it on the check-in event would see
+// learner's streak including today. Reading it on the daily-log event would see
 // yesterday's streak and pay every bonus a day late.
 const streakBonusRules: Rule[] = Array.from(
   { length: STREAK_BONUS_MAX_XP / STREAK_BONUS_XP },
   (_, tier) => {
     const streakDays = (tier + 1) * STREAK_BONUS_EVERY_DAYS;
     return {
-      id: `daily-checkin-${streakDays}-streak-bonus`,
+      id: `daily-log-${streakDays}-streak-bonus`,
       trigger: { event_type: STREAK_MILESTONE },
       conditions: [
         {
@@ -43,41 +43,46 @@ const streakBonusRules: Rule[] = Array.from(
 export const defaultRulePack: RulePack = {
   id: "default-v1",
   rules: [
+    // ── Learning item completed ──────────────────────────────────────────
     {
-      id: "assignment-xp",
-      trigger: { event_type: "assignment.completed" },
+      id: "learning-item-xp",
+      trigger: { event_type: "learning_item.completed" },
       conditions: [],
       effects: [
-        { type: "XP_GRANT", amount: ASSIGNMENT_XP },
+        { type: "XP_GRANT", amount: ITEM_XP },
         { type: "PET_MOOD", mood: "happy", duration_minutes: 30 },
       ],
     },
     {
-      id: "assignment-on-time-bonus",
-      trigger: { event_type: "assignment.completed" },
-      conditions: [{ field: "metadata.on_time", op: "eq", value: true }],
-      effects: [{ type: "XP_GRANT", amount: ASSIGNMENT_ON_TIME_BONUS_XP }],
+      id: "learning-item-on-time-bonus",
+      trigger: { event_type: "learning_item.completed" },
+      conditions: [{ field: "metadata.timing", op: "eq", value: "on_time" }],
+      effects: [{ type: "XP_GRANT", amount: ITEM_ON_TIME_BONUS_XP }],
     },
+
+    // ── Daily log completed ─────────────────────────────────────────────
     {
-      // The check-in event only advances the streak; it grants no XP itself. The
+      // The daily-log event only advances the streak; it grants no XP itself. The
       // XP is paid on the derived STREAK_MILESTONE below, which fires once per UTC
-      // day — so a learner POSTing several check-ins in one day earns the day's XP
-      // exactly once. Paying XP here instead would let repeated same-day check-ins
-      // farm DAILY_CHECKIN_XP without limit.
-      id: "daily-checkin-streak",
-      trigger: { event_type: "daily_checkin.created" },
+      // day — so a learner sending several daily-log events in one day earns the
+      // day's XP exactly once. Paying XP here instead would let repeated same-day
+      // events farm DAILY_LOG_XP without limit.
+      id: "daily-log-streak",
+      trigger: { event_type: "daily_log.completed" },
       conditions: [],
       effects: [{ type: "STREAK", continue_streak: true }],
     },
     {
       // The once-per-day base reward. STREAK_MILESTONE is derived only when the
       // streak actually advanced, so this cannot double-pay within a day.
-      id: "daily-checkin-xp",
+      id: "daily-log-xp",
       trigger: { event_type: STREAK_MILESTONE },
       conditions: [],
-      effects: [{ type: "XP_GRANT", amount: DAILY_CHECKIN_XP }],
+      effects: [{ type: "XP_GRANT", amount: DAILY_LOG_XP }],
     },
     ...streakBonusRules,
+
+    // ── Level up ─────────────────────────────────────────────────────────
     {
       // Fires on the derived XP_CHANGED, so it reads XP *after* the grant landed.
       // Banking enough XP for two levels at once levels twice: the deduction below
@@ -99,15 +104,19 @@ export const defaultRulePack: RulePack = {
       conditions: [],
       effects: [{ type: "PET_MOOD", mood: "excited", duration_minutes: 60 }],
     },
+
+    // ── Streak milestones ────────────────────────────────────────────────
     {
       id: "streak-7-world-unlock",
       trigger: { event_type: STREAK_MILESTONE },
       conditions: [{ field: "economy.streak_current", op: "gte", value: 7 }],
       effects: [{ type: "WORLD_UNLOCK", asset_ref_id: "world-bird-v1" }],
     },
+
+    // ── Daily-log week configured ────────────────────────────────────────
     {
-      id: "world-month-1",
-      trigger: { event_type: "calendar.month_end" },
+      id: "world-week-1",
+      trigger: { event_type: "daily_log_week.configured" },
       conditions: [],
       effects: [{ type: "WORLD_STAGE", stage: 1 }],
     },
