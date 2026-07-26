@@ -52,4 +52,11 @@ test("sandbox modal host makes application siblings inert and intercepts its bac
     sandboxStyles,
     /\.celebrationLayer\[data-open="false"\] \{[\s\S]*pointer-events: none/,
   );
+  assert.match(
+    sandboxStyles,
+    /\.celebrationLayer\[data-open="true"\] \{[\s\S]*background:/,
+  );
+  const baseLayerRule =
+    sandboxStyles.match(/\.celebrationLayer \{([^}]+)\}/)?.[1] ?? "";
+  assert.doesNotMatch(baseLayerRule, /background:/);
 });

@@ -396,12 +396,15 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(2 8 23 / 0.3);
   pointer-events: auto;
 }
 
 .celebrationLayer[data-open="false"] {
   pointer-events: none;
+}
+
+.celebrationLayer[data-open="true"] {
+  background: rgb(2 8 23 / 0.3);
 }
 
 .controls {
