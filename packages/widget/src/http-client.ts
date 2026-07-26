@@ -10,8 +10,35 @@ export interface PalHttpClientOptions {
   fetchImplementation?: typeof fetch;
 }
 
-function resolveUrl(baseUrl: string, path: string): string {
-  return new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
+function isLocalDevelopmentHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function secureApiBaseUrl(candidate: string): URL {
+  const baseUrl = new URL(candidate.endsWith("/") ? candidate : `${candidate}/`);
+  const secureTransport =
+    baseUrl.protocol === "https:" ||
+    (baseUrl.protocol === "http:" && isLocalDevelopmentHost(baseUrl.hostname));
+
+  if (!secureTransport || baseUrl.username || baseUrl.password) {
+    throw new Error(
+      "Pal API base URL must use HTTPS, except for credential-free local development",
+    );
+  }
+
+  return baseUrl;
+}
+
+function resolveUrl(baseUrl: URL, path: string): string {
+  const resolved = new URL(path, baseUrl);
+  if (
+    resolved.origin !== baseUrl.origin ||
+    resolved.username ||
+    resolved.password
+  ) {
+    throw new Error("Pal API request paths must stay on the configured API origin");
+  }
+  return resolved.toString();
 }
 
 function abortError(): DOMException {
@@ -47,7 +74,10 @@ export function createPalHttpClient({
     `/api/v1/learner/rewards/${encodeURIComponent(rewardId)}/seen`,
   fetchImplementation = fetch,
 }: PalHttpClientOptions): PalClient {
+  const baseUrl = secureApiBaseUrl(apiBaseUrl);
+
   async function authorizedFetch(path: string, init: RequestInit): Promise<Response> {
+    const requestUrl = resolveUrl(baseUrl, path);
     const signal = init.signal ?? undefined;
     const token = await abortable(getAccessToken(signal), signal);
     if (signal?.aborted) {
@@ -57,7 +87,7 @@ export function createPalHttpClient({
       throw new Error("Pal access token was empty");
     }
 
-    const response = await fetchImplementation(resolveUrl(apiBaseUrl, path), {
+    const response = await fetchImplementation(requestUrl, {
       ...init,
       headers: {
         ...init.headers,
@@ -78,7 +108,7 @@ export function createPalHttpClient({
         signal,
       });
       return parsePalWidgetSnapshot(await response.json(), {
-        assetBaseUrl: apiBaseUrl,
+        assetBaseUrl: baseUrl.toString(),
         allowedAssetOrigins,
       });
     },

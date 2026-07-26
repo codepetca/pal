@@ -4,7 +4,11 @@
 - Implementation screenshot: `/tmp/pal-design-qa-floating/implementation-1280x720.jpg`
 - Side-by-side comparison: `/tmp/pal-design-qa-floating/comparison-1280x720.jpg`
 - Focused comparison: `/tmp/pal-design-qa-floating/focused-floating-pet.jpg`
+- Remediation desktop comparison: `/tmp/pal-design-qa-remediation/source-vs-dark.jpg`
+- Remediation focused evidence: `/tmp/pal-design-qa-remediation/focused-fixes.jpg`
+- Remediation mobile evidence: `/tmp/pal-design-qa-remediation/mobile-open.jpg`
 - Viewport: 1280 × 720 CSS pixels
+- Responsive viewport: 389 × 843 CSS pixels (390 px target, rounded by the browser's 0.67 display-density override)
 - Source dimensions: 1280 × 720 pixels
 - Implementation dimensions: 1280 × 720 pixels after normalizing the in-app browser's 0.67 display-density capture to its verified 1280 × 720 CSS viewport
 - State: dark Pika host shell, expanded sidebar, Achievements selected, fixture controls collapsed, Week 4 of 16
@@ -27,6 +31,23 @@
 - The fixture control remains a small overlay and does not replace or reflow the host UI.
 - No P0, P1, or P2 visual issues remained after the comparison.
 
+## Review remediation
+
+1. P1 light-theme contrast: selected navigation previously used white text on
+   `#dbeafe`. Theme-aware selected text and icon tokens now render the active
+   item with `#1e3a8a` text on `#dbeafe`, a measured 8.49:1 contrast ratio.
+2. P1 collapsed navigation semantics: visually hidden labels previously removed
+   the accessible name. Every host navigation button now keeps an explicit
+   `aria-label`; all seven destinations remain uniquely discoverable by role and
+   name after collapsing the sidebar.
+3. P2 mobile overlay collision: fixture controls and the floating pet previously
+   shared the same lower-right space. The mobile controls reserve a separate pet
+   column. At the verified responsive viewport, expanded controls end at
+   295.94 px and the companion begins at 299.18 px, leaving the overlays
+   visually and interactively separate.
+4. Post-fix desktop light, desktop dark, collapsed-sidebar, and responsive
+   comparisons passed with no remaining P0, P1, or P2 visual issue.
+
 ## Comparison history
 
 1. Earlier implementation: P1 architecture mismatch. The companion was placed inside a faux persistent right rail, making Pal depend on a Pika layout region that is not guaranteed to exist.
@@ -40,6 +61,12 @@
 - Opened the sandbox fixture controls.
 - Triggered the fish reward and dismissed the celebration.
 - Confirmed the companion changed to its excited state after the reward.
+- Switched to the light preview and confirmed the selected Achievements state
+  remains clearly visible.
+- Collapsed the sidebar and confirmed Today, Classwork, Tests, Calendar,
+  Syllabus, Achievements, and Announcements retain accessible button names.
+- Opened fixture controls at the responsive viewport and confirmed their bounds
+  do not overlap the floating pet.
 - Checked browser warnings and errors after the interaction sequence: none.
 
 final result: passed

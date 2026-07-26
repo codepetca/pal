@@ -249,6 +249,7 @@ function SandboxExperience({
                   key={itemView}
                   data-active={itemView === view ? "true" : "false"}
                   aria-current={itemView === view ? "page" : undefined}
+                  aria-label={label}
                   onClick={() => onViewChange(itemView)}
                 >
                   <Icon aria-hidden="true" size={24} weight="regular" />

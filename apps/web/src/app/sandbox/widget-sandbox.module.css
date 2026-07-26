@@ -9,6 +9,8 @@
   --host-muted: #647086;
   --host-primary: #2455a6;
   --host-primary-solid: #2854ad;
+  --host-selected-text: #1e3a8a;
+  --host-selected-icon: #2455a6;
   --host-success: #166534;
   --host-success-bg: #dcfce7;
   --host-warning: #92400e;
@@ -58,6 +60,8 @@
   --host-muted: #9aa5b8;
   --host-primary: #8bb7ff;
   --host-primary-solid: #2e65c4;
+  --host-selected-text: #ffffff;
+  --host-selected-icon: #d8e7ff;
   --host-success: #76d99a;
   --host-success-bg: #193b2b;
   --host-warning: #f5c864;
@@ -200,13 +204,13 @@
 }
 
 .sidebar button[data-active="true"] {
-  color: #ffffff;
+  color: var(--host-selected-text);
   background: var(--host-selected);
   font-weight: 650;
 }
 
 .sidebar button[data-active="true"] svg {
-  color: #d8e7ff;
+  color: var(--host-selected-icon);
 }
 
 .classroomShell[data-sidebar-collapsed="true"] .navItems {
@@ -576,7 +580,11 @@
   .controls {
     bottom: 0.65rem;
     left: 3.65rem;
-    width: min(20rem, calc(100vw - 4.3rem));
+    width: min(20rem, calc(100vw - 9.5rem));
+  }
+
+  .controls[data-collapsed="true"] {
+    width: max-content;
   }
 
   .companionOverlay {

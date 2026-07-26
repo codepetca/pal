@@ -28,3 +28,7 @@ test("sandbox reset rotates provider identity and controls start collapsed", () 
   assert.match(sandboxSource, /key=\{fixtureScopeKey\}/);
   assert.match(sandboxSource, /setResetGeneration\(\(current\) => current \+ 1\)/);
 });
+
+test("sandbox navigation keeps accessible names when labels are visually hidden", () => {
+  assert.match(sandboxSource, /aria-label=\{label\}/);
+});

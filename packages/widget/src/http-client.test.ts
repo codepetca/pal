@@ -46,6 +46,69 @@ test("HTTP client rejects an empty learner token before making a request", async
   assert.equal(called, false);
 });
 
+test("HTTP client rejects insecure remote API origins at construction", () => {
+  assert.throws(
+    () =>
+      createPalHttpClient({
+        apiBaseUrl: "http://pal.example",
+        getAccessToken: async () => "learner-token",
+      }),
+    /must use HTTPS/i,
+  );
+});
+
+test("HTTP client permits HTTP only for credential-free local development", async () => {
+  let requestedUrl = "";
+  const client = createPalHttpClient({
+    apiBaseUrl: "http://localhost:3000",
+    getAccessToken: async () => "learner-token",
+    fetchImplementation: async (input) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify(createFixtureSnapshot()));
+    },
+  });
+
+  await client.getSnapshot();
+  assert.equal(requestedUrl, "http://localhost:3000/api/v1/learner/snapshot");
+});
+
+test("HTTP client rejects cross-origin endpoint overrides before acquiring a token", async () => {
+  let tokenCalls = 0;
+  let fetchCalls = 0;
+  const snapshotClient = createPalHttpClient({
+    apiBaseUrl: "https://pal.example",
+    snapshotPath: "https://attacker.example/capture",
+    getAccessToken: async () => {
+      tokenCalls += 1;
+      return "learner-token";
+    },
+    fetchImplementation: async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify(createFixtureSnapshot()));
+    },
+  });
+  const rewardClient = createPalHttpClient({
+    apiBaseUrl: "https://pal.example",
+    rewardSeenPath: () => "//attacker.example/capture",
+    getAccessToken: async () => {
+      tokenCalls += 1;
+      return "learner-token";
+    },
+    fetchImplementation: async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  await assert.rejects(() => snapshotClient.getSnapshot(), /configured API origin/i);
+  await assert.rejects(
+    () => rewardClient.markRewardSeen("reward-1"),
+    /configured API origin/i,
+  );
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
+});
+
 test("aborting token acquisition prevents a stale request from reaching fetch", async () => {
   let resolveToken!: (token: string) => void;
   const token = new Promise<string>((resolve) => {

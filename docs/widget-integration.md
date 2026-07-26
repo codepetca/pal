@@ -53,6 +53,10 @@ The package never receives:
 The browser receives only a short-lived learner-scoped token. Pal's integration
 secret stays on Pika's backend.
 
+`apiBaseUrl` must use HTTPS, except for credential-free localhost development.
+Custom snapshot and reward paths must resolve to that same API origin; the client
+validates the destination before requesting or attaching a learner token.
+
 Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
