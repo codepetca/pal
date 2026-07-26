@@ -9,6 +9,7 @@ import {
   type PalFixtureAction,
   type PalFixtureController,
   type PalTheme,
+  type PalViewport,
   usePalWidget,
 } from "@pal/widget";
 import {
@@ -28,7 +29,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Image from "next/image";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import styles from "./widget-sandbox.module.css";
 
@@ -178,12 +179,14 @@ function FixtureControls({
 function SandboxExperience({
   client,
   theme,
+  viewport,
   view,
   onViewChange,
   onThemeChange,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
+  viewport: PalViewport;
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
@@ -204,7 +207,7 @@ function SandboxExperience({
       density="comfortable"
       motion="system"
       theme={theme}
-      viewport="wide"
+      viewport={viewport}
     >
       <div className={styles.sandbox} data-theme={theme}>
         <header className={styles.appHeader}>
@@ -352,12 +355,22 @@ function FixtureRefreshBridge({
 export function WidgetSandbox() {
   const [client] = useState(() => createFixturePalClient());
   const [theme, setTheme] = useState<PalTheme>("dark");
+  const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 48rem)");
+    const updateViewport = () => setViewport(query.matches ? "narrow" : "wide");
+    updateViewport();
+    query.addEventListener("change", updateViewport);
+    return () => query.removeEventListener("change", updateViewport);
+  }, []);
 
   return (
     <SandboxExperience
       client={client}
       theme={theme}
+      viewport={viewport}
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
