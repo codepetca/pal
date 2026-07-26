@@ -17,6 +17,22 @@ const MAX_WEEKS = 64;
 const MAX_ACHIEVEMENTS_PER_WEEK = 100;
 const MAX_REWARDS = 100;
 
+export interface PalSnapshotValidationOptions {
+  /**
+   * Resolves root-relative asset paths. Its origin is automatically allowed.
+   */
+  assetBaseUrl?: string;
+  /**
+   * Additional explicit HTTPS asset origins, such as a Pal-owned CDN.
+   */
+  allowedAssetOrigins?: readonly string[];
+}
+
+interface AssetPolicy {
+  allowedOrigins: Set<string>;
+  baseUrl?: URL;
+}
+
 function fail(path: string, expectation: string): never {
   throw new Error(`Invalid Pal widget snapshot at ${path}: ${expectation}`);
 }
@@ -45,6 +61,69 @@ function optionalText(
   maxLength = MAX_TEXT_LENGTH,
 ): string | undefined {
   return value === undefined ? undefined : text(value, path, maxLength);
+}
+
+function secureAssetOrigin(url: URL, path: string): string {
+  const localDevelopmentHost =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "[::1]";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localDevelopmentHost)) {
+    return fail(path, "expected an HTTPS origin (or HTTP localhost for development)");
+  }
+  return url.origin;
+}
+
+function createAssetPolicy(
+  options: PalSnapshotValidationOptions,
+): AssetPolicy {
+  const allowedOrigins = new Set<string>();
+  let baseUrl: URL | undefined;
+  if (options.assetBaseUrl) {
+    baseUrl = new URL(options.assetBaseUrl);
+    allowedOrigins.add(
+      secureAssetOrigin(baseUrl, "options.assetBaseUrl"),
+    );
+  }
+  options.allowedAssetOrigins?.forEach((origin, index) => {
+    const url = new URL(origin);
+    if (url.origin !== url.toString().replace(/\/$/, "")) {
+      fail(
+        `options.allowedAssetOrigins[${index}]`,
+        "expected an origin without a path, query, or fragment",
+      );
+    }
+    allowedOrigins.add(
+      secureAssetOrigin(url, `options.allowedAssetOrigins[${index}]`),
+    );
+  });
+  return { allowedOrigins, baseUrl };
+}
+
+function optionalAssetUrl(
+  value: unknown,
+  path: string,
+  policy: AssetPolicy,
+): string | undefined {
+  if (value === undefined) return undefined;
+  const candidate = text(value, path, MAX_URL_LENGTH);
+  if (candidate.startsWith("/") && !candidate.startsWith("//")) {
+    return policy.baseUrl
+      ? new URL(candidate, policy.baseUrl).toString()
+      : candidate;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return fail(path, "expected a root-relative or absolute asset URL");
+  }
+  secureAssetOrigin(url, path);
+  if (!policy.allowedOrigins.has(url.origin)) {
+    return fail(path, "origin is not in the allowed Pal asset origin list");
+  }
+  return url.toString();
 }
 
 function integer(value: unknown, path: string, minimum = 0): number {
@@ -106,13 +185,17 @@ function parseProgress(value: unknown, path: string): PalProgress {
   };
 }
 
-function parseBadge(value: unknown, path: string): PalBadge {
+function parseBadge(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalBadge {
   const source = record(value, path);
   const icon = optionalText(source.icon, `${path}.icon`);
-  const assetUrl = optionalText(
+  const assetUrl = optionalAssetUrl(
     source.assetUrl,
     `${path}.assetUrl`,
-    MAX_URL_LENGTH,
+    assetPolicy,
   );
   return {
     label: text(source.label, `${path}.label`),
@@ -125,6 +208,7 @@ function parseAchievement(
   value: unknown,
   path: string,
   ids: Set<string>,
+  assetPolicy: AssetPolicy,
 ): PalAchievement {
   const source = record(value, path);
   const progress =
@@ -142,7 +226,7 @@ function parseAchievement(
       ["earned", "in-progress", "incomplete", "upcoming"],
     ),
     statusLabel: text(source.statusLabel, `${path}.statusLabel`),
-    badge: parseBadge(source.badge, `${path}.badge`),
+    badge: parseBadge(source.badge, `${path}.badge`, assetPolicy),
     ...(progress === undefined ? {} : { progress }),
     ...(rewardLabel === undefined ? {} : { rewardLabel }),
   };
@@ -153,6 +237,7 @@ function parseWeek(
   path: string,
   weekIds: Set<string>,
   achievementIds: Set<string>,
+  assetPolicy: AssetPolicy,
 ): PalRoadmapWeek {
   const source = record(value, path);
   return {
@@ -175,17 +260,22 @@ function parseWeek(
         achievement,
         `${path}.achievements[${index}]`,
         achievementIds,
+        assetPolicy,
       ),
     ),
   };
 }
 
-function parseCompanion(value: unknown, path: string): PalCompanionState {
+function parseCompanion(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalCompanionState {
   const source = record(value, path);
-  const assetUrl = optionalText(
+  const assetUrl = optionalAssetUrl(
     source.assetUrl,
     `${path}.assetUrl`,
-    MAX_URL_LENGTH,
+    assetPolicy,
   );
   return {
     name: text(source.name, `${path}.name`),
@@ -206,13 +296,14 @@ function parseReward(
   value: unknown,
   path: string,
   ids: Set<string>,
+  assetPolicy: AssetPolicy,
 ): PalRewardNotice {
   const source = record(value, path);
   const icon = optionalText(source.icon, `${path}.icon`);
-  const assetUrl = optionalText(
+  const assetUrl = optionalAssetUrl(
     source.assetUrl,
     `${path}.assetUrl`,
-    MAX_URL_LENGTH,
+    assetPolicy,
   );
   return {
     id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
@@ -226,8 +317,12 @@ function parseReward(
 /**
  * Validates the untrusted JSON returned by Pal before it reaches React state.
  */
-export function parsePalWidgetSnapshot(value: unknown): PalWidgetSnapshot {
+export function parsePalWidgetSnapshot(
+  value: unknown,
+  options: PalSnapshotValidationOptions = {},
+): PalWidgetSnapshot {
   const source = record(value, "snapshot");
+  const assetPolicy = createAssetPolicy(options);
   if (source.schemaVersion !== 1) {
     fail("snapshot.schemaVersion", "expected supported schema version 1");
   }
@@ -246,6 +341,7 @@ export function parsePalWidgetSnapshot(value: unknown): PalWidgetSnapshot {
       `snapshot.roadmap.weeks[${index}]`,
       weekIds,
       achievementIds,
+      assetPolicy,
     ),
   );
   const currentWeek = integer(
@@ -268,13 +364,22 @@ export function parsePalWidgetSnapshot(value: unknown): PalWidgetSnapshot {
       currentWeek,
       weeks,
     },
-    companion: parseCompanion(source.companion, "snapshot.companion"),
+    companion: parseCompanion(
+      source.companion,
+      "snapshot.companion",
+      assetPolicy,
+    ),
     rewards: boundedArray(
       source.rewards,
       "snapshot.rewards",
       MAX_REWARDS,
     ).map((reward, index) =>
-      parseReward(reward, `snapshot.rewards[${index}]`, rewardIds),
+      parseReward(
+        reward,
+        `snapshot.rewards[${index}]`,
+        rewardIds,
+        assetPolicy,
+      ),
     ),
   };
 }

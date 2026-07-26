@@ -338,6 +338,80 @@ test("a committed scope switch aborts an in-flight reward acknowledgement", asyn
   assert.equal(widget.snapshot?.roadmap.semesterLabel, "Fall semester");
 });
 
+test("returning to a reused scope cannot revive an aborted pending reward", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards.push({
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "A reward notice",
+  });
+  const learnerB = createFixtureSnapshot();
+  const acknowledgement = deferred<void>();
+  const clientA: PalClient = {
+    getSnapshot: async () => learnerA,
+    markRewardSeen: () => acknowledgement.promise,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={clientA}
+        initialSnapshot={learnerA}
+        scopeKey="learner-a"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  let dismissal!: Promise<void>;
+  await act(async () => {
+    dismissal = widget.dismissReward("reward-a");
+    await Promise.resolve();
+  });
+  assert.equal(widget.isRewardPending("reward-a"), true);
+
+  await act(async () => {
+    renderer.update(
+      <PalProvider
+        client={clientB}
+        initialSnapshot={learnerB}
+        scopeKey="learner-b"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  await act(async () => {
+    renderer.update(
+      <PalProvider
+        client={clientA}
+        initialSnapshot={learnerA}
+        scopeKey="learner-a"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  assert.equal(widget.isRewardPending("reward-a"), false);
+  assert.match(JSON.stringify(renderer.toJSON()), /Continue/);
+
+  await act(async () => {
+    acknowledgement.resolve();
+    await dismissal;
+  });
+});
+
 test("snapshot refresh does not clear a reward acknowledgement retry", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
@@ -644,6 +718,59 @@ test("polling schedules the next refresh only after the current one settles", as
       await pollingRequest;
     });
     assert.equal(scheduled.length, 2);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("polling waits for a slow initial refresh before scheduling", async () => {
+  const snapshot = createFixtureSnapshot();
+  const initialRefresh = deferred<PalWidgetSnapshot>();
+  const client: PalClient = {
+    getSnapshot: () => initialRefresh.promise,
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled: Array<() => Promise<void>> = [];
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout() {},
+      setTimeout(callback: () => Promise<void>) {
+        scheduled.push(callback);
+        return scheduled.length;
+      },
+    },
+  });
+  let renderer!: ReactTestRenderer;
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={snapshot}
+          refreshIntervalMs={1_000}
+          scopeKey="fixture-learner"
+        >
+          <PalAchievements />
+        </PalProvider>,
+      );
+      await Promise.resolve();
+    });
+    assert.equal(scheduled.length, 0);
+
+    await act(async () => {
+      initialRefresh.resolve(snapshot);
+      await initialRefresh.promise;
+    });
+    assert.equal(scheduled.length, 1);
   } finally {
     await act(async () => {
       renderer?.unmount();

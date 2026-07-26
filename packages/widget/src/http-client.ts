@@ -3,6 +3,7 @@ import type { PalClient } from "./types";
 
 export interface PalHttpClientOptions {
   apiBaseUrl: string;
+  allowedAssetOrigins?: readonly string[];
   getAccessToken: (signal?: AbortSignal) => Promise<string>;
   snapshotPath?: string;
   rewardSeenPath?: (rewardId: string) => string;
@@ -39,6 +40,7 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
 
 export function createPalHttpClient({
   apiBaseUrl,
+  allowedAssetOrigins,
   getAccessToken,
   snapshotPath = "/api/v1/learner/snapshot",
   rewardSeenPath = (rewardId) =>
@@ -75,7 +77,10 @@ export function createPalHttpClient({
         method: "GET",
         signal,
       });
-      return parsePalWidgetSnapshot(await response.json());
+      return parsePalWidgetSnapshot(await response.json(), {
+        assetBaseUrl: apiBaseUrl,
+        allowedAssetOrigins,
+      });
     },
     async markRewardSeen(rewardId, signal) {
       await authorizedFetch(rewardSeenPath(rewardId), {

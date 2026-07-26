@@ -20,6 +20,10 @@ test("HTTP client keeps the integration secret out and uses a learner token", as
 
   const snapshot = await client.getSnapshot();
   assert.equal(snapshot.schemaVersion, 1);
+  assert.equal(
+    snapshot.companion.assetUrl,
+    "https://pal.example/assets/pets/default.png",
+  );
   assert.equal(requests[0]?.input, "https://pal.example/api/v1/learner/snapshot");
   assert.equal(
     new Headers(requests[0]?.init?.headers).get("authorization"),

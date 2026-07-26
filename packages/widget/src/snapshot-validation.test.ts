@@ -51,3 +51,39 @@ test("snapshot parser bounds server-controlled collections", () => {
     /rewards.*0 to 100 entries/i,
   );
 });
+
+test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
+  const unsafe = createFixtureSnapshot();
+  unsafe.companion.assetUrl = "javascript:alert(1)";
+  assert.throws(
+    () => parsePalWidgetSnapshot(unsafe),
+    /HTTPS origin|root-relative/i,
+  );
+
+  const unapproved = createFixtureSnapshot();
+  unapproved.companion.assetUrl = "https://tracker.example/pet.png";
+  assert.throws(
+    () => parsePalWidgetSnapshot(unapproved),
+    /not in the allowed Pal asset origin list/i,
+  );
+});
+
+test("snapshot parser resolves relative assets and permits explicit Pal CDN origins", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl =
+    "https://assets.pal.example/badges/rhythm.png";
+
+  const parsed = parsePalWidgetSnapshot(fixture, {
+    assetBaseUrl: "https://api.pal.example",
+    allowedAssetOrigins: ["https://assets.pal.example"],
+  });
+
+  assert.equal(
+    parsed.companion.assetUrl,
+    "https://api.pal.example/assets/pets/default.png",
+  );
+  assert.equal(
+    parsed.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl,
+    "https://assets.pal.example/badges/rhythm.png",
+  );
+});

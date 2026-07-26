@@ -18,6 +18,7 @@ authorization, cached learner state, refreshes, and errors through `PalProvider`
 const client = createPalHttpClient({
   apiBaseUrl,
   getAccessToken: mintLearnerScopedToken,
+  allowedAssetOrigins: ["https://assets.pal.example"],
 })
 
 <PalProvider
@@ -51,6 +52,10 @@ The package never receives:
 
 The browser receives only a short-lived learner-scoped token. Pal's integration
 secret stays on Pika's backend.
+
+Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
+CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
+unlisted third-party origins are rejected before the snapshot enters React state.
 
 `scopeKey` is a host-local opaque value that changes synchronously before the active
 learner context changes. Pal never transmits it. This prevents a previous learner's

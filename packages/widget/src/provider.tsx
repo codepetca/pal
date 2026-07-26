@@ -99,17 +99,37 @@ export function PalProvider({
 
   useLayoutEffect(() => {
     const previous = requestScopeRef.current;
-    if (
+    const scopeChanged =
       previous.client !== client ||
       previous.scopeKey !== scopeKey ||
-      previous.controller.signal.aborted
-    ) {
+      previous.controller.signal.aborted;
+    if (scopeChanged) {
       previous.controller.abort();
       requestScopeRef.current = {
         client,
         controller: new AbortController(),
         scopeKey,
       };
+      requestSequence.current += 1;
+      pendingRewardIdsRef.current = {
+        ids: new Set(),
+        scopeKey,
+      };
+      acknowledgedRewardIdsRef.current = {
+        ids: new Set(),
+        scopeKey,
+      };
+      setResource({
+        error: null,
+        scopeKey,
+        snapshot: null,
+        state: "loading",
+      });
+      setRewardState({
+        error: null,
+        pendingIds: new Set(),
+        scopeKey,
+      });
     }
     const committedRequestScope = requestScopeRef.current;
     activeScopeRef.current = scopeKey;
@@ -232,21 +252,21 @@ export function PalProvider({
   }, [client, scopeKey]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (refreshIntervalMs <= 0) return;
     let cancelled = false;
     let timeout: number | undefined;
 
-    const schedule = () => {
+    const scheduleNext = () => {
       timeout = window.setTimeout(async () => {
         await refresh();
-        if (!cancelled) schedule();
+        if (!cancelled) scheduleNext();
       }, refreshIntervalMs);
     };
-    schedule();
+
+    const loadThenSchedule = async () => {
+      await refresh();
+      if (!cancelled && refreshIntervalMs > 0) scheduleNext();
+    };
+    void loadThenSchedule();
 
     return () => {
       cancelled = true;
@@ -280,10 +300,11 @@ export function PalProvider({
       if (acknowledgedRewardIdsRef.current.ids.has(rewardId)) return;
       if (pendingRewardIdsRef.current.ids.has(rewardId)) return;
 
-      pendingRewardIdsRef.current.ids.add(rewardId);
+      const pendingIds = pendingRewardIdsRef.current.ids;
+      pendingIds.add(rewardId);
       setRewardState({
         error: null,
-        pendingIds: new Set(pendingRewardIdsRef.current.ids),
+        pendingIds: new Set(pendingIds),
         scopeKey,
       });
 
@@ -332,18 +353,18 @@ export function PalProvider({
         );
         onErrorRef.current?.(nextError);
       } finally {
+        pendingIds.delete(rewardId);
         if (
-          !signal.aborted &&
           mountedRef.current &&
           activeScopeRef.current === scopeKey &&
-          pendingRewardIdsRef.current.scopeKey === scopeKey
+          pendingRewardIdsRef.current.scopeKey === scopeKey &&
+          pendingRewardIdsRef.current.ids === pendingIds
         ) {
-          pendingRewardIdsRef.current.ids.delete(rewardId);
           setRewardState((current) =>
             current.scopeKey === scopeKey
               ? {
                   ...current,
-                  pendingIds: new Set(pendingRewardIdsRef.current.ids),
+                  pendingIds: new Set(pendingIds),
                 }
               : current,
           );
