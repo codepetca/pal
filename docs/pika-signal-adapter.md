@@ -374,17 +374,32 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [ ] Weekly, learning-item, term, and lifetime achievement instances
 - [ ] Claimable reward state and one-time reward application
 - [ ] Achievement state in the learner-world API
-- [ ] A portable `@pal/widget` package with a shared provider
-- [ ] Separately mountable roadmap, companion, and celebration components
-- [ ] A versioned learner snapshot/client contract
-- [ ] A narrow, portable `--pal-*` theme contract
-- [ ] Roadmap UI, badge status, accessibility treatment, and reward celebrations
+- [x] A portable `@pal/widget` package with a shared provider
+- [x] Separately mountable roadmap, companion, and celebration components
+- [x] A versioned learner snapshot/client contract
+- [x] A narrow, portable `--pal-*` theme contract
+- [x] Roadmap UI, badge status, accessibility treatment, and reward celebrations
 - [ ] An optional chrome-free embed wrapper for non-React hosts
 - [ ] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
 - [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 
 ## Current implementation status
 
-Pal's prototype ingest allow-list currently accepts the five legacy event types documented in the integration guide. The developer control panel exercises assignment completion and daily check-in, while the default rule pack also handles `calendar.month_end`; accepted resource-view and semester-end facts currently have no default effect. It does not yet provide the target 16-week clock, version 1 fact selector, scenario fixtures, or visible expected-versus-actual semester progression. Within one warm process, the in-memory prototype deduplicates repeated deliveries by idempotency key, and its streak state prevents a second same-day check-in from advancing the streak or paying daily XP again. A cold start or a different serverless instance loses that deduplication state; durable, cross-instance idempotency remains target work.
+The private pilot `@pal/widget` package and its fixture-driven sandbox now exist. The
+sandbox renders a 16-week roadmap in a Pika-like host and can advance the fictional
+week, apply representative daily-log and on-time-completion outcomes, queue a reward,
+replay an inert duplicate, and reset its fictional learner. Those controls update
+fixture-client state only. They are not the version 1 fact selector, do not pass
+through Pal's ingest/persistence/rule pipeline, and do not yet provide the complete
+edge-case scenario library or expected-versus-actual comparison.
 
-The generalized event vocabulary, Pika adapter/outbox, qualified-fact layer, recurring achievement progress, and durable award ledger described here are target work and do not exist yet.
+The legacy ingest allow-list still accepts the five prototype event types documented
+in the integration guide, but no visible sandbox control invokes it. Within one warm
+process, that prototype deduplicates repeated deliveries by idempotency key, and its
+streak state prevents a second same-day check-in from advancing the streak or paying
+daily XP again. A cold start or a different serverless instance loses that
+deduplication state; durable, cross-instance idempotency remains target work.
+
+The version 1 event vocabulary and shared contract fixtures exist. The Pika
+adapter/outbox, qualified-fact layer, recurring achievement persistence, production
+learner snapshot receiver, and durable award ledger remain target work.

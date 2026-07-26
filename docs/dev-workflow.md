@@ -1,7 +1,7 @@
 # Development Workflow
 
 > Living document. Update this as the team evolves.
-> Last updated: 2026-07-06
+> Last updated: 2026-07-25
 
 ---
 
@@ -22,7 +22,7 @@ Open `apps/web/.env.local` and set:
 
 | Variable | What to put there | Needed when |
 |---|---|---|
-| `SANDBOX_INTEGRATION_SECRET` | Any long random string — generate one with `openssl rand -hex 24`. It's yours alone; it does not need to match anyone else's. | Now — the sandbox can't fire events without it |
+| `SANDBOX_INTEGRATION_SECRET` | Any long random string — generate one with `openssl rand -hex 24`. It's yours alone; it does not need to match anyone else's. | Only when exercising the legacy server-side event proxy; the widget fixture preview does not use it |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
@@ -33,9 +33,16 @@ Open `apps/web/.env.local` and set:
 pnpm dev
 ```
 
-Open [localhost:3000/sandbox](http://localhost:3000/sandbox), click **Assignment completed**, and you should see `→ assignment.completed: processed` in the event log. If you get a 500 with `sandbox_not_configured`, the env file is missing or in the wrong folder.
+Open [localhost:3000/sandbox](http://localhost:3000/sandbox). The Pika-like host
+preview should show the 16-week Pal roadmap, companion, and collapsible **Fixture
+preview** controls. Complete a daily log or earn the fish reward and confirm the
+public widget surfaces update.
 
-Why the secret exists: the ingest API (`POST /api/v1/events`) rejects unauthenticated requests, exactly as it will for real integrations. Your browser never sees the secret — the sandbox posts through a server-side proxy (`/api/sandbox/events`) that attaches it, playing the role of an integration's backend.
+This preview is fixture-only and needs no Pal receiver or integration secret. It does
+not prove event ingestion, persistence, or read-token authorization. The legacy
+`/api/sandbox/events` proxy and `SANDBOX_INTEGRATION_SECRET` remain available for
+direct API development: the proxy attaches the secret server-side, and the browser
+never receives it.
 
 ---
 

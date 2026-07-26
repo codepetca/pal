@@ -1,7 +1,7 @@
 # Integration Guide
 
 > Living document. Update as the integration API stabilizes.
-> Last updated: 2026-07-21
+> Last updated: 2026-07-25
 
 ---
 
@@ -73,7 +73,11 @@ Pika sends these event types:
 - `calendar.month_end` (via schedule, not Pika API)
 - `calendar.semester_end` (via schedule)
 
-The developer control panel exposes assignment completion and daily check-in. The default rule pack also handles `calendar.month_end`; `resource.viewed` and `calendar.semester_end` are accepted legacy prototype types but currently have no default effect.
+The legacy ingest API still accepts these prototype events. The current widget
+sandbox does not send them: its clearly labeled fixture controls update only the
+fixture client for visual development. The default rule pack handles
+`assignment.completed`, `daily_checkin.created`, and `calendar.month_end`;
+`resource.viewed` and `calendar.semester_end` currently have no default effect.
 
 Streaks are **not** sent by the integration. Pal derives them from `daily_checkin.created`: consecutive calendar days advance the streak, a missed day resets it. An integration cannot report a streak milestone, because an integration that could report one could also invent one.
 
@@ -89,4 +93,5 @@ An integration reports authoritative, privacy-safe learning facts. Pal owns achi
 
 ---
 
-> SDK package and detailed setup flow coming in Milestone 3.
+> Publishing `@pal/widget` for general integrations and the detailed production
+> setup flow remain Milestone 3 work.
