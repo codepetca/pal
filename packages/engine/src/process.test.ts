@@ -17,19 +17,19 @@ const baseState: LearnerState = {
   world: { stage: 0, unlocked_object_ids: [] },
 };
 
-function checkin(day: string): IncomingEvent {
+function log(day: string): IncomingEvent {
   return {
-    event_type: "daily_checkin.created",
+    event_type: "daily_log.completed",
     occurred_at: `${day}T12:00:00.000Z`,
     metadata: {},
   };
 }
 
-function assignment(day: string, onTime = false): IncomingEvent {
+function completedItem(day: string, timing?: string): IncomingEvent {
   return {
-    event_type: "assignment.completed",
+    event_type: "learning_item.completed",
     occurred_at: `${day}T12:00:00.000Z`,
-    metadata: { on_time: onTime },
+    metadata: timing ? { timing } : {},
   };
 }
 
@@ -41,8 +41,8 @@ function withEconomy(overrides: Partial<LearnerState["economy"]>): LearnerState 
 // pipeline — evaluate, apply, re-evaluate the derived events — so a rule that
 // triggers on an event nothing emits shows up here as "nothing happened".
 describe("processEvent", () => {
-  it("banks XP for an on-time assignment without levelling", () => {
-    const { state } = processEvent(assignment("2026-03-01", true), baseState, defaultRulePack);
+it("banks XP for an on-time learning item without levelling", () => {
+    const { state } = processEvent(completedItem("2026-03-01", "on_time"), baseState, defaultRulePack);
     assert.equal(state.economy.xp, 200);
     assert.equal(state.economy.xp_lifetime, 200);
     assert.equal(state.economy.level, 1);
@@ -71,7 +71,7 @@ describe("processEvent", () => {
     let state = baseState;
     for (const { day, streak, earned } of expected) {
       const before = state.economy.xp;
-      state = processEvent(checkin(day), state, defaultRulePack).state;
+      state = processEvent(log(day), state, defaultRulePack).state;
       assert.equal(state.economy.streak_current, streak, `streak on ${day}`);
       assert.equal(state.economy.xp - before, earned, `XP earned on ${day}`);
     }
@@ -84,26 +84,26 @@ describe("processEvent", () => {
     });
     assert.deepEqual(state.world.unlocked_object_ids, []);
 
-    state = processEvent(checkin("2026-03-07"), state, defaultRulePack).state;
+    state = processEvent(log("2026-03-07"), state, defaultRulePack).state;
     assert.deepEqual(state.world.unlocked_object_ids, ["world-bird-v1"]);
   });
 
-  it("gives nothing at all for a second check-in on the same day", () => {
-    let state = processEvent(checkin("2026-03-01"), baseState, defaultRulePack).state;
+it("gives nothing at all for a second daily log on the same day", () => {
+    let state = processEvent(log("2026-03-01"), baseState, defaultRulePack).state;
     const afterFirst = structuredClone(state);
 
-    state = processEvent(checkin("2026-03-01"), state, defaultRulePack).state;
+    state = processEvent(log("2026-03-01"), state, defaultRulePack).state;
     // Neither the streak nor any XP moves: the day's reward is paid exactly once,
-    // because both base and bonus hang off the streak advance, not the check-in.
+    // because both base and bonus hang off the streak advance, not the daily-log event.
     assert.deepEqual(state.economy, afterFirst.economy);
   });
 
-  it("does not let repeated same-day check-ins farm XP", () => {
-    // Regression: base check-in XP used to fire on every check-in event, so N
-    // same-day check-ins paid 10*N. It now fires on the once-per-day streak advance.
+  it("does not let repeated same-day daily logs farm XP", () => {
+    // Regression: base daily-log XP used to fire on every check-in event, so N
+    // same-day logs paid 10*N. It now fires on the once-per-day streak advance.
     let state = baseState;
     for (let i = 0; i < 50; i++) {
-      state = processEvent(checkin("2026-03-01"), state, defaultRulePack).state;
+      state = processEvent(log("2026-03-01"), state, defaultRulePack).state;
     }
     assert.equal(state.economy.xp, 10); // one day's base reward, not 500
     assert.equal(state.economy.streak_current, 1);
@@ -117,7 +117,7 @@ describe("processEvent", () => {
     // is visible: the ingest route MUST reject future occurred_at (see the
     // future_occurred_at 422 in apps/web/src/app/api/v1/events/route.ts).
     const poisoned = withEconomy({ streak_current: 1, streak_last_day: "2099-01-01" });
-    const { state, mutations } = processEvent(checkin("2026-07-18"), poisoned, defaultRulePack);
+    const { state, mutations } = processEvent(log("2026-07-18"), poisoned, defaultRulePack);
     assert.equal(state.economy.streak_current, 1);
     assert.equal(state.economy.streak_last_day, "2099-01-01");
     assert.equal(state.economy.xp, 0); // no STREAK_MILESTONE → no check-in XP
@@ -131,21 +131,21 @@ describe("processEvent", () => {
     // A check-in for an earlier day than the streak's last day (a delayed delivery
     // or a spoofed occurred_at) must not reset a legitimate streak or move it back.
     let state = processEvent(
-      checkin("2026-03-05"),
+      log("2026-03-05"),
       withEconomy({ streak_current: 4, streak_last_day: "2026-03-04" }),
       defaultRulePack
     ).state;
     assert.equal(state.economy.streak_current, 5);
     assert.equal(state.economy.streak_last_day, "2026-03-05");
 
-    state = processEvent(checkin("2026-03-02"), state, defaultRulePack).state;
+    state = processEvent(log("2026-03-02"), state, defaultRulePack).state;
     assert.equal(state.economy.streak_current, 5); // unchanged, not reset to 1
     assert.equal(state.economy.streak_last_day, "2026-03-05"); // not moved backward
   });
 
   it("resets the streak to 1 when a day is missed", () => {
     const state = processEvent(
-      checkin("2026-03-10"),
+      log("2026-03-10"),
       withEconomy({ streak_current: 9, streak_last_day: "2026-03-08" }),
       defaultRulePack
     ).state;
@@ -156,7 +156,7 @@ describe("processEvent", () => {
 
   it("levels up when banked XP crosses the threshold", () => {
     const state = processEvent(
-      assignment("2026-03-01", true),
+      completedItem("2026-03-01", "on_time"),
       withEconomy({ xp: 400, xp_lifetime: 400 }),
       defaultRulePack
     ).state;
@@ -168,7 +168,7 @@ describe("processEvent", () => {
 
   it("levels up twice when one event banks enough for two levels", () => {
     const { state, truncated } = processEvent(
-      assignment("2026-03-01", true),
+      completedItem("2026-03-01", "on_time"),
       withEconomy({ xp: 900, xp_lifetime: 900 }),
       defaultRulePack
     );
@@ -181,7 +181,7 @@ describe("processEvent", () => {
     // 2200 XP is four levels' worth, one more than the cascade depth allows. The
     // learner takes three levels now and the surplus stays banked — nothing is lost.
     const first = processEvent(
-      assignment("2026-03-01", true),
+      completedItem("2026-03-01", "on_time"),
       withEconomy({ xp: 2000, xp_lifetime: 2000 }),
       defaultRulePack
     );
@@ -190,14 +190,14 @@ describe("processEvent", () => {
     assert.ok(first.truncated.includes("XP_CHANGED"));
 
     // ...and the very next event spends it.
-    const second = processEvent(checkin("2026-03-02"), first.state, defaultRulePack);
+    const second = processEvent(log("2026-03-02"), first.state, defaultRulePack);
     assert.equal(second.state.economy.level, 5);
-    assert.equal(second.state.economy.xp, 210); // 700 + 10 check-in − 500 spent
+    assert.equal(second.state.economy.xp, 210); // 700 + 10 daily-log − 500 spent
   });
 
   it("does not level up one XP short of the threshold", () => {
     const state = processEvent(
-      checkin("2026-03-01"),
+      log("2026-03-01"),
       withEconomy({ xp: 489, xp_lifetime: 489 }),
       defaultRulePack
     ).state;
@@ -220,28 +220,28 @@ describe("processEvent", () => {
         },
         {
           id: "seed",
-          trigger: { event_type: "daily_checkin.created" },
+          trigger: { event_type: "daily_log.completed" },
           conditions: [],
           effects: [{ type: "XP_GRANT", amount: 1 }],
         },
       ],
     };
 
-    const { state, truncated } = processEvent(checkin("2026-03-01"), baseState, runawayPack);
+    const { state, truncated } = processEvent(log("2026-03-01"), baseState, runawayPack);
     assert.deepEqual(truncated, ["XP_CHANGED"]);
     assert.equal(state.economy.xp, 4); // one seed + three cascade rounds, then stopped
   });
 
   it("records a trace of every evaluation in the cascade", () => {
     const { trace } = processEvent(
-      assignment("2026-03-01", true),
+      completedItem("2026-03-01", "on_time"),
       withEconomy({ xp: 400 }),
       defaultRulePack
     );
     assert.deepEqual(
       trace.map((entry) => [entry.depth, entry.event_type]),
       [
-        [0, "assignment.completed"],
+        [0, "learning_item.completed"],
         [1, "XP_CHANGED"],
         [2, "XP_CHANGED"],
         [2, "LEVEL_UP"],
@@ -252,7 +252,7 @@ describe("processEvent", () => {
   it("leaves state untouched for an event no rule cares about", () => {
     const { state, mutations } = processEvent(
       {
-        event_type: "resource.viewed",
+        event_type: "platform.session.started",
         occurred_at: "2026-03-01T12:00:00.000Z",
         metadata: {},
       },
