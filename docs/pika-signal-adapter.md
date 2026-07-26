@@ -328,6 +328,10 @@ pane for `PalAchievements` and separate host layers for `PalCompanion` and
 `PalRewardCelebration`. A screenshot may remain a visual reference mode, but is not
 the primary host.
 
+![Current Pal sandbox with Achievements selected in the Pika-like sidebar, a full-width weekly roadmap in the content pane, and the compact pet floating over the lower-right corner](assets/pika-pal-widget-sandbox.jpg)
+
+*Current fixture-driven sandbox. The roadmap uses the normal content pane; the pet and reward celebration are independent host overlays rather than a persistent right-side panel.*
+
 A compact, collapsible semester-simulator control panel overlays that harness. The
 achievements and pet/world remain visible while a tester selects actions, so every
 injected fact produces immediate observable feedback.
