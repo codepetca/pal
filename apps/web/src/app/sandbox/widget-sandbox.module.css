@@ -1,19 +1,21 @@
 .sandbox {
-  --host-page: #f9fafb;
+  --host-page: #f5f7fb;
   --host-surface: #ffffff;
-  --host-surface-2: #f3f4f6;
+  --host-surface-2: #edf1f7;
   --host-selected: #dbeafe;
-  --host-border: #e5e7eb;
-  --host-border-strong: #d1d5db;
-  --host-text: #111827;
-  --host-muted: #4b5563;
-  --host-primary: #1d4ed8;
-  --host-primary-solid: #2563eb;
+  --host-border: #d6dce7;
+  --host-border-strong: #b9c2d0;
+  --host-text: #172033;
+  --host-muted: #647086;
+  --host-primary: #2455a6;
+  --host-primary-solid: #2854ad;
   --host-success: #166534;
   --host-success-bg: #dcfce7;
   --host-warning: #92400e;
   --host-warning-bg: #fef3c7;
-  --host-shadow: 0 4px 12px rgb(15 23 42 / 0.12);
+  --host-header: #15354a;
+  --host-sidebar: #ffffff;
+  --host-shadow: 0 4px 16px rgb(2 8 23 / 0.16);
 
   /* This is the proposed Pika-to-Pal semantic bridge. */
   --pal-color-page: var(--host-page);
@@ -30,10 +32,10 @@
   --pal-color-success-bg: var(--host-success-bg);
   --pal-color-warning: var(--host-warning);
   --pal-color-warning-bg: var(--host-warning-bg);
-  --pal-radius-control: 0.5rem;
-  --pal-radius-card: 0.5rem;
+  --pal-radius-control: 0.45rem;
+  --pal-radius-card: 0.45rem;
   --pal-shadow-panel: var(--host-shadow);
-  --pal-focus-ring: 0 0 0 3px rgb(37 99 235 / 0.3);
+  --pal-focus-ring: 0 0 0 3px rgb(64 118 214 / 0.4);
 
   width: 100%;
   height: 100dvh;
@@ -41,123 +43,100 @@
   color: var(--host-text);
   background: var(--host-page);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
 }
 
 .sandbox[data-theme="dark"] {
-  --host-page: #030712;
+  --host-page: #070d18;
   --host-surface: #111827;
-  --host-surface-2: #1f2937;
-  --host-selected: rgb(37 99 235 / 0.16);
-  --host-border: #374151;
-  --host-border-strong: #4b5563;
-  --host-text: #f3f4f6;
-  --host-muted: #9ca3af;
-  --host-primary: #60a5fa;
-  --host-primary-solid: #2563eb;
-  --host-success: #4ade80;
-  --host-success-bg: rgb(22 101 52 / 0.35);
-  --host-warning: #fbbf24;
-  --host-warning-bg: rgb(120 53 15 / 0.35);
+  --host-surface-2: #192235;
+  --host-selected: #2954aa;
+  --host-border: #344155;
+  --host-border-strong: #526077;
+  --host-text: #f4f6fa;
+  --host-muted: #9aa5b8;
+  --host-primary: #8bb7ff;
+  --host-primary-solid: #2e65c4;
+  --host-success: #76d99a;
+  --host-success-bg: #193b2b;
+  --host-warning: #f5c864;
+  --host-warning-bg: #3f3119;
+  --host-header: #102f43;
+  --host-sidebar: #101827;
   --host-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-  --pal-focus-ring: 0 0 0 3px rgb(96 165 250 / 0.4);
 }
 
 .appHeader {
   position: relative;
   z-index: 30;
   display: flex;
-  height: 3.5rem;
+  height: 3rem;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
   padding: 0 1rem;
-  border-bottom: 1px solid var(--host-border);
-  background: var(--host-surface);
+  border-bottom: 1px solid #31465a;
+  color: #f8fafc;
+  background: var(--host-header);
 }
 
 .brand,
-.hostControls,
-.viewSwitch {
+.hostControls {
   display: flex;
   align-items: center;
 }
 
 .brand {
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
-.brandMark {
+.pikaLogo {
+  filter: invert(1);
+  object-fit: contain;
+}
+
+.brand strong {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.hostControls {
+  gap: 0.75rem;
+  color: #f8fafc;
+}
+
+.hostDate {
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.themeButton {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 0.45rem;
+  color: #f8fafc;
+  background: transparent;
+  cursor: pointer;
+}
+
+.profileAvatar {
   display: grid;
   width: 2rem;
   height: 2rem;
   place-items: center;
-  border-radius: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 999px;
   color: white;
-  background: var(--host-primary-solid);
-  font-weight: 850;
-}
-
-.brand div {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.brand strong {
-  font-size: 0.86rem;
-}
-
-.brand div span {
-  color: var(--host-muted);
-  font-size: 0.7rem;
-}
-
-.hostControls {
-  gap: 0.6rem;
-}
-
-.viewSwitch {
-  padding: 0.2rem;
-  border: 1px solid var(--host-border);
-  border-radius: 0.55rem;
-  background: var(--host-surface-2);
-}
-
-.viewSwitch button,
-.themeButton {
-  min-height: 2.75rem;
-  border: 0;
-  border-radius: 0.4rem;
-  color: var(--host-muted);
-  background: transparent;
-  font: inherit;
+  background: #63b612;
   font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
+  font-weight: 750;
 }
 
-.viewSwitch button {
-  padding: 0 0.7rem;
-}
-
-.viewSwitch button[aria-pressed="true"] {
-  color: var(--host-text);
-  background: var(--host-surface);
-  box-shadow: 0 1px 3px rgb(15 23 42 / 0.12);
-}
-
-.themeButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0 0.7rem;
-  border: 1px solid var(--host-border);
-  color: var(--host-text);
-  background: var(--host-surface);
-}
-
-.viewSwitch button:focus-visible,
 .themeButton:focus-visible,
 .sidebar button:focus-visible,
 .controls button:focus-visible {
@@ -168,75 +147,171 @@
 .classroomShell {
   position: relative;
   display: grid;
-  grid-template-columns: 13rem minmax(0, 1fr);
-  height: calc(100dvh - 3.5rem);
+  grid-template-columns: 15rem minmax(0, 1fr) minmax(18rem, 21rem);
+  height: calc(100dvh - 3rem);
   overflow: hidden;
+  background: var(--host-page);
+}
+
+.classroomShell[data-sidebar-collapsed="true"] {
+  grid-template-columns: 3rem minmax(0, 1fr) minmax(18rem, 21rem);
 }
 
 .sidebar {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 1rem 0.65rem;
+  justify-content: space-between;
   border-right: 1px solid var(--host-border);
-  background: var(--host-surface);
+  background: var(--host-sidebar);
 }
 
-.classroomName {
-  overflow: hidden;
-  margin: 0 0.5rem 0.75rem;
-  font-size: 0.78rem;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.navItems {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem;
 }
 
 .sidebar button {
   display: flex;
-  min-height: 44px;
+  min-height: 3rem;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0 0.65rem;
+  gap: 0.8rem;
+  overflow: hidden;
+  padding: 0 0.75rem;
   border: 0;
   border-radius: 0.45rem;
   color: var(--host-muted);
   background: transparent;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 1rem;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.sidebar button span {
-  display: grid;
-  width: 1.3rem;
-  place-items: center;
-  font-size: 1rem;
+.sidebar button svg {
+  flex: 0 0 auto;
 }
 
 .sidebar button:hover {
+  color: var(--host-text);
   background: var(--host-surface-2);
 }
 
 .sidebar button[data-active="true"] {
-  color: var(--host-primary);
+  color: #ffffff;
   background: var(--host-selected);
-  font-weight: 750;
+  font-weight: 650;
+}
+
+.sidebar button[data-active="true"] svg {
+  color: #d8e7ff;
+}
+
+.classroomShell[data-sidebar-collapsed="true"] .navItems {
+  padding-inline: 0.15rem;
+}
+
+.classroomShell[data-sidebar-collapsed="true"] .sidebar button {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.classroomShell[data-sidebar-collapsed="true"] .sidebar button span {
+  display: none;
+}
+
+.sidebarToggle {
+  min-height: 4.5rem !important;
+  border-top: 1px solid var(--host-border) !important;
+  border-radius: 0 !important;
 }
 
 .content {
   min-width: 0;
   overflow-y: auto;
+  border-right: 1px solid var(--host-border);
   background: var(--host-page);
+}
+
+.content > :global(.pal-achievements) {
+  max-width: 100%;
+}
+
+.todayContent {
+  display: grid;
+  gap: 0.8rem;
+  min-height: 100%;
+  padding: 0.5rem 0.75rem 0;
+}
+
+.noClassCard,
+.pastLogs,
+.classroomContent,
+.lessonCard {
+  border: 1px solid var(--host-border);
+  border-radius: 0.5rem;
+  background: var(--host-surface);
+}
+
+.noClassCard {
+  display: grid;
+  min-height: 5.2rem;
+  place-items: center;
+  margin: 1rem 0 0;
+  color: var(--host-muted);
+  background: #050a13;
+}
+
+.pastLogs {
+  align-self: start;
+  overflow: hidden;
+}
+
+.pastLogs h1 {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--host-border);
+  font-size: 0.9rem;
+}
+
+.logEntry {
+  min-height: 4.6rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--host-border);
+}
+
+.logEntry:last-child {
+  border-bottom: 0;
+}
+
+.logEntry strong {
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+
+.logEntry p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0.38rem 0 0;
+  color: var(--host-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .classroomContent {
   max-width: 54rem;
+  min-height: calc(100% - 2rem);
+  margin: 1rem;
   padding: clamp(1.25rem, 4vw, 3rem);
 }
 
 .classroomContent h1 {
-  margin-top: 0.25rem;
+  margin: 0.25rem 0 0;
   font-size: clamp(1.6rem, 4vw, 2.2rem);
 }
 
@@ -247,9 +322,10 @@
   line-height: 1.6;
 }
 
-.hostEyebrow {
+.hostEyebrow,
+.railEyebrow {
   color: var(--host-primary);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -258,9 +334,7 @@
 .lessonCard {
   margin-top: 1.5rem;
   padding: 1.25rem;
-  border: 1px solid var(--host-border);
-  border-radius: 0.5rem;
-  background: var(--host-surface);
+  background: var(--host-surface-2);
 }
 
 .lessonCard span {
@@ -270,26 +344,68 @@
 }
 
 .lessonCard h2 {
-  margin-top: 0.35rem;
+  margin: 0.35rem 0 0;
   font-size: 1rem;
 }
 
 .lessonCard p {
-  margin-top: 0.4rem;
+  margin: 0.4rem 0 0;
   color: var(--host-muted);
   font-size: 0.85rem;
 }
 
+.rightRail {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  padding: 0.5rem 0.9rem 0.9rem;
+  background: var(--host-page);
+}
+
+.todayRail,
 .companionSlot {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 15;
+  min-height: 0;
+  padding: 1.25rem 1rem;
+  border: 1px solid var(--host-border);
+  background: var(--host-surface);
+}
+
+.todayRail {
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.todayRail strong {
+  font-size: 0.88rem;
+}
+
+.todayRail p {
+  margin: 1rem 0 0;
+  color: var(--host-muted);
+  font-size: 0.88rem;
+}
+
+.companionSlot {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-top: 0;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.companionSlot > :global(.pal-companion) {
+  width: 100%;
+  margin-top: 0.75rem;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  box-shadow: none;
+}
+
+.companionSlot :global(.pal-companion-art) {
+  min-height: 4rem;
 }
 
 .celebrationLayer {
   position: absolute;
-  z-index: 50;
+  z-index: 60;
   inset: 0;
   display: grid;
   place-items: center;
@@ -302,10 +418,10 @@
 
 .controls {
   position: fixed;
-  z-index: 40;
+  z-index: 50;
   bottom: 1rem;
-  left: 1rem;
-  width: min(21rem, calc(100vw - 2rem));
+  left: 16rem;
+  width: min(21rem, calc(100vw - 17rem));
 }
 
 .controlToggle {
@@ -317,8 +433,8 @@
   border: 1px solid rgb(255 255 255 / 0.18);
   border-radius: 999px;
   color: #f8fafc;
-  background: rgb(15 23 42 / 0.92);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.24);
+  background: rgb(8 15 28 / 0.94);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.28);
   font: inherit;
   font-size: 0.78rem;
   font-weight: 750;
@@ -336,19 +452,15 @@
   box-shadow: none;
 }
 
-.controls[data-collapsed="false"] .controlToggle span:first-child {
-  display: none;
-}
-
 .controlPanel {
   max-height: min(40rem, calc(100dvh - 6rem));
   overflow-y: auto;
   padding: 1rem;
   border: 1px solid rgb(255 255 255 / 0.15);
-  border-radius: 0.75rem;
+  border-radius: 0.65rem;
   color: #f8fafc;
-  background: rgb(15 23 42 / 0.96);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
+  background: rgb(8 15 28 / 0.97);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
   backdrop-filter: blur(12px);
 }
 
@@ -357,12 +469,12 @@
 }
 
 .controlPanel h2 {
-  margin-top: 0.25rem;
+  margin: 0.25rem 0 0;
   font-size: 1rem;
 }
 
 .controlPanel header > p {
-  margin-top: 0.45rem;
+  margin: 0.45rem 0 0;
   color: #cbd5e1;
   font-size: 0.72rem;
   line-height: 1.45;
@@ -386,7 +498,7 @@
 .resetButton {
   min-height: 44px;
   border: 1px solid rgb(255 255 255 / 0.12);
-  border-radius: 0.5rem;
+  border-radius: 0.45rem;
   color: #f8fafc;
   background: rgb(255 255 255 / 0.08);
   font: inherit;
@@ -450,52 +562,68 @@
   text-align: center;
 }
 
+@media (max-width: 1100px) {
+  .classroomShell,
+  .classroomShell[data-sidebar-collapsed="true"] {
+    grid-template-columns: 12rem minmax(0, 1fr);
+  }
+
+  .classroomShell[data-sidebar-collapsed="true"] {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .rightRail {
+    display: none;
+  }
+
+  .controls {
+    left: 13rem;
+    width: min(21rem, calc(100vw - 14rem));
+  }
+}
+
 @media (max-width: 720px) {
   .appHeader {
-    height: auto;
-    min-height: 3.5rem;
-    align-items: flex-start;
-    padding-block: 0.55rem;
+    padding-inline: 0.7rem;
   }
 
-  .brand div span,
-  .viewSwitch {
+  .brand strong,
+  .hostDate,
+  .hostControls > svg {
     display: none;
   }
 
-  .classroomShell {
-    grid-template-columns: 3.5rem minmax(0, 1fr);
-    height: calc(100dvh - 3.9rem);
+  .classroomShell,
+  .classroomShell[data-sidebar-collapsed="true"] {
+    grid-template-columns: 3rem minmax(0, 1fr);
   }
 
-  .sidebar {
-    padding-inline: 0.35rem;
-  }
-
-  .classroomName {
-    display: none;
+  .navItems {
+    padding-inline: 0.15rem;
   }
 
   .sidebar button {
     justify-content: center;
+    gap: 0;
     padding: 0;
-    overflow: hidden;
-    font-size: 0;
   }
 
   .sidebar button span {
-    font-size: 1rem;
+    display: none;
   }
 
-  .companionSlot {
-    right: 0.65rem;
-    bottom: 0.65rem;
+  .sidebarToggle {
+    display: none !important;
   }
 
   .controls {
     bottom: 0.65rem;
-    left: 0.65rem;
-    width: min(20rem, calc(100vw - 1.3rem));
+    left: 3.65rem;
+    width: min(20rem, calc(100vw - 4.3rem));
+  }
+
+  .content > :global(.pal-achievements) {
+    padding-inline: 0.75rem;
   }
 }
 
