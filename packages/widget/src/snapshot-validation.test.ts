@@ -68,6 +68,24 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   );
 });
 
+test("snapshot parser rejects root-relative URL normalization bypasses", () => {
+  for (const assetUrl of [
+    String.raw`/\evil.example/pet.png`,
+    String.raw`/\\evil.example/pet.png`,
+    "//evil.example/pet.png",
+  ]) {
+    const fixture = createFixtureSnapshot();
+    fixture.companion.assetUrl = assetUrl;
+    assert.throws(
+      () =>
+        parsePalWidgetSnapshot(fixture, {
+          assetBaseUrl: "https://api.pal.example",
+        }),
+      /without backslashes|protocol-relative prefix/i,
+    );
+  }
+});
+
 test("snapshot parser resolves relative assets and permits explicit Pal CDN origins", () => {
   const fixture = createFixtureSnapshot();
   fixture.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl =

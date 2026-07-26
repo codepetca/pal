@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useId, useRef } from "react";
+
 import { usePalWidget } from "./provider";
 
 export function PalRewardCelebration() {
@@ -14,17 +16,52 @@ export function PalRewardCelebration() {
     viewport,
   } = usePalWidget();
   const reward = snapshot?.rewards[0];
+  const rewardId = reward?.id;
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const descriptionId = useId();
+  const titleId = useId();
+
+  useEffect(() => {
+    if (
+      !rewardId ||
+      typeof document === "undefined" ||
+      typeof HTMLElement === "undefined"
+    ) {
+      return;
+    }
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    continueButtonRef.current?.focus();
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [rewardId]);
+
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
 
   return (
     <section
+      aria-describedby={descriptionId}
+      aria-labelledby={titleId}
+      aria-modal="true"
       className="pal-celebration"
       data-pal-density={density}
       data-pal-motion={motion}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
-      role="status"
+      onKeyDown={(event) => {
+        if (event.key === "Tab") {
+          event.preventDefault();
+          continueButtonRef.current?.focus();
+        } else if (event.key === "Escape" && !pending) {
+          event.preventDefault();
+          void dismissReward(reward.id);
+        }
+      }}
+      role="dialog"
     >
       <div className="pal-celebration-burst" aria-hidden="true">
         <span>✦</span><span>✧</span><span>✦</span>
@@ -37,8 +74,8 @@ export function PalRewardCelebration() {
         )}
       </div>
       <p className="pal-eyebrow">Reward earned</p>
-      <h2>{reward.title}</h2>
-      <p>{reward.description}</p>
+      <h2 id={titleId}>{reward.title}</h2>
+      <p id={descriptionId}>{reward.description}</p>
       {rewardError ? (
         <p className="pal-celebration-error" role="alert">
           We could not save that yet. Try again.
@@ -49,6 +86,7 @@ export function PalRewardCelebration() {
         type="button"
         disabled={pending}
         onClick={() => void dismissReward(reward.id)}
+        ref={continueButtonRef}
       >
         {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
       </button>

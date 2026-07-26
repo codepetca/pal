@@ -6,6 +6,42 @@ import { PAL_THEME_PROPERTIES } from "./theme-contract";
 
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (hex: string) => {
+    const channels = hex
+      .slice(1)
+      .match(/.{2}/g)!
+      .map((channel) => Number.parseInt(channel, 16) / 255)
+      .map((channel) =>
+        channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4,
+      );
+    return (
+      channels[0]! * 0.2126 +
+      channels[1]! * 0.7152 +
+      channels[2]! * 0.0722
+    );
+  };
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
+
+function hexFallbacks(variable: string): string[] {
+  return [
+    ...styles.matchAll(
+      new RegExp(
+        `${variable}: var\\([^,]+, (#[0-9a-f]{6})\\)`,
+        "g",
+      ),
+    ),
+  ].map((match) => match[1]!);
+}
+
 test("widget exposes portable theme fallbacks and dark mode", () => {
   assert.match(styles, /var\(--pal-color-surface, #ffffff\)/);
   assert.match(styles, /data-pal-theme="dark"/);
@@ -34,4 +70,26 @@ test("widget controls and motion meet the accessibility contract", () => {
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
+});
+
+test("future-week treatment preserves muted-text contrast in both themes", () => {
+  const futureCardRule =
+    styles.match(
+      /\.pal-week\[data-week-status="future"\] \.pal-week-card \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.doesNotMatch(futureCardRule, /opacity/);
+  assert.match(futureCardRule, /border-style: dashed/);
+
+  const textFallbacks = hexFallbacks("--pal-effective-color-text-muted");
+  const surfaceFallbacks = hexFallbacks("--pal-effective-color-surface");
+  assert.equal(textFallbacks.length, 2);
+  assert.equal(surfaceFallbacks.length, 2);
+  for (const themeIndex of [0, 1]) {
+    assert.ok(
+      contrastRatio(
+        textFallbacks[themeIndex]!,
+        surfaceFallbacks[themeIndex]!,
+      ) >= 4.5,
+    );
+  }
 });

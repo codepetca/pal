@@ -6,7 +6,8 @@ package with three separately mountable learner surfaces sharing a provider:
 - `PalAchievements` — the complete vertical roadmap in Pika's content pane.
 - `PalCompanion` — a small ambient pet surface in a host-approved layer.
 - `PalRewardCelebration` — a dismissible, reduced-motion-aware reward surface in a
-  host-approved layer.
+  host-approved layer. It renders as a modal dialog, focuses its Continue button,
+  contains keyboard focus, supports Escape dismissal, and restores prior focus.
 
 The separation is intentional. The roadmap is route content; the companion may
 outlive that route; a celebration has a one-time notification lifecycle. They share

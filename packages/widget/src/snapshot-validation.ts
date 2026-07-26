@@ -107,10 +107,20 @@ function optionalAssetUrl(
 ): string | undefined {
   if (value === undefined) return undefined;
   const candidate = text(value, path, MAX_URL_LENGTH);
-  if (candidate.startsWith("/") && !candidate.startsWith("//")) {
-    return policy.baseUrl
-      ? new URL(candidate, policy.baseUrl).toString()
-      : candidate;
+  if (candidate.includes("\\") || candidate.startsWith("//")) {
+    return fail(
+      path,
+      "expected a root-relative or absolute asset URL without backslashes or a protocol-relative prefix",
+    );
+  }
+  if (candidate.startsWith("/")) {
+    if (!policy.baseUrl) return candidate;
+    const url = new URL(candidate, policy.baseUrl);
+    secureAssetOrigin(url, path);
+    if (!policy.allowedOrigins.has(url.origin)) {
+      return fail(path, "origin is not in the allowed Pal asset origin list");
+    }
+    return url.toString();
   }
 
   let url: URL;

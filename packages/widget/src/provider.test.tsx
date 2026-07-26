@@ -141,6 +141,99 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(renderer.toJSON(), null);
 });
 
+test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Fish for Pip",
+    description: "A reward notice",
+  });
+  const client: PalClient = {
+    getSnapshot: async () => snapshot,
+    markRewardSeen: async () => undefined,
+  };
+  class FakeElement {
+    focusCount = 0;
+    isConnected = true;
+
+    focus() {
+      this.focusCount += 1;
+    }
+  }
+  const previousFocus = new FakeElement();
+  const continueButton = new FakeElement();
+  const originalDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  const originalHTMLElement = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "HTMLElement",
+  );
+  let renderer: ReactTestRenderer | undefined;
+
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    value: FakeElement,
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { activeElement: previousFocus },
+  });
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={snapshot}
+          scopeKey="fixture-learner"
+        >
+          <PalRewardCelebration />
+        </PalProvider>,
+        {
+          createNodeMock(element) {
+            return element.type === "button" ? continueButton : null;
+          },
+        },
+      );
+    });
+
+    const dialog = renderer!.root.findByType("section");
+    assert.equal(dialog.props.role, "dialog");
+    assert.equal(dialog.props["aria-modal"], "true");
+    assert.equal(continueButton.focusCount, 1);
+
+    let tabPrevented = false;
+    await act(async () => {
+      dialog.props.onKeyDown({
+        key: "Tab",
+        preventDefault: () => {
+          tabPrevented = true;
+        },
+      });
+    });
+    assert.equal(tabPrevented, true);
+    assert.equal(continueButton.focusCount, 2);
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+    assert.equal(previousFocus.focusCount, 1);
+  } finally {
+    if (originalDocument) {
+      Object.defineProperty(globalThis, "document", originalDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+    if (originalHTMLElement) {
+      Object.defineProperty(globalThis, "HTMLElement", originalHTMLElement);
+    } else {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+  }
+});
+
 test("an older snapshot refresh cannot resurrect an acknowledged reward", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

@@ -235,7 +235,7 @@
 }
 
 .pal-week[data-week-status="future"] .pal-week-card {
-  opacity: 0.72;
+  border-style: dashed;
 }
 
 .pal-week-header {
