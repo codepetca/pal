@@ -19,7 +19,8 @@ export type ApplyResult = {
 //
 // `mood` is a free-form string by design (rule packs may introduce their own), so
 // anything absent here ranks 0 — it behaves like `neutral` and yields to whatever
-// is currently running.
+// is currently running. A new mood that should be able to interrupt needs a rank
+// here; see docs/rule-engine.md#mood-strength for the full contract.
 const MOOD_STRENGTH: Record<string, number> = {
   neutral: 0,
   happy: 1,

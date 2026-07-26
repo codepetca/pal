@@ -25,12 +25,17 @@ const BLINK_EVERY_MS = 4000;
 
 // `dx` is a horizontal nudge in the frame's own canvas pixels, applied on top of
 // centring the canvas. The poses are drawn on canvases of different widths and the
-// cat does not sit identically centred on each, so centring the canvas alone — the
-// obvious thing — leaves the happy poses visibly right of the resting one. The
-// values were measured by maximising alpha-mask overlap against default.png; the
-// two frames of a mood share one value, which is what confirms the offset belongs
-// to the canvas rather than the pose. Vertically the canvases already agree, so
-// bottom-flush needs no correction.
+// cat is not centred identically on each, so centring the canvas alone — the obvious
+// thing — leaves the happy poses ~6.5px right of the resting one at render size,
+// which reads as a jitter every time the mood changes.
+//
+// Deriving these for new art: lay the frame over default.png with the two canvases
+// centred and their bottoms flush, then find the horizontal shift that maximises the
+// overlap of the two alpha masks. That shift is `dx`. Both frames of a pose should
+// come out the same — they do here, which is what shows the offset belongs to the
+// canvas rather than the pose; if they disagree, the two frames are drawn
+// inconsistently and the art is worth fixing rather than compensating for in code.
+// Vertically the canvases already agree, so bottom-flush needs no correction.
 type Frame = { src: string; w: number; h: number; dx: number };
 
 // Every frame shares a 2048px canvas height; the widths differ because the wider
@@ -69,6 +74,15 @@ type WorldResponse = {
   economy: { xp: number; xp_lifetime: number; level: number; streak: number };
 };
 
+// The pet, driven entirely by the mood the engine reports. Three cases:
+//
+//   mood has frames  → alternate them forever (happy, excited)
+//   mood has none    → rest on default.png and blink periodically (neutral)
+//   unknown mood     → treated as the resting case, so a rule pack inventing a
+//                      mood degrades to a still pet rather than an empty box
+//
+// Nothing here decides *when* a mood changes — that is the engine's job, and this
+// component only ever reads the result.
 function PetSprite({ mood }: { mood: string }) {
   const frames = MOOD_FRAMES[mood];
   const [moodFrame, setMoodFrame] = useState(0);
