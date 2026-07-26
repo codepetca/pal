@@ -147,14 +147,14 @@
 .classroomShell {
   position: relative;
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr) minmax(18rem, 21rem);
+  grid-template-columns: 15rem minmax(0, 1fr);
   height: calc(100dvh - 3rem);
   overflow: hidden;
   background: var(--host-page);
 }
 
 .classroomShell[data-sidebar-collapsed="true"] {
-  grid-template-columns: 3rem minmax(0, 1fr) minmax(18rem, 21rem);
+  grid-template-columns: 3rem minmax(0, 1fr);
 }
 
 .sidebar {
@@ -232,7 +232,6 @@
 .content {
   min-width: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--host-border);
   background: var(--host-page);
 }
 
@@ -322,8 +321,7 @@
   line-height: 1.6;
 }
 
-.hostEyebrow,
-.railEyebrow {
+.hostEyebrow {
   color: var(--host-primary);
   font-size: 0.72rem;
   font-weight: 800;
@@ -354,53 +352,16 @@
   font-size: 0.85rem;
 }
 
-.rightRail {
-  display: grid;
-  min-width: 0;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  padding: 0.5rem 0.9rem 0.9rem;
-  background: var(--host-page);
+.companionOverlay {
+  position: absolute;
+  z-index: 40;
+  right: 1rem;
+  bottom: 1rem;
+  pointer-events: none;
 }
 
-.todayRail,
-.companionSlot {
-  min-height: 0;
-  padding: 1.25rem 1rem;
-  border: 1px solid var(--host-border);
-  background: var(--host-surface);
-}
-
-.todayRail {
-  border-radius: 0.5rem 0.5rem 0 0;
-}
-
-.todayRail strong {
-  font-size: 0.88rem;
-}
-
-.todayRail p {
-  margin: 1rem 0 0;
-  color: var(--host-muted);
-  font-size: 0.88rem;
-}
-
-.companionSlot {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  border-top: 0;
-  border-radius: 0 0 0.5rem 0.5rem;
-}
-
-.companionSlot > :global(.pal-companion) {
-  width: 100%;
-  margin-top: 0.75rem;
-  grid-template-columns: 4rem minmax(0, 1fr);
-  box-shadow: none;
-}
-
-.companionSlot :global(.pal-companion-art) {
-  min-height: 4rem;
+.companionOverlay > :global(.pal-companion) {
+  pointer-events: auto;
 }
 
 .celebrationLayer {
@@ -572,10 +533,6 @@
     grid-template-columns: 3rem minmax(0, 1fr);
   }
 
-  .rightRail {
-    display: none;
-  }
-
   .controls {
     left: 13rem;
     width: min(21rem, calc(100vw - 14rem));
@@ -620,6 +577,11 @@
     bottom: 0.65rem;
     left: 3.65rem;
     width: min(20rem, calc(100vw - 4.3rem));
+  }
+
+  .companionOverlay {
+    right: 0.65rem;
+    bottom: 0.65rem;
   }
 
   .content > :global(.pal-achievements) {

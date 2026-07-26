@@ -309,16 +309,9 @@ function SandboxExperience({
             )}
           </main>
 
-          <aside className={styles.rightRail} aria-label="Pika context panel">
-            <section className={styles.todayRail}>
-              <strong>Today</strong>
-              <p>No lesson plan for today.</p>
-            </section>
-            <section className={styles.companionSlot}>
-              <span className={styles.railEyebrow}>Your Pal</span>
-              <PalCompanion />
-            </section>
-          </aside>
+          <div className={styles.companionOverlay}>
+            <PalCompanion variant="compact" />
+          </div>
 
           <div className={styles.celebrationLayer}>
             <PalRewardCelebration />
