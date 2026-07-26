@@ -135,3 +135,192 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(widget.snapshot?.rewards.length, 0);
   assert.equal(renderer.toJSON(), null);
 });
+
+test("an older snapshot refresh cannot resurrect an acknowledged reward", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Fish for Pip",
+    description: "A reward notice",
+  });
+  const staleRefresh = deferred<PalWidgetSnapshot>();
+  let snapshotCalls = 0;
+  let acknowledgementCalls = 0;
+  const client: PalClient = {
+    getSnapshot() {
+      snapshotCalls += 1;
+      return snapshotCalls === 1
+        ? Promise.resolve(snapshot)
+        : staleRefresh.promise;
+    },
+    async markRewardSeen() {
+      acknowledgementCalls += 1;
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-learner"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  let refreshPromise!: Promise<void>;
+  await act(async () => {
+    refreshPromise = widget.refresh();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await widget.dismissReward("reward-1");
+  });
+  assert.equal(widget.snapshot?.rewards.length, 0);
+
+  await act(async () => {
+    staleRefresh.resolve(snapshot);
+    await refreshPromise;
+  });
+  assert.equal(widget.snapshot?.rewards.length, 0);
+
+  await act(async () => {
+    await widget.dismissReward("reward-1");
+  });
+  assert.equal(acknowledgementCalls, 1);
+});
+
+test("a stale scope acknowledgement failure cannot call the new scope error handler", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards.push({
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "A reward notice",
+  });
+  const learnerB = createFixtureSnapshot();
+  const acknowledgement = deferred<void>();
+  const errorsA: Error[] = [];
+  const errorsB: Error[] = [];
+  const clientA: PalClient = {
+    getSnapshot: async () => learnerA,
+    markRewardSeen: () => acknowledgement.promise,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={clientA}
+        initialSnapshot={learnerA}
+        onError={(error) => errorsA.push(error)}
+        scopeKey="learner-a"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  let dismissal!: Promise<void>;
+  await act(async () => {
+    dismissal = widget.dismissReward("reward-a");
+    await Promise.resolve();
+  });
+  await act(async () => {
+    renderer.update(
+      <PalProvider
+        client={clientB}
+        initialSnapshot={learnerB}
+        onError={(error) => errorsB.push(error)}
+        scopeKey="learner-b"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  await act(async () => {
+    acknowledgement.reject(new Error("Old learner request failed"));
+    await dismissal;
+  });
+
+  assert.equal(errorsA.length, 0);
+  assert.equal(errorsB.length, 0);
+  assert.equal(widget.snapshot?.roadmap.semesterLabel, "Fall semester");
+});
+
+test("snapshot refresh does not clear a reward acknowledgement retry", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Fish for Pip",
+    description: "A reward notice",
+  });
+  let snapshotCalls = 0;
+  const failedRefresh = deferred<PalWidgetSnapshot>();
+  const client: PalClient = {
+    getSnapshot() {
+      snapshotCalls += 1;
+      return snapshotCalls === 1
+        ? Promise.resolve(snapshot)
+        : failedRefresh.promise;
+    },
+    async markRewardSeen() {
+      throw new Error("Acknowledgement unavailable");
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-learner"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  await act(async () => {
+    await widget.dismissReward("reward-1");
+  });
+  assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
+
+  let refreshPromise!: Promise<void>;
+  await act(async () => {
+    refreshPromise = widget.refresh();
+    await Promise.resolve();
+  });
+  assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
+
+  await act(async () => {
+    failedRefresh.reject(new Error("Snapshot unavailable"));
+    await refreshPromise;
+  });
+  assert.equal(widget.snapshot?.rewards.length, 1);
+  assert.ok(widget.rewardError);
+  assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
+});
