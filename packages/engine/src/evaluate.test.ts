@@ -255,16 +255,4 @@ describe("evaluate", () => {
       undefined
     );
   });
-
-  it("advances world stage on daily_log_week.configured", () => {
-    const mutations = evaluate(
-      { event_type: "daily_log_week.configured", occurred_at: AT, metadata: {} },
-      baseState,
-      defaultRulePack
-    );
-    assert.deepEqual(
-      mutations.find((m) => m.type === "WORLD_STAGE"),
-      { type: "WORLD_STAGE", stage: 1 }
-    );
-  });
 });

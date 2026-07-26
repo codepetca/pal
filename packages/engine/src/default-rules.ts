@@ -112,13 +112,5 @@ export const defaultRulePack: RulePack = {
       conditions: [{ field: "economy.streak_current", op: "gte", value: 7 }],
       effects: [{ type: "WORLD_UNLOCK", asset_ref_id: "world-bird-v1" }],
     },
-
-    // ── Daily-log week configured ────────────────────────────────────────
-    {
-      id: "world-week-1",
-      trigger: { event_type: "daily_log_week.configured" },
-      conditions: [],
-      effects: [{ type: "WORLD_STAGE", stage: 1 }],
-    },
   ],
 };
