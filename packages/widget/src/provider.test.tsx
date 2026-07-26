@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { startTransition, Suspense } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { PalAchievements } from "./achievements";
@@ -26,6 +27,10 @@ function snapshotNamed(name: string): PalWidgetSnapshot {
   snapshot.roadmap.semesterLabel = name;
   return snapshot;
 }
+
+const concurrentRendererOptions = {
+  unstable_isConcurrent: true,
+} as unknown as Parameters<typeof create>[1];
 
 test("a scope change never paints the previous learner snapshot", async () => {
   const learnerA = snapshotNamed("Learner A semester");
@@ -323,4 +328,195 @@ test("snapshot refresh does not clear a reward acknowledgement retry", async () 
   assert.equal(widget.snapshot?.rewards.length, 1);
   assert.ok(widget.rewardError);
   assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
+});
+
+test("an abandoned concurrent scope render cannot swallow the committed scope acknowledgement", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards.push({
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "A reward notice",
+  });
+  const learnerB = createFixtureSnapshot();
+  learnerB.rewards.push({
+    id: "reward-b",
+    title: "Learner B reward",
+    description: "A different reward notice",
+  });
+  const acknowledgement = deferred<void>();
+  const suspendedScope = deferred<void>();
+  const clientA: PalClient = {
+    getSnapshot: async () => learnerA,
+    markRewardSeen: () => acknowledgement.promise,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  let committedWidget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe({ suspend }: { suspend: boolean }) {
+    const widget = usePalWidget();
+    if (suspend) throw suspendedScope.promise;
+    committedWidget = widget;
+    return <PalRewardCelebration />;
+  }
+
+  function Experience({
+    client,
+    scopeKey,
+    suspend,
+  }: {
+    client: PalClient;
+    scopeKey: string;
+    suspend: boolean;
+  }) {
+    return (
+      <Suspense fallback={<span>Loading next learner</span>}>
+        <PalProvider
+          client={client}
+          initialSnapshot={scopeKey === "learner-a" ? learnerA : learnerB}
+          scopeKey={scopeKey}
+        >
+          <Probe suspend={suspend} />
+        </PalProvider>
+      </Suspense>
+    );
+  }
+
+  await act(async () => {
+    renderer = create(
+      <Experience client={clientA} scopeKey="learner-a" suspend={false} />,
+      concurrentRendererOptions,
+    );
+  });
+
+  let dismissal!: Promise<void>;
+  await act(async () => {
+    dismissal = committedWidget.dismissReward("reward-a");
+    await Promise.resolve();
+  });
+  await act(async () => {
+    startTransition(() => {
+      renderer.update(
+        <Experience client={clientB} scopeKey="learner-b" suspend />,
+      );
+    });
+    await Promise.resolve();
+  });
+  assert.match(JSON.stringify(renderer.toJSON()), /Learner A reward/);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Learner B reward/);
+
+  await act(async () => {
+    acknowledgement.resolve();
+    await dismissal;
+  });
+  assert.equal(committedWidget.snapshot?.rewards.length, 0);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Learner A reward/);
+
+  await act(async () => {
+    renderer.unmount();
+  });
+});
+
+test("an abandoned concurrent scope render reports an acknowledgement failure only to the committed scope", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards.push({
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "A reward notice",
+  });
+  const learnerB = createFixtureSnapshot();
+  const acknowledgement = deferred<void>();
+  const suspendedScope = deferred<void>();
+  const errorsA: Error[] = [];
+  const errorsB: Error[] = [];
+  const clientA: PalClient = {
+    getSnapshot: async () => learnerA,
+    markRewardSeen: () => acknowledgement.promise,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  let committedWidget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe({ suspend }: { suspend: boolean }) {
+    const widget = usePalWidget();
+    if (suspend) throw suspendedScope.promise;
+    committedWidget = widget;
+    return <PalRewardCelebration />;
+  }
+
+  function Experience({
+    client,
+    onError,
+    scopeKey,
+    suspend,
+  }: {
+    client: PalClient;
+    onError: (error: Error) => void;
+    scopeKey: string;
+    suspend: boolean;
+  }) {
+    return (
+      <Suspense fallback={<span>Loading next learner</span>}>
+        <PalProvider
+          client={client}
+          initialSnapshot={scopeKey === "learner-a" ? learnerA : learnerB}
+          onError={onError}
+          scopeKey={scopeKey}
+        >
+          <Probe suspend={suspend} />
+        </PalProvider>
+      </Suspense>
+    );
+  }
+
+  await act(async () => {
+    renderer = create(
+      <Experience
+        client={clientA}
+        onError={(error) => errorsA.push(error)}
+        scopeKey="learner-a"
+        suspend={false}
+      />,
+      concurrentRendererOptions,
+    );
+  });
+
+  let dismissal!: Promise<void>;
+  await act(async () => {
+    dismissal = committedWidget.dismissReward("reward-a");
+    await Promise.resolve();
+  });
+  await act(async () => {
+    startTransition(() => {
+      renderer.update(
+        <Experience
+          client={clientB}
+          onError={(error) => errorsB.push(error)}
+          scopeKey="learner-b"
+          suspend
+        />,
+      );
+    });
+    await Promise.resolve();
+  });
+
+  await act(async () => {
+    acknowledgement.reject(new Error("Committed learner acknowledgement failed"));
+    await dismissal;
+  });
+  assert.equal(errorsA.length, 1);
+  assert.equal(errorsB.length, 0);
+  assert.equal(committedWidget.snapshot?.rewards.length, 1);
+  assert.ok(committedWidget.rewardError);
+  assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
+
+  await act(async () => {
+    renderer.unmount();
+  });
 });

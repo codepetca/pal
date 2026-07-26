@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -77,7 +78,9 @@ export function PalProvider({
   const activeScopeRef = useRef(scopeKey);
   const mountedRef = useRef(false);
 
-  activeScopeRef.current = scopeKey;
+  useLayoutEffect(() => {
+    activeScopeRef.current = scopeKey;
+  }, [scopeKey]);
 
   useEffect(() => {
     onErrorRef.current = onError;
