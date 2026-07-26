@@ -20,7 +20,11 @@ const client = createPalHttpClient({
   getAccessToken: mintLearnerScopedToken,
 })
 
-<PalProvider client={client} theme="light">
+<PalProvider
+  client={client}
+  scopeKey={learnerSessionGeneration}
+  theme="light"
+>
   <PalAchievements />
   <PalCompanion />
   <PalRewardCelebration />
@@ -47,6 +51,11 @@ The package never receives:
 
 The browser receives only a short-lived learner-scoped token. Pal's integration
 secret stays on Pika's backend.
+
+`scopeKey` is a host-local opaque value that changes synchronously before the active
+learner context changes. Pal never transmits it. This prevents a previous learner's
+cached snapshot from appearing while a new learner loads; it must not be a name,
+email, raw learner ID, or other personal data.
 
 ## Host and Pal ownership
 

@@ -81,6 +81,11 @@ export interface PalClient {
 export interface PalProviderProps {
   children: ReactNode;
   client: PalClient;
+  /**
+   * Host-local opaque key for the active learner context. It is never sent to
+   * Pal and must change before the host switches learners.
+   */
+  scopeKey: string;
   theme?: PalTheme;
   initialSnapshot?: PalWidgetSnapshot;
   refreshIntervalMs?: number;

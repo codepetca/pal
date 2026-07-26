@@ -291,7 +291,11 @@ Pika consumes the public React package `@pal/widget`. One provider shares the
 learner-scoped client and state, while Pika mounts three independent surfaces:
 
 ```tsx
-<PalProvider client={palClient} theme={pikaTheme}>
+<PalProvider
+  client={palClient}
+  scopeKey={learnerSessionGeneration}
+  theme={pikaTheme}
+>
   <PalAchievements />       // normal Pika content pane
   <PalCompanion />          // Pika-approved ambient layer
   <PalRewardCelebration />  // Pika-approved celebration layer

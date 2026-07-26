@@ -42,7 +42,11 @@ const palClient = createPalHttpClient({
   getAccessToken: mintLearnerScopedToken,
 })
 
-<PalProvider client={palClient} theme={theme}>
+<PalProvider
+  client={palClient}
+  scopeKey={learnerSessionGeneration}
+  theme={theme}
+>
   <main><PalAchievements /></main>
   <aside><PalCompanion /></aside>
   <div><PalRewardCelebration /></div>

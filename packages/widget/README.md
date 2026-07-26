@@ -11,7 +11,7 @@ import "@pal/widget/styles.css";
 Then mount the public surfaces under one provider:
 
 ```tsx
-<PalProvider client={client} theme="light">
+<PalProvider client={client} scopeKey={learnerSessionGeneration} theme="light">
   <PalAchievements />
   <PalCompanion />
   <PalRewardCelebration />

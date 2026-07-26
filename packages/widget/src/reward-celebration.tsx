@@ -3,16 +3,22 @@
 import { usePalWidget } from "./provider";
 
 export function PalRewardCelebration() {
-  const { dismissReward, snapshot, theme } = usePalWidget();
+  const {
+    dismissReward,
+    isRewardPending,
+    rewardError,
+    snapshot,
+    theme,
+  } = usePalWidget();
   const reward = snapshot?.rewards[0];
   if (!reward) return null;
+  const pending = isRewardPending(reward.id);
 
   return (
     <section
       className="pal-celebration"
       data-pal-theme={theme}
       role="status"
-      aria-label="New Pal reward"
     >
       <div className="pal-celebration-burst" aria-hidden="true">
         <span>✦</span><span>✧</span><span>✦</span>
@@ -27,12 +33,18 @@ export function PalRewardCelebration() {
       <p className="pal-eyebrow">Reward earned</p>
       <h2>{reward.title}</h2>
       <p>{reward.description}</p>
+      {rewardError ? (
+        <p className="pal-celebration-error" role="alert">
+          We could not save that yet. Try again.
+        </p>
+      ) : null}
       <button
         className="pal-button"
         type="button"
+        disabled={pending}
         onClick={() => void dismissReward(reward.id)}
       >
-        Continue
+        {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
       </button>
     </section>
   );

@@ -14,7 +14,12 @@ test("public surfaces render meaningful status without relying on color", () => 
   const snapshot = client.peek();
 
   const html = renderToStaticMarkup(
-    <PalProvider client={client} initialSnapshot={snapshot} theme="dark">
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+      theme="dark"
+    >
       <PalAchievements />
       <PalCompanion />
       <PalRewardCelebration />
@@ -28,15 +33,20 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /Pip, your Pal companion/);
   assert.match(html, /data-pal-variant="responsive"/);
   assert.match(html, /Level 2; 3 day rhythm/);
-  assert.match(html, /New Pal reward/);
+  assert.match(html, /A treat for Pip!/);
   assert.match(html, />Continue</);
   assert.match(html, /data-pal-theme="dark"/);
+  assert.doesNotMatch(html, /aria-label="New Pal reward"/);
 });
 
 test("roadmap renders all fictional semester weeks", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
-    <PalProvider client={client} initialSnapshot={client.peek()}>
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="fixture-learner"
+    >
       <PalAchievements />
     </PalProvider>,
   );

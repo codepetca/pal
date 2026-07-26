@@ -402,9 +402,19 @@
   filter: brightness(0.94);
 }
 
+.pal-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .pal-button:focus-visible {
   outline: none;
   box-shadow: var(--pal-effective-focus-ring);
+}
+
+.pal-celebration-error {
+  color: var(--pal-effective-color-warning);
+  font-weight: 700;
 }
 
 .pal-companion {

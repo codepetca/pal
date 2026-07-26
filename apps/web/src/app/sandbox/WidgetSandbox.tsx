@@ -143,7 +143,12 @@ function SandboxExperience({
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
 
   return (
-    <PalProvider client={client} initialSnapshot={client.peek()} theme={theme}>
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="fixture-learner"
+      theme={theme}
+    >
       <div className={styles.sandbox} data-theme={theme}>
         <header className={styles.appHeader}>
           <div className={styles.brand}>
