@@ -57,6 +57,12 @@ learner context changes. Pal never transmits it. This prevents a previous learne
 cached snapshot from appearing while a new learner loads; it must not be a name,
 email, raw learner ID, or other personal data.
 
+The provider aborts snapshot and reward-acknowledgement work whenever `scopeKey` or
+the client changes. The token callback receives the same optional `AbortSignal`, so
+a request started for one learner cannot continue through token acquisition after
+the host commits a different learner. Reward acknowledgement is retry-safe and
+idempotent on Pal's API.
+
 ## Host and Pal ownership
 
 Pika owns:

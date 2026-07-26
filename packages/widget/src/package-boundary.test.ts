@@ -21,3 +21,10 @@ test("sandbox labels fixture mode as visual state rather than pipeline proof", (
   assert.match(sandboxSource, /Visual states only/);
   assert.match(sandboxSource, /no production state is connected/);
 });
+
+test("sandbox reset rotates provider identity and controls start collapsed", () => {
+  assert.match(sandboxSource, /useState\(true\)/);
+  assert.match(sandboxSource, /fixture-learner-\$\{resetGeneration\}/);
+  assert.match(sandboxSource, /key=\{fixtureScopeKey\}/);
+  assert.match(sandboxSource, /setResetGeneration\(\(current\) => current \+ 1\)/);
+});

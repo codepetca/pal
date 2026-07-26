@@ -1,8 +1,9 @@
-import type { PalClient, PalWidgetSnapshot } from "./types";
+import { parsePalWidgetSnapshot } from "./snapshot-validation";
+import type { PalClient } from "./types";
 
 export interface PalHttpClientOptions {
   apiBaseUrl: string;
-  getAccessToken: () => Promise<string>;
+  getAccessToken: (signal?: AbortSignal) => Promise<string>;
   snapshotPath?: string;
   rewardSeenPath?: (rewardId: string) => string;
   fetchImplementation?: typeof fetch;
@@ -10,6 +11,30 @@ export interface PalHttpClientOptions {
 
 function resolveUrl(baseUrl: string, path: string): string {
   return new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
+}
+
+function abortError(): DOMException {
+  return new DOMException("The operation was aborted", "AbortError");
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortError());
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 export function createPalHttpClient({
@@ -21,7 +46,11 @@ export function createPalHttpClient({
   fetchImplementation = fetch,
 }: PalHttpClientOptions): PalClient {
   async function authorizedFetch(path: string, init: RequestInit): Promise<Response> {
-    const token = await getAccessToken();
+    const signal = init.signal ?? undefined;
+    const token = await abortable(getAccessToken(signal), signal);
+    if (signal?.aborted) {
+      throw abortError();
+    }
     if (!token) {
       throw new Error("Pal access token was empty");
     }
@@ -46,7 +75,7 @@ export function createPalHttpClient({
         method: "GET",
         signal,
       });
-      return (await response.json()) as PalWidgetSnapshot;
+      return parsePalWidgetSnapshot(await response.json());
     },
     async markRewardSeen(rewardId, signal) {
       await authorizedFetch(rewardSeenPath(rewardId), {

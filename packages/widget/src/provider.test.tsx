@@ -270,6 +270,74 @@ test("a stale scope acknowledgement failure cannot call the new scope error hand
   assert.equal(widget.snapshot?.roadmap.semesterLabel, "Fall semester");
 });
 
+test("a committed scope switch aborts an in-flight reward acknowledgement", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards.push({
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "A reward notice",
+  });
+  const learnerB = createFixtureSnapshot();
+  let acknowledgementSignal: AbortSignal | undefined;
+  const acknowledgement = deferred<void>();
+  const clientA: PalClient = {
+    getSnapshot: async () => learnerA,
+    markRewardSeen(_rewardId, signal) {
+      acknowledgementSignal = signal;
+      return acknowledgement.promise;
+    },
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={clientA}
+        initialSnapshot={learnerA}
+        scopeKey="learner-a"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  let dismissal!: Promise<void>;
+  await act(async () => {
+    dismissal = widget.dismissReward("reward-a");
+    await Promise.resolve();
+  });
+  assert.equal(acknowledgementSignal?.aborted, false);
+
+  await act(async () => {
+    renderer.update(
+      <PalProvider
+        client={clientB}
+        initialSnapshot={learnerB}
+        scopeKey="learner-b"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  assert.equal(acknowledgementSignal?.aborted, true);
+
+  await act(async () => {
+    acknowledgement.resolve();
+    await dismissal;
+  });
+  assert.equal(widget.snapshot?.roadmap.semesterLabel, "Fall semester");
+});
+
 test("snapshot refresh does not clear a reward acknowledgement retry", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
@@ -519,4 +587,70 @@ test("an abandoned concurrent scope render reports an acknowledgement failure on
   await act(async () => {
     renderer.unmount();
   });
+});
+
+test("polling schedules the next refresh only after the current one settles", async () => {
+  const snapshot = createFixtureSnapshot();
+  const polledSnapshot = deferred<PalWidgetSnapshot>();
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    getSnapshot() {
+      snapshotCalls += 1;
+      return snapshotCalls === 1
+        ? Promise.resolve(snapshot)
+        : polledSnapshot.promise;
+    },
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled: Array<() => Promise<void>> = [];
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout() {},
+      setTimeout(callback: () => Promise<void>) {
+        scheduled.push(callback);
+        return scheduled.length;
+      },
+    },
+  });
+  let renderer!: ReactTestRenderer;
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={snapshot}
+          refreshIntervalMs={1_000}
+          scopeKey="fixture-learner"
+        >
+          <PalAchievements />
+        </PalProvider>,
+      );
+    });
+    assert.equal(scheduled.length, 1);
+
+    let pollingRequest!: Promise<void>;
+    await act(async () => {
+      pollingRequest = scheduled[0]!();
+      await Promise.resolve();
+    });
+    assert.equal(snapshotCalls, 2);
+    assert.equal(scheduled.length, 1);
+
+    await act(async () => {
+      polledSnapshot.resolve(snapshot);
+      await pollingRequest;
+    });
+    assert.equal(scheduled.length, 2);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
 });

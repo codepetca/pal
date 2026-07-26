@@ -45,6 +45,20 @@ interface PalRewardState {
   scopeKey: string;
 }
 
+interface PalRequestScope {
+  client: PalProviderProps["client"];
+  controller: AbortController;
+  scopeKey: string;
+}
+
+function isAbortError(cause: unknown, signal: AbortSignal): boolean {
+  return (
+    signal.aborted ||
+    (cause instanceof DOMException && cause.name === "AbortError") ||
+    (cause instanceof Error && cause.name === "AbortError")
+  );
+}
+
 export function PalProvider({
   children,
   client,
@@ -76,11 +90,33 @@ export function PalProvider({
   const requestSequence = useRef(0);
   const onErrorRef = useRef(onError);
   const activeScopeRef = useRef(scopeKey);
+  const requestScopeRef = useRef<PalRequestScope>({
+    client,
+    controller: new AbortController(),
+    scopeKey,
+  });
   const mountedRef = useRef(false);
 
   useLayoutEffect(() => {
+    const previous = requestScopeRef.current;
+    if (
+      previous.client !== client ||
+      previous.scopeKey !== scopeKey ||
+      previous.controller.signal.aborted
+    ) {
+      previous.controller.abort();
+      requestScopeRef.current = {
+        client,
+        controller: new AbortController(),
+        scopeKey,
+      };
+    }
+    const committedRequestScope = requestScopeRef.current;
     activeScopeRef.current = scopeKey;
-  }, [scopeKey]);
+    return () => {
+      committedRequestScope.controller.abort();
+    };
+  }, [client, scopeKey]);
 
   useEffect(() => {
     onErrorRef.current = onError;
@@ -112,6 +148,15 @@ export function PalProvider({
         };
 
   const refresh = useCallback(async () => {
+    const requestScope = requestScopeRef.current;
+    if (
+      requestScope.client !== client ||
+      requestScope.scopeKey !== scopeKey ||
+      requestScope.controller.signal.aborted
+    ) {
+      return;
+    }
+    const { signal } = requestScope.controller;
     const sequence = ++requestSequence.current;
     if (acknowledgedRewardIdsRef.current.scopeKey !== scopeKey) {
       acknowledgedRewardIdsRef.current = {
@@ -134,8 +179,9 @@ export function PalProvider({
         },
     );
     try {
-      const nextSnapshot = await client.getSnapshot();
+      const nextSnapshot = await client.getSnapshot(signal);
       if (
+        signal.aborted ||
         sequence !== requestSequence.current ||
         !mountedRef.current ||
         activeScopeRef.current !== scopeKey
@@ -155,6 +201,9 @@ export function PalProvider({
         state: "ready",
       });
     } catch (cause) {
+      if (isAbortError(cause, signal)) {
+        return;
+      }
       if (
         sequence !== requestSequence.current ||
         !mountedRef.current ||
@@ -188,12 +237,34 @@ export function PalProvider({
 
   useEffect(() => {
     if (refreshIntervalMs <= 0) return;
-    const interval = window.setInterval(() => void refresh(), refreshIntervalMs);
-    return () => window.clearInterval(interval);
+    let cancelled = false;
+    let timeout: number | undefined;
+
+    const schedule = () => {
+      timeout = window.setTimeout(async () => {
+        await refresh();
+        if (!cancelled) schedule();
+      }, refreshIntervalMs);
+    };
+    schedule();
+
+    return () => {
+      cancelled = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
   }, [refresh, refreshIntervalMs]);
 
   const dismissReward = useCallback(
     async (rewardId: string) => {
+      const requestScope = requestScopeRef.current;
+      if (
+        requestScope.client !== client ||
+        requestScope.scopeKey !== scopeKey ||
+        requestScope.controller.signal.aborted
+      ) {
+        return;
+      }
+      const { signal } = requestScope.controller;
       if (pendingRewardIdsRef.current.scopeKey !== scopeKey) {
         pendingRewardIdsRef.current = {
           ids: new Set(),
@@ -217,8 +288,9 @@ export function PalProvider({
       });
 
       try {
-        await client.markRewardSeen(rewardId);
+        await client.markRewardSeen(rewardId, signal);
         if (
+          signal.aborted ||
           !mountedRef.current ||
           activeScopeRef.current !== scopeKey
         ) {
@@ -239,6 +311,9 @@ export function PalProvider({
             : current,
         );
       } catch (cause) {
+        if (isAbortError(cause, signal)) {
+          return;
+        }
         if (
           !mountedRef.current ||
           activeScopeRef.current !== scopeKey
@@ -257,7 +332,12 @@ export function PalProvider({
         );
         onErrorRef.current?.(nextError);
       } finally {
-        if (pendingRewardIdsRef.current.scopeKey === scopeKey) {
+        if (
+          !signal.aborted &&
+          mountedRef.current &&
+          activeScopeRef.current === scopeKey &&
+          pendingRewardIdsRef.current.scopeKey === scopeKey
+        ) {
           pendingRewardIdsRef.current.ids.delete(rewardId);
           setRewardState((current) =>
             current.scopeKey === scopeKey

@@ -40,7 +40,10 @@ versioned independently from event ingestion and includes:
 The widget receives no raw learner identifier. Pika's backend uses its integration
 credential to mint the learner-scoped token; that credential never enters the
 browser. Acknowledging a reward notice changes notification presentation only and
-must not reapply or mutate the underlying award.
+must not reapply or mutate the underlying award. The acknowledgement endpoint is
+idempotent for a learner-scoped reward ID: every repeat `POST` returns success as a
+no-op, including a retry after the original response was lost. A repeat must never
+replay the award, celebration, analytics, or any other side effect.
 
 ## Event ingest contract
 

@@ -41,3 +41,55 @@ test("HTTP client rejects an empty learner token before making a request", async
   await assert.rejects(() => client.getSnapshot(), /access token was empty/i);
   assert.equal(called, false);
 });
+
+test("aborting token acquisition prevents a stale request from reaching fetch", async () => {
+  let resolveToken!: (token: string) => void;
+  const token = new Promise<string>((resolve) => {
+    resolveToken = resolve;
+  });
+  let fetchCalls = 0;
+  let receivedSignal: AbortSignal | undefined;
+  const client = createPalHttpClient({
+    apiBaseUrl: "https://pal.example",
+    getAccessToken: (signal) => {
+      receivedSignal = signal;
+      return token;
+    },
+    fetchImplementation: async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify(createFixtureSnapshot()));
+    },
+  });
+  const controller = new AbortController();
+
+  const request = client.getSnapshot(controller.signal);
+  controller.abort();
+
+  await assert.rejects(request, (error: unknown) => {
+    return error instanceof Error && error.name === "AbortError";
+  });
+  assert.equal(receivedSignal, controller.signal);
+  resolveToken("token-for-a-different-learner");
+  await Promise.resolve();
+  assert.equal(fetchCalls, 0);
+});
+
+test("reward acknowledgement retries use the same learner-scoped endpoint", async () => {
+  const requests: string[] = [];
+  const client = createPalHttpClient({
+    apiBaseUrl: "https://pal.example",
+    getAccessToken: async () => "learner-token",
+    fetchImplementation: async (input) => {
+      requests.push(String(input));
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  await client.markRewardSeen("reward/with spaces");
+  await client.markRewardSeen("reward/with spaces");
+
+  assert.deepEqual(requests, [
+    "https://pal.example/api/v1/learner/rewards/reward%2Fwith%20spaces/seen",
+    "https://pal.example/api/v1/learner/rewards/reward%2Fwith%20spaces/seen",
+  ]);
+});

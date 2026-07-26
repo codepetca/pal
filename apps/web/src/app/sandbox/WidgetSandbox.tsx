@@ -54,11 +54,13 @@ function FixtureControls({
   collapsed,
   onCollapsedChange,
   onRefresh,
+  onReset,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
+  onReset: () => void;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
@@ -67,6 +69,10 @@ function FixtureControls({
   async function dispatch(action: PalFixtureAction) {
     const result = client.dispatch(action);
     setLog((current) => [result, ...current].slice(0, 6));
+    if (action === "reset") {
+      onReset();
+      return;
+    }
     await onRefresh();
   }
 
@@ -140,13 +146,16 @@ function SandboxExperience({
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
 }) {
-  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(true);
+  const [resetGeneration, setResetGeneration] = useState(0);
+  const fixtureScopeKey = `fixture-learner-${resetGeneration}`;
 
   return (
     <PalProvider
+      key={fixtureScopeKey}
       client={client}
       initialSnapshot={client.peek()}
-      scopeKey="fixture-learner"
+      scopeKey={fixtureScopeKey}
       theme={theme}
     >
       <div className={styles.sandbox} data-theme={theme}>
@@ -246,6 +255,7 @@ function SandboxExperience({
               collapsed={controlsCollapsed}
               onCollapsedChange={setControlsCollapsed}
               onRefresh={refresh}
+              onReset={() => setResetGeneration((current) => current + 1)}
             />
           )}
         </FixtureRefreshBridge>
