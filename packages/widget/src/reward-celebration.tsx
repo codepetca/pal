@@ -4,7 +4,13 @@ import { useEffect, useId, useRef } from "react";
 
 import { usePalWidget } from "./provider";
 
-export function PalRewardCelebration() {
+export function PalRewardCelebration({
+  modal = false,
+  onOpenChange,
+}: {
+  modal?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const {
     dismissReward,
     density,
@@ -22,6 +28,12 @@ export function PalRewardCelebration() {
   const titleId = useId();
 
   useEffect(() => {
+    if (!rewardId) return;
+    onOpenChange?.(true);
+    return () => onOpenChange?.(false);
+  }, [onOpenChange, rewardId]);
+
+  useEffect(() => {
     if (
       !rewardId ||
       typeof document === "undefined" ||
@@ -35,7 +47,14 @@ export function PalRewardCelebration() {
         : null;
     continueButtonRef.current?.focus();
     return () => {
-      if (previousFocus?.isConnected) previousFocus.focus();
+      const restoreFocus = () => {
+        if (previousFocus?.isConnected) previousFocus.focus();
+      };
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => requestAnimationFrame(restoreFocus));
+      } else {
+        queueMicrotask(restoreFocus);
+      }
     };
   }, [rewardId]);
 
@@ -46,14 +65,14 @@ export function PalRewardCelebration() {
     <section
       aria-describedby={descriptionId}
       aria-labelledby={titleId}
-      aria-modal="true"
+      aria-modal={modal ? "true" : undefined}
       className="pal-celebration"
       data-pal-density={density}
       data-pal-motion={motion}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       onKeyDown={(event) => {
-        if (event.key === "Tab") {
+        if (event.key === "Tab" && modal) {
           event.preventDefault();
           continueButtonRef.current?.focus();
         } else if (event.key === "Escape" && !pending) {

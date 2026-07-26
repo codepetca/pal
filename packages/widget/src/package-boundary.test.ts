@@ -9,6 +9,13 @@ const sandboxSource = readFileSync(
   ),
   "utf8",
 );
+const sandboxStyles = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/widget-sandbox.module.css",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("sandbox consumes only the widget public package boundary", () => {
   assert.match(sandboxSource, /from "@pal\/widget"/);
@@ -31,4 +38,18 @@ test("sandbox reset rotates provider identity and controls start collapsed", () 
 
 test("sandbox navigation keeps accessible names when labels are visually hidden", () => {
   assert.match(sandboxSource, /aria-label=\{label\}/);
+});
+
+test("sandbox modal host makes application siblings inert and intercepts its backdrop", () => {
+  assert.match(sandboxSource, /inert=\{celebrationOpen \|\| undefined\}/);
+  assert.match(sandboxSource, /<PalRewardCelebration[\s\S]*modal/);
+  assert.match(sandboxSource, /onOpenChange=\{setCelebrationOpen\}/);
+  assert.match(
+    sandboxStyles,
+    /\.celebrationLayer \{[\s\S]*pointer-events: auto/,
+  );
+  assert.match(
+    sandboxStyles,
+    /\.celebrationLayer\[data-open="false"\] \{[\s\S]*pointer-events: none/,
+  );
 });

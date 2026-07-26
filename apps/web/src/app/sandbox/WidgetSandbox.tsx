@@ -192,6 +192,7 @@ function SandboxExperience({
   onThemeChange: (theme: PalTheme) => void;
 }) {
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
   const fixtureScopeKey = `fixture-learner-${resetGeneration}`;
@@ -210,7 +211,11 @@ function SandboxExperience({
       viewport={viewport}
     >
       <div className={styles.sandbox} data-theme={theme}>
-        <header className={styles.appHeader}>
+        <div
+          className={styles.applicationLayer}
+          inert={celebrationOpen || undefined}
+        >
+          <header className={styles.appHeader}>
           <div className={styles.brand}>
             <Image
               src="/assets/mockups/pika-student/pika-logo.png"
@@ -241,12 +246,12 @@ function SandboxExperience({
               S
             </span>
           </div>
-        </header>
+          </header>
 
-        <div
-          className={styles.classroomShell}
-          data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
-        >
+          <div
+            className={styles.classroomShell}
+            data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+          >
           <nav className={styles.sidebar} aria-label="Fictional Pika classroom">
             <div className={styles.navItems}>
               {NAV_ITEMS.map(({ icon: Icon, label, view: itemView }) => (
@@ -320,22 +325,30 @@ function SandboxExperience({
             <PalCompanion variant="compact" />
           </div>
 
-          <div className={styles.celebrationLayer}>
-            <PalRewardCelebration />
           </div>
+
+          <FixtureRefreshBridge>
+            {(refresh) => (
+              <FixtureControls
+                client={client}
+                collapsed={controlsCollapsed}
+                onCollapsedChange={setControlsCollapsed}
+                onRefresh={refresh}
+                onReset={() => setResetGeneration((current) => current + 1)}
+              />
+            )}
+          </FixtureRefreshBridge>
         </div>
 
-        <FixtureRefreshBridge>
-          {(refresh) => (
-            <FixtureControls
-              client={client}
-              collapsed={controlsCollapsed}
-              onCollapsedChange={setControlsCollapsed}
-              onRefresh={refresh}
-              onReset={() => setResetGeneration((current) => current + 1)}
-            />
-          )}
-        </FixtureRefreshBridge>
+        <div
+          className={styles.celebrationLayer}
+          data-open={celebrationOpen ? "true" : "false"}
+        >
+          <PalRewardCelebration
+            modal
+            onOpenChange={setCelebrationOpen}
+          />
+        </div>
       </div>
     </PalProvider>
   );

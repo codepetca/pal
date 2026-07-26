@@ -89,6 +89,10 @@
   --host-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
 }
 
+.applicationLayer {
+  height: 100%;
+}
+
 .appHeader {
   position: relative;
   z-index: 30;
@@ -392,11 +396,12 @@
   inset: 0;
   display: grid;
   place-items: center;
-  pointer-events: none;
+  background: rgb(2 8 23 / 0.3);
+  pointer-events: auto;
 }
 
-.celebrationLayer > * {
-  pointer-events: auto;
+.celebrationLayer[data-open="false"] {
+  pointer-events: none;
 }
 
 .controls {

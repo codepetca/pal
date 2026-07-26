@@ -5,9 +5,9 @@ package with three separately mountable learner surfaces sharing a provider:
 
 - `PalAchievements` — the complete vertical roadmap in Pika's content pane.
 - `PalCompanion` — a small ambient pet surface in a host-approved layer.
-- `PalRewardCelebration` — a dismissible, reduced-motion-aware reward surface in a
-  host-approved layer. It renders as a modal dialog, focuses its Continue button,
-  contains keyboard focus, supports Escape dismissal, and restores prior focus.
+- `PalRewardCelebration` — a dismissible, reduced-motion-aware reward dialog in a
+  host-approved layer. It focuses its Continue button, supports Escape dismissal,
+  and restores prior focus. A host may opt into modal keyboard behavior.
 
 The separation is intentional. The roadmap is route content; the companion may
 outlive that route; a celebration has a one-time notification lifecycle. They share
@@ -32,7 +32,10 @@ const client = createPalHttpClient({
 >
   <PalAchievements />
   <PalCompanion />
-  <PalRewardCelebration />
+  <PalRewardCelebration
+    modal
+    onOpenChange={setPalCelebrationOpen}
+  />
 </PalProvider>
 ```
 
@@ -64,6 +67,12 @@ validates the destination before requesting or attaching a learner token.
 Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
+
+When `modal` is true, the host must use `onOpenChange` to make its application
+region inert while the reward is open and must mount the component in a backdrop
+that intercepts pointer input. The widget then contains Tab focus, supports
+Escape, and restores the previously focused host control. Without that host
+lifecycle, omit `modal`; the component remains a focus-managed non-modal dialog.
 
 `scopeKey` is a host-local opaque value that changes synchronously before the active
 learner context changes. Pal never transmits it. This prevents a previous learner's

@@ -162,6 +162,7 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
   }
   const previousFocus = new FakeElement();
   const continueButton = new FakeElement();
+  const openChanges: boolean[] = [];
   const originalDocument = Object.getOwnPropertyDescriptor(
     globalThis,
     "document",
@@ -189,7 +190,10 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
           initialSnapshot={snapshot}
           scopeKey="fixture-learner"
         >
-          <PalRewardCelebration />
+          <PalRewardCelebration
+            modal
+            onOpenChange={(open) => openChanges.push(open)}
+          />
         </PalProvider>,
         {
           createNodeMock(element) {
@@ -203,6 +207,7 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
     assert.equal(dialog.props.role, "dialog");
     assert.equal(dialog.props["aria-modal"], "true");
     assert.equal(continueButton.focusCount, 1);
+    assert.deepEqual(openChanges, [true]);
 
     let tabPrevented = false;
     await act(async () => {
@@ -218,8 +223,10 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
 
     await act(async () => {
       renderer?.unmount();
+      await Promise.resolve();
     });
     assert.equal(previousFocus.focusCount, 1);
+    assert.deepEqual(openChanges, [true, false]);
   } finally {
     if (originalDocument) {
       Object.defineProperty(globalThis, "document", originalDocument);

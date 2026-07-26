@@ -21,7 +21,10 @@ Then mount the public surfaces under one provider:
 >
   <PalAchievements />
   <PalCompanion />
-  <PalRewardCelebration />
+  <PalRewardCelebration
+    modal
+    onOpenChange={setPalCelebrationOpen}
+  />
 </PalProvider>
 ```
 
