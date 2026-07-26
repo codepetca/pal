@@ -4,7 +4,7 @@ import { usePalWidget } from "./provider";
 import type { PalCompanionProps } from "./types";
 
 export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
-  const { snapshot, state, theme } = usePalWidget();
+  const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
   if (state === "error" || !snapshot) return null;
 
   const companion = snapshot.companion;
@@ -12,7 +12,10 @@ export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
   return (
     <aside
       className="pal-companion"
+      data-pal-density={density}
+      data-pal-motion={motion}
       data-pal-theme={theme}
+      data-pal-viewport={viewport}
       data-pal-mood={companion.mood}
       data-pal-variant={variant}
       aria-label={`${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`}

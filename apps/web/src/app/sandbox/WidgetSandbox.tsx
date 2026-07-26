@@ -201,7 +201,10 @@ function SandboxExperience({
       client={client}
       initialSnapshot={client.peek()}
       scopeKey={fixtureScopeKey}
+      density="comfortable"
+      motion="system"
       theme={theme}
+      viewport="wide"
     >
       <div className={styles.sandbox} data-theme={theme}>
         <header className={styles.appHeader}>

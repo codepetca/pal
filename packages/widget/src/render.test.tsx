@@ -19,6 +19,9 @@ test("public surfaces render meaningful status without relying on color", () => 
       initialSnapshot={snapshot}
       scopeKey="fixture-learner"
       theme="dark"
+      density="compact"
+      motion="reduced"
+      viewport="narrow"
     >
       <PalAchievements />
       <PalCompanion />
@@ -36,6 +39,9 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /A treat for Pip!/);
   assert.match(html, />Continue</);
   assert.match(html, /data-pal-theme="dark"/);
+  assert.match(html, /data-pal-density="compact"/);
+  assert.match(html, /data-pal-motion="reduced"/);
+  assert.match(html, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(html, /aria-label="New Pal reward"/);
 });
 

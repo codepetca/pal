@@ -25,6 +25,9 @@ const client = createPalHttpClient({
   client={client}
   scopeKey={learnerSessionGeneration}
   theme="light"
+  density="comfortable"
+  viewport="wide"
+  motion="system"
 >
   <PalAchievements />
   <PalCompanion />
@@ -92,25 +95,70 @@ Pal owns:
 
 ## Theme contract
 
-Widget CSS uses only scoped semantic variables with portable fallbacks:
+Theme contract version 1 is exported from `@pal/widget/theme-contract` as
+`PAL_THEME_CONTRACT_VERSION`, `PAL_THEME_PROPERTIES`, and
+`PAL_THEME_ATTRIBUTES`. This is the machine-readable boundary hosts should use
+for adapter drift checks.
+
+Widget CSS uses only scoped semantic variables with portable fallbacks. A host
+may omit every variable and still get a usable light or dark widget. Pika maps
+all properties because it wants native visual continuity:
 
 ```css
 .pal-widget-host {
   --pal-color-page: var(--color-page);
   --pal-color-surface: var(--color-surface);
   --pal-color-surface-muted: var(--color-surface-2);
+  --pal-color-surface-selected: var(--color-surface-selected);
   --pal-color-border: var(--color-border);
+  --pal-color-border-strong: var(--color-border-strong);
   --pal-color-text: var(--color-text-default);
   --pal-color-text-muted: var(--color-text-muted);
+  --pal-color-text-inverse: var(--color-text-inverse);
   --pal-color-primary: var(--color-primary);
+  --pal-color-primary-solid: var(--color-primary-solid);
+  --pal-color-primary-solid-hover: var(--color-primary-solid-hover);
+  --pal-color-success: var(--color-success);
+  --pal-color-success-bg: var(--color-success-bg);
+  --pal-color-warning: var(--color-warning);
+  --pal-color-warning-bg: var(--color-warning-bg);
+  --pal-font-family-ui: var(--font-family-ui);
+  --pal-radius-control: var(--radius-control);
   --pal-radius-card: var(--radius-card);
   --pal-shadow-panel: var(--shadow-panel);
+  --pal-focus-color: var(--focus-ring-color);
+  --pal-focus-width: var(--focus-ring-width);
+  --pal-focus-offset: var(--focus-ring-offset);
+  --pal-motion-duration-fast: var(--motion-duration-fast);
+  --pal-motion-duration-standard: var(--motion-duration-standard);
+  --pal-motion-duration-deliberate: var(--motion-duration-deliberate);
+  --pal-motion-easing-standard: var(--motion-easing-standard);
+  --pal-size-control-min: var(--size-control-min);
+  --pal-space-card: var(--space-card);
+  --pal-space-control: var(--space-control);
+  --pal-density-compact-gutter: var(--density-compact-gutter);
+  --pal-density-compact-content-top: var(--density-compact-content-top);
+  --pal-density-compact-stack: var(--density-compact-stack-gap);
+  --pal-density-comfortable-gutter: var(--density-comfortable-gutter);
+  --pal-density-comfortable-content-top: var(--density-comfortable-content-top);
+  --pal-density-comfortable-stack: var(--density-comfortable-stack-gap);
 }
 ```
 
-The exact Pika aliases are finalized through Pika's design-system consolidation.
-The widget inherits typography from its host. Pal-specific art, illustration, and
-reward colors remain Pal-owned, while all status meaning also uses text and icons.
+The widget inherits the host font and maps the optional font-family property.
+`theme`, `density`, `viewport`, and `motion` become scoped `data-pal-*`
+attributes on each public surface. Pika therefore communicates its layout mode
+explicitly; Pal does not inspect a Pika route, role, Tailwind breakpoint, or
+global theme class.
+
+`viewport="narrow"` changes only responsive composition. `density` changes
+spacing, never information or behavior. `motion="reduced"` disables decorative
+animation; `motion="system"` follows `prefers-reduced-motion`.
+
+Pal-specific art, illustration, gradients, badge identity, and reward colors
+remain Pal-owned, while all status meaning also uses text and icons. The
+components have no fixed, sticky, portal, or `document.body` placement behavior:
+the host owns companion and celebration layers and their clearances.
 
 ## Sandbox contract
 

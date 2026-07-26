@@ -12,8 +12,11 @@ import {
 } from "react";
 
 import type {
+  PalDensity,
+  PalMotion,
   PalProviderProps,
   PalTheme,
+  PalViewport,
   PalWidgetSnapshot,
 } from "./types";
 
@@ -27,7 +30,10 @@ interface PalContextValue {
   rewardError: Error | null;
   snapshot: PalWidgetSnapshot | null;
   state: PalLoadState;
+  density: PalDensity;
+  motion: PalMotion;
   theme: PalTheme;
+  viewport: PalViewport;
 }
 
 const PalContext = createContext<PalContextValue | null>(null);
@@ -64,6 +70,9 @@ export function PalProvider({
   client,
   scopeKey,
   theme = "light",
+  density = "comfortable",
+  motion = "system",
+  viewport = "wide",
   initialSnapshot,
   refreshIntervalMs = 0,
   onError,
@@ -388,17 +397,23 @@ export function PalProvider({
       rewardError: currentRewardState.error,
       snapshot: currentResource.snapshot,
       state: currentResource.state,
+      density,
+      motion,
       theme,
+      viewport,
     }),
     [
       currentResource.error,
       currentResource.snapshot,
       currentResource.state,
       currentRewardState.error,
+      density,
       dismissReward,
       isRewardPending,
+      motion,
       refresh,
       theme,
+      viewport,
     ],
   );
 

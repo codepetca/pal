@@ -5,10 +5,13 @@ import { usePalWidget } from "./provider";
 export function PalRewardCelebration() {
   const {
     dismissReward,
+    density,
     isRewardPending,
+    motion,
     rewardError,
     snapshot,
     theme,
+    viewport,
   } = usePalWidget();
   const reward = snapshot?.rewards[0];
   if (!reward) return null;
@@ -17,7 +20,10 @@ export function PalRewardCelebration() {
   return (
     <section
       className="pal-celebration"
+      data-pal-density={density}
+      data-pal-motion={motion}
       data-pal-theme={theme}
+      data-pal-viewport={viewport}
       role="status"
     >
       <div className="pal-celebration-burst" aria-hidden="true">

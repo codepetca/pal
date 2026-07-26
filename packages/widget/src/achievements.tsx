@@ -11,11 +11,19 @@ const STATUS_ICONS: Record<PalAchievementStatus, string> = {
 };
 
 export function PalAchievements() {
-  const { error, refresh, snapshot, state, theme } = usePalWidget();
+  const { density, error, motion, refresh, snapshot, state, theme, viewport } =
+    usePalWidget();
+
+  const appearance = {
+    "data-pal-density": density,
+    "data-pal-motion": motion,
+    "data-pal-theme": theme,
+    "data-pal-viewport": viewport,
+  } as const;
 
   if (state === "loading" && !snapshot) {
     return (
-      <section className="pal-surface pal-state" data-pal-theme={theme} role="status">
+      <section className="pal-surface pal-state" {...appearance} role="status">
         <span className="pal-spinner" aria-hidden="true" />
         <h2>Loading achievements</h2>
         <p>Connecting to your Pal roadmap.</p>
@@ -25,7 +33,7 @@ export function PalAchievements() {
 
   if ((state === "error" || error) && !snapshot) {
     return (
-      <section className="pal-surface pal-state" data-pal-theme={theme} role="alert">
+      <section className="pal-surface pal-state" {...appearance} role="alert">
         <span className="pal-state-icon" aria-hidden="true">!</span>
         <h2>Achievements are temporarily unavailable</h2>
         <p>Your schoolwork is safe. Try loading the roadmap again.</p>
@@ -41,7 +49,7 @@ export function PalAchievements() {
   return (
     <section
       className="pal-surface pal-achievements"
-      data-pal-theme={theme}
+      {...appearance}
       aria-labelledby="pal-roadmap-title"
     >
       <header className="pal-roadmap-header">

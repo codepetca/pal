@@ -28,8 +28,10 @@
   --pal-color-border-strong: var(--host-border-strong);
   --pal-color-text: var(--host-text);
   --pal-color-text-muted: var(--host-muted);
+  --pal-color-text-inverse: #ffffff;
   --pal-color-primary: var(--host-primary);
   --pal-color-primary-solid: var(--host-primary-solid);
+  --pal-color-primary-solid-hover: var(--host-primary);
   --pal-color-success: var(--host-success);
   --pal-color-success-bg: var(--host-success-bg);
   --pal-color-warning: var(--host-warning);
@@ -37,7 +39,23 @@
   --pal-radius-control: 0.45rem;
   --pal-radius-card: 0.45rem;
   --pal-shadow-panel: var(--host-shadow);
-  --pal-focus-ring: 0 0 0 3px rgb(64 118 214 / 0.4);
+  --pal-font-family-ui: inherit;
+  --pal-focus-color: var(--host-primary);
+  --pal-focus-width: 2px;
+  --pal-focus-offset: 2px;
+  --pal-motion-duration-fast: 150ms;
+  --pal-motion-duration-standard: 200ms;
+  --pal-motion-duration-deliberate: 300ms;
+  --pal-motion-easing-standard: ease-out;
+  --pal-size-control-min: 2.75rem;
+  --pal-space-card: 1.25rem;
+  --pal-space-control: 0.5rem;
+  --pal-density-compact-gutter: 0.75rem;
+  --pal-density-compact-content-top: 0.5rem;
+  --pal-density-compact-stack: 0.75rem;
+  --pal-density-comfortable-gutter: 1rem;
+  --pal-density-comfortable-content-top: 0.75rem;
+  --pal-density-comfortable-stack: 1rem;
 
   width: 100%;
   height: 100dvh;
@@ -144,8 +162,8 @@
 .themeButton:focus-visible,
 .sidebar button:focus-visible,
 .controls button:focus-visible {
-  outline: none;
-  box-shadow: var(--pal-focus-ring);
+  outline: var(--pal-focus-width) solid var(--pal-focus-color);
+  outline-offset: var(--pal-focus-offset);
 }
 
 .classroomShell {

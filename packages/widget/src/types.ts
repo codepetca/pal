@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
 export type PalTheme = "light" | "dark";
+export type PalDensity = "compact" | "comfortable";
+export type PalMotion = "system" | "reduced";
+export type PalViewport = "narrow" | "wide";
 export type PalAchievementStatus =
   | "earned"
   | "in-progress"
@@ -87,6 +90,9 @@ export interface PalProviderProps {
    */
   scopeKey: string;
   theme?: PalTheme;
+  density?: PalDensity;
+  motion?: PalMotion;
+  viewport?: PalViewport;
   initialSnapshot?: PalWidgetSnapshot;
   refreshIntervalMs?: number;
   onError?: (error: Error) => void;
