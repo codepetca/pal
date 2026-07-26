@@ -279,7 +279,7 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 - Incomplete status is shown only when Pal received explicit opportunity context, such as a configured Weekly Rhythm week; absence of a learning-item event is not treated as an incomplete assignment.
 - Status always uses an icon and text in addition to color.
 
-![Concept mockup with Achievements selected in Pika's sidebar and the Pal vertical weekly roadmap embedded in the content pane](assets/pika-pal-roadmap-concept.png)
+![Concept mockup with Achievements selected in Pika's sidebar and the Pal vertical weekly roadmap rendered in the content pane](assets/pika-pal-roadmap-concept.png)
 
 *Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
 
@@ -287,40 +287,56 @@ The roadmap is achievement state, not a raw event feed. Pal renders persisted pr
 
 ## Selected Pika presentation boundary
 
-Pal exposes a chrome-free route for the complete roadmap:
+Pika consumes the public React package `@pal/widget`. One provider shares the
+learner-scoped client and state, while Pika mounts three independent surfaces:
 
-```text
-/embed/roadmap
+```tsx
+<PalProvider client={palClient} theme={pikaTheme}>
+  <PalAchievements />       // normal Pika content pane
+  <PalCompanion />          // Pika-approved ambient layer
+  <PalRewardCelebration />  // Pika-approved celebration layer
+</PalProvider>
 ```
 
-Pika adds an **Achievements** navigation destination and loads this route inside its normal content pane. The initial integration may use an iframe; `@pal/widget` can replace or wrap the embed later without changing achievement ownership or API contracts.
+Pika adds an **Achievements** navigation destination and renders
+`PalAchievements` inside its normal content pane. The roadmap is never a
+page-covering overlay. Pika owns the host layout, standard interface styling, and
+whether the companion or celebration mounts on a given route. Pal owns everything
+inside each surface.
 
-```text
-Pika navigation
-    -> Pika content pane
-    -> Pal /embed/roadmap
-```
+Pika obtains a short-lived, learner-scoped read token from its backend and supplies
+it through the Pal client's `getAccessToken` callback. The integration secret, raw
+learner ID, and long-lived credentials never enter the browser. The widget package
+does not import Pika routes, user objects, components, or application internals.
 
-Pika obtains a short-lived, learner-scoped embed/read token from its backend. An initial iframe can receive that token through a `postMessage` handshake after the embed loads; the token is not placed in the iframe URL. The contract must use fixed allowed origins and an exact `targetOrigin`, verify both `event.origin` and `event.source`, and bind the exchange to a per-load nonce. The integration secret, raw learner ID, and long-lived credentials never enter the browser. The embedded route contains no duplicate Pika header, sidebar, or authentication screen.
+The widget consumes a narrow semantic `--pal-*` CSS-variable contract. Pika aliases
+its design tokens into those variables; another host supplies its own values. Pal
+retains control of badge art, pet art, roadmap illustration, and reward identity.
 
-The overlay has a deliberately smaller role:
-
-- A compact pet companion may persist over Pika screens.
-- A brief celebration/fireworks layer may appear when a reward is earned.
-- The full roadmap does not render as a page-covering overlay.
-
-The current screenshot-backed overlay remains a development sandbox technique; it is not the production content architecture.
+A future chrome-free `/embed/roadmap` may wrap the same components for non-React
+integrations. It is not the selected Pika presentation.
 
 ## Selected development sandbox
 
-The sandbox uses a compact, collapsible semester-simulator control panel over the live Pal sandbox rather than a separate control dashboard. The achievements and pet/world remain visible while a tester selects actions, so every injected fact produces immediate observable feedback.
+The sandbox is a host harness that imports `@pal/widget` through its public package
+exports exactly as an integration does. Its minimal Pika-like shell has a content
+pane for `PalAchievements` and separate host layers for `PalCompanion` and
+`PalRewardCelebration`. A screenshot may remain a visual reference mode, but is not
+the primary host.
+
+A compact, collapsible semester-simulator control panel overlays that harness. The
+achievements and pet/world remain visible while a tester selects actions, so every
+injected fact produces immediate observable feedback.
 
 - The fictional semester contains 16 weeks and can move by day or week.
 - One event selector exposes the six version 1 normalized facts and only the fields allowed for the selected fact.
 - Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
 - Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
 - Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
-- The overlay is a development tool and never appears in the learner-facing `/embed/roadmap` route.
+- The control overlay is a development tool and is not exported from `@pal/widget`.
+- Fixture mode is explicitly labeled and changes only fixture-client state. Once the
+  receiver is ready, pipeline mode sends every action through the normal Pal API and
+  never mutates widget, achievement, or pet state directly.
 
 ## What must be built in Pika
 
@@ -332,8 +348,10 @@ The sandbox uses a compact, collapsible semester-simulator control panel over th
 - [ ] Later hooks for planning-surface visits, meaningful progress, revisions, tests, surveys, and term changes after their qualifying rules are defined
 - [ ] Source-side classification for activity date, eligible daily-log days, and early/on-time/late outcomes
 - [ ] Guards so background fetches, retries, and page preloading cannot masquerade as genuine sessions or first learning-item views
-- [ ] A Pal navigation destination and content-pane embed host
-- [ ] A secure short-lived embed/read-token handoff
+- [ ] A Pal navigation destination and native widget host
+- [ ] A secure short-lived widget read-token client
+- [ ] A Pika-to-Pal semantic design-token bridge
+- [ ] Approved companion and celebration mount layers
 - [ ] Reconciliation tools for events that were committed in Pika but not yet delivered
 - [ ] Contract and integration tests against Pal's ingest API
 
@@ -352,9 +370,12 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [ ] Weekly, learning-item, term, and lifetime achievement instances
 - [ ] Claimable reward state and one-time reward application
 - [ ] Achievement state in the learner-world API
-- [ ] A responsive, chrome-free `/embed/roadmap` route
-- [ ] An optional compact companion overlay contract separate from the roadmap
+- [ ] A portable `@pal/widget` package with a shared provider
+- [ ] Separately mountable roadmap, companion, and celebration components
+- [ ] A versioned learner snapshot/client contract
+- [ ] A narrow, portable `--pal-*` theme contract
 - [ ] Roadmap UI, badge status, accessibility treatment, and reward celebrations
+- [ ] An optional chrome-free embed wrapper for non-React hosts
 - [ ] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
 - [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 

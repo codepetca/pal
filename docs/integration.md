@@ -11,26 +11,52 @@
 2. Integration backend hashes student IDs before sending: `SHA256(salt + raw_student_id)`
 3. Integration backend sends learning signals to `/api/v1/events`
 4. On student page load, integration backend mints a short-lived learner-scoped read/embed token via `/api/v1/integration/read-token`
-5. Integration frontend renders a Pal embed route or `@pal/widget` using that token
+5. Integration frontend gives that token to a Pal client and renders the selected
+   `@pal/widget` surfaces
 
-The embed/widget fetches achievement, pet, and world state directly from Pal. The integration secret never leaves the backend.
+The Pal client fetches achievement, pet, and world state directly from Pal. The
+integration secret never leaves the backend.
 
 Steps 4–5 are target M3 behavior, not an implemented API flow. The current prototype has no read-token minting route, and its learner-world endpoint does not yet enforce reader authorization. Do not use the prototype endpoint as a production embed boundary.
 
-For Pika, the selected initial presentation is Pal's chrome-free `/embed/roadmap` route inside Pika's normal content pane. The full roadmap is not a page-covering overlay. A compact pet and brief reward celebration may remain overlay elements. See [Selected Pika presentation boundary](pika-signal-adapter.md#selected-pika-presentation-boundary).
+For Pika, the selected presentation is the native React package `@pal/widget`.
+`PalAchievements` renders inside Pika's normal content pane. Pika separately mounts
+`PalCompanion` and `PalRewardCelebration` in approved application-shell layers. A
+future chrome-free `/embed/roadmap` route remains an option for hosts that cannot run
+React; it is not Pika's primary presentation. See
+[Selected Pika presentation boundary](pika-signal-adapter.md#selected-pika-presentation-boundary).
 
-## Widget usage (later integration option)
+## Widget usage
 
 ```tsx
-import { PalWidget } from '@pal/widget'
+import {
+  PalAchievements,
+  PalCompanion,
+  PalProvider,
+  PalRewardCelebration,
+  createPalHttpClient,
+} from '@pal/widget'
 
-<PalWidget
-  readToken={tokenFromYourBackend}
-  learnerId={pseudonymousId}
-  theme="pika"
-  onUnlock={(unlock) => showToast(unlock.name)}
-/>
+const palClient = createPalHttpClient({
+  apiBaseUrl,
+  getAccessToken: mintLearnerScopedToken,
+})
+
+<PalProvider client={palClient} theme={theme}>
+  <main><PalAchievements /></main>
+  <aside><PalCompanion /></aside>
+  <div><PalRewardCelebration /></div>
+</PalProvider>
 ```
+
+`PalProvider` shares authorization, learner state, refreshes, and error handling. The
+three visible surfaces are separately mountable because their placement and lifecycle
+differ. Pika owns the host containers and supplies a narrow semantic `--pal-*` theme
+bridge; Pal owns their contents and behavior.
+
+The package does not accept a raw learner ID, Pika user object, assignment data,
+integration secret, or Pika component dependency. See
+[Widget integration](widget-integration.md).
 
 ## Pika integration (first integration)
 

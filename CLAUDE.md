@@ -12,7 +12,7 @@ apps/web/public/assets/ — Static game art (see "Conventions" below)
 packages/engine/   — Rule engine: pure TypeScript functions, no DB, no side effects
 packages/contract/ — The integration wire contract as code: event schemas + shared fixtures
 packages/db/       — Database schema and migrations (Drizzle)
-packages/widget/   — Embeddable widget npm package (coming in M3)
+packages/widget/   — Portable React surfaces for roadmap, companion, and rewards
 docs/              — Architecture and domain docs — read these first
 ```
 

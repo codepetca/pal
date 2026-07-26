@@ -1,0 +1,509 @@
+.sandbox {
+  --host-page: #f9fafb;
+  --host-surface: #ffffff;
+  --host-surface-2: #f3f4f6;
+  --host-selected: #dbeafe;
+  --host-border: #e5e7eb;
+  --host-border-strong: #d1d5db;
+  --host-text: #111827;
+  --host-muted: #4b5563;
+  --host-primary: #1d4ed8;
+  --host-primary-solid: #2563eb;
+  --host-success: #166534;
+  --host-success-bg: #dcfce7;
+  --host-warning: #92400e;
+  --host-warning-bg: #fef3c7;
+  --host-shadow: 0 4px 12px rgb(15 23 42 / 0.12);
+
+  /* This is the proposed Pika-to-Pal semantic bridge. */
+  --pal-color-page: var(--host-page);
+  --pal-color-surface: var(--host-surface);
+  --pal-color-surface-muted: var(--host-surface-2);
+  --pal-color-surface-selected: var(--host-selected);
+  --pal-color-border: var(--host-border);
+  --pal-color-border-strong: var(--host-border-strong);
+  --pal-color-text: var(--host-text);
+  --pal-color-text-muted: var(--host-muted);
+  --pal-color-primary: var(--host-primary);
+  --pal-color-primary-solid: var(--host-primary-solid);
+  --pal-color-success: var(--host-success);
+  --pal-color-success-bg: var(--host-success-bg);
+  --pal-color-warning: var(--host-warning);
+  --pal-color-warning-bg: var(--host-warning-bg);
+  --pal-radius-control: 0.5rem;
+  --pal-radius-card: 0.5rem;
+  --pal-shadow-panel: var(--host-shadow);
+  --pal-focus-ring: 0 0 0 3px rgb(37 99 235 / 0.3);
+
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--host-text);
+  background: var(--host-page);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+.sandbox[data-theme="dark"] {
+  --host-page: #030712;
+  --host-surface: #111827;
+  --host-surface-2: #1f2937;
+  --host-selected: rgb(37 99 235 / 0.16);
+  --host-border: #374151;
+  --host-border-strong: #4b5563;
+  --host-text: #f3f4f6;
+  --host-muted: #9ca3af;
+  --host-primary: #60a5fa;
+  --host-primary-solid: #2563eb;
+  --host-success: #4ade80;
+  --host-success-bg: rgb(22 101 52 / 0.35);
+  --host-warning: #fbbf24;
+  --host-warning-bg: rgb(120 53 15 / 0.35);
+  --host-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  --pal-focus-ring: 0 0 0 3px rgb(96 165 250 / 0.4);
+}
+
+.appHeader {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--host-border);
+  background: var(--host-surface);
+}
+
+.brand,
+.hostControls,
+.viewSwitch {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 0.65rem;
+}
+
+.brandMark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  color: white;
+  background: var(--host-primary-solid);
+  font-weight: 850;
+}
+
+.brand div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.brand strong {
+  font-size: 0.86rem;
+}
+
+.brand div span {
+  color: var(--host-muted);
+  font-size: 0.7rem;
+}
+
+.hostControls {
+  gap: 0.6rem;
+}
+
+.viewSwitch {
+  padding: 0.2rem;
+  border: 1px solid var(--host-border);
+  border-radius: 0.55rem;
+  background: var(--host-surface-2);
+}
+
+.viewSwitch button,
+.themeButton {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--host-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.viewSwitch button {
+  padding: 0 0.7rem;
+}
+
+.viewSwitch button[aria-pressed="true"] {
+  color: var(--host-text);
+  background: var(--host-surface);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.12);
+}
+
+.themeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--host-border);
+  color: var(--host-text);
+  background: var(--host-surface);
+}
+
+.viewSwitch button:focus-visible,
+.themeButton:focus-visible,
+.sidebar button:focus-visible,
+.controls button:focus-visible {
+  outline: none;
+  box-shadow: var(--pal-focus-ring);
+}
+
+.classroomShell {
+  position: relative;
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  height: calc(100dvh - 3.5rem);
+  overflow: hidden;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 0.65rem;
+  border-right: 1px solid var(--host-border);
+  background: var(--host-surface);
+}
+
+.classroomName {
+  overflow: hidden;
+  margin: 0 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar button {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.65rem;
+  border: 0;
+  border-radius: 0.45rem;
+  color: var(--host-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar button span {
+  display: grid;
+  width: 1.3rem;
+  place-items: center;
+  font-size: 1rem;
+}
+
+.sidebar button:hover {
+  background: var(--host-surface-2);
+}
+
+.sidebar button[data-active="true"] {
+  color: var(--host-primary);
+  background: var(--host-selected);
+  font-weight: 750;
+}
+
+.content {
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--host-page);
+}
+
+.classroomContent {
+  max-width: 54rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+}
+
+.classroomContent h1 {
+  margin-top: 0.25rem;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+}
+
+.classroomContent > p:not(.hostEyebrow) {
+  max-width: 42rem;
+  margin-top: 0.65rem;
+  color: var(--host-muted);
+  line-height: 1.6;
+}
+
+.hostEyebrow {
+  color: var(--host-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lessonCard {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--host-border);
+  border-radius: 0.5rem;
+  background: var(--host-surface);
+}
+
+.lessonCard span {
+  color: var(--host-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.lessonCard h2 {
+  margin-top: 0.35rem;
+  font-size: 1rem;
+}
+
+.lessonCard p {
+  margin-top: 0.4rem;
+  color: var(--host-muted);
+  font-size: 0.85rem;
+}
+
+.companionSlot {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 15;
+}
+
+.celebrationLayer {
+  position: absolute;
+  z-index: 25;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebrationLayer > * {
+  pointer-events: auto;
+}
+
+.controls {
+  position: fixed;
+  z-index: 40;
+  bottom: 1rem;
+  left: 1rem;
+  width: min(21rem, calc(100vw - 2rem));
+}
+
+.controlToggle {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 999px;
+  color: #f8fafc;
+  background: rgb(15 23 42 / 0.92);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.24);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.controls[data-collapsed="false"] .controlToggle {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
+  min-height: 36px;
+  padding: 0 0.65rem;
+  border-radius: 0.45rem;
+  box-shadow: none;
+}
+
+.controls[data-collapsed="false"] .controlToggle span:first-child {
+  display: none;
+}
+
+.controlPanel {
+  max-height: min(40rem, calc(100dvh - 6rem));
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.75rem;
+  color: #f8fafc;
+  background: rgb(15 23 42 / 0.96);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.3);
+  backdrop-filter: blur(12px);
+}
+
+.controlPanel header {
+  padding-right: 4.4rem;
+}
+
+.controlPanel h2 {
+  margin-top: 0.25rem;
+  font-size: 1rem;
+}
+
+.controlPanel header > p {
+  margin-top: 0.45rem;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.fixtureLabel {
+  color: #93c5fd;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.controlActions {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.controlActions button,
+.resetButton {
+  min-height: 44px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.5rem;
+  color: #f8fafc;
+  background: rgb(255 255 255 / 0.08);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.controlActions button {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.controlActions button:hover,
+.resetButton:hover {
+  background: rgb(255 255 255 / 0.14);
+}
+
+.controlActions strong {
+  font-size: 0.76rem;
+}
+
+.controlActions span {
+  color: #cbd5e1;
+  font-size: 0.66rem;
+}
+
+.controlLog {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.controlLog > span {
+  color: #94a3b8;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.controlLog ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.controlLog li {
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.resetButton {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  color: #fecaca;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .appHeader {
+    height: auto;
+    min-height: 3.5rem;
+    align-items: flex-start;
+    padding-block: 0.55rem;
+  }
+
+  .brand div span,
+  .viewSwitch {
+    display: none;
+  }
+
+  .classroomShell {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+    height: calc(100dvh - 3.9rem);
+  }
+
+  .sidebar {
+    padding-inline: 0.35rem;
+  }
+
+  .classroomName {
+    display: none;
+  }
+
+  .sidebar button {
+    justify-content: center;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .sidebar button span {
+    font-size: 1rem;
+  }
+
+  .companionSlot {
+    right: 0.65rem;
+    bottom: 0.65rem;
+  }
+
+  .controls {
+    bottom: 0.65rem;
+    left: 0.65rem;
+    width: min(20rem, calc(100vw - 1.3rem));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox *,
+  .sandbox *::before,
+  .sandbox *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

@@ -1,7 +1,7 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-06-25
+> Last updated: 2026-07-25
 
 ---
 
@@ -10,10 +10,37 @@
 | Method | Path | Who calls it | Purpose |
 |---|---|---|---|
 | POST | `/api/v1/events` | Integration backend | Ingest a learning signal |
-| GET | `/api/v1/world/:learner_id` | Widget (via read token) | Fetch pet + world state |
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
+| GET | `/api/v1/learner/snapshot` | `@pal/widget` client | Fetch roadmap, companion, and unseen reward state |
+| POST | `/api/v1/learner/rewards/:reward_id/seen` | `@pal/widget` client | Acknowledge one learner reward notice |
+| GET | `/api/v1/world/:learner_id` | Legacy sandbox | Fetch prototype pet + world state |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
+
+The read-token and learner-snapshot routes are target pilot work and are not
+implemented yet. The fixture client in `@pal/widget` exists only for sandbox and
+visual development. It is not evidence that the production read boundary works.
+
+## Widget read contract
+
+The browser calls learner routes with:
+
+```text
+Authorization: Bearer <short-lived learner-scoped read token>
+```
+
+The public TypeScript source of truth for the initial snapshot is
+[`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
+versioned independently from event ingestion and includes:
+
+- the 16-week roadmap and stored achievement state;
+- current companion state; and
+- unseen reward notices.
+
+The widget receives no raw learner identifier. Pika's backend uses its integration
+credential to mint the learner-scoped token; that credential never enters the
+browser. Acknowledging a reward notice changes notification presentation only and
+must not reapply or mutate the underlying award.
 
 ## Event ingest contract
 
