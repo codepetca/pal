@@ -1,0 +1,197 @@
+# Pal widget integration
+
+`@pal/widget` is Pal's selected presentation boundary for Pika. It is one React
+package with three separately mountable learner surfaces sharing a provider:
+
+- `PalAchievements` — the complete vertical roadmap in Pika's content pane.
+- `PalCompanion` — a small ambient pet surface in a host-approved layer.
+- `PalRewardCelebration` — a dismissible, reduced-motion-aware reward dialog in a
+  host-approved layer. It focuses its Continue button, supports Escape dismissal,
+  and restores prior focus. A host may opt into modal keyboard behavior.
+
+The separation is intentional. The roadmap is route content; the companion may
+outlive that route; a celebration has a one-time notification lifecycle. They share
+authorization, cached learner state, refreshes, and errors through `PalProvider`.
+
+## Public boundary
+
+```tsx
+const client = createPalHttpClient({
+  apiBaseUrl,
+  getAccessToken: mintLearnerScopedToken,
+  allowedAssetOrigins: ["https://assets.pal.example"],
+})
+
+<PalProvider
+  client={client}
+  scopeKey={learnerSessionGeneration}
+  theme="light"
+  density="comfortable"
+  viewport="wide"
+  motion="system"
+>
+  <PalAchievements />
+  <PalCompanion />
+  <PalRewardCelebration
+    modal
+    onOpenChange={setPalCelebrationOpen}
+  />
+</PalProvider>
+```
+
+The public client returns a versioned learner snapshot. The widget renders stored
+Pal state; it never interprets Pika events or calculates achievement progress in the
+browser.
+
+The package may receive:
+
+- a Pal client or the inputs needed to create one;
+- `light` or `dark` appearance;
+- an optional refresh interval and error callback; and
+- host-owned containers around its separately mounted surfaces.
+
+The package never receives:
+
+- a raw learner ID, email, name, grade, assignment, deadline, or student work;
+- a Pika session cookie or integration secret;
+- Pika database or route objects; or
+- Pika components or private application state.
+
+The browser receives only a short-lived learner-scoped token. Pal's integration
+secret stays on Pika's backend.
+
+`apiBaseUrl` must use HTTPS, except for credential-free localhost development.
+Custom snapshot and reward paths must resolve to that same API origin; the client
+validates the destination before requesting or attaching a learner token.
+
+Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
+CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
+unlisted third-party origins are rejected before the snapshot enters React state.
+
+When `modal` is true, the host must use `onOpenChange` to make its application
+region inert while the reward is open and must mount the component in a backdrop
+that intercepts pointer input. The widget then contains Tab focus, supports
+Escape, and restores the previously focused host control. Without that host
+lifecycle, omit `modal`; the component remains a focus-managed non-modal dialog.
+
+`scopeKey` is a host-local opaque value that changes synchronously before the active
+learner context changes. Pal never transmits it. This prevents a previous learner's
+cached snapshot from appearing while a new learner loads; it must not be a name,
+email, raw learner ID, or other personal data.
+
+The provider aborts snapshot and reward-acknowledgement work whenever `scopeKey` or
+the client changes. The token callback receives the same optional `AbortSignal`, so
+a request started for one learner cannot continue through token acquisition after
+the host commits a different learner. Reward acknowledgement is retry-safe and
+idempotent on Pal's API.
+
+## Host and Pal ownership
+
+Pika owns:
+
+- whether and where each surface mounts;
+- application shell, navigation, page width, and overlay boundaries;
+- the learner-token callback;
+- semantic host tokens, theme, focus expectations, and reduced-motion setting; and
+- failure containment so Pal cannot block academic work.
+
+Pal owns:
+
+- roadmap, achievement, badge, pet, and reward rendering;
+- component accessibility inside each Pal surface;
+- learner snapshot types and refresh semantics;
+- asset resolution; and
+- fixture and real HTTP client implementations.
+
+## Theme contract
+
+Theme contract version 1 is exported from `@pal/widget/theme-contract` as
+`PAL_THEME_CONTRACT_VERSION`, `PAL_THEME_PROPERTIES`, and
+`PAL_THEME_ATTRIBUTES`. This is the machine-readable boundary hosts should use
+for adapter drift checks.
+
+Widget CSS uses only scoped semantic variables with portable fallbacks. A host
+may omit every variable and still get a usable light or dark widget. Pika maps
+all properties because it wants native visual continuity:
+
+```css
+.pal-widget-host {
+  --pal-color-page: var(--color-page);
+  --pal-color-surface: var(--color-surface);
+  --pal-color-surface-muted: var(--color-surface-2);
+  --pal-color-surface-selected: var(--color-surface-selected);
+  --pal-color-border: var(--color-border);
+  --pal-color-border-strong: var(--color-border-strong);
+  --pal-color-text: var(--color-text-default);
+  --pal-color-text-muted: var(--color-text-muted);
+  --pal-color-text-inverse: var(--color-text-inverse);
+  --pal-color-primary: var(--color-primary);
+  --pal-color-primary-solid: var(--color-primary-solid);
+  --pal-color-primary-solid-hover: var(--color-primary-solid-hover);
+  --pal-color-success: var(--color-success);
+  --pal-color-success-bg: var(--color-success-bg);
+  --pal-color-warning: var(--color-warning);
+  --pal-color-warning-bg: var(--color-warning-bg);
+  --pal-font-family-ui: var(--font-family-ui);
+  --pal-radius-control: var(--radius-control);
+  --pal-radius-card: var(--radius-card);
+  --pal-shadow-panel: var(--shadow-panel);
+  --pal-focus-color: var(--focus-ring-color);
+  --pal-focus-width: var(--focus-ring-width);
+  --pal-focus-offset: var(--focus-ring-offset);
+  --pal-motion-duration-fast: var(--motion-duration-fast);
+  --pal-motion-duration-standard: var(--motion-duration-standard);
+  --pal-motion-duration-deliberate: var(--motion-duration-deliberate);
+  --pal-motion-easing-standard: var(--motion-easing-standard);
+  --pal-size-control-min: var(--size-control-min);
+  --pal-space-card: var(--space-card);
+  --pal-space-control: var(--space-control);
+  --pal-density-compact-gutter: var(--density-compact-gutter);
+  --pal-density-compact-content-top: var(--density-compact-content-top);
+  --pal-density-compact-stack: var(--density-compact-stack-gap);
+  --pal-density-comfortable-gutter: var(--density-comfortable-gutter);
+  --pal-density-comfortable-content-top: var(--density-comfortable-content-top);
+  --pal-density-comfortable-stack: var(--density-comfortable-stack-gap);
+}
+```
+
+The widget inherits the host font and maps the optional font-family property.
+`theme`, `density`, `viewport`, and `motion` become scoped `data-pal-*`
+attributes on each public surface. Pika therefore communicates its layout mode
+explicitly; Pal does not inspect a Pika route, role, Tailwind breakpoint, or
+global theme class.
+
+`viewport="narrow"` changes only responsive composition. `density` changes
+spacing, never information or behavior. `motion="reduced"` disables decorative
+animation; `motion="system"` follows `prefers-reduced-motion`.
+
+Pal-specific art, illustration, gradients, badge identity, and reward colors
+remain Pal-owned, while all status meaning also uses text and icons. The
+components have no fixed, sticky, portal, or `document.body` placement behavior:
+the host owns companion and celebration layers and their clearances.
+
+## Sandbox contract
+
+Pal's sandbox imports only the package's public exports. It contains:
+
+- a minimal host shell with content and overlay layers;
+- light, dark, wide, and narrow host scenarios;
+- a clearly labeled fixture client for visual-state development;
+- the compact fictional-semester control panel; and
+- a pipeline mode, once implemented, that injects v1 events through Pal's real API.
+
+The control panel is an application-development tool and is not exported from the
+widget package. Fixture actions may update only the fixture client. Pipeline actions
+must pass through validation, deduplication, persistence, achievement evaluation,
+award/reward persistence, and the learner read API.
+
+## Initial acceptance
+
+- The sandbox consumes `@pal/widget` through public package exports.
+- Roadmap, companion, and celebration can mount and fail independently.
+- All surfaces render in light and dark modes and inherit host typography.
+- Status is never conveyed by color alone.
+- Controls retain visible focus and a 44px minimum target.
+- Celebration has a dismiss control and a reduced-motion treatment.
+- No integration secret or raw learner identifier enters the package.
+- Fixture mode is visibly distinct from proof of the real event pipeline.

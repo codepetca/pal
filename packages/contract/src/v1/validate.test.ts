@@ -90,6 +90,21 @@ test("metadata keys outside the allow-list are rejected, not ignored", () => {
   if (!result.ok) assert.equal(result.error, "invalid_metadata");
 });
 
+test("envelope keys outside the allow-list are rejected, not forwarded", () => {
+  const base = readJson(join(FIXTURES, "valid", "classroom-joined.json")) as Record<string, unknown>;
+
+  for (const widened of [
+    { ...base, email: "learner@example.com" },
+    { ...base, title: "Period 2 Biology" },
+    { ...base, student_id: "raw-database-id" },
+    { ...base, debug: { request_id: "trace-123" } },
+  ]) {
+    const result = validateV1Event(widened);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, "invalid_envelope");
+  }
+});
+
 test("a future-dated event still validates — the clock check belongs to ingest", () => {
   // Documents a deliberate boundary. The validator is pure and has no clock, so
   // ingest keeps its own future-date guard; see the events route.

@@ -17,16 +17,21 @@ The pilot supports five learner-facing achievements:
 | Ready Early | First `learning_item.viewed` classified `within_24h_of_release` | One award per learner/item |
 | On-Time Finish | First `learning_item.completed` classified `on_time` | One award per learner/item |
 
-The pilot includes the embedded vertical roadmap, the initial badge set, one accessible reward celebration, and a minimal sandbox overlay for advancing through a fictional 16-week semester and injecting normalized events. Additional achievement types, an assignment catalog or incomplete-assignment projection, advanced animations, and ClassOS integration are outside this delivery window.
+The pilot includes a native React vertical roadmap, a separately mountable companion,
+the initial badge set, one separately mountable accessible reward celebration, and a
+minimal sandbox overlay for advancing through a fictional 16-week semester and
+injecting normalized events. Additional achievement types, an assignment catalog or
+incomplete-assignment projection, advanced animations, and ClassOS integration are
+outside this delivery window.
 
 ## Ownership
 
 | Owner | Workstream | Responsibilities |
 |---|---|---|
-| **Ab** | Pal engineering and experience | Production ingest, validation, durable idempotency, achievement progress and award persistence, learner-world API state, `/embed/roadmap`, and the reward celebration. |
+| **Ab** | Pal engineering and experience | Production ingest, validation, durable idempotency, achievement progress and award persistence, learner-world API state, the `@pal/widget` package, and the reward celebration. |
 | **Je** | Visual system and artwork | Badge templates and icons, status treatments, accessible color/text combinations, initial badge and pet/reward assets, responsive visual QA, and asset handoff. |
 | **Ja** | Achievement system, sandbox, and QA | Achievement rules, recurrence, thresholds, scope, copy, rewards, event-to-achievement mapping, acceptance fixtures, the minimal 16-week sandbox control-panel overlay, fictional-semester scenarios, edge-case expectations, and product QA. |
-| **St** | Pika integration | Transactional outbox, six authoritative signal hooks, pseudonymous tokens, weekly configuration revisions, authenticated delivery/retry/reconciliation, embed-token handoff, and Pika-side contract tests. |
+| **St** | Pika integration | Transactional outbox, six authoritative signal hooks, pseudonymous tokens, weekly configuration revisions, authenticated delivery/retry/reconciliation, widget token client, Pika theme bridge and placement, and Pika-side contract tests. |
 
 Ja owns the sandbox control panel and its fictional-semester behavior. St supplies Pika-compatible version 1 payload examples, and Ab ensures injected facts use the same Pal validation and achievement pipeline as real facts rather than directly changing progress or awards.
 
@@ -38,7 +43,7 @@ Ab and St jointly own the cross-project contract tests. Neither side changes a v
 |---|---|
 | **4 — Align and prove** | Ja freezes the five pilot rules and acceptance examples and defines the fictional 16-week sandbox scenarios. Je freezes the badge/status system. St and Ab prove one complete real or contract-fixture signal → durable Pal fact → achievement state → rendered badge path. |
 | **5 — Make it durable** | St completes the initial outbox and authoritative emitters. Ab completes production persistence, validation, idempotency, progress, and award storage. Je delivers the initial badges. Ja delivers the minimal semester-control overlay and validates the fixtures against live sandbox state. |
-| **6 — Make it visible** | Ab delivers the chrome-free embedded roadmap. St completes secure read-token handoff and reconciliation visibility. Je and Ja validate every supported state with representative data. |
+| **6 — Make it visible** | Ab delivers the public roadmap, companion, and celebration widget surfaces. St integrates them into Pika with the secure token client and theme bridge. Je and Ja validate every supported state with representative data. |
 | **7 — Integrate and harden** | The team adds the one-time reward celebration and tests retries, concurrent duplicates, delayed/out-of-order delivery, short weeks, schedule revisions, resubmissions, deleted assignments, and archived classes. |
 | **8 — Pilot** | The team completes accessibility review, fixes pilot-blocking defects, verifies deployment and failure recovery, runs the learner pilot, and records follow-up work separately from the pilot scope. |
 
@@ -57,7 +62,8 @@ The pilot is complete when:
 - weekly revisions and shortened weeks behave as documented;
 - Pika delivery failures are visible and recoverable without blocking learner actions;
 - Ja's compact sandbox overlay can move through a fictional 16-week semester, inject each version 1 fact, replay a duplicate, and reset its fictional learner while the visible achievements and pet update through Pal's normal pipeline;
-- the Achievements destination opens Pal's roadmap inside Pika's content pane;
+- the Achievements destination renders `PalAchievements` inside Pika's content pane,
+  while Pika independently controls companion and celebration placement;
 - awards and claimable rewards apply once, with an accessible reduced-motion experience;
 - status uses text and icons as well as color; and
 - inspection of representative payloads confirms that no names, assignment content, grades, raw IDs, or raw deadlines cross into Pal.

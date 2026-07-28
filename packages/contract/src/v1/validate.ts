@@ -35,6 +35,14 @@ const RFC_3339_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$/;
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const EVENT_TYPES = new Set<string>(V1_EVENT_TYPES);
+const ENVELOPE_KEYS = [
+  "schema_version",
+  "idempotency_key",
+  "learner_id",
+  "event_type",
+  "occurred_at",
+  "metadata",
+] as const;
 
 function fail(error: V1Error, detail: string): V1ValidationResult {
   return { ok: false, error, detail };
@@ -144,6 +152,16 @@ export function validateV1Event(payload: unknown): V1ValidationResult {
     return fail("missing_required_fields", "payload must be a JSON object");
   }
 
+  const unexpectedEnvelopeKeys = Object.keys(payload).filter(
+    (key) => !ENVELOPE_KEYS.includes(key as (typeof ENVELOPE_KEYS)[number])
+  );
+  if (unexpectedEnvelopeKeys.length > 0) {
+    return fail(
+      "invalid_envelope",
+      `version 1 does not allow envelope keys: ${unexpectedEnvelopeKeys.join(", ")}`
+    );
+  }
+
   // Version first. An unsupported version means the rest of the shape is not
   // ours to interpret, and the producer should stop retrying rather than
   // reformat the body.
@@ -212,7 +230,20 @@ export function validateV1Event(payload: unknown): V1ValidationResult {
     return fail("invalid_metadata", problem);
   }
 
-  return { ok: true, event: payload as V1Envelope };
+  // Return a freshly closed envelope as defense in depth. Even if this
+  // validator is later changed to tolerate an input detail, an accepted value
+  // cannot forward fields outside the versioned privacy contract.
+  return {
+    ok: true,
+    event: {
+      schema_version: SCHEMA_VERSION,
+      idempotency_key: key,
+      learner_id: payload.learner_id,
+      event_type: eventType,
+      occurred_at: payload.occurred_at,
+      metadata: payload.metadata,
+    } as V1Envelope,
+  };
 }
 
 /** True when a payload declares a version this package can validate. */

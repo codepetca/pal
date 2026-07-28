@@ -17,6 +17,22 @@
       "error": "invalid_metadata",
       "why": "Version 1 models a Monday-Friday week, so 7 eligible days cannot be true."
     },
+    "envelope-leaks-debug-object.json": {
+      "error": "invalid_envelope",
+      "why": "Nested debugging context is outside the closed event envelope and may carry accidental personal data."
+    },
+    "envelope-leaks-email.json": {
+      "error": "invalid_envelope",
+      "why": "A raw email must be rejected even when it is outside metadata; the entire event envelope is privacy-allow-listed."
+    },
+    "envelope-leaks-raw-student-id.json": {
+      "error": "invalid_envelope",
+      "why": "A producer cannot attach its internal learner identifier beside the pseudonymous learner_id."
+    },
+    "envelope-leaks-title.json": {
+      "error": "invalid_envelope",
+      "why": "Human-readable classroom or assignment titles are not part of the event envelope."
+    },
     "kind-not-allowed-in-v1.json": {
       "error": "invalid_metadata",
       "why": "Only 'assignment' is defined in version 1. Widening the enum is a contract change, not a payload choice."
