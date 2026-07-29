@@ -10,10 +10,15 @@ A game engine as a service. External systems (like Pika) send privacy-safe learn
 apps/web/          — Next.js app: student viewer, dev sandbox, all API routes
 apps/web/public/assets/ — Static game art (see "Conventions" below)
 packages/engine/   — Rule engine: pure TypeScript functions, no DB, no side effects
+packages/contract/ — The integration wire contract as code: event schemas + shared fixtures
 packages/db/       — Database schema and migrations (Drizzle)
-packages/widget/   — Embeddable widget npm package (coming in M3)
+packages/widget/   — Portable React surfaces for roadmap, companion, and rewards
 docs/              — Architecture and domain docs — read these first
 ```
+
+`packages/contract/` is the source of truth for what an integration may send. If you are
+writing validation for an incoming event by hand, use it instead. The docs describe the
+contract in prose; where prose and package disagree, the package is right.
 
 ## Key architectural constraint
 
@@ -58,6 +63,8 @@ don't restate it here. The short version: lowercase kebab-case for files and dir
 
 ```bash
 pnpm --filter @pal/engine test   # rule engine unit tests
+pnpm lint                         # eslint, every package — a CI gate, warnings fail
+pnpm typecheck                    # tsc --noEmit, every package — a CI gate
 pnpm dev                          # start dev server at localhost:3000
 ```
 

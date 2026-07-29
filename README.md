@@ -6,7 +6,8 @@ A gamified learning companion that connects to platforms like Pika. Students ear
 
 A student submits an assignment in Pika. Their pet bounces with excitement. A plant sprouts in their world. After a month of consistent work, the sun appears. After a semester, their world looks completely different from the one they started with — built entirely from their own effort.
 
-They can see their world embedded inside Pika, or visit Pal directly. Either way, it's their world, shaped by their work.
+They can see their achievements and companion as native Pal-powered surfaces inside
+Pika, or visit Pal directly. Either way, it is their world, shaped by their work.
 
 ## What Pal owns
 
@@ -19,24 +20,35 @@ They can see their world embedded inside Pika, or visit Pal directly. Either way
 - Student identity or authentication (that's Pika's)
 - Grades, scores, or raw learning data
 - Classroom management
+- The current assignment catalog, deadlines, deletion/archive state, or assignment-specific incomplete status
 
 Privacy is a first-class constraint. Pal receives only pseudonymous IDs and low-risk signals — never names, grades, or student content.
 
 ## How it connects to Pika (and other platforms)
 
-Pika sends Pal privacy-safe learning signals:
-- Assignment completed
-- Daily check-in
-- Streak milestone
-- Calendar event (end of month, end of semester)
+The current developer panel exercises `assignment.completed` and `daily_checkin.created`; the prototype ingest API also retains legacy resource and calendar allow-list entries. The target initial Pika adapter will automatically send six normalized, privacy-safe facts:
 
-Pal processes those signals through a rule engine and updates the student's pet and world. Pika then renders the result — either as an embedded widget or by linking to the standalone student viewer.
+- `platform.session.started`
+- `classroom.joined`
+- `daily_log_week.configured`
+- `daily_log.completed`
+- `learning_item.viewed`
+- `learning_item.completed`
+
+Pal derives streaks, achievements, and rewards from those signals, then updates the
+student's pet and world. Pika renders the result with the React surfaces from
+`@pal/widget`; non-React integrations may use a future chrome-free embed route.
+
+The initial integration rewards behavior that actually occurred; it does not mirror Pika's assignment system. Showing every untouched or incomplete assignment would require a separate, later Pika-owned academic projection with reconciliation.
 
 Any learning platform can integrate this way. Pika is the first.
 
 ## The dev sandbox
 
-Developers working on Pal use a built-in sandbox UI to fire test events and immediately see the pet react and world change — no Pika connection needed. It's the primary tool for building and testing game logic locally.
+Developers working on Pal use a built-in host sandbox to exercise the same public
+`@pal/widget` surfaces that Pika consumes. A collapsible control panel starts with
+explicit fixture scenarios and evolves into a real-pipeline event injector; it never
+ships in the learner widget.
 
 ## Team
 
@@ -49,6 +61,9 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [API contracts](docs/api.md)
 - [Rule engine](docs/rule-engine.md)
 - [Integration guide](docs/integration.md)
+- [Pika signal adapter and achievement pipeline](docs/pika-signal-adapter.md)
+- [Pika–Pal achievement pilot plan](docs/pilot-plan.md)
+- [Widget integration](docs/widget-integration.md)
 - [Development workflow](docs/dev-workflow.md)
 - [Roadmap](docs/roadmap.md)
 
@@ -61,15 +76,13 @@ apps/
 packages/
   engine/       # Rule engine (pure functions, no DB)
   db/           # Drizzle schema + migrations
+  contract/     # Versioned integration event contracts
+  widget/       # Portable React achievement, companion, and reward surfaces
 docs/           # Living architecture documents (start here)
 ```
 
-Planned, not yet in the repo:
-
-```
-apps/admin/       # Operator + teacher console (M2)
-packages/widget/  # @pal/widget npm package (M3)
-```
+The operator and teacher console remains planned work; it will live under
+`apps/admin/` when that milestone begins.
 
 Next.js serves both the UI and the API — there is no separate API server. See
 [Tech stack](docs/architecture.md#tech-stack).

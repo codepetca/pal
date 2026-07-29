@@ -1,0 +1,73 @@
+{
+  "$comment": "Each fixture in this directory must be rejected with the listed error. Producers can use these to prove their adapter never emits a payload Pal will refuse; Pal uses them to prove ingest refuses one.",
+  "cases": {
+    "activity-day-not-a-real-date.json": {
+      "error": "invalid_metadata",
+      "why": "2026-02-30 has the right shape but is not a date, which usually means a timezone bug upstream."
+    },
+    "config-version-zero.json": {
+      "error": "invalid_metadata",
+      "why": "config_version is monotonic and 1-based; 0 would sort below every real revision."
+    },
+    "derived-event-type.json": {
+      "error": "unknown_event_type",
+      "why": "Engine-derived events are never ingestable. An integration that could POST level_up could grant its own levels."
+    },
+    "eligible-days-out-of-range.json": {
+      "error": "invalid_metadata",
+      "why": "Version 1 models a Monday-Friday week, so 7 eligible days cannot be true."
+    },
+    "envelope-leaks-debug-object.json": {
+      "error": "invalid_envelope",
+      "why": "Nested debugging context is outside the closed event envelope and may carry accidental personal data."
+    },
+    "envelope-leaks-email.json": {
+      "error": "invalid_envelope",
+      "why": "A raw email must be rejected even when it is outside metadata; the entire event envelope is privacy-allow-listed."
+    },
+    "envelope-leaks-raw-student-id.json": {
+      "error": "invalid_envelope",
+      "why": "A producer cannot attach its internal learner identifier beside the pseudonymous learner_id."
+    },
+    "envelope-leaks-title.json": {
+      "error": "invalid_envelope",
+      "why": "Human-readable classroom or assignment titles are not part of the event envelope."
+    },
+    "kind-not-allowed-in-v1.json": {
+      "error": "invalid_metadata",
+      "why": "Only 'assignment' is defined in version 1. Widening the enum is a contract change, not a payload choice."
+    },
+    "legacy-event-type.json": {
+      "error": "unknown_event_type",
+      "why": "The prototype's assignment.completed is not part of the v1 vocabulary; it reaches ingest on the legacy path instead."
+    },
+    "metadata-leaks-assignment-title.json": {
+      "error": "invalid_metadata",
+      "why": "The privacy boundary is enforced by rejecting unknown keys, not by trusting producers to omit them."
+    },
+    "missing-period-key.json": {
+      "error": "invalid_metadata",
+      "why": "Without period_key Pal would have to infer the academic week from delivery time, which is exactly what the contract forbids."
+    },
+    "occurred-at-local-time.json": {
+      "error": "invalid_occurred_at",
+      "why": "occurred_at is an absolute instant. Offsets are rejected so no consumer has to guess a timezone."
+    },
+    "raw-learner-email.json": {
+      "error": "invalid_learner_id",
+      "why": "learner_id must be a pseudonymous token. An email is both non-URL-safe and a privacy violation."
+    },
+    "session-started-with-metadata.json": {
+      "error": "invalid_metadata",
+      "why": "platform.session.started carries no metadata, so an IP address cannot ride along with it."
+    },
+    "timing-enum-not-allowed.json": {
+      "error": "invalid_metadata",
+      "why": "'excused' is an academic state Pika owns; it is not a completion timing Pal can interpret."
+    },
+    "unsupported-schema-version.json": {
+      "error": "unsupported_schema_version",
+      "why": "Pal must ship support for a version before a producer emits it. This failure is not retryable."
+    }
+  }
+}

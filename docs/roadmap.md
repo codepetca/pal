@@ -5,6 +5,23 @@ conventions — see [dev-workflow.md](dev-workflow.md).
 
 Milestones are sequential but not dated. A milestone is done when everything under it ships.
 
+## Achievement-system workstream (sequencing TBD)
+
+The project's target direction is a recurring achievement roadmap driven automatically by integrations. The cross-project ownership boundary, signal flow, duplicate semantics, Weekly Rhythm example, and detailed Pika/Pal build checklists live in [Pika Signal Adapter and Achievement Pipeline](pika-signal-adapter.md). The time-bound week 4–8 scope, ownership, delivery gates, and pilot definition of done live in the [Pika–Pal Achievement Pilot Plan](pilot-plan.md).
+
+At a high level:
+
+- **Pika:** normalize authoritative activity into privacy-safe events and deliver them through a reliable adapter/outbox.
+- **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render native roadmap, companion, and celebration surfaces through `@pal/widget`.
+- **Teachers:** no additional Pal configuration or achievement maintenance.
+
+The initial workstream rewards completed behaviors and configured weekly opportunities. It does not mirror Pika's assignment catalog or infer that a silent assignment is incomplete. A complete assignment-status view is deferred unless the product later adopts a separate, versioned Pika-owned academic projection with reconciliation.
+
+The initial Pika presentation mounts `PalAchievements` in Pika's content pane.
+`PalCompanion` and `PalRewardCelebration` are separate components that Pika may mount
+in approved overlay layers. A chrome-free embed route remains optional for non-React
+hosts.
+
 ## Milestone 1 (M1) — Pika-first foundation
 - Event ingest API + idempotency
 - Basic rule pack (assignment.completed → XP + pet mood)
@@ -21,7 +38,7 @@ Milestones are sequential but not dated. A milestone is done when everything und
 
 ## Milestone 3 (M3) — Multi-integration
 - Integration setup portal
-- `@pal/widget` npm package
+- Publish the already-piloted `@pal/widget` package for general integrations
 - Read token mint flow
 - Teacher console (aggregate views, no PII)
 

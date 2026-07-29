@@ -1,0 +1,114 @@
+"use client";
+
+import { useEffect, useId, useRef } from "react";
+
+import { usePalWidget } from "./provider";
+
+export function PalRewardCelebration({
+  modal = false,
+  onOpenChange,
+}: {
+  modal?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
+  const {
+    dismissReward,
+    density,
+    isRewardPending,
+    motion,
+    rewardError,
+    snapshot,
+    theme,
+    viewport,
+  } = usePalWidget();
+  const reward = snapshot?.rewards[0];
+  const rewardId = reward?.id;
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const descriptionId = useId();
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!rewardId) return;
+    onOpenChange?.(true);
+    return () => onOpenChange?.(false);
+  }, [onOpenChange, rewardId]);
+
+  useEffect(() => {
+    if (
+      !rewardId ||
+      typeof document === "undefined" ||
+      typeof HTMLElement === "undefined"
+    ) {
+      return;
+    }
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    continueButtonRef.current?.focus();
+    return () => {
+      const restoreFocus = () => {
+        if (previousFocus?.isConnected) previousFocus.focus();
+      };
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => requestAnimationFrame(restoreFocus));
+      } else {
+        queueMicrotask(restoreFocus);
+      }
+    };
+  }, [rewardId]);
+
+  if (!reward) return null;
+  const pending = isRewardPending(reward.id);
+
+  return (
+    <section
+      aria-describedby={descriptionId}
+      aria-labelledby={titleId}
+      aria-modal={modal ? "true" : undefined}
+      className="pal-celebration"
+      data-pal-density={density}
+      data-pal-motion={motion}
+      data-pal-theme={theme}
+      data-pal-viewport={viewport}
+      onKeyDown={(event) => {
+        if (event.key === "Tab" && modal) {
+          event.preventDefault();
+          continueButtonRef.current?.focus();
+        } else if (event.key === "Escape" && !pending) {
+          event.preventDefault();
+          void dismissReward(reward.id);
+        }
+      }}
+      role="dialog"
+    >
+      <div className="pal-celebration-burst" aria-hidden="true">
+        <span>✦</span><span>✧</span><span>✦</span>
+      </div>
+      <div className="pal-celebration-icon" aria-hidden="true">
+        {reward.assetUrl ? (
+          <img src={reward.assetUrl} alt="" width="80" height="80" />
+        ) : (
+          reward.icon ?? "★"
+        )}
+      </div>
+      <p className="pal-eyebrow">Reward earned</p>
+      <h2 id={titleId}>{reward.title}</h2>
+      <p id={descriptionId}>{reward.description}</p>
+      {rewardError ? (
+        <p className="pal-celebration-error" role="alert">
+          We could not save that yet. Try again.
+        </p>
+      ) : null}
+      <button
+        className="pal-button"
+        type="button"
+        disabled={pending}
+        onClick={() => void dismissReward(reward.id)}
+        ref={continueButtonRef}
+      >
+        {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
+      </button>
+    </section>
+  );
+}

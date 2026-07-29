@@ -1,7 +1,7 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-06-25
+> Last updated: 2026-07-25
 
 ---
 
@@ -10,12 +10,78 @@
 | Method | Path | Who calls it | Purpose |
 |---|---|---|---|
 | POST | `/api/v1/events` | Integration backend | Ingest a learning signal |
-| GET | `/api/v1/world/:learner_id` | Widget (via read token) | Fetch pet + world state |
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
+| GET | `/api/v1/learner/snapshot` | `@pal/widget` client | Fetch roadmap, companion, and unseen reward state |
+| POST | `/api/v1/learner/rewards/:reward_id/seen` | `@pal/widget` client | Acknowledge one learner reward notice |
+| GET | `/api/v1/world/:learner_id` | Legacy sandbox | Fetch prototype pet + world state |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
+The read-token and learner-snapshot routes are target pilot work and are not
+implemented yet. The fixture client in `@pal/widget` exists only for sandbox and
+visual development. It is not evidence that the production read boundary works.
+
+## Widget read contract
+
+The browser calls learner routes with:
+
+```text
+Authorization: Bearer <short-lived learner-scoped read token>
+```
+
+The public TypeScript source of truth for the initial snapshot is
+[`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
+versioned independently from event ingestion and includes:
+
+- the 16-week roadmap and stored achievement state;
+- current companion state; and
+- unseen reward notices.
+
+The widget receives no raw learner identifier. Pika's backend uses its integration
+credential to mint the learner-scoped token; that credential never enters the
+browser. Acknowledging a reward notice changes notification presentation only and
+must not reapply or mutate the underlying award. The acknowledgement endpoint is
+idempotent for a learner-scoped reward ID: every repeat `POST` returns success as a
+no-op, including a retry after the original response was lost. A repeat must never
+replay the award, celebration, analytics, or any other side effect.
+
 ## Event ingest contract
+
+Two versions travel in one request and mean different things. The `v1` in the path
+versions the **API surface** — auth scheme, which endpoints exist, the error envelope.
+The `schema_version` in the body versions the **payload** for a single event. They move
+independently; see [@pal/contract](../packages/contract/README.md#versioning).
+
+### Version 1 payloads (target)
+
+Machine-readable schemas, types, and shared test fixtures live in
+[`packages/contract`](../packages/contract/README.md). That package is the source of
+truth; the tables in [pika-signal-adapter.md](pika-signal-adapter.md) explain it.
+
+```
+POST /api/v1/events
+Authorization: Bearer <integration_secret>
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:assignment:opaque-item-token:completed",
+  "learner_id": "<pseudonymous_token>",
+  "event_type": "learning_item.completed",
+  "occurred_at": "2026-09-16T18:20:00Z",
+  "metadata": {
+    "item_token": "opaque-item-token",
+    "kind": "assignment",
+    "period_key": "2026-fall-week-03",
+    "timing": "on_time"
+  }
+}
+```
+
+Ingest does not accept this shape yet — the contract package landed first so that both
+sides can build against it. Wiring it into the route is the follow-up.
+
+### Legacy prototype payloads (current)
+
+Sent without `schema_version`. Still the only shape ingest accepts today.
 
 ```
 POST /api/v1/events
@@ -41,4 +107,5 @@ Responses:
 
 ---
 
-> Full request/response schemas coming in Milestone 1.
+> Version 1 request schemas are implemented in [@pal/contract](../packages/contract/README.md).
+> Response schemas are still prose above.
