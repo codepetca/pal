@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "idempotency_key": "pika:enrolment:enr-2b7e4c1a",
+  "learner_id": "lrn-8f2c1a9b4e7d3056",
+  "event_type": "classroom.joined",
+  "occurred_at": "2026-09-14T13:04:47Z",
+  "metadata": {
+    "classroom_token": "cls-4a7b2e9f"
+  },
+  "debug": {
+    "request_id": "trace-123"
+  }
+}

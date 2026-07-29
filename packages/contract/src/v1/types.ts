@@ -106,6 +106,7 @@ export const V1_ERRORS = [
   "invalid_idempotency_key",
   "invalid_learner_id",
   "invalid_occurred_at",
+  "invalid_envelope",
   "invalid_metadata",
 ] as const;
 
