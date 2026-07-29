@@ -297,6 +297,8 @@ function parseCompanion(
     moodLabel: text(source.moodLabel, `${path}.moodLabel`),
     level: integer(source.level, `${path}.level`),
     streak: integer(source.streak, `${path}.streak`),
+    xp: integer(source.xp, `${path}.xp`),
+    xpToNextLevel: integer(source.xpToNextLevel, `${path}.xpToNextLevel`),
     message: text(source.message, `${path}.message`),
     ...(assetUrl === undefined ? {} : { assetUrl }),
   };

@@ -100,16 +100,57 @@
   height: 3rem;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0 1rem;
   border-bottom: 1px solid #31465a;
   color: #f8fafc;
   background: var(--host-header);
 }
 
+.xpBar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+  max-width: 22rem;
+}
+
+.xpBarTrack {
+  flex: 1;
+  height: 0.45rem;
+  border-radius: 0.25rem;
+  background: rgb(255 255 255 / 0.15);
+  overflow: hidden;
+}
+
+.xpBarFill {
+  height: 100%;
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  transition: width 300ms ease-out;
+}
+
+.xpBarLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.xpBarLevel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #a5b4fc;
+  white-space: nowrap;
+}
+
 .brand,
 .hostControls {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -469,6 +510,21 @@
   color: #cbd5e1;
   font-size: 0.72rem;
   line-height: 1.45;
+}
+
+.pipelineToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: #93c5fd;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pipelineToggle input {
+  accent-color: #3b82f6;
 }
 
 .fixtureLabel {

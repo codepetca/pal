@@ -57,6 +57,8 @@ export interface PalCompanionState {
   moodLabel: string;
   level: number;
   streak: number;
+  xp: number;
+  xpToNextLevel: number;
   message: string;
   assetUrl?: string;
 }
@@ -106,8 +108,10 @@ export type PalFixtureAction =
   | "advance-week"
   | "daily-log-completed"
   | "on-time-finish"
+  | "late-finish"
   | "reward-earned"
   | "duplicate-replayed"
+  | "session-started"
   | "reset";
 
 export interface PalFixtureController extends PalClient {

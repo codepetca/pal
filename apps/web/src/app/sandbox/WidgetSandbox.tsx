@@ -33,6 +33,45 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import styles from "./widget-sandbox.module.css";
 
+const TEST_LEARNER_ID = "test-learner-001";
+
+/** Maps fixture actions to real v1 event types + metadata for the live pipeline. */
+const REAL_EVENT_MAP: Partial<
+  Record<PalFixtureAction, { event_type: string; metadata: Record<string, unknown> }>
+> = {
+  "session-started": {
+    event_type: "platform.session.started",
+    metadata: {},
+  },
+  "daily-log-completed": {
+    event_type: "daily_log.completed",
+    metadata: {
+      period_key: "sandbox-week",
+      activity_day: new Date().toISOString().split("T")[0],
+    },
+  },
+  "on-time-finish": {
+    event_type: "learning_item.completed",
+    metadata: {
+      item_token: "sandbox-item",
+      kind: "assignment",
+      period_key: "sandbox-week",
+      timing: "on_time",
+    },
+  },
+  "late-finish": {
+    event_type: "learning_item.completed",
+    metadata: {
+      item_token: "sandbox-item",
+      kind: "assignment",
+      period_key: "sandbox-week",
+      timing: "late",
+    },
+  },
+};
+
+type PipelineMode = "fixture" | "real";
+
 type HostView =
   | "today"
   | "achievements"
@@ -62,6 +101,11 @@ const FIXTURE_ACTIONS: Array<{
   detail: string;
 }> = [
   {
+    action: "session-started",
+    label: "Start session",
+    detail: "platform.session.started",
+  },
+  {
     action: "daily-log-completed",
     label: "Complete daily log",
     detail: "Advances Weekly Rhythm",
@@ -70,6 +114,11 @@ const FIXTURE_ACTIONS: Array<{
     action: "on-time-finish",
     label: "Finish on time",
     detail: "Adds an earned item badge",
+  },
+  {
+    action: "late-finish",
+    label: "Finish late",
+    detail: "Adds a late completion badge",
   },
   {
     action: "reward-earned",
@@ -94,21 +143,66 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
+  pipelineMode,
+  onPipelineModeChange,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
+  pipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
   ]);
 
+  async function fireRealEvent(
+    event_type: string,
+    metadata: Record<string, unknown>,
+  ): Promise<string> {
+    const idempotency_key = `sandbox-${Date.now()}`;
+    const res = await fetch("/api/sandbox/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idempotency_key,
+        learner_id: TEST_LEARNER_ID,
+        event_type,
+        occurred_at: new Date().toISOString(),
+        metadata,
+      }),
+    });
+    const data = await res.json();
+    return res.ok ? (data.status as string) : "error";
+  }
+
   async function dispatch(action: PalFixtureAction) {
-    const result = client.dispatch(action);
-    setLog((current) => [result, ...current].slice(0, 6));
+    const fixtureResult = client.dispatch(action);
+
+    if (pipelineMode === "real") {
+      const mapping = REAL_EVENT_MAP[action];
+      if (mapping) {
+        const status = await fireRealEvent(mapping.event_type, mapping.metadata);
+        setLog((current) =>
+          [`→ ${mapping.event_type}: ${status}`, fixtureResult, ...current].slice(0, 6),
+        );
+      } else {
+        setLog((current) => [fixtureResult, ...current].slice(0, 6));
+      }
+    } else {
+      setLog((current) => [fixtureResult, ...current].slice(0, 6));
+    }
+
     if (action === "reset") {
+      if (pipelineMode === "real") {
+        await fetch("/api/sandbox/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
+        });
+      }
       onReset();
       return;
     }
@@ -143,6 +237,16 @@ function FixtureControls({
               <h2>Semester controls</h2>
             </div>
             <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
+            <label className={styles.pipelineToggle}>
+              <input
+                type="checkbox"
+                checked={pipelineMode === "real"}
+                onChange={(e) =>
+                  onPipelineModeChange(e.target.checked ? "real" : "fixture")
+                }
+              />
+              <span>Real pipeline</span>
+            </label>
           </header>
 
           <div className={styles.controlActions}>
@@ -183,6 +287,8 @@ function SandboxExperience({
   view,
   onViewChange,
   onThemeChange,
+  pipelineMode,
+  onPipelineModeChange,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
@@ -190,6 +296,8 @@ function SandboxExperience({
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
+  pipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
 }) {
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
@@ -227,6 +335,7 @@ function SandboxExperience({
             />
             <strong>Test Classroom</strong>
           </div>
+          <XpBar />
           <div className={styles.hostControls} aria-label="Host preview settings">
             <ArrowsOut aria-hidden="true" size={18} />
             <span className={styles.hostDate}>Sat Jul 18&nbsp; 11:56 AM</span>
@@ -335,6 +444,8 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
+                pipelineMode={pipelineMode}
+                onPipelineModeChange={onPipelineModeChange}
               />
             )}
           </FixtureRefreshBridge>
@@ -365,11 +476,35 @@ function FixtureRefreshBridge({
   return children(refresh);
 }
 
+/** Reads the live companion snapshot and renders an XP bar. */
+function XpBar() {
+  const { snapshot, state } = usePalWidget();
+  if (state === "error" || !snapshot) return null;
+
+  const { xp, xpToNextLevel, level } = snapshot.companion;
+  const pct = xpToNextLevel > 0
+    ? ((xp / (xp + xpToNextLevel)) * 100).toFixed(1)
+    : "100";
+
+  return (
+    <div className={styles.xpBar} role="progressbar" aria-valuenow={xp} aria-valuemin={0} aria-valuemax={xp + xpToNextLevel} aria-label={`${xp} XP toward level ${level + 1}`}>
+      <div className={styles.xpBarTrack}>
+        <div className={styles.xpBarFill} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={styles.xpBarLabel}>
+        {xp} / {xp + xpToNextLevel}
+      </span>
+      <span className={styles.xpBarLevel}>Lv {level}</span>
+    </div>
+  );
+}
+
 export function WidgetSandbox() {
   const [client] = useState(() => createFixturePalClient());
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("fixture");
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 48rem)");
@@ -387,6 +522,9 @@ export function WidgetSandbox() {
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
+      pipelineMode={pipelineMode}
+      onPipelineModeChange={setPipelineMode}
     />
   );
 }
+
