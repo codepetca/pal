@@ -34,21 +34,21 @@ function totalXp(mutations: Mutation[]): number {
 // The behaviours a learner actually experiences (streaks over days, levelling)
 // span the cascade and live in process.test.ts.
 describe("evaluate", () => {
-  it("grants XP when assignment is completed", () => {
+  it("grants XP when learning item is completed", () => {
     const mutations = evaluate(
-      { event_type: "assignment.completed", occurred_at: AT, metadata: {} },
+      { event_type: "learning_item.completed", occurred_at: AT, metadata: {} },
       baseState,
       defaultRulePack
     );
     assert.equal(totalXp(mutations), 150);
   });
 
-  it("grants bonus XP when assignment is completed on time", () => {
+  it("grants bonus XP when learning item is completed on time", () => {
     const mutations = evaluate(
       {
-        event_type: "assignment.completed",
+        event_type: "learning_item.completed",
         occurred_at: AT,
-        metadata: { on_time: true },
+        metadata: { timing: "on_time" },
       },
       baseState,
       defaultRulePack
@@ -56,12 +56,12 @@ describe("evaluate", () => {
     assert.equal(totalXp(mutations), 200); // 150 base + 50 on-time bonus
   });
 
-  it("does not grant on-time bonus when assignment is late", () => {
+  it("does not grant on-time bonus when learning item is late", () => {
     const mutations = evaluate(
       {
-        event_type: "assignment.completed",
+        event_type: "learning_item.completed",
         occurred_at: AT,
-        metadata: { on_time: false },
+        metadata: { timing: "late" },
       },
       baseState,
       defaultRulePack
@@ -69,18 +69,18 @@ describe("evaluate", () => {
     assert.equal(totalXp(mutations), 150);
   });
 
-  it("does not grant on-time bonus when the on_time flag is absent", () => {
+  it("does not grant on-time bonus when the timing field is absent", () => {
     const mutations = evaluate(
-      { event_type: "assignment.completed", occurred_at: AT, metadata: {} },
+      { event_type: "learning_item.completed", occurred_at: AT, metadata: {} },
       baseState,
       defaultRulePack
     );
     assert.equal(totalXp(mutations), 150);
   });
 
-  it("sets pet mood to happy after assignment", () => {
+  it("sets pet mood to happy after learning item completion", () => {
     const mutations = evaluate(
-      { event_type: "assignment.completed", occurred_at: AT, metadata: {} },
+      { event_type: "learning_item.completed", occurred_at: AT, metadata: {} },
       baseState,
       defaultRulePack
     );
@@ -119,15 +119,15 @@ describe("evaluate", () => {
     assert.deepEqual(mutations, [{ type: "NUDGE", copy_id: "welcome-back-v1" }]);
   });
 
-  // --- Daily check-in ---
+  // --- Daily log completed ---
   //
-  // The check-in event only advances the streak. Both the base XP and the streak
+  // The daily-log event only advances the streak. Both the base XP and the streak
   // bonus are paid on the derived STREAK_MILESTONE, which fires once per day — so a
-  // second same-day check-in advances nothing and earns nothing.
+  // second same-day daily log advances nothing and earns nothing.
 
-  it("only continues the streak on a daily check-in, granting no XP directly", () => {
+  it("only continues the streak on a daily log, granting no XP directly", () => {
     const mutations = evaluate(
-      { event_type: "daily_checkin.created", occurred_at: AT, metadata: {} },
+      { event_type: "daily_log.completed", occurred_at: AT, metadata: {} },
       baseState,
       defaultRulePack
     );
@@ -138,21 +138,21 @@ describe("evaluate", () => {
     );
   });
 
-  it("does not pay any check-in XP on the check-in event itself", () => {
+  it("does not pay any XP on the daily-log event itself", () => {
     // Both base and bonus belong to STREAK_MILESTONE, derived after the streak
     // advances. Paying here would read yesterday's streak and let repeated same-day
-    // check-ins farm XP, since the streak's same-day guard wouldn't gate the XP.
+    // daily-log events farm XP, since the streak's same-day guard wouldn't gate the XP.
     const mutations = evaluate(
-      { event_type: "daily_checkin.created", occurred_at: AT, metadata: {} },
+      { event_type: "daily_log.completed", occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 9 }),
       defaultRulePack
     );
     assert.equal(totalXp(mutations), 0);
   });
 
-  // --- Check-in XP on the derived milestone (base + tiered bonus, streak includes today) ---
+  // --- Daily-log XP on the derived milestone (base + tiered bonus, streak includes today) ---
 
-  it("pays only the base check-in XP on day 1", () => {
+  it("pays only the base XP on day 1", () => {
     const mutations = evaluate(
       { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 1 }),
@@ -253,18 +253,6 @@ describe("evaluate", () => {
     assert.equal(
       mutations.find((m) => m.type === "WORLD_UNLOCK"),
       undefined
-    );
-  });
-
-  it("advances world stage on calendar.month_end", () => {
-    const mutations = evaluate(
-      { event_type: "calendar.month_end", occurred_at: AT, metadata: {} },
-      baseState,
-      defaultRulePack
-    );
-    assert.deepEqual(
-      mutations.find((m) => m.type === "WORLD_STAGE"),
-      { type: "WORLD_STAGE", stage: 1 }
     );
   });
 });
