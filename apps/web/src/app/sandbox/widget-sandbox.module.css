@@ -512,21 +512,6 @@
   line-height: 1.45;
 }
 
-.pipelineToggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  font-size: 0.72rem;
-  color: #93c5fd;
-  cursor: pointer;
-  user-select: none;
-}
-
-.pipelineToggle input {
-  accent-color: #3b82f6;
-}
-
 .fixtureLabel {
   color: #93c5fd;
   font-size: 0.66rem;

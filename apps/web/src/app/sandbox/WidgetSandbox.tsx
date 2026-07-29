@@ -70,8 +70,6 @@ const REAL_EVENT_MAP: Partial<
   },
 };
 
-type PipelineMode = "fixture" | "real";
-
 type HostView =
   | "today"
   | "achievements"
@@ -143,16 +141,12 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
-  pipelineMode,
-  onPipelineModeChange,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
-  pipelineMode: PipelineMode;
-  onPipelineModeChange: (mode: PipelineMode) => void;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
@@ -180,29 +174,23 @@ function FixtureControls({
 
   async function dispatch(action: PalFixtureAction) {
     const fixtureResult = client.dispatch(action);
+    const mapping = REAL_EVENT_MAP[action];
 
-    if (pipelineMode === "real") {
-      const mapping = REAL_EVENT_MAP[action];
-      if (mapping) {
-        const status = await fireRealEvent(mapping.event_type, mapping.metadata);
-        setLog((current) =>
-          [`→ ${mapping.event_type}: ${status}`, fixtureResult, ...current].slice(0, 6),
-        );
-      } else {
-        setLog((current) => [fixtureResult, ...current].slice(0, 6));
-      }
+    if (mapping) {
+      const status = await fireRealEvent(mapping.event_type, mapping.metadata);
+      setLog((current) =>
+        [`→ ${mapping.event_type}: ${status}`, fixtureResult, ...current].slice(0, 6),
+      );
     } else {
       setLog((current) => [fixtureResult, ...current].slice(0, 6));
     }
 
     if (action === "reset") {
-      if (pipelineMode === "real") {
-        await fetch("/api/sandbox/reset", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
-        });
-      }
+      await fetch("/api/sandbox/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
+      });
       onReset();
       return;
     }
@@ -237,16 +225,6 @@ function FixtureControls({
               <h2>Semester controls</h2>
             </div>
             <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
-            <label className={styles.pipelineToggle}>
-              <input
-                type="checkbox"
-                checked={pipelineMode === "real"}
-                onChange={(e) =>
-                  onPipelineModeChange(e.target.checked ? "real" : "fixture")
-                }
-              />
-              <span>Real pipeline</span>
-            </label>
           </header>
 
           <div className={styles.controlActions}>
@@ -287,8 +265,6 @@ function SandboxExperience({
   view,
   onViewChange,
   onThemeChange,
-  pipelineMode,
-  onPipelineModeChange,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
@@ -296,8 +272,6 @@ function SandboxExperience({
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
-  pipelineMode: PipelineMode;
-  onPipelineModeChange: (mode: PipelineMode) => void;
 }) {
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
@@ -444,8 +418,6 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
-                pipelineMode={pipelineMode}
-                onPipelineModeChange={onPipelineModeChange}
               />
             )}
           </FixtureRefreshBridge>
@@ -504,7 +476,6 @@ export function WidgetSandbox() {
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
-  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("fixture");
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 48rem)");
@@ -522,8 +493,6 @@ export function WidgetSandbox() {
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
-      pipelineMode={pipelineMode}
-      onPipelineModeChange={setPipelineMode}
     />
   );
 }
