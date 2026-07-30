@@ -212,6 +212,11 @@ function SandboxExperience({
       motion="system"
       theme={theme}
       viewport={viewport}
+      // Moods expire on a clock the client does not own: happy runs 30 minutes,
+      // excited an hour, and the world endpoint reports neutral once the window
+      // has passed. Without a poll the pet would hold its last pose until the
+      // next button press, so the durations would never be visible at all.
+      refreshIntervalMs={15_000}
     >
       <div className={styles.sandbox} data-theme={theme}>
         <div
