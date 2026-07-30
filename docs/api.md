@@ -11,14 +11,14 @@
 |---|---|---|---|
 | POST | `/api/v1/events` | Integration backend | Ingest a learning signal |
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
-| GET | `/api/v1/learner/snapshot` | `@pal/widget` client | Fetch roadmap, companion, and unseen reward state |
-| POST | `/api/v1/learner/rewards/:reward_id/seen` | `@pal/widget` client | Acknowledge one learner reward notice |
+| GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
+| POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
 | GET | `/api/v1/world/:learner_id` | Legacy sandbox | Fetch prototype pet + world state |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
 The read-token and learner-snapshot routes are target pilot work and are not
-implemented yet. The fixture client in `@pal/widget` exists only for sandbox and
+implemented yet. The fixture client in `@codepet/pal-widget` exists only for sandbox and
 visual development. It is not evidence that the production read boundary works.
 
 ## Widget read contract

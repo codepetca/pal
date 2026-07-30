@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@pal/engine": "workspace:*",
-    "@pal/widget": "workspace:*",
+    "@codepet/pal-widget": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "next": "^15.3.4",
     "react": "^19.1.0",

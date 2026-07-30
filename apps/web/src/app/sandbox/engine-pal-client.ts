@@ -4,7 +4,7 @@ import {
   type PalFixtureAction,
   type PalFixtureController,
   type PalWidgetSnapshot,
-} from "@pal/widget";
+} from "@codepet/pal-widget";
 
 // The sandbox drives one fixed learner. The id is opaque and carries nothing
 // about a student, which is what crossing the ingest API requires.
