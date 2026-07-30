@@ -25,7 +25,8 @@ const widgetPackage = JSON.parse(
   main?: string;
   types?: string;
   files?: string[];
-  publishConfig?: { access?: string; tag?: string };
+  scripts?: { prepublishOnly?: string; "release:alpha"?: string };
+  publishConfig?: { access?: string };
   exports?: Record<string, unknown>;
 };
 
@@ -37,7 +38,14 @@ test("package metadata exposes only compiled public entry points", () => {
   assert.equal(widgetPackage.types, "./dist/index.d.ts");
   assert.deepEqual(widgetPackage.files, ["dist", "README.md"]);
   assert.equal(widgetPackage.publishConfig?.access, "public");
-  assert.equal(widgetPackage.publishConfig?.tag, "alpha");
+  assert.equal(
+    widgetPackage.scripts?.prepublishOnly,
+    "node scripts/assert-publish-tag.mjs",
+  );
+  assert.equal(
+    widgetPackage.scripts?.["release:alpha"],
+    "npm publish --access public --tag alpha",
+  );
   assert.deepEqual(Object.keys(widgetPackage.exports ?? {}), [
     ".",
     "./theme-contract",

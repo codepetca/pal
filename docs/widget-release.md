@@ -29,12 +29,13 @@ Inspect or install the generated `.tgz` in Pika before publishing it. When the
 artifact is approved, sign in with `npm login`, then publish that exact tarball:
 
 ```bash
-npm publish /tmp/pal-widget-pack/codepet-pal-widget-<version>.tgz
+npm publish /tmp/pal-widget-pack/codepet-pal-widget-<version>.tgz --access public --tag alpha
 ```
 
-The package metadata fixes access to `public` and the distribution tag to `alpha`,
-so an early release cannot accidentally become npm's default `latest` version.
-Pika installs the prerelease with:
+The package metadata fixes access to `public`. A package lifecycle guard also
+rejects a direct prerelease publish that omits `--tag alpha`; publishing a
+prebuilt tarball must still include the explicit tag shown above. Pika installs
+the prerelease with:
 
 ```bash
 pnpm add @codepet/pal-widget@alpha

@@ -28,8 +28,7 @@
     "widget"
   ],
   "publishConfig": {
-    "access": "public",
-    "tag": "alpha"
+    "access": "public"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,6 +48,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "prepack": "pnpm run build",
+    "prepublishOnly": "node scripts/assert-publish-tag.mjs",
+    "release:alpha": "npm publish --access public --tag alpha",
     "test": "node --import tsx --test src/**/*.test.ts src/**/*.test.tsx",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
