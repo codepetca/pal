@@ -78,5 +78,5 @@ jobs:
       - name: Widget tests
         run: pnpm --filter @codepet/pal-widget test
 
-      - name: Verify widget package tarball
-        run: pnpm --filter @codepet/pal-widget pack --pack-destination "$RUNNER_TEMP"
+      - name: Verify packed widget with React 18.3
+        run: pnpm --filter @codepet/pal-widget verify:package

@@ -11,7 +11,8 @@ The package remains unpublished until an owner deliberately runs the publish ste
 - The tarball contains compiled `dist/` files, the package README, and no source
   tests or sandbox controls.
 - A team owner has chosen the package license. It is intentionally marked
-  `UNLICENSED` until that decision is made.
+  `UNLICENSED` and `"private": true` until that decision is made. The release PR
+  must set the selected SPDX license and remove the private flag.
 - The publishing npm account has two-factor authentication enabled.
 
 ## Alpha release
@@ -22,20 +23,23 @@ From an up-to-date, clean checkout after the release PR is merged:
 pnpm install --frozen-lockfile
 pnpm --filter @codepet/pal-widget test
 pnpm --filter @codepet/pal-widget build
+pnpm --filter @codepet/pal-widget verify:package
 pnpm --filter @codepet/pal-widget pack --pack-destination /tmp/pal-widget-pack
 ```
 
 Inspect or install the generated `.tgz` in Pika before publishing it. When the
-artifact is approved, sign in with `npm login`, then publish that exact tarball:
+artifact is approved, sign in with `npm login`, then run the guarded release
+command from the same clean checkout:
 
 ```bash
-npm publish /tmp/pal-widget-pack/codepet-pal-widget-<version>.tgz --access public --tag alpha
+pnpm --filter @codepet/pal-widget release:alpha
 ```
 
-The package metadata fixes access to `public`. A package lifecycle guard also
-rejects a direct prerelease publish that omits `--tag alpha`; publishing a
-prebuilt tarball must still include the explicit tag shown above. Pika installs
-the prerelease with:
+The package metadata fixes access to `public`. The package lifecycle guard rejects
+publication while the license/private gate remains and rejects a prerelease that
+omits the `alpha` tag. Do not publish the `.tgz` directly: npm skips package
+lifecycle guards when publishing an existing tarball. Pika installs the prerelease
+with:
 
 ```bash
 pnpm add @codepet/pal-widget@alpha

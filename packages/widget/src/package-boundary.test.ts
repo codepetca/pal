@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const sandboxSource = readFileSync(
@@ -25,7 +27,12 @@ const widgetPackage = JSON.parse(
   main?: string;
   types?: string;
   files?: string[];
-  scripts?: { prepublishOnly?: string; "release:alpha"?: string };
+  peerDependencies?: { react?: string; "react-dom"?: string };
+  scripts?: {
+    prepublishOnly?: string;
+    "release:alpha"?: string;
+    "verify:package"?: string;
+  };
   publishConfig?: { access?: string };
   exports?: Record<string, unknown>;
 };
@@ -33,7 +40,7 @@ const widgetPackage = JSON.parse(
 test("package metadata exposes only compiled public entry points", () => {
   assert.equal(widgetPackage.name, "@codepet/pal-widget");
   assert.match(widgetPackage.version ?? "", /^0\.1\.0-alpha\.\d+$/);
-  assert.notEqual(widgetPackage.private, true);
+  assert.equal(widgetPackage.private, true);
   assert.equal(widgetPackage.main, "./dist/index.js");
   assert.equal(widgetPackage.types, "./dist/index.d.ts");
   assert.deepEqual(widgetPackage.files, ["dist", "README.md"]);
@@ -46,12 +53,49 @@ test("package metadata exposes only compiled public entry points", () => {
     widgetPackage.scripts?.["release:alpha"],
     "npm publish --access public --tag alpha",
   );
+  assert.equal(
+    widgetPackage.scripts?.["verify:package"],
+    "node scripts/verify-package.mjs",
+  );
+  assert.equal(
+    widgetPackage.peerDependencies?.react,
+    "^18.3.0 || ^19.0.0",
+  );
+  assert.equal(
+    widgetPackage.peerDependencies?.["react-dom"],
+    "^18.3.0 || ^19.0.0",
+  );
   assert.deepEqual(Object.keys(widgetPackage.exports ?? {}), [
     ".",
     "./theme-contract",
     "./styles.css",
     "./package.json",
   ]);
+});
+
+test("release guard blocks publication before the license decision", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../scripts/assert-publish-tag.mjs", import.meta.url),
+      ),
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        npm_config_tag: "alpha",
+        npm_package_version: widgetPackage.version,
+      },
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /approved license and is no longer private/,
+  );
 });
 
 test("sandbox consumes only the widget public package boundary", () => {
