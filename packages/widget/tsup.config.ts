@@ -2,7 +2,9 @@ import { defineConfig } from "tsup";
 
 export default defineConfig([
   {
-    clean: true,
+    // Cleaning happens once in the package scripts. Either watch context cleaning
+    // here would delete the other context's output after an isolated file change.
+    clean: false,
     dts: true,
     entry: ["src/index.ts", "src/theme-contract.ts"],
     external: ["react", "react-dom", "react/jsx-runtime"],
@@ -12,6 +14,7 @@ export default defineConfig([
     treeshake: true,
   },
   {
+    // Keep this aligned with the TypeScript context above.
     clean: false,
     dts: false,
     entry: ["src/styles.css"],

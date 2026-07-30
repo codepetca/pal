@@ -46,8 +46,8 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup && node scripts/add-client-directive.mjs",
-    "dev": "tsup --watch --onSuccess \"node scripts/add-client-directive.mjs\"",
+    "build": "node scripts/clean-dist.mjs && tsup && node scripts/add-client-directive.mjs",
+    "dev": "node scripts/clean-dist.mjs && tsup --watch --onSuccess \"node scripts/add-client-directive.mjs\"",
     "prepack": "pnpm run build",
     "prepublishOnly": "node scripts/assert-publish-tag.mjs",
     "release:alpha": "npm publish --access public --tag alpha",
