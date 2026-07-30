@@ -1,16 +1,54 @@
 {
-  "name": "@pal/widget",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@codepet/pal-widget",
+  "version": "0.1.0-alpha.1",
+  "description": "Portable React surfaces for Pal achievements, companion state, and rewards.",
+  "license": "UNLICENSED",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codepetca/pal.git",
+    "directory": "packages/widget"
+  },
+  "homepage": "https://github.com/codepetca/pal/tree/main/packages/widget#readme",
+  "bugs": {
+    "url": "https://github.com/codepetca/pal/issues"
+  },
+  "keywords": [
+    "achievements",
+    "education",
+    "pal",
+    "react",
+    "widget"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./theme-contract": "./src/theme-contract.ts",
-    "./styles.css": "./src/styles.css"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./theme-contract": {
+      "types": "./dist/theme-contract.d.ts",
+      "import": "./dist/theme-contract.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepack": "pnpm run build",
     "test": "node --import tsx --test src/**/*.test.ts src/**/*.test.tsx",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
@@ -28,6 +66,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-test-renderer": "19.2.7",
+    "tsup": "^8.5.1",
     "tsx": "^4.22.4",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"

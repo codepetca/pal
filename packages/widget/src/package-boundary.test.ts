@@ -16,11 +16,40 @@ const sandboxStyles = readFileSync(
   ),
   "utf8",
 );
+const widgetPackage = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as {
+  name?: string;
+  version?: string;
+  private?: boolean;
+  main?: string;
+  types?: string;
+  files?: string[];
+  publishConfig?: { access?: string; tag?: string };
+  exports?: Record<string, unknown>;
+};
+
+test("package metadata exposes only compiled public entry points", () => {
+  assert.equal(widgetPackage.name, "@codepet/pal-widget");
+  assert.match(widgetPackage.version ?? "", /^0\.1\.0-alpha\.\d+$/);
+  assert.notEqual(widgetPackage.private, true);
+  assert.equal(widgetPackage.main, "./dist/index.js");
+  assert.equal(widgetPackage.types, "./dist/index.d.ts");
+  assert.deepEqual(widgetPackage.files, ["dist", "README.md"]);
+  assert.equal(widgetPackage.publishConfig?.access, "public");
+  assert.equal(widgetPackage.publishConfig?.tag, "alpha");
+  assert.deepEqual(Object.keys(widgetPackage.exports ?? {}), [
+    ".",
+    "./theme-contract",
+    "./styles.css",
+    "./package.json",
+  ]);
+});
 
 test("sandbox consumes only the widget public package boundary", () => {
-  assert.match(sandboxSource, /from "@pal\/widget"/);
+  assert.match(sandboxSource, /from "@codepet\/pal-widget"/);
   assert.doesNotMatch(sandboxSource, /packages\/widget\/src/);
-  assert.doesNotMatch(sandboxSource, /@pal\/widget\//);
+  assert.doesNotMatch(sandboxSource, /@codepet\/pal-widget\//);
 });
 
 test("sandbox labels fixture mode as visual state rather than pipeline proof", () => {

@@ -12,7 +12,7 @@ The project's target direction is a recurring achievement roadmap driven automat
 At a high level:
 
 - **Pika:** normalize authoritative activity into privacy-safe events and deliver them through a reliable adapter/outbox.
-- **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render native roadmap, companion, and celebration surfaces through `@pal/widget`.
+- **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render native roadmap, companion, and celebration surfaces through `@codepet/pal-widget`.
 - **Teachers:** no additional Pal configuration or achievement maintenance.
 
 The initial workstream rewards completed behaviors and configured weekly opportunities. It does not mirror Pika's assignment catalog or infer that a silent assignment is incomplete. A complete assignment-status view is deferred unless the product later adopts a separate, versioned Pika-owned academic projection with reconciliation.
@@ -38,7 +38,7 @@ hosts.
 
 ## Milestone 3 (M3) — Multi-integration
 - Integration setup portal
-- Publish the already-piloted `@pal/widget` package for general integrations
+- Publish the already-piloted `@codepet/pal-widget` package for general integrations
 - Read token mint flow
 - Teacher console (aggregate views, no PII)
 

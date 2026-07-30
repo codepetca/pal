@@ -12,14 +12,14 @@
 3. Integration backend sends learning signals to `/api/v1/events`
 4. On student page load, integration backend mints a short-lived learner-scoped read/embed token via `/api/v1/integration/read-token`
 5. Integration frontend gives that token to a Pal client and renders the selected
-   `@pal/widget` surfaces
+   `@codepet/pal-widget` surfaces
 
 The Pal client fetches achievement, pet, and world state directly from Pal. The
 integration secret never leaves the backend.
 
 Steps 4–5 are target M3 behavior, not an implemented API flow. The current prototype has no read-token minting route, and its learner-world endpoint does not yet enforce reader authorization. Do not use the prototype endpoint as a production embed boundary.
 
-For Pika, the selected presentation is the native React package `@pal/widget`.
+For Pika, the selected presentation is the native React package `@codepet/pal-widget`.
 `PalAchievements` renders inside Pika's normal content pane. Pika separately mounts
 `PalCompanion` and `PalRewardCelebration` in approved application-shell layers. A
 future chrome-free `/embed/roadmap` route remains an option for hosts that cannot run
@@ -35,7 +35,7 @@ import {
   PalProvider,
   PalRewardCelebration,
   createPalHttpClient,
-} from '@pal/widget'
+} from '@codepet/pal-widget'
 
 const palClient = createPalHttpClient({
   apiBaseUrl,
@@ -86,12 +86,12 @@ Streaks are **not** sent by the integration. Pal derives them from `daily_checki
 Any learning platform can integrate by:
 1. Contacting the Pal operator to register
 2. Agreeing to the pseudonymous ID spec and event allow-list
-3. Installing `@pal/widget`
+3. Installing `@codepet/pal-widget`
 4. Implementing the three backend calls: ingest, read-token mint, and learner delete (for consent withdrawal)
 
 An integration reports authoritative, privacy-safe learning facts. Pal owns achievement thresholds, recurrence, badge awards, and rewards; integrations do not report that an achievement was earned.
 
 ---
 
-> Publishing `@pal/widget` for general integrations and the detailed production
+> Publishing `@codepet/pal-widget` for general integrations and the detailed production
 > setup flow remain Milestone 3 work.
