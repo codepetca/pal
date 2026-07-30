@@ -98,6 +98,28 @@ test("release guard blocks publication before the license decision", () => {
   );
 });
 
+test("release guard rejects every non-alpha prerelease tag", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../scripts/assert-publish-tag.mjs", import.meta.url),
+      ),
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        npm_config_tag: "beta",
+        npm_package_version: widgetPackage.version,
+      },
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /with the beta tag\. Use --tag alpha/);
+});
+
 test("sandbox consumes only the widget public package boundary", () => {
   assert.match(sandboxSource, /from "@codepet\/pal-widget"/);
   assert.doesNotMatch(sandboxSource, /packages\/widget\/src/);
