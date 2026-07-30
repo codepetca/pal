@@ -16,17 +16,39 @@ const sandboxStyles = readFileSync(
   ),
   "utf8",
 );
+const engineClientSource = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/engine-pal-client.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("sandbox consumes only the widget public package boundary", () => {
-  assert.match(sandboxSource, /from "@pal\/widget"/);
-  assert.doesNotMatch(sandboxSource, /packages\/widget\/src/);
-  assert.doesNotMatch(sandboxSource, /@pal\/widget\//);
+  for (const source of [sandboxSource, engineClientSource]) {
+    assert.match(source, /from "@pal\/widget"/);
+    assert.doesNotMatch(source, /packages\/widget\/src/);
+    assert.doesNotMatch(source, /@pal\/widget\//);
+  }
 });
 
-test("sandbox labels fixture mode as visual state rather than pipeline proof", () => {
+test("sandbox says which surfaces are engine-backed and which are fixtures", () => {
   assert.match(sandboxSource, /Fixture preview/);
-  assert.match(sandboxSource, /Visual states only/);
   assert.match(sandboxSource, /no production state is connected/);
+  // The companion is read back from the rule engine; the roadmap and rewards
+  // are still fixture state. Overclaiming either way misleads whoever is
+  // demoing, so the copy has to keep drawing the line.
+  assert.match(sandboxSource, /pet runs on the real engine/);
+  assert.match(sandboxSource, /roadmap and rewards stay fixtures/);
+  assert.match(sandboxSource, /createEnginePalClient/);
+});
+
+test("only the engine decides the companion's mood", () => {
+  // The client reports what the world endpoint returns. If it ever starts
+  // choosing a mood itself, the engine has stopped being the only thing that
+  // moves learner state.
+  assert.match(engineClientSource, /api\/v1\/world/);
+  assert.doesNotMatch(engineClientSource, /mood = "(happy|excited|sleeping)"/);
 });
 
 test("sandbox reset rotates provider identity and controls start collapsed", () => {

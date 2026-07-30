@@ -5,7 +5,6 @@ import {
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
-  createFixturePalClient,
   type PalFixtureAction,
   type PalFixtureController,
   type PalTheme,
@@ -31,6 +30,7 @@ import {
 import Image from "next/image";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { createEnginePalClient } from "./engine-pal-client";
 import styles from "./widget-sandbox.module.css";
 
 type HostView =
@@ -64,12 +64,12 @@ const FIXTURE_ACTIONS: Array<{
   {
     action: "daily-log-completed",
     label: "Complete daily log",
-    detail: "Advances Weekly Rhythm",
+    detail: "Advances Weekly Rhythm, and grants XP",
   },
   {
     action: "on-time-finish",
     label: "Finish on time",
-    detail: "Adds an earned item badge",
+    detail: "Adds a badge, and makes the pet happy",
   },
   {
     action: "reward-earned",
@@ -142,7 +142,10 @@ function FixtureControls({
               <span className={styles.fixtureLabel}>Fixture preview</span>
               <h2>Semester controls</h2>
             </div>
-            <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
+            <p>
+              The pet runs on the real engine — these send events and it decides.
+              The roadmap and rewards stay fixtures until the v1 receiver lands.
+            </p>
           </header>
 
           <div className={styles.controlActions}>
@@ -366,7 +369,7 @@ function FixtureRefreshBridge({
 }
 
 export function WidgetSandbox() {
-  const [client] = useState(() => createFixturePalClient());
+  const [client] = useState(() => createEnginePalClient());
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
