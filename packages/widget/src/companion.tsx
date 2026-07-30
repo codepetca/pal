@@ -21,29 +21,49 @@ const BLINK_EVERY_MS = 4000;
 const CANVAS_H = 2048;
 const REST_W = 1952;
 
-// `dx` is a horizontal nudge in the frame's own canvas pixels, applied on top of
-// centring the canvas. The poses are drawn on canvases of different widths and
-// the cat is not centred identically on each, so centring the canvas alone — the
-// obvious thing — leaves the happy poses noticeably right of the resting one,
-// which reads as a jitter every time the mood changes.
+// `dx` and `dy` register each frame against the resting pose, in that frame's
+// own canvas pixels, applied on top of centring the canvas and sitting it on the
+// box floor. The poses are drawn on canvases of different widths and the cat is
+// not placed identically on any two of them, so the obvious geometry — centre
+// the canvas, flush the bottom — lands the cat in a different spot on almost
+// every frame, which reads as a twitch on each frame change.
 //
-// Deriving these for new art: lay the frame over the resting pose with the two
-// canvases centred and their bottoms flush, then find the horizontal shift that
-// maximises the overlap of the two alpha masks. That shift is `dx`. Both frames
-// of a pose should come out the same — they do here, which is what shows the
-// offset belongs to the canvas rather than the pose; if they disagree, the two
-// frames are drawn inconsistently and the art is worth fixing rather than
-// compensating for in code. Vertically the canvases already agree, so
-// bottom-flush needs no correction.
-type Frame = { src: string; w: number; dx: number };
+// Deriving these for new art: sample both alpha masks, reduce each to a row and
+// a column occupancy profile, and cross-correlate those against the resting
+// pose's. The shifts that maximise the two correlations are `dy` and `dx`, in
+// canvas pixels; positive `dy` moves the frame down. Registering on the mask
+// rather than on the bounding box matters — a pose with a limb extended pushes
+// its bounding-box centre sideways while the body has not moved, so aligning
+// boxes would introduce exactly the drift this is meant to remove.
+//
+// Every canvas shares a 2048px height, so all frames render at one scale and
+// these offsets stay valid at any rendered size.
+type Frame = { src: string; w: number; dx: number; dy: number };
+
+type FrameSpec = { file: string; w: number; dx: number; dy: number };
+
+const BLINK_SPECS: FrameSpec[] = [1, 2, 3, 4, 5].map((n) => ({
+  file: `blinking-${n}`,
+  w: REST_W,
+  dx: 0,
+  dy: 0,
+}));
 
 // Moods with animation frames. A mood absent here — "neutral", and "sleeping"
 // until there is art for it — falls back to the resting pose and blinks.
-const MOOD_SPRITES: Partial<
-  Record<PalCompanionMood, { name: string; w: number; dx: number }>
-> = {
-  happy: { name: "happy", w: 2126, dx: -64 },
-  excited: { name: "excited", w: 2502, dx: -16 },
+//
+// The second frame of each mood carries its own offsets rather than sharing the
+// first's: the art moves the cat between the two, and only a per-frame value can
+// hold the body still through the loop.
+const MOOD_SPECS: Partial<Record<PalCompanionMood, FrameSpec[]>> = {
+  happy: [
+    { file: "happy-1", w: 2126, dx: -58, dy: 0 },
+    { file: "happy-2", w: 2126, dx: -54, dy: 6 },
+  ],
+  excited: [
+    { file: "excited-1", w: 2502, dx: -12, dy: 4 },
+    { file: "excited-2", w: 2502, dx: -10, dy: 46 },
+  ],
 };
 
 type SpriteSet = {
@@ -65,21 +85,21 @@ type SpriteSet = {
  */
 function buildSprites(restUrl: string): SpriteSet {
   const base = restUrl.slice(0, restUrl.lastIndexOf("/") + 1);
-  const rest: Frame = { src: restUrl, w: REST_W, dx: 0 };
+  const toFrame = (spec: FrameSpec): Frame => ({
+    src: `${base}${spec.file}.png`,
+    w: spec.w,
+    dx: spec.dx,
+    dy: spec.dy,
+  });
 
-  const blink: Frame[] = [1, 2, 3, 4, 5].map((n) => ({
-    src: `${base}blinking-${n}.png`,
-    w: REST_W,
-    dx: 0,
-  }));
+  // The resting pose is the registration reference, so its offsets are zero by
+  // definition, and it is the one frame addressed by the snapshot's own URL.
+  const rest: Frame = { src: restUrl, w: REST_W, dx: 0, dy: 0 };
+  const blink: Frame[] = BLINK_SPECS.map(toFrame);
 
   const byMood: Partial<Record<PalCompanionMood, Frame[]>> = {};
-  for (const [mood, sprite] of Object.entries(MOOD_SPRITES)) {
-    byMood[mood as PalCompanionMood] = [1, 2].map((n) => ({
-      src: `${base}${sprite.name}-${n}.png`,
-      w: sprite.w,
-      dx: sprite.dx,
-    }));
+  for (const [mood, specs] of Object.entries(MOOD_SPECS)) {
+    byMood[mood as PalCompanionMood] = specs.map(toFrame);
   }
 
   // Every frame is mounted at once and switched by opacity. Swapping the `src`
@@ -204,9 +224,9 @@ function PetSprite({
           height={CANVAS_H}
           style={{
             opacity: frame.src === activeSrc ? 1 : 0,
-            // Both terms are percentages of the frame's own width, so the nudge
-            // stays correct at any rendered size.
-            transform: `translateX(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%))`,
+            // Every term is a percentage of the frame's own rendered box, which
+            // maps 1:1 onto its canvas, so the registration holds at any size.
+            transform: `translate(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%), ${((frame.dy / CANVAS_H) * 100).toFixed(3)}%)`,
           }}
         />
       ))}
