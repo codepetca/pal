@@ -11,7 +11,7 @@ import {
   type PalTheme,
   type PalViewport,
   usePalWidget,
-} from "@pal/widget";
+} from "@codepet/pal-widget";
 import {
   ArrowsOut,
   BookOpen,

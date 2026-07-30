@@ -28,7 +28,7 @@ outside this delivery window.
 
 | Owner | Workstream | Responsibilities |
 |---|---|---|
-| **Ab** | Pal engineering and experience | Production ingest, validation, durable idempotency, achievement progress and award persistence, learner-world API state, the `@pal/widget` package, and the reward celebration. |
+| **Ab** | Pal engineering and experience | Production ingest, validation, durable idempotency, achievement progress and award persistence, learner-world API state, the `@codepet/pal-widget` package, and the reward celebration. |
 | **Je** | Visual system and artwork | Badge templates and icons, status treatments, accessible color/text combinations, initial badge and pet/reward assets, responsive visual QA, and asset handoff. |
 | **Ja** | Achievement system, sandbox, and QA | Achievement rules, recurrence, thresholds, scope, copy, rewards, event-to-achievement mapping, acceptance fixtures, the minimal 16-week sandbox control-panel overlay, fictional-semester scenarios, edge-case expectations, and product QA. |
 | **St** | Pika integration | Transactional outbox, six authoritative signal hooks, pseudonymous tokens, weekly configuration revisions, authenticated delivery/retry/reconciliation, widget token client, Pika theme bridge and placement, and Pika-side contract tests. |

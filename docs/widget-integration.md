@@ -1,6 +1,6 @@
 # Pal widget integration
 
-`@pal/widget` is Pal's selected presentation boundary for Pika. It is one React
+`@codepet/pal-widget` is Pal's selected presentation boundary for Pika. It is one React
 package with three separately mountable learner surfaces sharing a provider:
 
 - `PalAchievements` — the complete vertical roadmap in Pika's content pane.
@@ -12,6 +12,8 @@ package with three separately mountable learner surfaces sharing a provider:
 The separation is intentional. The roadmap is route content; the companion may
 outlive that route; a celebration has a one-time notification lifecycle. They share
 authorization, cached learner state, refreshes, and errors through `PalProvider`.
+Packaging and alpha publication are documented in
+[Pal widget release](widget-release.md).
 
 ## Public boundary
 
@@ -105,7 +107,7 @@ Pal owns:
 
 ## Theme contract
 
-Theme contract version 1 is exported from `@pal/widget/theme-contract` as
+Theme contract version 1 is exported from `@codepet/pal-widget/theme-contract` as
 `PAL_THEME_CONTRACT_VERSION`, `PAL_THEME_PROPERTIES`, and
 `PAL_THEME_ATTRIBUTES`. This is the machine-readable boundary hosts should use
 for adapter drift checks.
@@ -187,7 +189,7 @@ award/reward persistence, and the learner read API.
 
 ## Initial acceptance
 
-- The sandbox consumes `@pal/widget` through public package exports.
+- The sandbox consumes `@codepet/pal-widget` through public package exports.
 - Roadmap, companion, and celebration can mount and fail independently.
 - All surfaces render in light and dark modes and inherit host typography.
 - Status is never conveyed by color alone.

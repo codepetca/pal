@@ -287,7 +287,7 @@ The roadmap is achievement state, not a raw event feed. Pal renders persisted pr
 
 ## Selected Pika presentation boundary
 
-Pika consumes the public React package `@pal/widget`. One provider shares the
+Pika consumes the public React package `@codepet/pal-widget`. One provider shares the
 learner-scoped client and state, while Pika mounts three independent surfaces:
 
 ```tsx
@@ -322,7 +322,7 @@ integrations. It is not the selected Pika presentation.
 
 ## Selected development sandbox
 
-The sandbox is a host harness that imports `@pal/widget` through its public package
+The sandbox is a host harness that imports `@codepet/pal-widget` through its public package
 exports exactly as an integration does. Its minimal Pika-like shell has a content
 pane for `PalAchievements` and separate host layers for `PalCompanion` and
 `PalRewardCelebration`. A screenshot may remain a visual reference mode, but is not
@@ -341,7 +341,7 @@ injected fact produces immediate observable feedback.
 - Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
 - Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
 - Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
-- The control overlay is a development tool and is not exported from `@pal/widget`.
+- The control overlay is a development tool and is not exported from `@codepet/pal-widget`.
 - Fixture mode is explicitly labeled and changes only fixture-client state. Once the
   receiver is ready, pipeline mode sends every action through the normal Pal API and
   never mutates widget, achievement, or pet state directly.
@@ -378,7 +378,7 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [ ] Weekly, learning-item, term, and lifetime achievement instances
 - [ ] Claimable reward state and one-time reward application
 - [ ] Achievement state in the learner-world API
-- [x] A portable `@pal/widget` package with a shared provider
+- [x] A portable `@codepet/pal-widget` package with a shared provider
 - [x] Separately mountable roadmap, companion, and celebration components
 - [x] A versioned learner snapshot/client contract
 - [x] A narrow, portable `--pal-*` theme contract
@@ -389,7 +389,7 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 
 ## Current implementation status
 
-The private pilot `@pal/widget` package and its fixture-driven sandbox now exist. The
+The unpublished pilot `@codepet/pal-widget` package and its fixture-driven sandbox now exist. The
 sandbox renders a 16-week roadmap in a Pika-like host and can advance the fictional
 week, apply representative daily-log and on-time-completion outcomes, queue a reward,
 replay an inert duplicate, and reset its fictional learner. Those controls update

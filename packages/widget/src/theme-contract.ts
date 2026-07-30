@@ -1,7 +1,7 @@
 export const PAL_THEME_CONTRACT_VERSION = 1 as const;
 
 /**
- * The complete host-owned visual input boundary for @pal/widget.
+ * The complete host-owned visual input boundary for @codepet/pal-widget.
  *
  * Every property is optional because the widget provides light and dark
  * fallbacks. Hosts should map semantic tokens rather than literal values.
