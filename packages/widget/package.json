@@ -1,0 +1,35 @@
+{
+  "name": "@pal/widget",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme-contract": "./src/theme-contract.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.test.ts src/**/*.test.tsx",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18.3.0",
+    "react-dom": ">=18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/react-test-renderer": "^19",
+    "eslint": "catalog:",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-test-renderer": "19.2.7",
+    "tsx": "^4.22.4",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}

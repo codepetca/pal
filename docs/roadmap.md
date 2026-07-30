@@ -12,12 +12,15 @@ The project's target direction is a recurring achievement roadmap driven automat
 At a high level:
 
 - **Pika:** normalize authoritative activity into privacy-safe events and deliver them through a reliable adapter/outbox.
-- **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render a vertical weekly roadmap through `/embed/roadmap`.
+- **Pal:** aggregate events into distinct facts, track scoped/recurring achievement progress, award badges and rewards, and render native roadmap, companion, and celebration surfaces through `@pal/widget`.
 - **Teachers:** no additional Pal configuration or achievement maintenance.
 
 The initial workstream rewards completed behaviors and configured weekly opportunities. It does not mirror Pika's assignment catalog or infer that a silent assignment is incomplete. A complete assignment-status view is deferred unless the product later adopts a separate, versioned Pika-owned academic projection with reconciliation.
 
-The initial Pika presentation places the roadmap in Pika's content pane. Only the compact pet companion and brief reward celebrations may render as overlays.
+The initial Pika presentation mounts `PalAchievements` in Pika's content pane.
+`PalCompanion` and `PalRewardCelebration` are separate components that Pika may mount
+in approved overlay layers. A chrome-free embed route remains optional for non-React
+hosts.
 
 ## Milestone 1 (M1) — Pika-first foundation
 - Event ingest API + idempotency
@@ -35,7 +38,7 @@ The initial Pika presentation places the roadmap in Pika's content pane. Only th
 
 ## Milestone 3 (M3) — Multi-integration
 - Integration setup portal
-- `@pal/widget` npm package
+- Publish the already-piloted `@pal/widget` package for general integrations
 - Read token mint flow
 - Teacher console (aggregate views, no PII)
 
