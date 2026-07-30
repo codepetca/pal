@@ -465,12 +465,30 @@
 }
 
 .pal-companion-art {
+  position: relative;
   display: grid;
   min-height: 5rem;
   place-items: center;
   border-radius: calc(var(--pal-effective-radius-card) - 0.2rem);
   background: linear-gradient(145deg, #dbeafe, #dcfce7);
   font-size: 2rem;
+}
+
+/* Every pose is stacked in the same box and switched by opacity, so the frames
+   are taken out of flow and sized from the box height. `transform` is set per
+   frame in companion.tsx: centring plus a measured per-canvas nudge, so every
+   pose lands on the same spot. Vertically the canvases already agree, so
+   bottom-flush is correct for all of them.
+
+   No transition: a crossfade would show two poses at once, and the point of the
+   two-frame loop is that each drawing reads on its own. */
+.pal-companion-art .pal-companion-sprite {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: auto;
+  max-width: none;
+  height: 100%;
 }
 
 .pal-companion-title {
