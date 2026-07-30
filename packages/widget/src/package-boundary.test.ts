@@ -38,6 +38,25 @@ const widgetPackage = JSON.parse(
   exports?: Record<string, unknown>;
 };
 
+function runReleaseGuard(version: string | undefined, tag: string) {
+  return spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../scripts/assert-publish-tag.mjs", import.meta.url),
+      ),
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        npm_config_tag: tag,
+        npm_package_version: version,
+      },
+    },
+  );
+}
+
 test("package metadata exposes only compiled public entry points", () => {
   assert.equal(widgetPackage.name, "@codepet/pal-widget");
   assert.match(widgetPackage.version ?? "", /^0\.1\.0-alpha\.\d+$/);
@@ -76,46 +95,25 @@ test("package metadata exposes only compiled public entry points", () => {
 });
 
 test("release guard accepts the licensed alpha release configuration", () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      fileURLToPath(
-        new URL("../scripts/assert-publish-tag.mjs", import.meta.url),
-      ),
-    ],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        npm_config_tag: "alpha",
-        npm_package_version: widgetPackage.version,
-      },
-    },
-  );
+  const result = runReleaseGuard(widgetPackage.version, "alpha");
 
   assert.equal(result.status, 0, result.stderr);
 });
 
 test("release guard rejects every non-alpha prerelease tag", () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      fileURLToPath(
-        new URL("../scripts/assert-publish-tag.mjs", import.meta.url),
-      ),
-    ],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        npm_config_tag: "beta",
-        npm_package_version: widgetPackage.version,
-      },
-    },
-  );
+  const result = runReleaseGuard(widgetPackage.version, "beta");
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /with the beta tag\. Use --tag alpha/);
+});
+
+test("release guard rejects stable versions with any distribution tag", () => {
+  for (const tag of ["latest", "beta"]) {
+    const result = runReleaseGuard("0.1.0", tag);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Refusing to publish non-alpha version 0\.1\.0/);
+  }
 });
 
 test("sandbox consumes only the widget public package boundary", () => {

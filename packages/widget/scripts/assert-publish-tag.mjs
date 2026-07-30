@@ -6,7 +6,14 @@ const packageJson = JSON.parse(
 const version = process.env.npm_package_version ?? "";
 const tag = process.env.npm_config_tag ?? "latest";
 
-if (version.includes("-") && tag !== "alpha") {
+if (!/^\d+\.\d+\.\d+-alpha\.\d+(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+  console.error(
+    `Refusing to publish non-alpha version ${version || "(missing)"}.`,
+  );
+  process.exit(1);
+}
+
+if (tag !== "alpha") {
   console.error(
     `Refusing to publish prerelease ${version} with the ${tag} tag. Use --tag alpha.`,
   );
