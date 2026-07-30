@@ -52,6 +52,7 @@ try {
     "pal-widget",
   );
   assert.deepEqual(readdirSync(installedPackage).sort(), [
+    "LICENSE",
     "README.md",
     "dist",
     "package.json",
@@ -65,6 +66,10 @@ try {
     const theme = await import("@codepet/pal-widget/theme-contract");
     const entryUrl = import.meta.resolve("@codepet/pal-widget");
     const stylesheetUrl = import.meta.resolve("@codepet/pal-widget/styles.css");
+    const license = readFileSync(
+      new URL("./node_modules/@codepet/pal-widget/LICENSE", import.meta.url),
+      "utf8",
+    );
     const packageJson = JSON.parse(
       readFileSync(new URL("./node_modules/@codepet/pal-widget/package.json", import.meta.url), "utf8"),
     );
@@ -76,6 +81,9 @@ try {
     assert.match(readFileSync(new URL(entryUrl), "utf8"), /^"use client";/);
     assert.equal(packageJson.peerDependencies.react, "^18.3.0 || ^19.0.0");
     assert.equal(packageJson.peerDependencies["react-dom"], "^18.3.0 || ^19.0.0");
+    assert.equal(packageJson.license, "MIT");
+    assert.notEqual(packageJson.private, true);
+    assert.match(license, /^MIT License/);
   `;
 
   execFileSync(

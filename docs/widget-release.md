@@ -10,9 +10,8 @@ The package remains unpublished until an owner deliberately runs the publish ste
 - CI passes typecheck, lint, widget tests, and a real package-tarball build.
 - The tarball contains compiled `dist/` files, the package README, and no source
   tests or sandbox controls.
-- A team owner has chosen the package license. It is intentionally marked
-  `UNLICENSED` and `"private": true` until that decision is made. The release PR
-  must set the selected SPDX license and remove the private flag.
+- The widget package is licensed under MIT in `packages/widget/LICENSE`, declares
+  `"license": "MIT"`, and is not marked private.
 - The publishing npm account has two-factor authentication enabled.
 
 ## Alpha release
@@ -36,10 +35,10 @@ pnpm --filter @codepet/pal-widget release:alpha
 ```
 
 The package metadata fixes access to `public`. The package lifecycle guard rejects
-publication while the license/private gate remains and rejects a prerelease that
-omits the `alpha` tag. Do not publish the `.tgz` directly: npm skips package
-lifecycle guards when publishing an existing tarball. Pika installs the prerelease
-with:
+publication if the MIT license/private configuration regresses and rejects a
+prerelease that omits the `alpha` tag. Do not publish the `.tgz` directly: npm
+skips package lifecycle guards when publishing an existing tarball. Pika installs
+the prerelease with:
 
 ```bash
 pnpm add @codepet/pal-widget@alpha

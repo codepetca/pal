@@ -23,6 +23,7 @@ const widgetPackage = JSON.parse(
 ) as {
   name?: string;
   version?: string;
+  license?: string;
   private?: boolean;
   main?: string;
   types?: string;
@@ -40,10 +41,11 @@ const widgetPackage = JSON.parse(
 test("package metadata exposes only compiled public entry points", () => {
   assert.equal(widgetPackage.name, "@codepet/pal-widget");
   assert.match(widgetPackage.version ?? "", /^0\.1\.0-alpha\.\d+$/);
-  assert.equal(widgetPackage.private, true);
+  assert.equal(widgetPackage.license, "MIT");
+  assert.notEqual(widgetPackage.private, true);
   assert.equal(widgetPackage.main, "./dist/index.js");
   assert.equal(widgetPackage.types, "./dist/index.d.ts");
-  assert.deepEqual(widgetPackage.files, ["dist", "README.md"]);
+  assert.deepEqual(widgetPackage.files, ["dist", "LICENSE", "README.md"]);
   assert.equal(widgetPackage.publishConfig?.access, "public");
   assert.equal(
     widgetPackage.scripts?.prepublishOnly,
@@ -73,7 +75,7 @@ test("package metadata exposes only compiled public entry points", () => {
   ]);
 });
 
-test("release guard blocks publication before the license decision", () => {
+test("release guard accepts the licensed alpha release configuration", () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -91,11 +93,7 @@ test("release guard blocks publication before the license decision", () => {
     },
   );
 
-  assert.notEqual(result.status, 0);
-  assert.match(
-    result.stderr,
-    /approved license and is no longer private/,
-  );
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test("release guard rejects every non-alpha prerelease tag", () => {

@@ -13,9 +13,9 @@ if (version.includes("-") && tag !== "alpha") {
   process.exit(1);
 }
 
-if (packageJson.private || packageJson.license === "UNLICENSED") {
+if (packageJson.private || packageJson.license !== "MIT") {
   console.error(
-    "Refusing to publish until the package has an approved license and is no longer private.",
+    "Refusing to publish unless the package is MIT licensed and is not private.",
   );
   process.exit(1);
 }

@@ -53,3 +53,5 @@ for the full boundary.
 The package is currently prepared as an `alpha` prerelease. Publication is a
 separate owner action; see the
 [release guide](https://github.com/codepetca/pal/blob/main/docs/widget-release.md).
+
+Licensed under the [MIT License](./LICENSE).
