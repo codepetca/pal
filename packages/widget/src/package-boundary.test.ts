@@ -145,10 +145,11 @@ test("sandbox says which surfaces are engine-backed and which are fixtures", () 
 });
 
 test("only the engine decides the companion's mood", () => {
-  // The client reports what the world endpoint returns. If it ever starts
-  // choosing a mood itself, the engine has stopped being the only thing that
-  // moves learner state.
-  assert.match(engineClientSource, /api\/v1\/world/);
+  // The client reports the state signed by the sandbox engine route. If it ever
+  // starts choosing a mood itself, the engine has stopped being the only thing
+  // that moves learner state.
+  assert.match(engineClientSource, /api\/sandbox\/events/);
+  assert.match(engineClientSource, /mood_expires_at/);
   assert.doesNotMatch(engineClientSource, /mood = "(happy|excited|sleeping)"/);
 });
 

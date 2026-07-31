@@ -11,9 +11,18 @@ import {
 const LEVEL_UP_COST_XP = 500;
 
 type WorldResponse = {
-  pet: { mood: string; animation_state: string };
+  pet: {
+    mood: string;
+    mood_expires_at: string | null;
+    animation_state: string;
+  };
   world: { stage: number; objects: string[] };
   economy: { xp: number; xp_lifetime: number; level: number; streak: number };
+};
+
+type SandboxSessionResponse = {
+  session: string;
+  world: WorldResponse;
 };
 
 const COMPANION_MOODS = new Set(["neutral", "happy", "excited", "sleeping"]);
@@ -53,10 +62,9 @@ function sessionLearnerId() {
  *
  * The roadmap and reward surfaces stay on the fixture — they need the v1
  * receiver before they can be real — but the pet is driven end to end: the
- * controls POST actual events through the sandbox proxy, the engine decides
- * what they mean, and the companion is read back from
- * `GET /api/v1/world/:learnerId`. Nothing here chooses a mood; that is the
- * engine's call and this only reports it.
+ * controls POST actual events through the sandbox route, the engine decides
+ * what they mean, and the resulting state returns in a server-signed session.
+ * Nothing here chooses a mood; it only expires and reports the engine's result.
  */
 export function createEnginePalClient(
   options: EnginePalClientOptions = {},
@@ -65,12 +73,18 @@ export function createEnginePalClient(
   const learnerId = options.learnerId ?? sessionLearnerId();
 
   let lastRequest: EngineEventRequest | null = null;
+  let sessionToken: string | null = null;
+  let engineWorld: WorldResponse | null = null;
 
   // Left null until the first read so nothing fetches during SSR, where a
   // relative URL has no origin to resolve against.
   let queue: Promise<unknown> | null = null;
 
-  async function post(path: string, body: unknown, operation: string) {
+  async function post<T>(
+    path: string,
+    body: unknown,
+    operation: string,
+  ): Promise<T> {
     const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,19 +93,20 @@ export function createEnginePalClient(
     if (!response.ok) {
       throw new Error(`Pal could not ${operation} (${response.status})`);
     }
-    return response;
+    return (await response.json()) as T;
   }
 
-  // Each page load starts from a known state. The learner store is in-memory and
-  // process-local, so without this a refresh would silently inherit the XP and
-  // level left by the previous session and the run-up to a level-up could not be
-  // watched from a fixed starting point.
-  function resetLearner() {
-    return post(
+  // Each page load starts from a known, signed state. A fresh token makes the
+  // demo repeatable without relying on whichever serverless process happens to
+  // receive the next request.
+  async function resetLearner() {
+    const result = await post<SandboxSessionResponse>(
       "/api/sandbox/reset",
       { learner_id: learnerId },
       "reset the sandbox learner",
     );
+    sessionToken = result.session;
+    engineWorld = result.world;
   }
 
   async function resetLearnerAndClearReplay() {
@@ -110,20 +125,30 @@ export function createEnginePalClient(
       occurred_at: new Date().toISOString(),
       metadata,
     };
-    const response = await post(
+    if (!sessionToken) {
+      throw new Error("Pal could not send the sandbox event (missing session)");
+    }
+    const result = await post<SandboxSessionResponse>(
       "/api/sandbox/events",
-      request,
+      { session: sessionToken, event: request },
       "send the sandbox event",
     );
+    sessionToken = result.session;
+    engineWorld = result.world;
     // A request is replayable only after the engine accepted it. Remembering a
     // failed write would make Replay retry a request that created no progress.
     lastRequest = request;
-    return response;
   }
 
-  function replay() {
-    if (!lastRequest) return null;
-    return post("/api/sandbox/events", lastRequest, "replay the sandbox event");
+  async function replay() {
+    if (!lastRequest || !sessionToken) return;
+    const result = await post<SandboxSessionResponse>(
+      "/api/sandbox/events",
+      { session: sessionToken, event: lastRequest },
+      "replay the sandbox event",
+    );
+    sessionToken = result.session;
+    engineWorld = result.world;
   }
 
   // Writes go on one chain and reads wait for it. The controls dispatch
@@ -146,15 +171,14 @@ export function createEnginePalClient(
       }
       await queue;
 
-      const [base, res] = await Promise.all([
-        fixture.getSnapshot(signal),
-        fetch(`/api/v1/world/${learnerId}`, { signal }),
-      ]);
-      if (!res.ok) {
-        throw new Error(`Pal could not read the sandbox world (${res.status})`);
+      const base = await fixture.getSnapshot(signal);
+      if (!engineWorld) {
+        throw new Error("Pal could not read the sandbox world (missing session)");
       }
-      const world = (await res.json()) as WorldResponse;
-      const mood = toMood(world.pet.mood);
+      const moodExpired =
+        engineWorld.pet.mood_expires_at !== null &&
+        Date.parse(engineWorld.pet.mood_expires_at) <= Date.now();
+      const mood = moodExpired ? "neutral" : toMood(engineWorld.pet.mood);
 
       return {
         ...base,
@@ -162,9 +186,9 @@ export function createEnginePalClient(
           name: "Pip",
           mood,
           moodLabel: mood[0].toUpperCase() + mood.slice(1),
-          level: world.economy.level,
-          streak: world.economy.streak,
-          message: `${MOOD_COPY[mood]} ${world.economy.xp} of ${LEVEL_UP_COST_XP} XP toward the next level.`,
+          level: engineWorld.economy.level,
+          streak: engineWorld.economy.streak,
+          message: `${MOOD_COPY[mood]} ${engineWorld.economy.xp} of ${LEVEL_UP_COST_XP} XP toward the next level.`,
           assetUrl: "/assets/pets/default.png",
         },
       };

@@ -8,12 +8,28 @@ type RecordedRequest = {
   path: string;
 };
 
-function worldResponse() {
+function sessionResponse({
+  mood = "neutral",
+  session = "session-token",
+  xp = 0,
+}: {
+  mood?: string;
+  session?: string;
+  xp?: number;
+} = {}) {
   return new Response(
     JSON.stringify({
-      pet: { mood: "neutral", animation_state: "idle" },
-      world: { stage: 1, objects: [] },
-      economy: { xp: 0, xp_lifetime: 0, level: 1, streak: 0 },
+      session,
+      world: {
+        pet: {
+          mood,
+          mood_expires_at:
+            mood === "neutral" ? null : "2099-01-01T00:00:00.000Z",
+          animation_state: "idle",
+        },
+        world: { stage: 1, objects: [] },
+        economy: { xp, xp_lifetime: xp, level: 1, streak: 0 },
+      },
     }),
     { status: 200 },
   );
@@ -39,7 +55,7 @@ test("replay is a no-op before the first event and after reset", async () => {
         body: JSON.parse(String(init.body)) as Record<string, unknown>,
       });
     }
-    return path.startsWith("/api/v1/world/") ? worldResponse() : new Response(null);
+    return sessionResponse();
   });
 
   try {
@@ -69,9 +85,7 @@ test("reset invalidates an engine event that was already queued", async () => {
   let eventWrites = 0;
   const restore = installFetch((path) => {
     if (path === "/api/sandbox/events") eventWrites += 1;
-    return path.startsWith("/api/v1/world/")
-      ? worldResponse()
-      : new Response(null);
+    return sessionResponse();
   });
 
   try {
@@ -89,10 +103,21 @@ test("reset invalidates an engine event that was already queued", async () => {
 });
 
 test("replay resends the exact prior engine request", async () => {
-  const eventBodies: string[] = [];
+  const eventBodies: Array<{
+    event: Record<string, unknown>;
+    session: string;
+  }> = [];
   const restore = installFetch((path, init) => {
-    if (path === "/api/sandbox/events") eventBodies.push(String(init?.body));
-    return path.startsWith("/api/v1/world/") ? worldResponse() : new Response(null);
+    if (path === "/api/sandbox/events") {
+      eventBodies.push(
+        JSON.parse(String(init?.body)) as {
+          event: Record<string, unknown>;
+          session: string;
+        },
+      );
+      return sessionResponse({ session: "advanced-session" });
+    }
+    return sessionResponse({ session: "reset-session" });
   });
 
   try {
@@ -102,7 +127,9 @@ test("replay resends the exact prior engine request", async () => {
     client.dispatch("duplicate-replayed");
     await client.getSnapshot();
     assert.equal(eventBodies.length, 2);
-    assert.equal(eventBodies[1], eventBodies[0]);
+    assert.deepEqual(eventBodies[1]!.event, eventBodies[0]!.event);
+    assert.equal(eventBodies[0]!.session, "reset-session");
+    assert.equal(eventBodies[1]!.session, "advanced-session");
   } finally {
     restore();
   }
@@ -112,15 +139,14 @@ test("two clients keep their learner requests isolated", async () => {
   const learnerIds = new Set<string>();
   const restore = installFetch((path, init) => {
     if (init?.body) {
-      const body = JSON.parse(String(init.body)) as { learner_id?: string };
-      if (body.learner_id) learnerIds.add(body.learner_id);
+      const body = JSON.parse(String(init.body)) as {
+        learner_id?: string;
+        event?: { learner_id?: string };
+      };
+      const learnerId = body.learner_id ?? body.event?.learner_id;
+      if (learnerId) learnerIds.add(learnerId);
     }
-    const worldMatch = path.match(/^\/api\/v1\/world\/(.+)$/);
-    if (worldMatch) {
-      learnerIds.add(worldMatch[1]!);
-      return worldResponse();
-    }
-    return new Response(null);
+    return sessionResponse();
   });
 
   try {
@@ -162,9 +188,7 @@ test("a failed event write never becomes replayable", async () => {
       eventWrites += 1;
       return new Response(null, { status: 503 });
     }
-    return path.startsWith("/api/v1/world/")
-      ? worldResponse()
-      : new Response(null);
+    return sessionResponse();
   });
 
   try {
@@ -173,6 +197,28 @@ test("a failed event write never becomes replayable", async () => {
     await assert.rejects(client.getSnapshot(), /send the sandbox event \(503\)/);
     assert.match(client.dispatch("duplicate-replayed"), /Nothing to replay/);
     assert.equal(eventWrites, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("an event response drives the companion without a process-local world read", async () => {
+  const paths: string[] = [];
+  const restore = installFetch((path) => {
+    paths.push(path);
+    return path === "/api/sandbox/events"
+      ? sessionResponse({ mood: "happy", session: "advanced", xp: 150 })
+      : sessionResponse({ session: "reset" });
+  });
+
+  try {
+    const client = createEnginePalClient({ learnerId: "learner-a" });
+    client.dispatch("on-time-finish");
+    const snapshot = await client.getSnapshot();
+
+    assert.equal(snapshot.companion.mood, "happy");
+    assert.match(snapshot.companion.message, /150 of 500 XP/);
+    assert.deepEqual(paths, ["/api/sandbox/reset", "/api/sandbox/events"]);
   } finally {
     restore();
   }
