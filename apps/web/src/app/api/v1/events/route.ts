@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { defaultRulePack, processEvent, type IncomingEvent } from "@pal/engine";
+import type { IncomingEvent } from "@pal/engine";
 import { isAuthorizedIngest } from "@/lib/ingest-auth";
 import { isIngestableEventType } from "@/lib/event-types";
-import {
-  hasProcessedEvent,
-  loadLearner,
-  recordProcessedEvent,
-  saveLearner,
-} from "@/lib/learner-store";
+import { processEventInDb } from "@/lib/db-learner";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
 // Small on purpose: it only absorbs clock drift between an integration and us
@@ -57,41 +52,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "future_occurred_at" }, { status: 422 });
   }
 
-  if (hasProcessedEvent(idempotency_key)) {
-    return NextResponse.json({ status: "duplicate" });
-  }
-
   const event: IncomingEvent = {
     event_type,
     occurred_at: new Date(occurredAtMs).toISOString(),
     metadata: metadata ?? {},
   };
 
-  // The engine decides what changes; processEvent applies those changes and feeds the
-  // derived events back through the engine until the cascade settles. Nothing else in
-  // the codebase is allowed to write learner state.
-  const state = loadLearner(learner_id);
-  const result = processEvent(event, state, defaultRulePack);
-  saveLearner(learner_id, result.state);
+  // The engine decides what changes; processEventInDb runs the engine inside a
+  // single ACID transaction with FOR UPDATE locking and constraint-based dedup.
+  // Nothing else in the codebase is allowed to write learner state.
+  const result = await processEventInDb(learner_id, event, idempotency_key);
 
-  // Record the key only after the state change is persisted. If anything above threw,
-  // the key was never recorded and a retry reprocesses the event instead of getting a
-  // spurious "duplicate" and losing the update. Keep this immediately after the save,
-  // and keep the whole stretch from `hasProcessedEvent` to here free of `await` — the
-  // check/record pair is not atomic, and only the synchronous path prevents two
-  // concurrent deliveries of the same key from both applying (see learner-store.ts).
-  recordProcessedEvent(idempotency_key);
+  if (result.status === "duplicate") {
+    return NextResponse.json({ status: "duplicate" });
+  }
 
-  if (result.truncated.length > 0) {
+  if (result.result.truncated.length > 0) {
     // Belongs in the AuditLog once M1 lands. Until then it at least surfaces a rule
     // pack that cascades deeper than the engine will follow.
     console.warn(
-      `[pal] cascade hit the depth limit for ${event.event_type}; dropped: ${result.truncated.join(", ")}`
+      `[pal] cascade hit the depth limit for ${event.event_type}; dropped: ${result.result.truncated.join(", ")}`
     );
   }
 
   return NextResponse.json({
     status: "processed",
-    mutations: result.mutations,
+    mutations: result.result.mutations,
   });
 }

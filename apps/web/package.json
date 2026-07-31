@@ -9,16 +9,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pal/db": "workspace:*",
     "@pal/engine": "workspace:*",
     "@pal/widget": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
+    "drizzle-orm": "^0.44.2",
     "next": "^15.3.4",
+    "pg": "^8.16.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",
     "@types/node": "^22",
+    "@types/pg": "^8.15.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "catalog:",

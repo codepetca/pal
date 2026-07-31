@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resetLearner } from "@/lib/learner-store";
+import { resetLearnerInDb } from "@/lib/db-learner";
 
 // POST /api/sandbox/reset
-// Dev-only: clears a learner's in-memory state so the sandbox panel can
-// be replayed from scratch without restarting the dev server. Not part
-// of the real API contract in docs/api.md.
+// Dev-only: clears a learner's state so the sandbox panel can be replayed
+// from scratch. Not part of the real API contract in docs/api.md.
 export async function POST(req: NextRequest) {
   // Blocked on production only. Vercel preview builds also run with
   // NODE_ENV=production, and the panel's Reset must keep working there —
@@ -22,6 +21,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_learner_id" }, { status: 422 });
   }
 
-  resetLearner(learner_id);
+  await resetLearnerInDb(learner_id);
   return NextResponse.json({ status: "reset" });
 }
