@@ -78,6 +78,8 @@ jobs:
       - name: Widget tests
         run: pnpm --filter @codepet/pal-widget test
 
+      # Run through Turbo so the web package's workspace dependencies are built
+      # before its tests import their public entry points.
       - name: Web API and persistence tests
         run: pnpm turbo test --filter @pal/web
 

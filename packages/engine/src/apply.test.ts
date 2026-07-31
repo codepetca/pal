@@ -28,6 +28,10 @@ function withEconomy(overrides: Partial<LearnerState["economy"]>): LearnerState 
   return { ...baseState, economy: { ...baseState.economy, ...overrides } };
 }
 
+function withPet(overrides: Partial<LearnerState["pet"]>): LearnerState {
+  return { ...baseState, pet: { ...baseState.pet, ...overrides } };
+}
+
 describe("applyMutations", () => {
   it("does not mutate the state it was given", () => {
     const before = structuredClone(baseState);
@@ -180,6 +184,83 @@ describe("applyMutations", () => {
       baseState,
       [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
       log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
+  it("lets a stronger mood take over one that is still running", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:30:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "excited", duration_minutes: 60 }],
+      log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "excited");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T13:00:00.000Z");
+  });
+
+  it("keeps a stronger mood when a weaker one fires inside its window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "excited", mood_expires_at: "2026-03-01T13:00:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
+      log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "excited");
+    // The window is not extended either — it still ends 60 minutes after the
+    // level-up that set it, not 30 minutes after this event.
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T13:00:00.000Z");
+  });
+
+  it("lets a weaker mood take over once the stronger one has expired", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "excited", mood_expires_at: "2026-03-01T11:00:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
+      log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
+  it("lets a mood of equal strength refresh its own window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:10:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
+      log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
+  it("ends on the strongest mood when one cascade sets several", () => {
+    // What an assignment that also levels the learner up emits: the assignment's
+    // own `happy` first, then `excited` from the derived LEVEL_UP.
+    const { state } = applyMutations(
+      baseState,
+      [
+        { type: "PET_MOOD", mood: "happy", duration_minutes: 30 },
+        { type: "PET_MOOD", mood: "excited", duration_minutes: 60 },
+      ],
+      log("2026-03-01")
+    );
+    assert.equal(state.pet.mood, "excited");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T13:00:00.000Z");
+  });
+
+  it("does not let a backdated stronger mood shorten a newer mood window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:30:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "excited", duration_minutes: 60 }],
+      log("2026-02-28")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
+  it("does not let a backdated equal mood shorten a newer mood window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:30:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
+      log("2026-02-28")
     );
     assert.equal(state.pet.mood, "happy");
     assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");

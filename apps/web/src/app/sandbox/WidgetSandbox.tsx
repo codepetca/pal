@@ -1,11 +1,11 @@
 "use client";
 
 import {
+  createFixturePalClient,
   PalAchievements,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
-  createFixturePalClient,
   type PalFixtureAction,
   type PalFixtureController,
   type PalTheme,
@@ -76,12 +76,12 @@ const FIXTURE_ACTIONS: Array<{
   {
     action: "daily-log-completed",
     label: "Complete daily log",
-    detail: "Advances Weekly Rhythm",
+    detail: "Advances Weekly Rhythm, and grants XP",
   },
   {
     action: "on-time-finish",
     label: "Finish on time",
-    detail: "Adds an earned item badge",
+    detail: "Adds a badge, and makes the pet happy",
   },
   {
     action: "late-finish",
@@ -332,6 +332,10 @@ function SandboxExperience({
       theme={theme}
       viewport={viewport}
       onError={(error) => setSandboxError(error.message)}
+      // Moods expire on the engine's timestamp: happy runs 30 minutes and
+      // excited an hour. Refreshing reads the durable state against the
+      // current clock, so the pet returns to neutral without another event.
+      refreshIntervalMs={15_000}
     >
       <div className={styles.sandbox} data-theme={theme}>
         <div

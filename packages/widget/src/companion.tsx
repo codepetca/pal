@@ -1,7 +1,267 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 import { usePalWidget } from "./provider";
-import type { PalCompanionProps } from "./types";
+import type { PalCompanionMood, PalCompanionProps, PalMotion } from "./types";
+
+// The two frames of a mood alternate at this interval. Deliberately slow for a
+// sprite animation: each pose has to register as its own drawing rather than
+// blending into the next.
+const MOOD_FRAME_MS = 600;
+
+// A blink plays blinking-1..5 in sequence, then rests. The art is authored as a
+// ping-pong — frame 5 is byte-identical to frame 1 and frame 4 to frame 2, with
+// frame 3 the closed-eye peak — and frame 1 matches the resting pose, so the
+// sequence enters and leaves it without a visible cut.
+const BLINK_FRAME_MS = 70;
+const BLINK_EVERY_MS = 4000;
+
+// Every pose is drawn on a canvas of this height; only the widths differ.
+const CANVAS_H = 2048;
+const REST_W = 1952;
+
+// `dx` and `dy` register each frame against the resting pose, in that frame's
+// own canvas pixels, applied on top of centring the canvas and sitting it on the
+// box floor. The poses are drawn on canvases of different widths and the cat is
+// not placed identically on any two of them, so the obvious geometry — centre
+// the canvas, flush the bottom — lands the cat in a different spot on almost
+// every frame, which reads as a twitch on each frame change.
+//
+// Deriving these for new art: sample both alpha masks, reduce each to a row and
+// a column occupancy profile, and cross-correlate those against the resting
+// pose's. The shifts that maximise the two correlations are `dy` and `dx`, in
+// canvas pixels; positive `dy` moves the frame down. Registering on the mask
+// rather than on the bounding box matters — a pose with a limb extended pushes
+// its bounding-box centre sideways while the body has not moved, so aligning
+// boxes would introduce exactly the drift this is meant to remove.
+//
+// Every canvas shares a 2048px height, so all frames render at one scale and
+// these offsets stay valid at any rendered size.
+type Frame = { src: string; w: number; dx: number; dy: number };
+
+type FrameSpec = { file: string; w: number; dx: number; dy: number };
+
+const BLINK_SPECS: FrameSpec[] = [1, 2, 3, 4, 5].map((n) => ({
+  file: `blinking-${n}`,
+  w: REST_W,
+  dx: 0,
+  dy: 0,
+}));
+
+// Moods with animation frames. A mood absent here — "neutral", and "sleeping"
+// until there is art for it — falls back to the resting pose and blinks.
+//
+// The second frame of each mood carries its own offsets rather than sharing the
+// first's: the art moves the cat between the two, and only a per-frame value can
+// hold the body still through the loop.
+const MOOD_SPECS: Partial<Record<PalCompanionMood, FrameSpec[]>> = {
+  happy: [
+    { file: "happy-1", w: 2126, dx: -58, dy: 0 },
+    { file: "happy-2", w: 2126, dx: -54, dy: 6 },
+  ],
+  excited: [
+    { file: "excited-1", w: 2502, dx: -12, dy: 4 },
+    { file: "excited-2", w: 2502, dx: -10, dy: 46 },
+  ],
+};
+
+type SpriteSet = {
+  rest: Frame;
+  blink: Frame[];
+  byMood: Partial<Record<PalCompanionMood, Frame[]>>;
+};
+
+/**
+ * Builds the frame table from the resting pose the snapshot points at.
+ *
+ * The animation frames live beside that file and are named after it, so the
+ * URLs are derived rather than hardcoded: an integration serving Pal's art from
+ * its own origin keeps working, and the widget needs no knowledge of where
+ * Pal's public directory sits. The cost is that the naming convention is
+ * implicit — a snapshot whose companion art does not ship the sibling frames
+ * 404s on them, and the pet holds its resting pose.
+ */
+function buildSprites(restUrl: string): SpriteSet {
+  const base = restUrl.slice(0, restUrl.lastIndexOf("/") + 1);
+  const toFrame = (spec: FrameSpec): Frame => ({
+    src: `${base}${spec.file}.png`,
+    w: spec.w,
+    dx: spec.dx,
+    dy: spec.dy,
+  });
+
+  // The resting pose is the registration reference, so its offsets are zero by
+  // definition, and it is the one frame addressed by the snapshot's own URL.
+  const rest: Frame = { src: restUrl, w: REST_W, dx: 0, dy: 0 };
+  const blink: Frame[] = BLINK_SPECS.map(toFrame);
+
+  const byMood: Partial<Record<PalCompanionMood, Frame[]>> = {};
+  for (const [mood, specs] of Object.entries(MOOD_SPECS)) {
+    byMood[mood as PalCompanionMood] = specs.map(toFrame);
+  }
+
+  return { rest, blink, byMood };
+}
+
+/**
+ * Tracks the OS-level motion preference.
+ *
+ * The stylesheet answers `prefers-reduced-motion` on its own, but this
+ * animation is driven by timers rather than CSS, so it has to ask directly —
+ * otherwise `motion="system"` would honour the preference for every other
+ * surface and keep the pet moving anyway. Starts false so the server and the
+ * first client render agree; the effect corrects it before any frame advances.
+ */
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return reduced;
+}
+
+/**
+ * The pet, driven entirely by the mood the snapshot reports. Three cases:
+ *
+ *   mood has frames → alternate them forever (happy, excited)
+ *   mood has none   → rest on the still pose and blink periodically (neutral)
+ *   unknown mood    → treated as the resting case, so a mood the widget has no
+ *                     art for degrades to a still pet rather than an empty box
+ *
+ * Nothing here decides *when* a mood changes — that is the rule engine's job,
+ * and this component only ever reads the result.
+ */
+function PetSprite({
+  mood,
+  motion,
+  restUrl,
+}: {
+  mood: PalCompanionMood;
+  motion: PalMotion;
+  restUrl: string;
+}) {
+  const sprites = useMemo(() => buildSprites(restUrl), [restUrl]);
+  const frames = sprites.byMood[mood];
+
+  // Reduced motion holds the mood's opening pose. The pet still changes with
+  // the mood — that is information, not decoration — it just stops moving.
+  const prefersReduced = usePrefersReducedMotion();
+  const still = motion === "reduced" || (motion === "system" && prefersReduced);
+
+  const [moodFrame, setMoodFrame] = useState(0);
+  const [blinkFrame, setBlinkFrame] = useState(-1);
+  const [failedFrames, setFailedFrames] = useState<Set<string>>(() => new Set());
+  const [loadedFrames, setLoadedFrames] = useState<Set<string>>(() => new Set());
+
+  // The two-frame mood loop. Restarting at frame 0 on every mood change means a
+  // new mood always opens on its first pose.
+  useEffect(() => {
+    setMoodFrame(0);
+    if (still || !frames) return;
+    const id = setInterval(
+      () => setMoodFrame((f) => (f + 1) % frames.length),
+      MOOD_FRAME_MS,
+    );
+    return () => clearInterval(id);
+  }, [frames, still]);
+
+  // Idle blinking, and only idle — the happy and excited art has no blink
+  // frames, and a pet already animating a mood does not need a second animation
+  // on top.
+  useEffect(() => {
+    setBlinkFrame(-1);
+    if (still || frames) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    // One chained timeout rather than an interval per frame, so a mood change
+    // mid-blink cancels the whole sequence instead of leaving strays queued.
+    const step = (i: number) => {
+      if (cancelled) return;
+      if (i >= sprites.blink.length) {
+        setBlinkFrame(-1);
+        timer = setTimeout(() => step(0), BLINK_EVERY_MS);
+        return;
+      }
+      setBlinkFrame(i);
+      timer = setTimeout(() => step(i + 1), BLINK_FRAME_MS);
+    };
+
+    timer = setTimeout(() => step(0), BLINK_EVERY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [frames, sprites, still]);
+
+  const requestedSrc = frames
+    ? frames[moodFrame].src
+    : blinkFrame >= 0
+      ? sprites.blink[blinkFrame].src
+      : sprites.rest.src;
+  const activeSrc =
+    requestedSrc === sprites.rest.src ||
+    (loadedFrames.has(requestedSrc) && !failedFrames.has(requestedSrc))
+      ? requestedSrc
+      : sprites.rest.src;
+
+  // Only mount frames this mood can actually show. The rest pose remains
+  // visible while those images load, so a first visit does not need to fetch
+  // every mood up front just to avoid an empty box during the first animation.
+  const animatedFrames = frames
+    ? still
+      ? [frames[0]]
+      : frames
+    : still
+      ? []
+      : sprites.blink;
+  const mountedFrames = [sprites.rest, ...animatedFrames];
+
+  return (
+    <>
+      {mountedFrames.map((frame) => (
+        <img
+          key={frame.src}
+          className="pal-companion-sprite"
+          src={frame.src}
+          alt=""
+          width={frame.w}
+          height={CANVAS_H}
+          onLoad={() => {
+            if (frame.src !== sprites.rest.src) {
+              setLoadedFrames((current) => {
+                if (current.has(frame.src)) return current;
+                return new Set(current).add(frame.src);
+              });
+            }
+          }}
+          onError={() => {
+            if (frame.src !== sprites.rest.src) {
+              setFailedFrames((current) => {
+                if (current.has(frame.src)) return current;
+                return new Set(current).add(frame.src);
+              });
+            }
+          }}
+          style={{
+            opacity: frame.src === activeSrc ? 1 : 0,
+            // Every term is a percentage of the frame's own rendered box, which
+            // maps 1:1 onto its canvas, so the registration holds at any size.
+            transform: `translate(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%), ${((frame.dy / CANVAS_H) * 100).toFixed(3)}%)`,
+          }}
+        />
+      ))}
+    </>
+  );
+}
 
 export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
   const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
@@ -22,7 +282,12 @@ export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
     >
       <div className="pal-companion-art" aria-hidden="true">
         {companion.assetUrl ? (
-          <img src={companion.assetUrl} alt="" width="96" height="96" />
+          <PetSprite
+            key={companion.assetUrl}
+            mood={companion.mood}
+            motion={motion}
+            restUrl={companion.assetUrl}
+          />
         ) : (
           <span>🐾</span>
         )}

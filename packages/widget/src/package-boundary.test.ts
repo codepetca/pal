@@ -18,6 +18,13 @@ const sandboxStyles = readFileSync(
   ),
   "utf8",
 );
+const sandboxClientSource = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/sandbox-client.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -117,15 +124,30 @@ test("release guard rejects stable versions with any distribution tag", () => {
 });
 
 test("sandbox consumes only the widget public package boundary", () => {
-  assert.match(sandboxSource, /from "@codepet\/pal-widget"/);
-  assert.doesNotMatch(sandboxSource, /packages\/widget\/src/);
-  assert.doesNotMatch(sandboxSource, /@codepet\/pal-widget\//);
+  // The sandbox client imports the widget as well, so it is held to the same
+  // boundary as the sandbox component itself.
+  for (const source of [sandboxSource, sandboxClientSource]) {
+    assert.match(source, /from "@codepet\/pal-widget"/);
+    assert.doesNotMatch(source, /packages\/widget\/src/);
+    assert.doesNotMatch(source, /@codepet\/pal-widget\//);
+  }
 });
 
 test("sandbox distinguishes persisted companion state from fixture-only surfaces", () => {
   assert.match(sandboxSource, /Fixture preview/);
   assert.match(sandboxSource, /persisted rule-engine state/);
   assert.match(sandboxSource, /roadmap and reward states remain fixtures/);
+});
+
+test("only the engine decides the companion's mood", () => {
+  // The client reports state read from the durable world endpoint. If it ever
+  // starts choosing a mood from a fixture action, the engine is no longer the
+  // sole authority over learner state.
+  assert.match(sandboxClientSource, /api\/v1\/world/);
+  assert.doesNotMatch(
+    sandboxClientSource,
+    /action === .*mood|mood = "(happy|excited|sleeping)"/,
+  );
 });
 
 test("sandbox reset rotates provider identity and controls start collapsed", () => {

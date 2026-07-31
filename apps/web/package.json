@@ -2,10 +2,11 @@
   "name": "@pal/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "test": "node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.mts'",
+    "test": "node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx' 'src/**/*.test.mts'",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },

@@ -158,7 +158,7 @@ processEvent(event, state, rulePack)
 
 `processEvent` is pure — state in, state out — so the whole cascade is unit-testable with no infrastructure. The caller owns persistence and wraps it in one transaction that locks the learner row (see [data-model.md](data-model.md)) and writes the trace to the AuditLog.
 
-> **M1 status:** the ingest route calls `processEvent` today, but persistence is a process-local in-memory store (`apps/web/src/lib/learner-store.ts`) standing in for `@pal/db`. It does not survive a cold start and is not shared across function instances. Replacing it with the real transaction is M1 work; the route and the applier do not change when it lands.
+> **M1 status:** the ingest route calls `processEventInDb`, which locks the learner row, inserts the event with constraint-backed deduplication, applies the engine, and persists economy, pet, and world state in one PostgreSQL transaction. Persisting the full mutation trace to the AuditLog remains future work.
 
 Domains don't apply their own mutations ad hoc — they **register handlers** with the applier:
 
