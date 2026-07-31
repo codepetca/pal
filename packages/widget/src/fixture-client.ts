@@ -8,12 +8,6 @@ import type {
 
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 
-const LEVEL_UP_COST_XP = 500;
-
-function xpToNextLevel(xp: number): number {
-  return Math.max(0, LEVEL_UP_COST_XP - xp);
-}
-
 function weeklyRhythm(
   week: number,
   current: number,
@@ -91,7 +85,7 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
       level: 2,
       streak: 3,
       xp: 230,
-      xpToNextLevel: xpToNextLevel(230),
+      xpToNextLevel: 270,
       message: "Two daily-log days complete this week.",
       assetUrl: "/assets/pets/default.png",
     },
@@ -123,15 +117,6 @@ export function createFixturePalClient(
     );
     if (!achievement) throw new Error("Fixture Weekly Rhythm is missing");
     return achievement;
-  }
-
-  function grantXp(amount: number) {
-    snapshot.companion.xp += amount;
-    while (snapshot.companion.xp >= LEVEL_UP_COST_XP) {
-      snapshot.companion.xp -= LEVEL_UP_COST_XP;
-      snapshot.companion.level += 1;
-    }
-    snapshot.companion.xpToNextLevel = xpToNextLevel(snapshot.companion.xp);
   }
 
   return {
@@ -168,8 +153,6 @@ export function createFixturePalClient(
           rhythm.statusLabel =
             rhythm.status === "earned" ? "Earned" : rhythm.progress.label;
         }
-        grantXp(50);
-        snapshot.companion.message = "A daily log moved your weekly rhythm forward.";
         return "daily_log.completed applied to fixture state";
       }
       if (action === "on-time-finish") {
@@ -185,10 +168,6 @@ export function createFixturePalClient(
             rewardLabel: "Fish snack",
           });
         }
-        grantXp(100);
-        snapshot.companion.mood = "excited";
-        snapshot.companion.moodLabel = "Excited";
-        snapshot.companion.message = "An on-time finish made Pip excited.";
         return "learning_item.completed (on_time) applied to fixture state";
       }
       if (action === "late-finish") {
@@ -203,16 +182,9 @@ export function createFixturePalClient(
             badge: { label: "Late Finish", icon: "⏰" },
           });
         }
-        grantXp(50);
-        snapshot.companion.mood = "neutral";
-        snapshot.companion.moodLabel = "Okay";
-        snapshot.companion.message = "A late finish — still counts.";
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {
-        snapshot.companion.mood = "happy";
-        snapshot.companion.moodLabel = "Happy";
-        snapshot.companion.message = "Session started — welcome back!";
         return "platform.session.started applied to fixture state";
       }
 
@@ -224,12 +196,15 @@ export function createFixturePalClient(
           icon: "🐟",
         });
       }
-      snapshot.companion.mood = "excited";
-      snapshot.companion.moodLabel = "Excited";
       return "Fixture reward queued";
     },
     peek() {
       return cloneSnapshot(snapshot);
+    },
+
+    setWeek(week: number) {
+      const clamped = Math.max(1, Math.min(16, week));
+      snapshot = createFixtureSnapshot(clamped);
     },
   };
 }

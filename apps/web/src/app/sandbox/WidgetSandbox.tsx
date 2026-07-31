@@ -29,8 +29,9 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Image from "next/image";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { createSandboxPalClient } from "./sandbox-client";
 import styles from "./widget-sandbox.module.css";
 
 const TEST_LEARNER_ID = "test-learner-001";
@@ -127,11 +128,6 @@ const FIXTURE_ACTIONS: Array<{
     action: "duplicate-replayed",
     label: "Replay duplicate",
     detail: "Must not change progress",
-  },
-  {
-    action: "advance-week",
-    label: "Advance one week",
-    detail: "Moves the fictional semester",
   },
 ];
 
@@ -309,11 +305,25 @@ function SandboxExperience({
     return () => clearInterval(timer);
   }, []);
 
+  // Derive the current semester week from the simulated date.
+  // Semester starts 2026-07-13 (week 1). Each week is 7 days.
+  const currentSemesterWeek = useMemo(() => {
+    const semesterStart = new Date("2026-07-13T00:00:00");
+    const diffMs = simulatedDate.getTime() - semesterStart.getTime();
+    const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    return Math.max(1, Math.min(16, Math.floor(diffDays / 7) + 1));
+  }, [simulatedDate]);
+
+  // Sync the fixture client snapshot whenever the week changes.
+  useEffect(() => {
+    client.setWeek(currentSemesterWeek);
+  }, [currentSemesterWeek, client]);
+
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
-  const fixtureScopeKey = `fixture-learner-${resetGeneration}`;
+  const fixtureScopeKey = `fixture-learner-${resetGeneration}-w${currentSemesterWeek}`;
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
 
@@ -511,7 +521,7 @@ function XpBar() {
 }
 
 export function WidgetSandbox() {
-  const [client] = useState(() => createFixturePalClient());
+  const [client] = useState(() => createSandboxPalClient(createFixturePalClient()));
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");

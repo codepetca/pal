@@ -117,4 +117,6 @@ export type PalFixtureAction =
 export interface PalFixtureController extends PalClient {
   dispatch(action: PalFixtureAction): string;
   peek(): PalWidgetSnapshot;
+  /** Override the current week number (1-16), rebuilding the snapshot. */
+  setWeek(week: number): void;
 }
