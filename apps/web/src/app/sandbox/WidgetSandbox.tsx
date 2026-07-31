@@ -223,7 +223,7 @@ function FixtureControls({
           </header>
 
           <div className={styles.dateBar}>
-            <span className={styles.dateLabel}>Simulated date</span>
+            <span className={styles.dateLabel}>Semester / daily-log date</span>
             <span className={styles.dateValue}>
               {simulatedDate.toLocaleDateString("en-US", {
                 weekday: "short",

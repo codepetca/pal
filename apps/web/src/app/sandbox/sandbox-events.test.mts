@@ -5,22 +5,36 @@ import { addDays, eventForAction, isTodayOrEarlier } from "./sandbox-events";
 
 const learnerId = "sandbox-00000000-0000-4000-8000-000000000001";
 
-test("builds contract-valid events from the simulated date", () => {
+test("builds contract-valid events with coherent simulation and reaction clocks", () => {
   const simulatedDate = new Date("2026-07-14T08:00:00Z");
+  const now = new Date("2026-07-31T20:00:00Z");
   for (const action of [
     "session-started",
     "daily-log-completed",
     "on-time-finish",
     "late-finish",
   ] as const) {
-    const event = eventForAction(action, simulatedDate, learnerId);
+    const event = eventForAction(action, simulatedDate, learnerId, now);
     assert.ok(event);
     assert.equal(v1.validateV1Event(event).ok, true);
   }
 
-  const dailyLog = eventForAction("daily-log-completed", simulatedDate, learnerId);
+  const dailyLog = eventForAction(
+    "daily-log-completed",
+    simulatedDate,
+    learnerId,
+    now,
+  );
   assert.equal(dailyLog?.metadata.activity_day, "2026-07-14");
   assert.equal(dailyLog?.occurred_at.slice(0, 10), dailyLog?.metadata.activity_day);
+
+  const completion = eventForAction(
+    "on-time-finish",
+    simulatedDate,
+    learnerId,
+    now,
+  );
+  assert.equal(completion?.occurred_at, now.toISOString());
 });
 
 test("date controls cannot advance beyond the ingestable UTC day", () => {

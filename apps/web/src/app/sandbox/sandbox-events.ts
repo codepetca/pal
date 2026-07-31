@@ -14,8 +14,14 @@ export function eventForAction(
   action: PalFixtureAction,
   simulatedDate: Date,
   learnerId: string,
+  now = new Date(),
 ): SandboxEventRequest | null {
-  const occurredAt = simulatedDate.toISOString();
+  // Daily logs use the selected semester day so streak scenarios are coherent.
+  // Other actions use the current instant: pet moods deliberately expire from
+  // occurred_at, so backdating a completion would hide its engine reaction.
+  const occurredAt = (
+    action === "daily-log-completed" ? simulatedDate : now
+  ).toISOString();
   const base = {
     schema_version: 1 as const,
     idempotency_key: `sandbox-${crypto.randomUUID()}`,
@@ -32,7 +38,7 @@ export function eventForAction(
         event_type: "daily_log.completed",
         metadata: {
           period_key: "sandbox-week",
-          activity_day: occurredAt.slice(0, 10),
+          activity_day: simulatedDate.toISOString().slice(0, 10),
         },
       };
     case "on-time-finish":
