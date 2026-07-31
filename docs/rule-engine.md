@@ -55,13 +55,55 @@ Rules are JSON config — operators can tune gameplay without code changes.
 | `XP_GRANT` | Add XP to learner economy. A negative amount *spends* XP (this is how a level-up charges its cost); XP is clamped at zero and lifetime XP is never reduced |
 | `LEVEL_GRANT` | Raise the learner's level |
 | `STREAK` | Continue the daily streak, or break it |
-| `PET_MOOD` | Set pet mood for a duration |
+| `PET_MOOD` | Set pet mood for a duration — unless a stronger mood is still running, see [Mood strength](#mood-strength) |
 | `WORLD_UNLOCK` | Unlock a world object by asset ref |
 | `WORLD_STAGE` | Advance world to a specific stage |
 | `ACHIEVEMENT` | Award a badge |
 | `NUDGE` | Trigger a nudge message referencing a copy pack entry (`copy_id`) |
 
 Effects are **literal** mutations — the engine does no arithmetic. A rule cannot say "+3 XP per 2 days of streak, capped at 15"; it says "+3 XP", and the formula is expanded into one rule per tier. Keep it that way: the moment an effect carries a formula, the applier has to evaluate it, and gameplay logic starts leaking out of the rule pack.
+
+### Mood strength
+
+`PET_MOOD` is the one effect that can decline to apply. Moods are ranked, and a mood
+that is still inside its window can only be replaced by one of **equal or greater**
+strength:
+
+| Mood | Strength |
+|---|---|
+| `neutral` (and any mood not listed) | 0 |
+| `happy` | 1 |
+| `excited` | 2 |
+
+Without this, the default rule pack contradicts itself. A level-up sets `excited` for
+60 minutes, but `assignment.completed` sets `happy` unconditionally — so the next
+assignment a minute later would drop the pet straight back to `happy` and the
+celebration would never be seen. The rank makes the stronger mood hold its window.
+
+Three consequences worth knowing before you write a rule that sets a mood:
+
+- **Equal strength replaces when it extends the window**, so repeated current
+  assignments keep refreshing `happy` without letting delayed events move its
+  expiry backward.
+- **A refused mood does not extend the running one.** The window ends when the event
+  that set it said it would, not when the last event that tried to change it arrived.
+- **Only the mood is skipped.** XP, unlocks and everything else in the same cascade
+  apply normally — a rule that grants XP and sets a mood still pays the XP.
+
+Within a single cascade the same rank applies in mutation order, which is why an
+assignment that also levels the learner up ends on `excited`: `happy` lands first,
+then `excited` outranks it.
+
+Because the engine has no clock, "still running" is judged against the event's own
+`occurred_at` — the same instant a new expiry would be measured from. Mood expiry is
+monotonic: a backdated event whose proposed window ends no later than the stored
+window is ignored, even when its mood has equal or greater strength. This prevents
+delayed delivery from erasing newer active state.
+
+`mood` stays a free-form string so rule packs can introduce their own; anything absent
+from the table ranks 0 and yields to whatever is already running. If you add a mood
+that should be able to interrupt, give it a rank in `MOOD_STRENGTH` in
+`packages/engine/src/apply.ts`.
 
 ---
 

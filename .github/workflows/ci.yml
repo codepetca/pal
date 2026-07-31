@@ -78,5 +78,10 @@ jobs:
       - name: Widget tests
         run: pnpm --filter @codepet/pal-widget test
 
+      # Run through Turbo so the web package's workspace dependencies are built
+      # before its tests import their compiled public entry points.
+      - name: Web tests
+        run: pnpm turbo test --filter @pal/web
+
       - name: Verify packed widget with React 18.3
         run: pnpm --filter @codepet/pal-widget verify:package

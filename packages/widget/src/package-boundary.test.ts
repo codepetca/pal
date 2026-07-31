@@ -18,6 +18,13 @@ const sandboxStyles = readFileSync(
   ),
   "utf8",
 );
+const engineClientSource = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/engine-pal-client.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -117,15 +124,33 @@ test("release guard rejects stable versions with any distribution tag", () => {
 });
 
 test("sandbox consumes only the widget public package boundary", () => {
-  assert.match(sandboxSource, /from "@codepet\/pal-widget"/);
-  assert.doesNotMatch(sandboxSource, /packages\/widget\/src/);
-  assert.doesNotMatch(sandboxSource, /@codepet\/pal-widget\//);
+  // The engine client imports the widget as well, so it is held to the same
+  // boundary as the sandbox component itself.
+  for (const source of [sandboxSource, engineClientSource]) {
+    assert.match(source, /from "@codepet\/pal-widget"/);
+    assert.doesNotMatch(source, /packages\/widget\/src/);
+    assert.doesNotMatch(source, /@codepet\/pal-widget\//);
+  }
 });
 
-test("sandbox labels fixture mode as visual state rather than pipeline proof", () => {
+test("sandbox says which surfaces are engine-backed and which are fixtures", () => {
   assert.match(sandboxSource, /Fixture preview/);
-  assert.match(sandboxSource, /Visual states only/);
   assert.match(sandboxSource, /no production state is connected/);
+  // The companion is read back from the rule engine; the roadmap and rewards
+  // are still fixture state. Overclaiming either way misleads whoever is
+  // demoing, so the copy has to keep drawing the line.
+  assert.match(sandboxSource, /pet runs on the real engine/);
+  assert.match(sandboxSource, /roadmap and rewards stay fixtures/);
+  assert.match(sandboxSource, /createEnginePalClient/);
+});
+
+test("only the engine decides the companion's mood", () => {
+  // The client reports the state signed by the sandbox engine route. If it ever
+  // starts choosing a mood itself, the engine has stopped being the only thing
+  // that moves learner state.
+  assert.match(engineClientSource, /api\/sandbox\/events/);
+  assert.match(engineClientSource, /mood_expires_at/);
+  assert.doesNotMatch(engineClientSource, /mood = "(happy|excited|sleeping)"/);
 });
 
 test("sandbox reset rotates provider identity and controls start collapsed", () => {

@@ -5,7 +5,6 @@ import {
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
-  createFixturePalClient,
   type PalFixtureAction,
   type PalFixtureController,
   type PalTheme,
@@ -31,6 +30,7 @@ import {
 import Image from "next/image";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { createEnginePalClient } from "./engine-pal-client";
 import styles from "./widget-sandbox.module.css";
 
 type HostView =
@@ -64,12 +64,12 @@ const FIXTURE_ACTIONS: Array<{
   {
     action: "daily-log-completed",
     label: "Complete daily log",
-    detail: "Advances Weekly Rhythm",
+    detail: "Advances Weekly Rhythm, and grants XP",
   },
   {
     action: "on-time-finish",
     label: "Finish on time",
-    detail: "Adds an earned item badge",
+    detail: "Adds a badge, and makes the pet happy",
   },
   {
     action: "reward-earned",
@@ -94,16 +94,24 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
+  writeError,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
+  writeError: string | null;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
   ]);
+
+  useEffect(() => {
+    if (writeError) {
+      setLog((current) => [`Engine error: ${writeError}`, ...current].slice(0, 6));
+    }
+  }, [writeError]);
 
   async function dispatch(action: PalFixtureAction) {
     const result = client.dispatch(action);
@@ -142,7 +150,10 @@ function FixtureControls({
               <span className={styles.fixtureLabel}>Fixture preview</span>
               <h2>Semester controls</h2>
             </div>
-            <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
+            <p>
+              The pet runs on the real engine — these send events and it decides.
+              The roadmap and rewards stay fixtures until the v1 receiver lands.
+            </p>
           </header>
 
           <div className={styles.controlActions}>
@@ -183,6 +194,8 @@ function SandboxExperience({
   view,
   onViewChange,
   onThemeChange,
+  onSandboxError,
+  sandboxError,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
@@ -190,6 +203,8 @@ function SandboxExperience({
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
+  onSandboxError: (error: Error) => void;
+  sandboxError: string | null;
 }) {
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
@@ -209,6 +224,11 @@ function SandboxExperience({
       motion="system"
       theme={theme}
       viewport={viewport}
+      onError={onSandboxError}
+      // Moods expire on the engine's timestamp: happy runs 30 minutes and
+      // excited an hour. Refreshing recomputes that signed state against the
+      // current clock, so the pet returns to neutral without another event.
+      refreshIntervalMs={15_000}
     >
       <div className={styles.sandbox} data-theme={theme}>
         <div
@@ -335,6 +355,7 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
+                writeError={sandboxError}
               />
             )}
           </FixtureRefreshBridge>
@@ -366,7 +387,12 @@ function FixtureRefreshBridge({
 }
 
 export function WidgetSandbox() {
-  const [client] = useState(() => createFixturePalClient());
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [client] = useState(() =>
+    createEnginePalClient({
+      onWriteError: (error) => setSandboxError(error.message),
+    }),
+  );
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
@@ -387,6 +413,8 @@ export function WidgetSandbox() {
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
+      onSandboxError={(error) => setSandboxError(error.message)}
+      sandboxError={sandboxError}
     />
   );
 }
