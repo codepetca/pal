@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { act, create } from "react-test-renderer";
+
+import { PalCompanion } from "./companion";
+import { createFixtureSnapshot } from "./fixture-client";
+import { PalProvider } from "./provider";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
+  .IS_REACT_ACT_ENVIRONMENT = true;
+
+test("a missing mood frame falls back to the supplied rest image", async () => {
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener() {},
+        removeEventListener() {},
+      }),
+    },
+  });
+
+  try {
+    const snapshot = createFixtureSnapshot();
+    snapshot.companion.mood = "happy";
+    snapshot.companion.assetUrl = "/only/rest.png";
+    let renderer!: ReturnType<typeof create>;
+
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={{
+            getSnapshot: async () => snapshot,
+            markRewardSeen: async () => undefined,
+          }}
+          initialSnapshot={snapshot}
+          motion="reduced"
+          scopeKey="missing-sprites"
+        >
+          <PalCompanion />
+        </PalProvider>,
+      );
+    });
+
+    const images = renderer.root.findAllByType("img");
+    const rest = images.find((image) => image.props.src === "/only/rest.png")!;
+    const missing = images.find(
+      (image) => image.props.src === "/only/happy-1.png",
+    )!;
+    assert.equal(missing.props.style.opacity, 1);
+    assert.equal(rest.props.style.opacity, 0);
+
+    await act(async () => {
+      missing.props.onError();
+    });
+    assert.equal(
+      renderer.root.findAllByType("img").find(
+        (image) => image.props.src === "/only/rest.png",
+      )!.props.style.opacity,
+      1,
+    );
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});

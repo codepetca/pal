@@ -82,8 +82,9 @@ celebration would never be seen. The rank makes the stronger mood hold its windo
 
 Three consequences worth knowing before you write a rule that sets a mood:
 
-- **Equal strength still replaces**, so repeated assignments keep refreshing `happy`
-  rather than letting the first one run out.
+- **Equal strength replaces when it extends the window**, so repeated current
+  assignments keep refreshing `happy` without letting delayed events move its
+  expiry backward.
 - **A refused mood does not extend the running one.** The window ends when the event
   that set it said it would, not when the last event that tried to change it arrived.
 - **Only the mood is skipped.** XP, unlocks and everything else in the same cascade
@@ -94,8 +95,10 @@ assignment that also levels the learner up ends on `excited`: `happy` lands firs
 then `excited` outranks it.
 
 Because the engine has no clock, "still running" is judged against the event's own
-`occurred_at` — the same instant a new expiry would be measured from. A backdated
-event therefore sees the mood state as it was at *its* moment, not as it is now.
+`occurred_at` — the same instant a new expiry would be measured from. Mood expiry is
+monotonic: a backdated event whose proposed window ends no later than the stored
+window is ignored, even when its mood has equal or greater strength. This prevents
+delayed delivery from erasing newer active state.
 
 `mood` stays a free-form string so rule packs can introduce their own; anything absent
 from the table ranks 0 and yields to whatever is already running. If you add a mood

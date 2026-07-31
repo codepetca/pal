@@ -100,7 +100,16 @@ export function applyMutations(
         const runningUntil = next.pet.mood_expires_at
           ? Date.parse(next.pet.mood_expires_at)
           : 0;
-        const stillRunning = runningUntil > Date.parse(event.occurred_at);
+        const eventAt = Date.parse(event.occurred_at);
+        const candidateExpiry =
+          eventAt + mutation.duration_minutes * 60_000;
+        const stillRunning = runningUntil > eventAt;
+        // Delayed events must never shorten a newer mood window. Learner state
+        // stores the expiry (not a separate mood-start timestamp), so monotonic
+        // expiry is the chronology guard available to the pure mutation layer.
+        if (candidateExpiry <= runningUntil) {
+          break;
+        }
         if (stillRunning && moodStrength(next.pet.mood) > moodStrength(mutation.mood)) {
           // Deliberately does not extend the running mood's window either: it ends
           // when the event that set it said it would. Only the mood is skipped —
@@ -109,9 +118,7 @@ export function applyMutations(
         }
 
         next.pet.mood = mutation.mood;
-        next.pet.mood_expires_at = new Date(
-          new Date(event.occurred_at).getTime() + mutation.duration_minutes * 60_000
-        ).toISOString();
+        next.pet.mood_expires_at = new Date(candidateExpiry).toISOString();
         break;
       }
 

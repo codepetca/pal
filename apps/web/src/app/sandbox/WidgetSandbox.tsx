@@ -94,16 +94,24 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
+  writeError,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
+  writeError: string | null;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
   ]);
+
+  useEffect(() => {
+    if (writeError) {
+      setLog((current) => [`Engine error: ${writeError}`, ...current].slice(0, 6));
+    }
+  }, [writeError]);
 
   async function dispatch(action: PalFixtureAction) {
     const result = client.dispatch(action);
@@ -186,6 +194,8 @@ function SandboxExperience({
   view,
   onViewChange,
   onThemeChange,
+  onSandboxError,
+  sandboxError,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
@@ -193,6 +203,8 @@ function SandboxExperience({
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
+  onSandboxError: (error: Error) => void;
+  sandboxError: string | null;
 }) {
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
@@ -212,6 +224,7 @@ function SandboxExperience({
       motion="system"
       theme={theme}
       viewport={viewport}
+      onError={onSandboxError}
       // Moods expire on a clock the client does not own: happy runs 30 minutes,
       // excited an hour, and the world endpoint reports neutral once the window
       // has passed. Without a poll the pet would hold its last pose until the
@@ -343,6 +356,7 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
+                writeError={sandboxError}
               />
             )}
           </FixtureRefreshBridge>
@@ -374,7 +388,12 @@ function FixtureRefreshBridge({
 }
 
 export function WidgetSandbox() {
-  const [client] = useState(() => createEnginePalClient());
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [client] = useState(() =>
+    createEnginePalClient({
+      onWriteError: (error) => setSandboxError(error.message),
+    }),
+  );
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
@@ -395,6 +414,8 @@ export function WidgetSandbox() {
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
+      onSandboxError={(error) => setSandboxError(error.message)}
+      sandboxError={sandboxError}
     />
   );
 }

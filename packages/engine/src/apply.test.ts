@@ -246,6 +246,26 @@ describe("applyMutations", () => {
     assert.equal(state.pet.mood_expires_at, "2026-03-01T13:00:00.000Z");
   });
 
+  it("does not let a backdated stronger mood shorten a newer mood window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:30:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "excited", duration_minutes: 60 }],
+      log("2026-02-28")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
+  it("does not let a backdated equal mood shorten a newer mood window", () => {
+    const { state } = applyMutations(
+      withPet({ mood: "happy", mood_expires_at: "2026-03-01T12:30:00.000Z" }),
+      [{ type: "PET_MOOD", mood: "happy", duration_minutes: 30 }],
+      log("2026-02-28")
+    );
+    assert.equal(state.pet.mood, "happy");
+    assert.equal(state.pet.mood_expires_at, "2026-03-01T12:30:00.000Z");
+  });
+
   it("unlocks a world object only once, however often the rule re-fires", () => {
     const { state } = applyMutations(
       withEconomy({}),

@@ -163,6 +163,11 @@ function PetSprite({
 
   const [moodFrame, setMoodFrame] = useState(0);
   const [blinkFrame, setBlinkFrame] = useState(-1);
+  const [failedFrames, setFailedFrames] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setFailedFrames(new Set());
+  }, [sprites]);
 
   // The two-frame mood loop. Restarting at frame 0 on every mood change means a
   // new mood always opens on its first pose.
@@ -206,11 +211,14 @@ function PetSprite({
     };
   }, [frames, sprites, still]);
 
-  const activeSrc = frames
+  const requestedSrc = frames
     ? frames[moodFrame].src
     : blinkFrame >= 0
       ? sprites.blink[blinkFrame].src
       : sprites.rest.src;
+  const activeSrc = failedFrames.has(requestedSrc)
+    ? sprites.rest.src
+    : requestedSrc;
 
   return (
     <>
@@ -222,6 +230,14 @@ function PetSprite({
           alt=""
           width={frame.w}
           height={CANVAS_H}
+          onError={() => {
+            if (frame.src !== sprites.rest.src) {
+              setFailedFrames((current) => {
+                if (current.has(frame.src)) return current;
+                return new Set(current).add(frame.src);
+              });
+            }
+          }}
           style={{
             opacity: frame.src === activeSrc ? 1 : 0,
             // Every term is a percentage of the frame's own rendered box, which

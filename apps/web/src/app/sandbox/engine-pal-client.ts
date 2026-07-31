@@ -6,10 +6,6 @@ import {
   type PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 
-// The sandbox drives one fixed learner. The id is opaque and carries nothing
-// about a student, which is what crossing the ingest API requires.
-const LEARNER_ID = "sandbox-learner-001";
-
 // Mirrors LEVEL_UP_COST_XP in the engine's default rule pack, for the progress
 // readout only. The engine stays the sole authority on when a level-up fires.
 const LEVEL_UP_COST_XP = 500;
@@ -35,6 +31,23 @@ const MOOD_COPY: Record<PalCompanionMood, string> = {
   sleeping: "Pip is asleep.",
 };
 
+type EnginePalClientOptions = {
+  learnerId?: string;
+  onWriteError?: (error: Error) => void;
+};
+
+type EngineEventRequest = {
+  idempotency_key: string;
+  learner_id: string;
+  event_type: string;
+  occurred_at: string;
+  metadata: Record<string, unknown>;
+};
+
+function sessionLearnerId() {
+  return `sandbox-${crypto.randomUUID()}`;
+}
+
 /**
  * A sandbox client whose companion comes from the rule engine.
  *
@@ -45,21 +58,28 @@ const MOOD_COPY: Record<PalCompanionMood, string> = {
  * `GET /api/v1/world/:learnerId`. Nothing here chooses a mood; that is the
  * engine's call and this only reports it.
  */
-export function createEnginePalClient(): PalFixtureController {
+export function createEnginePalClient(
+  options: EnginePalClientOptions = {},
+): PalFixtureController {
   const fixture = createFixturePalClient();
+  const learnerId = options.learnerId ?? sessionLearnerId();
 
-  let lastKey: string | null = null;
+  let lastRequest: EngineEventRequest | null = null;
 
   // Left null until the first read so nothing fetches during SSR, where a
   // relative URL has no origin to resolve against.
   let queue: Promise<unknown> | null = null;
 
-  function post(path: string, body: unknown) {
-    return fetch(path, {
+  async function post(path: string, body: unknown, operation: string) {
+    const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!response.ok) {
+      throw new Error(`Pal could not ${operation} (${response.status})`);
+    }
+    return response;
   }
 
   // Each page load starts from a known state. The learner store is in-memory and
@@ -67,44 +87,60 @@ export function createEnginePalClient(): PalFixtureController {
   // level left by the previous session and the run-up to a level-up could not be
   // watched from a fixed starting point.
   function resetLearner() {
-    return post("/api/sandbox/reset", { learner_id: LEARNER_ID });
+    return post(
+      "/api/sandbox/reset",
+      { learner_id: learnerId },
+      "reset the sandbox learner",
+    );
   }
 
-  function send(
-    eventType: string,
-    metadata: Record<string, unknown>,
-    replayLastKey = false,
-  ) {
-    const key =
-      replayLastKey && lastKey
-        ? lastKey
-        : `sandbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    lastKey = key;
-    return post("/api/sandbox/events", {
-      idempotency_key: key,
-      learner_id: LEARNER_ID,
+  async function send(eventType: string, metadata: Record<string, unknown>) {
+    const request: EngineEventRequest = {
+      idempotency_key: `sandbox-${crypto.randomUUID()}`,
+      learner_id: learnerId,
       event_type: eventType,
       occurred_at: new Date().toISOString(),
       metadata,
-    });
+    };
+    const response = await post(
+      "/api/sandbox/events",
+      request,
+      "send the sandbox event",
+    );
+    // A request is replayable only after the engine accepted it. Remembering a
+    // failed write would make Replay retry a request that created no progress.
+    lastRequest = request;
+    return response;
+  }
+
+  function replay() {
+    if (!lastRequest) return null;
+    return post("/api/sandbox/events", lastRequest, "replay the sandbox event");
   }
 
   // Writes go on one chain and reads wait for it. The controls dispatch
   // synchronously and refresh immediately after, so without this the read could
   // overtake the write it was meant to observe and report a stale mood.
   function enqueue(work: () => Promise<unknown>) {
-    const start = queue ?? (queue = resetLearner());
-    queue = start.then(work, work);
+    const start = queue ? queue.catch(() => undefined) : resetLearner();
+    queue = start.then(work).catch((reason: unknown) => {
+      const error =
+        reason instanceof Error ? reason : new Error("Sandbox write failed");
+      options.onWriteError?.(error);
+      throw error;
+    });
   }
 
   return {
     async getSnapshot(signal) {
-      queue ??= resetLearner();
+      if (!queue) {
+        enqueue(async () => undefined);
+      }
       await queue;
 
       const [base, res] = await Promise.all([
         fixture.getSnapshot(signal),
-        fetch(`/api/v1/world/${LEARNER_ID}`, { signal }),
+        fetch(`/api/v1/world/${learnerId}`, { signal }),
       ]);
       if (!res.ok) {
         throw new Error(`Pal could not read the sandbox world (${res.status})`);
@@ -137,18 +173,23 @@ export function createEnginePalClient(): PalFixtureController {
 
       switch (action) {
         case "reset":
-          lastKey = null;
+          lastRequest = null;
           enqueue(resetLearner);
-          return "Fixture reset, and the engine learner cleared";
+          return "Fixture reset queued";
         case "daily-log-completed":
           enqueue(() => send("daily_log.completed", {}));
-          return "daily_log.completed sent to the engine";
+          return "daily_log.completed queued for the engine";
         case "on-time-finish":
           enqueue(() => send("learning_item.completed", { on_time: true }));
-          return "learning_item.completed sent to the engine";
+          return "learning_item.completed queued for the engine";
         case "duplicate-replayed":
-          enqueue(() => send("learning_item.completed", { on_time: true }, true));
-          return "Replayed the last idempotency key — the engine must ignore it";
+          if (!lastRequest) {
+            return "Nothing to replay yet — send an engine event first";
+          }
+          enqueue(async () => {
+            await replay();
+          });
+          return "Exact prior request queued again — the engine must ignore it";
         default:
           return fixtureResult;
       }
