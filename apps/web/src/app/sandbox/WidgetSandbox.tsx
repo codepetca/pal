@@ -141,12 +141,18 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
+  simulatedDate,
+  onAddDay,
+  onAddWeek,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
+  simulatedDate: Date;
+  onAddDay: () => void;
+  onAddWeek: () => void;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
@@ -164,7 +170,7 @@ function FixtureControls({
         idempotency_key,
         learner_id: TEST_LEARNER_ID,
         event_type,
-        occurred_at: new Date().toISOString(),
+        occurred_at: simulatedDate,
         metadata,
       }),
     });
@@ -227,6 +233,26 @@ function FixtureControls({
             <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
           </header>
 
+          <div className={styles.dateBar}>
+            <span className={styles.dateLabel}>Simulated date</span>
+            <span className={styles.dateValue}>
+              {simulatedDate.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+            <div className={styles.dateButtons}>
+              <button type="button" onClick={onAddDay} aria-label="Add 1 day">
+                +1 day
+              </button>
+              <button type="button" onClick={onAddWeek} aria-label="Add 1 week">
+                +1 week
+              </button>
+            </div>
+          </div>
+
           <div className={styles.controlActions}>
             {FIXTURE_ACTIONS.map(({ action, label, detail }) => (
               <button type="button" key={action} onClick={() => void dispatch(action)}>
@@ -273,6 +299,16 @@ function SandboxExperience({
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
 }) {
+  const [simulatedDate, setSimulatedDate] = useState(() => new Date("2026-07-13T08:00:00"));
+
+  // Auto-increment simulated date by 1 day every 60 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSimulatedDate((prev) => new Date(prev.getTime() + 24 * 60 * 60 * 1000));
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -418,6 +454,9 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
+                simulatedDate={simulatedDate}
+                onAddDay={() => setSimulatedDate((prev) => new Date(prev.getTime() + 24 * 60 * 60 * 1000))}
+                onAddWeek={() => setSimulatedDate((prev) => new Date(prev.getTime() + 7 * 24 * 60 * 60 * 1000))}
               />
             )}
           </FixtureRefreshBridge>

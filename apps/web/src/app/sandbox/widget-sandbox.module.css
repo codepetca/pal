@@ -520,6 +520,57 @@
   text-transform: uppercase;
 }
 
+.dateBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 0.05);
+}
+
+.dateLabel {
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.dateValue {
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+}
+
+.dateButtons {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.dateButtons button {
+  min-height: 28px;
+  padding: 0 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.35rem;
+  color: #f8fafc;
+  background: rgb(255 255 255 / 0.1);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dateButtons button:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+
 .controlActions {
   display: grid;
   gap: 0.45rem;
