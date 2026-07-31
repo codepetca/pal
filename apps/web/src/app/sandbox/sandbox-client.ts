@@ -1,95 +1,116 @@
 import type {
+  PalCompanionMood,
   PalFixtureAction,
   PalFixtureController,
   PalWidgetSnapshot,
-} from "@pal/widget";
+} from "@codepet/pal-widget";
 
-interface CompanionDTO {
-  name: string;
-  mood: string;
-  moodLabel: string;
-  level: number;
-  streak: number;
-  xp: number;
-  xpToNextLevel: number;
-  message: string;
-  assetUrl?: string;
+const LEVEL_UP_COST_XP = 500;
+const COMPANION_MOODS = new Set<PalCompanionMood>([
+  "neutral",
+  "happy",
+  "excited",
+  "sleeping",
+]);
+
+type WorldResponse = {
+  pet: { mood: string; animation_state: string };
+  world: { stage: number; objects: string[] };
+  economy: { xp: number; xp_lifetime: number; level: number; streak: number };
+};
+
+function toMood(value: string): PalCompanionMood {
+  return COMPANION_MOODS.has(value as PalCompanionMood)
+    ? (value as PalCompanionMood)
+    : "neutral";
+}
+
+function moodMessage(mood: PalCompanionMood): string {
+  switch (mood) {
+    case "excited":
+      return "Pip is excited!";
+    case "happy":
+      return "Pip is happy.";
+    case "sleeping":
+      return "Pip is sleeping.";
+    default:
+      return "Pip is feeling neutral.";
+  }
+}
+
+function companionFromWorld(world: WorldResponse): PalWidgetSnapshot["companion"] {
+  const mood = toMood(world.pet.mood);
+  return {
+    name: "Pip",
+    mood,
+    moodLabel: mood[0].toUpperCase() + mood.slice(1),
+    level: world.economy.level,
+    streak: world.economy.streak,
+    xp: world.economy.xp,
+    xpToNextLevel: Math.max(0, LEVEL_UP_COST_XP - world.economy.xp),
+    message: moodMessage(mood),
+    assetUrl: "/assets/pets/default.png",
+  };
 }
 
 /**
- * Creates a sandbox Pal client that uses the fixture client for roadmap
- * state (weeks, achievements) and reads live companion state (XP, level,
- * streak, mood) from the sandbox API after each action.
- *
- * This removes the hardcoded XP approximations from the fixture client
- * and shows real values produced by the rule engine.
+ * Composes fixture roadmap/reward state with companion state read from the
+ * persisted rule-engine world for one browser-scoped sandbox learner.
  */
 export function createSandboxPalClient(
   fixtureClient: PalFixtureController,
+  learnerId: string,
 ): PalFixtureController {
-  let lastCompanion: CompanionDTO | null = null;
-
-  async function fetchCompanion(): Promise<CompanionDTO | null> {
-    try {
-      const res = await fetch("/api/sandbox/snapshot");
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.companion as CompanionDTO;
-    } catch {
-      return null;
-    }
-  }
-
-  // Pre-fetch so the first getSnapshot() call has data.
-  void fetchCompanion().then((c) => { lastCompanion = c; });
-
   return {
     async getSnapshot(signal) {
-      const fixtureSnapshot = await fixtureClient.getSnapshot(signal);
+      const [fixtureSnapshot, response] = await Promise.all([
+        fixtureClient.getSnapshot(signal),
+        fetch(`/api/v1/world/${encodeURIComponent(learnerId)}`, { signal }),
+      ]);
 
-      // Fetch live companion data in parallel.
-      const companion = lastCompanion ?? (await fetchCompanion());
-      lastCompanion = companion;
-
-      if (!companion) {
-        // Fallback to the fixture snapshot's companion values.
-        return fixtureSnapshot;
+      if (response.status === 404) {
+        return {
+          ...fixtureSnapshot,
+          companion: companionFromWorld({
+            pet: { mood: "neutral", animation_state: "idle" },
+            world: { stage: 0, objects: [] },
+            economy: { xp: 0, xp_lifetime: 0, level: 1, streak: 0 },
+          }),
+        };
+      }
+      if (!response.ok) {
+        throw new Error(`Pal could not load persisted sandbox state (${response.status})`);
       }
 
+      const world = (await response.json()) as WorldResponse;
       return {
         ...fixtureSnapshot,
-        companion: {
-          name: companion.name,
-          mood: companion.mood as PalWidgetSnapshot["companion"]["mood"],
-          moodLabel: companion.moodLabel,
-          level: companion.level,
-          streak: companion.streak,
-          xp: companion.xp,
-          xpToNextLevel: companion.xpToNextLevel,
-          message: companion.message,
-          assetUrl: companion.assetUrl,
-        },
+        companion: companionFromWorld(world),
       } satisfies PalWidgetSnapshot;
     },
 
-    async markRewardSeen(rewardId, signal) {
-      await fixtureClient.markRewardSeen(rewardId, signal);
+    markRewardSeen(rewardId, signal) {
+      return fixtureClient.markRewardSeen(rewardId, signal);
     },
 
     dispatch(action: PalFixtureAction) {
-      const result = fixtureClient.dispatch(action);
-      // Invalidate the cached companion so the next getSnapshot() re-fetches.
-      lastCompanion = null;
-      return result;
+      return fixtureClient.dispatch(action);
     },
 
     peek() {
-      return fixtureClient.peek();
+      const fixtureSnapshot = fixtureClient.peek();
+      return {
+        ...fixtureSnapshot,
+        companion: companionFromWorld({
+          pet: { mood: "neutral", animation_state: "idle" },
+          world: { stage: 0, objects: [] },
+          economy: { xp: 0, xp_lifetime: 0, level: 1, streak: 0 },
+        }),
+      };
     },
 
     setWeek(week: number) {
-      fixtureClient.setWeek(week);
-      lastCompanion = null;
+      fixtureClient.setWeek?.(week);
     },
   };
 }

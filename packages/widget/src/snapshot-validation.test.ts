@@ -11,6 +11,15 @@ test("snapshot parser accepts the bounded v1 fixture", () => {
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 });
 
+test("snapshot parser keeps XP fields backward-compatible in schema version 1", () => {
+  const fixture = createFixtureSnapshot();
+  delete fixture.companion.xp;
+  delete fixture.companion.xpToNextLevel;
+  const legacySnapshot = JSON.parse(JSON.stringify(fixture)) as unknown;
+
+  assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
+});
+
 test("snapshot parser rejects unsupported schema versions", () => {
   const fixture: unknown = {
     ...createFixtureSnapshot(),

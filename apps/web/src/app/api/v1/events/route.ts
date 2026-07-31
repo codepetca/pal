@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { v1 } from "@pal/contract";
 import type { IncomingEvent } from "@pal/engine";
 import { isAuthorizedIngest } from "@/lib/ingest-auth";
-import { isIngestableEventType } from "@/lib/event-types";
 import { processEventInDb } from "@/lib/db-learner";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
@@ -18,22 +18,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
-
-  const { idempotency_key, learner_id, event_type, occurred_at, metadata } = body;
-
-  if (!idempotency_key || !learner_id || !event_type || !occurred_at) {
-    return NextResponse.json({ error: "missing_required_fields" }, { status: 422 });
+  const validation = v1.validateV1Event(await req.json());
+  if (!validation.ok) {
+    return NextResponse.json(
+      { error: validation.error, detail: validation.detail },
+      { status: 422 },
+    );
   }
+  const { event } = validation;
 
-  if (!isIngestableEventType(event_type)) {
-    return NextResponse.json({ error: "unknown_event_type" }, { status: 422 });
-  }
-
-  const occurredAtMs = Date.parse(occurred_at);
-  if (Number.isNaN(occurredAtMs)) {
-    return NextResponse.json({ error: "invalid_occurred_at" }, { status: 422 });
-  }
+  const occurredAtMs = Date.parse(event.occurred_at);
 
   // Reject events dated on a future UTC day. The engine's streak guard is forward-only
   // and deliberately never self-heals, so a future-dated check-in that got in would pin
@@ -52,16 +46,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "future_occurred_at" }, { status: 422 });
   }
 
-  const event: IncomingEvent = {
-    event_type,
+  const engineEvent: IncomingEvent = {
+    event_type: event.event_type,
     occurred_at: new Date(occurredAtMs).toISOString(),
-    metadata: metadata ?? {},
+    metadata: event.metadata,
   };
 
   // The engine decides what changes; processEventInDb runs the engine inside a
   // single ACID transaction with FOR UPDATE locking and constraint-based dedup.
   // Nothing else in the codebase is allowed to write learner state.
-  const result = await processEventInDb(learner_id, event, idempotency_key);
+  const result = await processEventInDb(
+    event.learner_id,
+    engineEvent,
+    event.idempotency_key,
+  );
 
   if (result.status === "duplicate") {
     return NextResponse.json({ status: "duplicate" });
@@ -71,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Belongs in the AuditLog once M1 lands. Until then it at least surfaces a rule
     // pack that cascades deeper than the engine will follow.
     console.warn(
-      `[pal] cascade hit the depth limit for ${event.event_type}; dropped: ${result.result.truncated.join(", ")}`
+      `[pal] cascade hit the depth limit for ${engineEvent.event_type}; dropped: ${result.result.truncated.join(", ")}`
     );
   }
 

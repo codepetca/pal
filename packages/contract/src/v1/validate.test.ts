@@ -4,8 +4,8 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { V1_EVENT_TYPES, type V1Error } from "./types.js";
-import { validateV1Event } from "./validate.js";
+import { V1_EVENT_TYPES, type V1Error } from "./types";
+import { validateV1Event } from "./validate";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/v1");
 

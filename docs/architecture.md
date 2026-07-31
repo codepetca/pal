@@ -84,7 +84,7 @@ Nothing mutates these directly. Only the rule engine produces mutations, and mut
 | Hosting | Vercel | Serverless functions, zero config deploys |
 | Database | TBD — Postgres when needed | Neon is the likely choice when scale requires it |
 | Rule engine | TypeScript (`packages/engine`) | Pure functions, no infrastructure |
-| Widget | `@pal/widget` | npm package, integrators render it themselves |
+| Widget | `@codepet/pal-widget` | npm package, integrators render it themselves |
 | Auth | Deferred to Milestone 2 (M2) | Needed for teacher/operator consoles |
 
 ## System layers

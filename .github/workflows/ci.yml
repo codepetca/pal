@@ -74,3 +74,12 @@ jobs:
 
       - name: Rule engine tests
         run: pnpm --filter @pal/engine test
+
+      - name: Widget tests
+        run: pnpm --filter @codepet/pal-widget test
+
+      - name: Web API and persistence tests
+        run: pnpm turbo test --filter @pal/web
+
+      - name: Verify packed widget with React 18.3
+        run: pnpm --filter @codepet/pal-widget verify:package

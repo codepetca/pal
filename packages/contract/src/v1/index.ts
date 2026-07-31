@@ -15,6 +15,6 @@ export {
   type V1EventType,
   type V1Metadata,
   type V1ValidationResult,
-} from "./types.js";
+} from "./types";
 
-export { isV1Payload, validateV1Event } from "./validate.js";
+export { isV1Payload, validateV1Event } from "./validate";

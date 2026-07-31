@@ -57,8 +57,10 @@ export interface PalCompanionState {
   moodLabel: string;
   level: number;
   streak: number;
-  xp: number;
-  xpToNextLevel: number;
+  /** Current XP balance, when supplied by the host. */
+  xp?: number;
+  /** Remaining XP before the next level, when supplied by the host. */
+  xpToNextLevel?: number;
   message: string;
   assetUrl?: string;
 }
@@ -118,5 +120,5 @@ export interface PalFixtureController extends PalClient {
   dispatch(action: PalFixtureAction): string;
   peek(): PalWidgetSnapshot;
   /** Override the current week number (1-16), rebuilding the snapshot. */
-  setWeek(week: number): void;
+  setWeek?(week: number): void;
 }

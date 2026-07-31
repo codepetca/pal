@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resetLearnerInDb } from "@/lib/db-learner";
+import { isSandboxLearnerId } from "@/lib/sandbox-learner";
 
 // POST /api/sandbox/reset
 // Dev-only: clears a learner's state so the sandbox panel can be replayed
@@ -15,12 +16,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { learner_id } = await req.json();
+  const body: unknown = await req.json();
+  const learnerId =
+    typeof body === "object" && body !== null && "learner_id" in body
+      ? body.learner_id
+      : undefined;
 
-  if (!learner_id) {
-    return NextResponse.json({ error: "missing_learner_id" }, { status: 422 });
+  if (!isSandboxLearnerId(learnerId)) {
+    return NextResponse.json({ error: "invalid_sandbox_learner_id" }, { status: 422 });
   }
 
-  await resetLearnerInDb(learner_id);
+  await resetLearnerInDb(learnerId);
   return NextResponse.json({ status: "reset" });
 }

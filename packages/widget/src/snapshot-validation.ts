@@ -143,6 +143,14 @@ function integer(value: unknown, path: string, minimum = 0): number {
   return value as number;
 }
 
+function optionalInteger(
+  value: unknown,
+  path: string,
+  minimum = 0,
+): number | undefined {
+  return value === undefined ? undefined : integer(value, path, minimum);
+}
+
 function member<T extends string>(
   value: unknown,
   path: string,
@@ -287,6 +295,11 @@ function parseCompanion(
     `${path}.assetUrl`,
     assetPolicy,
   );
+  const xp = optionalInteger(source.xp, `${path}.xp`);
+  const xpToNextLevel = optionalInteger(
+    source.xpToNextLevel,
+    `${path}.xpToNextLevel`,
+  );
   return {
     name: text(source.name, `${path}.name`),
     mood: member<PalCompanionMood>(
@@ -297,8 +310,8 @@ function parseCompanion(
     moodLabel: text(source.moodLabel, `${path}.moodLabel`),
     level: integer(source.level, `${path}.level`),
     streak: integer(source.streak, `${path}.streak`),
-    xp: integer(source.xp, `${path}.xp`),
-    xpToNextLevel: integer(source.xpToNextLevel, `${path}.xpToNextLevel`),
+    ...(xp === undefined ? {} : { xp }),
+    ...(xpToNextLevel === undefined ? {} : { xpToNextLevel }),
     message: text(source.message, `${path}.message`),
     ...(assetUrl === undefined ? {} : { assetUrl }),
   };

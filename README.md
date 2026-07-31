@@ -37,7 +37,7 @@ The current developer panel exercises `assignment.completed` and `daily_checkin.
 
 Pal derives streaks, achievements, and rewards from those signals, then updates the
 student's pet and world. Pika renders the result with the React surfaces from
-`@pal/widget`; non-React integrations may use a future chrome-free embed route.
+`@codepet/pal-widget`; non-React integrations may use a future chrome-free embed route.
 
 The initial integration rewards behavior that actually occurred; it does not mirror Pika's assignment system. Showing every untouched or incomplete assignment would require a separate, later Pika-owned academic projection with reconciliation.
 
@@ -46,7 +46,7 @@ Any learning platform can integrate this way. Pika is the first.
 ## The dev sandbox
 
 Developers working on Pal use a built-in host sandbox to exercise the same public
-`@pal/widget` surfaces that Pika consumes. A collapsible control panel starts with
+`@codepet/pal-widget` surfaces that Pika consumes. A collapsible control panel starts with
 explicit fixture scenarios and evolves into a real-pipeline event injector; it never
 ships in the learner widget.
 
@@ -64,6 +64,7 @@ Design discussions, proposals, and feedback happen in **Discord**. Bring an idea
 - [Pika signal adapter and achievement pipeline](docs/pika-signal-adapter.md)
 - [Pika–Pal achievement pilot plan](docs/pilot-plan.md)
 - [Widget integration](docs/widget-integration.md)
+- [Widget release](docs/widget-release.md)
 - [Development workflow](docs/dev-workflow.md)
 - [Roadmap](docs/roadmap.md)
 
