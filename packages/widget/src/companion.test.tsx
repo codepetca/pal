@@ -11,6 +11,7 @@ import { PalProvider } from "./provider";
 
 test("a missing mood frame falls back to the supplied rest image", async () => {
   const originalWindow = globalThis.window;
+  let renderer: ReturnType<typeof create> | undefined;
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
@@ -26,7 +27,6 @@ test("a missing mood frame falls back to the supplied rest image", async () => {
     const snapshot = createFixtureSnapshot();
     snapshot.companion.mood = "happy";
     snapshot.companion.assetUrl = "/only/rest.png";
-    let renderer!: ReturnType<typeof create>;
 
     await act(async () => {
       renderer = create(
@@ -44,24 +44,90 @@ test("a missing mood frame falls back to the supplied rest image", async () => {
       );
     });
 
-    const images = renderer.root.findAllByType("img");
+    const images = renderer!.root.findAllByType("img");
     const rest = images.find((image) => image.props.src === "/only/rest.png")!;
     const missing = images.find(
       (image) => image.props.src === "/only/happy-1.png",
     )!;
-    assert.equal(missing.props.style.opacity, 1);
-    assert.equal(rest.props.style.opacity, 0);
+    assert.equal(images.length, 2);
+    assert.equal(missing.props.style.opacity, 0);
+    assert.equal(rest.props.style.opacity, 1);
 
     await act(async () => {
       missing.props.onError();
     });
     assert.equal(
-      renderer.root.findAllByType("img").find(
+      renderer!.root.findAllByType("img").find(
         (image) => image.props.src === "/only/rest.png",
       )!.props.style.opacity,
       1,
     );
   } finally {
+    await act(async () => renderer?.unmount());
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("the companion mounts only frames used by the current mood", async () => {
+  const originalWindow = globalThis.window;
+  let renderer: ReturnType<typeof create> | undefined;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener() {},
+        removeEventListener() {},
+      }),
+    },
+  });
+
+  try {
+    const snapshot = createFixtureSnapshot();
+    snapshot.companion.mood = "happy";
+    snapshot.companion.assetUrl = "/pets/rest.png";
+
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={{
+            getSnapshot: async () => snapshot,
+            markRewardSeen: async () => undefined,
+          }}
+          initialSnapshot={snapshot}
+          motion="system"
+          scopeKey="current-mood-sprites"
+        >
+          <PalCompanion />
+        </PalProvider>,
+      );
+    });
+
+    const sources = renderer!.root
+      .findAllByType("img")
+      .map((image) => image.props.src);
+    assert.deepEqual(sources, [
+      "/pets/rest.png",
+      "/pets/happy-1.png",
+      "/pets/happy-2.png",
+    ]);
+
+    const happy = renderer!.root
+      .findAllByType("img")
+      .find((image) => image.props.src === "/pets/happy-1.png")!;
+    await act(async () => happy.props.onLoad());
+    assert.equal(happy.props.style.opacity, 1);
+    assert.equal(
+      renderer!.root.findAllByType("img").find(
+        (image) => image.props.src === "/pets/rest.png",
+      )!.props.style.opacity,
+      0,
+    );
+  } finally {
+    await act(async () => renderer?.unmount());
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: originalWindow,

@@ -94,6 +94,14 @@ export function createEnginePalClient(
     );
   }
 
+  async function resetLearnerAndClearReplay() {
+    await resetLearner();
+    // Reset is queued behind any write already in flight. Clear again only
+    // after it reaches the server, otherwise an earlier send can finish after
+    // dispatch("reset") and make its request replayable in the fresh session.
+    lastRequest = null;
+  }
+
   async function send(eventType: string, metadata: Record<string, unknown>) {
     const request: EngineEventRequest = {
       idempotency_key: `sandbox-${crypto.randomUUID()}`,
@@ -173,8 +181,10 @@ export function createEnginePalClient(
 
       switch (action) {
         case "reset":
+          // Disable Replay immediately as well as after the queued reset. The
+          // second clear in resetLearnerAndClearReplay closes the in-flight race.
           lastRequest = null;
-          enqueue(resetLearner);
+          enqueue(resetLearnerAndClearReplay);
           return "Fixture reset queued";
         case "daily-log-completed":
           enqueue(() => send("daily_log.completed", {}));

@@ -70,7 +70,6 @@ type SpriteSet = {
   rest: Frame;
   blink: Frame[];
   byMood: Partial<Record<PalCompanionMood, Frame[]>>;
-  all: Frame[];
 };
 
 /**
@@ -102,12 +101,7 @@ function buildSprites(restUrl: string): SpriteSet {
     byMood[mood as PalCompanionMood] = specs.map(toFrame);
   }
 
-  // Every frame is mounted at once and switched by opacity. Swapping the `src`
-  // of a single <img> instead would fetch mid-animation and flash an empty box
-  // on the first pass through each pose.
-  const all = [rest, ...blink, ...Object.values(byMood).flat()];
-
-  return { rest, blink, byMood, all };
+  return { rest, blink, byMood };
 }
 
 /**
@@ -164,10 +158,7 @@ function PetSprite({
   const [moodFrame, setMoodFrame] = useState(0);
   const [blinkFrame, setBlinkFrame] = useState(-1);
   const [failedFrames, setFailedFrames] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    setFailedFrames(new Set());
-  }, [sprites]);
+  const [loadedFrames, setLoadedFrames] = useState<Set<string>>(() => new Set());
 
   // The two-frame mood loop. Restarting at frame 0 on every mood change means a
   // new mood always opens on its first pose.
@@ -216,13 +207,27 @@ function PetSprite({
     : blinkFrame >= 0
       ? sprites.blink[blinkFrame].src
       : sprites.rest.src;
-  const activeSrc = failedFrames.has(requestedSrc)
-    ? sprites.rest.src
-    : requestedSrc;
+  const activeSrc =
+    requestedSrc === sprites.rest.src ||
+    (loadedFrames.has(requestedSrc) && !failedFrames.has(requestedSrc))
+      ? requestedSrc
+      : sprites.rest.src;
+
+  // Only mount frames this mood can actually show. The rest pose remains
+  // visible while those images load, so a first visit does not need to fetch
+  // every mood up front just to avoid an empty box during the first animation.
+  const animatedFrames = frames
+    ? still
+      ? [frames[0]]
+      : frames
+    : still
+      ? []
+      : sprites.blink;
+  const mountedFrames = [sprites.rest, ...animatedFrames];
 
   return (
     <>
-      {sprites.all.map((frame) => (
+      {mountedFrames.map((frame) => (
         <img
           key={frame.src}
           className="pal-companion-sprite"
@@ -230,6 +235,14 @@ function PetSprite({
           alt=""
           width={frame.w}
           height={CANVAS_H}
+          onLoad={() => {
+            if (frame.src !== sprites.rest.src) {
+              setLoadedFrames((current) => {
+                if (current.has(frame.src)) return current;
+                return new Set(current).add(frame.src);
+              });
+            }
+          }}
           onError={() => {
             if (frame.src !== sprites.rest.src) {
               setFailedFrames((current) => {
@@ -270,6 +283,7 @@ export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
       <div className="pal-companion-art" aria-hidden="true">
         {companion.assetUrl ? (
           <PetSprite
+            key={companion.assetUrl}
             mood={companion.mood}
             motion={motion}
             restUrl={companion.assetUrl}

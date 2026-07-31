@@ -65,6 +65,29 @@ test("replay is a no-op before the first event and after reset", async () => {
   }
 });
 
+test("reset invalidates an engine event that was already queued", async () => {
+  let eventWrites = 0;
+  const restore = installFetch((path) => {
+    if (path === "/api/sandbox/events") eventWrites += 1;
+    return path.startsWith("/api/v1/world/")
+      ? worldResponse()
+      : new Response(null);
+  });
+
+  try {
+    const client = createEnginePalClient({ learnerId: "learner-a" });
+    client.dispatch("on-time-finish");
+    client.dispatch("reset");
+    await client.getSnapshot();
+
+    assert.match(client.dispatch("duplicate-replayed"), /Nothing to replay/);
+    await client.getSnapshot();
+    assert.equal(eventWrites, 1);
+  } finally {
+    restore();
+  }
+});
+
 test("replay resends the exact prior engine request", async () => {
   const eventBodies: string[] = [];
   const restore = installFetch((path, init) => {
