@@ -32,15 +32,27 @@ importers:
       '@codepet/pal-widget':
         specifier: workspace:*
         version: link:../../packages/widget
+      '@pal/contract':
+        specifier: workspace:*
+        version: link:../../packages/contract
+      '@pal/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@pal/engine':
         specifier: workspace:*
         version: link:../../packages/engine
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      drizzle-orm:
+        specifier: ^0.44.2
+        version: 0.44.7(@types/pg@8.20.0)(pg@8.22.0)
       next:
         specifier: ^15.3.4
         version: 15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      pg:
+        specifier: ^8.16.3
+        version: 8.22.0
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -54,6 +66,9 @@ importers:
       '@types/node':
         specifier: ^22
         version: 22.20.0
+      '@types/pg':
+        specifier: ^8.15.4
+        version: 8.20.0
       '@types/react':
         specifier: ^19
         version: 19.2.17

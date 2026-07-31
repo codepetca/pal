@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  createFixturePalClient,
   PalAchievements,
   PalCompanion,
   PalProvider,
@@ -28,9 +29,15 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Image from "next/image";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { createEnginePalClient } from "./engine-pal-client";
+import { createSandboxPalClient } from "./sandbox-client";
+import {
+  addDays,
+  eventForAction,
+  isTodayOrEarlier,
+  type SandboxEventRequest,
+} from "./sandbox-events";
 import styles from "./widget-sandbox.module.css";
 
 type HostView =
@@ -62,6 +69,11 @@ const FIXTURE_ACTIONS: Array<{
   detail: string;
 }> = [
   {
+    action: "session-started",
+    label: "Start session",
+    detail: "platform.session.started",
+  },
+  {
     action: "daily-log-completed",
     label: "Complete daily log",
     detail: "Advances Weekly Rhythm, and grants XP",
@@ -70,6 +82,11 @@ const FIXTURE_ACTIONS: Array<{
     action: "on-time-finish",
     label: "Finish on time",
     detail: "Adds a badge, and makes the pet happy",
+  },
+  {
+    action: "late-finish",
+    label: "Finish late",
+    detail: "Adds a late completion badge",
   },
   {
     action: "reward-earned",
@@ -81,11 +98,6 @@ const FIXTURE_ACTIONS: Array<{
     label: "Replay duplicate",
     detail: "Must not change progress",
   },
-  {
-    action: "advance-week",
-    label: "Advance one week",
-    detail: "Moves the fictional semester",
-  },
 ];
 
 function FixtureControls({
@@ -94,33 +106,87 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
-  writeError,
+  simulatedDate,
+  onAddDay,
+  onAddWeek,
+  canAddDay,
+  canAddWeek,
+  learnerId,
+  sandboxError,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
-  writeError: string | null;
+  simulatedDate: Date;
+  onAddDay: () => void;
+  onAddWeek: () => void;
+  canAddDay: boolean;
+  canAddWeek: boolean;
+  learnerId: string;
+  sandboxError: string | null;
 }) {
   const [log, setLog] = useState<string[]>([
-    "Fixture preview ready — no production state is connected.",
+    "Sandbox ready — companion state is persisted through the real pipeline.",
   ]);
+  const [busy, setBusy] = useState(false);
+  const lastRequest = useRef<SandboxEventRequest | null>(null);
 
-  useEffect(() => {
-    if (writeError) {
-      setLog((current) => [`Engine error: ${writeError}`, ...current].slice(0, 6));
+  async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      throw new Error(String(data.error ?? `request failed (${res.status})`));
     }
-  }, [writeError]);
+    return data;
+  }
 
   async function dispatch(action: PalFixtureAction) {
-    const result = client.dispatch(action);
-    setLog((current) => [result, ...current].slice(0, 6));
-    if (action === "reset") {
-      onReset();
-      return;
+    if (busy) return;
+    setBusy(true);
+    try {
+      const fixtureResult = client.dispatch(action);
+
+      if (action === "reset") {
+        await post("/api/sandbox/reset", { learner_id: learnerId });
+        lastRequest.current = null;
+        setLog((current) => ["Persisted learner reset", fixtureResult, ...current].slice(0, 6));
+        onReset();
+        return;
+      }
+
+      const request =
+        action === "duplicate-replayed"
+          ? lastRequest.current
+          : eventForAction(action, simulatedDate, learnerId);
+      if (request) {
+        const data = await post("/api/sandbox/events", request);
+        if (action !== "duplicate-replayed") lastRequest.current = request;
+        setLog((current) => [
+          `→ ${request.event_type}: ${String(data.status)}`,
+          fixtureResult,
+          ...current,
+        ].slice(0, 6));
+      } else {
+        const detail =
+          action === "duplicate-replayed"
+            ? "Nothing to replay — send a real event first"
+            : fixtureResult;
+        setLog((current) => [detail, ...current].slice(0, 6));
+      }
+
+      await onRefresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sandbox request failed";
+      setLog((current) => [`Pipeline error: ${message}`, ...current].slice(0, 6));
+    } finally {
+      setBusy(false);
     }
-    await onRefresh();
   }
 
   return (
@@ -151,14 +217,34 @@ function FixtureControls({
               <h2>Semester controls</h2>
             </div>
             <p>
-              The pet runs on the real engine — these send events and it decides.
-              The roadmap and rewards stay fixtures until the v1 receiver lands.
+              Companion events use the v1 receiver and persisted rule-engine state;
+              roadmap and reward states remain fixtures.
             </p>
           </header>
 
+          <div className={styles.dateBar}>
+            <span className={styles.dateLabel}>Semester / daily-log date</span>
+            <span className={styles.dateValue}>
+              {simulatedDate.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+            <div className={styles.dateButtons}>
+              <button type="button" onClick={onAddDay} disabled={!canAddDay} aria-label="Add 1 day">
+                +1 day
+              </button>
+              <button type="button" onClick={onAddWeek} disabled={!canAddWeek} aria-label="Add 1 week">
+                +1 week
+              </button>
+            </div>
+          </div>
+
           <div className={styles.controlActions}>
             {FIXTURE_ACTIONS.map(({ action, label, detail }) => (
-              <button type="button" key={action} onClick={() => void dispatch(action)}>
+              <button type="button" key={action} disabled={busy} onClick={() => void dispatch(action)}>
                 <strong>{label}</strong>
                 <span>{detail}</span>
               </button>
@@ -167,6 +253,7 @@ function FixtureControls({
 
           <div className={styles.controlLog} aria-live="polite">
             <span>Recent results</span>
+            {sandboxError ? <p role="alert">Pipeline error: {sandboxError}</p> : null}
             <ul>
               {log.map((entry, index) => (
                 <li key={`${entry}-${index}`}>{entry}</li>
@@ -177,6 +264,7 @@ function FixtureControls({
           <button
             className={styles.resetButton}
             type="button"
+            disabled={busy}
             onClick={() => void dispatch("reset")}
           >
             Reset fictional learner
@@ -194,8 +282,7 @@ function SandboxExperience({
   view,
   onViewChange,
   onThemeChange,
-  onSandboxError,
-  sandboxError,
+  learnerId,
 }: {
   client: PalFixtureController;
   theme: PalTheme;
@@ -203,14 +290,34 @@ function SandboxExperience({
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
-  onSandboxError: (error: Error) => void;
-  sandboxError: string | null;
+  learnerId: string;
 }) {
+  const [simulatedDate, setSimulatedDate] = useState(
+    () => new Date("2026-07-13T08:00:00Z"),
+  );
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const canAddDay = isTodayOrEarlier(addDays(simulatedDate, 1));
+  const canAddWeek = isTodayOrEarlier(addDays(simulatedDate, 7));
+
+  // Derive the current semester week from the simulated date.
+  // Semester starts 2026-07-13 (week 1). Each week is 7 days.
+  const currentSemesterWeek = useMemo(() => {
+    const semesterStart = new Date("2026-07-13T00:00:00Z");
+    const diffMs = simulatedDate.getTime() - semesterStart.getTime();
+    const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    return Math.max(1, Math.min(16, Math.floor(diffDays / 7) + 1));
+  }, [simulatedDate]);
+
+  // Sync the fixture client snapshot whenever the week changes.
+  useEffect(() => {
+    client.setWeek?.(currentSemesterWeek);
+  }, [currentSemesterWeek, client]);
+
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
-  const fixtureScopeKey = `fixture-learner-${resetGeneration}`;
+  const fixtureScopeKey = `${learnerId}-${resetGeneration}-w${currentSemesterWeek}`;
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
 
@@ -224,9 +331,9 @@ function SandboxExperience({
       motion="system"
       theme={theme}
       viewport={viewport}
-      onError={onSandboxError}
+      onError={(error) => setSandboxError(error.message)}
       // Moods expire on the engine's timestamp: happy runs 30 minutes and
-      // excited an hour. Refreshing recomputes that signed state against the
+      // excited an hour. Refreshing reads the durable state against the
       // current clock, so the pet returns to neutral without another event.
       refreshIntervalMs={15_000}
     >
@@ -247,6 +354,7 @@ function SandboxExperience({
             />
             <strong>Test Classroom</strong>
           </div>
+          <XpBar />
           <div className={styles.hostControls} aria-label="Host preview settings">
             <ArrowsOut aria-hidden="true" size={18} />
             <span className={styles.hostDate}>Sat Jul 18&nbsp; 11:56 AM</span>
@@ -355,7 +463,13 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
-                writeError={sandboxError}
+                simulatedDate={simulatedDate}
+                onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
+                onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
+                canAddDay={canAddDay}
+                canAddWeek={canAddWeek}
+                learnerId={learnerId}
+                sandboxError={sandboxError}
               />
             )}
           </FixtureRefreshBridge>
@@ -386,12 +500,34 @@ function FixtureRefreshBridge({
   return children(refresh);
 }
 
+/** Reads the live companion snapshot and renders an XP bar. */
+function XpBar() {
+  const { snapshot, state } = usePalWidget();
+  if (state === "error" || !snapshot) return null;
+
+  const { xp, xpToNextLevel, level } = snapshot.companion;
+  if (xp === undefined || xpToNextLevel === undefined) return null;
+  const pct = xpToNextLevel > 0
+    ? ((xp / (xp + xpToNextLevel)) * 100).toFixed(1)
+    : "100";
+
+  return (
+    <div className={styles.xpBar} role="progressbar" aria-valuenow={xp} aria-valuemin={0} aria-valuemax={xp + xpToNextLevel} aria-label={`${xp} XP toward level ${level + 1}`}>
+      <div className={styles.xpBarTrack}>
+        <div className={styles.xpBarFill} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={styles.xpBarLabel}>
+        {xp} / {xp + xpToNextLevel}
+      </span>
+      <span className={styles.xpBarLevel}>Lv {level}</span>
+    </div>
+  );
+}
+
 export function WidgetSandbox() {
-  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
   const [client] = useState(() =>
-    createEnginePalClient({
-      onWriteError: (error) => setSandboxError(error.message),
-    }),
+    createSandboxPalClient(createFixturePalClient(), learnerId),
   );
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
@@ -413,8 +549,7 @@ export function WidgetSandbox() {
       view={view}
       onViewChange={setView}
       onThemeChange={setTheme}
-      onSandboxError={(error) => setSandboxError(error.message)}
-      sandboxError={sandboxError}
+      learnerId={learnerId}
     />
   );
 }

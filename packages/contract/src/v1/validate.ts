@@ -22,7 +22,7 @@ import {
   type V1Error,
   type V1EventType,
   type V1ValidationResult,
-} from "./types.js";
+} from "./types";
 
 // RFC 3986 unreserved characters. Tokens travel in URLs and log lines, so the
 // contract keeps them free of anything needing escaping.

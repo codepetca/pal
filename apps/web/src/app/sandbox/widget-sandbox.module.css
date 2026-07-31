@@ -100,16 +100,57 @@
   height: 3rem;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0 1rem;
   border-bottom: 1px solid #31465a;
   color: #f8fafc;
   background: var(--host-header);
 }
 
+.xpBar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+  max-width: 22rem;
+}
+
+.xpBarTrack {
+  flex: 1;
+  height: 0.45rem;
+  border-radius: 0.25rem;
+  background: rgb(255 255 255 / 0.15);
+  overflow: hidden;
+}
+
+.xpBarFill {
+  height: 100%;
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  transition: width 300ms ease-out;
+}
+
+.xpBarLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.xpBarLevel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #a5b4fc;
+  white-space: nowrap;
+}
+
 .brand,
 .hostControls {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -477,6 +518,57 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.dateBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 0.05);
+}
+
+.dateLabel {
+  color: #94a3b8;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.dateValue {
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+}
+
+.dateButtons {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.dateButtons button {
+  min-height: 28px;
+  padding: 0 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.35rem;
+  color: #f8fafc;
+  background: rgb(255 255 255 / 0.1);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dateButtons button:hover {
+  background: rgb(255 255 255 / 0.18);
 }
 
 .controlActions {

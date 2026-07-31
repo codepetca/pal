@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSandboxSession } from "@/lib/sandbox-session";
+import { resetLearnerInDb } from "@/lib/db-learner";
+import { isSandboxLearnerId } from "@/lib/sandbox-learner";
 
 // POST /api/sandbox/reset
-// Dev/preview-only: starts a signed, stateless engine session. Carrying state
-// in the signed token keeps separate serverless invocations consistent without
-// exposing the signing secret or pretending process-local memory is shared.
+// Dev-only: clears a learner's state so the sandbox panel can be replayed
+// from scratch. Not part of the real API contract in docs/api.md.
 export async function POST(req: NextRequest) {
   // Blocked on production only. Vercel preview builds also run with
   // NODE_ENV=production, and the panel's Reset must keep working there —
@@ -16,25 +16,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { learner_id } = (await req.json()) as { learner_id?: unknown };
+  const body: unknown = await req.json();
+  const learnerId =
+    typeof body === "object" && body !== null && "learner_id" in body
+      ? body.learner_id
+      : undefined;
 
-  if (typeof learner_id !== "string" || !learner_id) {
-    return NextResponse.json({ error: "missing_learner_id" }, { status: 422 });
+  if (!isSandboxLearnerId(learnerId)) {
+    return NextResponse.json({ error: "invalid_sandbox_learner_id" }, { status: 422 });
   }
 
-  const secret = process.env.SANDBOX_INTEGRATION_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      {
-        error: "sandbox_not_configured",
-        hint: "Set SANDBOX_INTEGRATION_SECRET in apps/web/.env.local",
-      },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({
-    status: "reset",
-    ...createSandboxSession(learner_id, secret),
-  });
+  await resetLearnerInDb(learnerId);
+  return NextResponse.json({ status: "reset" });
 }

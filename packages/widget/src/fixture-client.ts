@@ -84,6 +84,8 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
       moodLabel: "Happy",
       level: 2,
       streak: 3,
+      xp: 230,
+      xpToNextLevel: 270,
       message: "Two daily-log days complete this week.",
       assetUrl: "/assets/pets/default.png",
     },
@@ -151,7 +153,6 @@ export function createFixturePalClient(
           rhythm.statusLabel =
             rhythm.status === "earned" ? "Earned" : rhythm.progress.label;
         }
-        snapshot.companion.message = "A daily log moved your weekly rhythm forward.";
         return "daily_log.completed applied to fixture state";
       }
       if (action === "on-time-finish") {
@@ -167,10 +168,24 @@ export function createFixturePalClient(
             rewardLabel: "Fish snack",
           });
         }
-        snapshot.companion.mood = "excited";
-        snapshot.companion.moodLabel = "Excited";
-        snapshot.companion.message = "An on-time finish made Pip excited.";
-        return "learning_item.completed applied to fixture state";
+        return "learning_item.completed (on_time) applied to fixture state";
+      }
+      if (action === "late-finish") {
+        const week = currentWeek();
+        if (!week.achievements.some((achievement) => achievement.id === "late-finish")) {
+          week.achievements.push({
+            id: "late-finish",
+            title: "Late Finish",
+            description: "Completed a learning item late.",
+            status: "earned",
+            statusLabel: "Completed late",
+            badge: { label: "Late Finish", icon: "⏰" },
+          });
+        }
+        return "learning_item.completed (late) applied to fixture state";
+      }
+      if (action === "session-started") {
+        return "platform.session.started applied to fixture state";
       }
 
       if (!snapshot.rewards.some((reward) => reward.id === "fixture-fish-reward")) {
@@ -181,12 +196,15 @@ export function createFixturePalClient(
           icon: "🐟",
         });
       }
-      snapshot.companion.mood = "excited";
-      snapshot.companion.moodLabel = "Excited";
       return "Fixture reward queued";
     },
     peek() {
       return cloneSnapshot(snapshot);
+    },
+
+    setWeek(week: number) {
+      const clamped = Math.max(1, Math.min(16, week));
+      snapshot = createFixtureSnapshot(clamped);
     },
   };
 }

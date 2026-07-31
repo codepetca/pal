@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadLearner } from "@/lib/learner-store";
+import { loadLearnerFromDb } from "@/lib/db-learner";
 
 // GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
@@ -12,7 +12,11 @@ export async function GET(
 
   // TODO: validate read token from Authorization header
 
-  const state = loadLearner(learnerId);
+  const state = await loadLearnerFromDb(learnerId);
+
+  if (!state) {
+    return NextResponse.json({ error: "learner_not_found" }, { status: 404 });
+  }
 
   // Moods are temporary: past mood_expires_at, present as "neutral". Read-side
   // presentation only — stored state still changes exclusively via the engine.
