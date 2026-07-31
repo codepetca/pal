@@ -347,3 +347,53 @@ export async function resetLearnerInDb(externalLearnerId: string): Promise<void>
       sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
     );
 }
+
+/**
+ * Dev-only: resets the learner's economy to level 1 / 0 XP and clears pet mood
+ * and world stage, without deleting the learner or event history. Used by the
+ * sandbox "Reset XP & level" button.
+ */
+export async function resetEconomyInDb(externalLearnerId: string): Promise<void> {
+  const db = getDb();
+  const integrationId = await getOrCreateIntegration(db);
+
+  const [learner] = await db
+    .select({ id: learners.id })
+    .from(learners)
+    .where(
+      sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
+    )
+    .limit(1);
+
+  if (!learner) return;
+
+  await db
+    .update(economy)
+    .set({
+      xp: 0,
+      xpLifetime: 0,
+      level: 1,
+      streakCurrent: 0,
+      streakLastDay: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(economy.learnerId, learner.id));
+
+  await db
+    .update(petState)
+    .set({
+      mood: "neutral",
+      moodExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(petState.learnerId, learner.id));
+
+  await db
+    .update(worldState)
+    .set({
+      stage: 0,
+      unlockedObjectIds: [],
+      updatedAt: new Date(),
+    })
+    .where(eq(worldState.learnerId, learner.id));
+}

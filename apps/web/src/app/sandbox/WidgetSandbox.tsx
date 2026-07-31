@@ -137,6 +137,7 @@ function FixtureControls({
   onCollapsedChange,
   onRefresh,
   onReset,
+  onResetDate,
   simulatedDate,
   onAddDay,
   onAddWeek,
@@ -146,6 +147,7 @@ function FixtureControls({
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
   onReset: () => void;
+  onResetDate: () => void;
   simulatedDate: Date;
   onAddDay: () => void;
   onAddWeek: () => void;
@@ -194,6 +196,7 @@ function FixtureControls({
         body: JSON.stringify({ learner_id: TEST_LEARNER_ID }),
       });
       onReset();
+      onResetDate();
       return;
     }
     await onRefresh();
@@ -315,14 +318,17 @@ function SandboxExperience({
   }, [simulatedDate]);
 
   // Sync the fixture client snapshot whenever the week changes.
-  useEffect(() => {
+  // Called during render (not effect) so client.peek() is correct before
+  // PalProvider remounts with a new scopeKey.
+  if (client.peek().roadmap.currentWeek !== currentSemesterWeek) {
     client.setWeek(currentSemesterWeek);
-  }, [currentSemesterWeek, client]);
+  }
 
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
+  const SEMESTER_START = useMemo(() => new Date("2026-07-13T08:00:00"), []);
   const fixtureScopeKey = `fixture-learner-${resetGeneration}-w${currentSemesterWeek}`;
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
@@ -464,6 +470,7 @@ function SandboxExperience({
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
                 onReset={() => setResetGeneration((current) => current + 1)}
+                onResetDate={() => setSimulatedDate(SEMESTER_START)}
                 simulatedDate={simulatedDate}
                 onAddDay={() => setSimulatedDate((prev) => new Date(prev.getTime() + 24 * 60 * 60 * 1000))}
                 onAddWeek={() => setSimulatedDate((prev) => new Date(prev.getTime() + 7 * 24 * 60 * 60 * 1000))}
