@@ -1,5 +1,5 @@
 {
-  "id": "ccad525e-2ae6-454e-83f7-8564704213a6",
+  "id": "ccb13e32-f2b1-49a0-a6da-a62033e73a10",
   "prevId": "c2262a1d-df42-4ff8-b3c5-ca9951bad490",
   "version": "7",
   "dialect": "postgresql",
@@ -121,17 +121,34 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "achievement_instances_source_fact_id_learner_facts_id_fk": {
-          "name": "achievement_instances_source_fact_id_learner_facts_id_fk",
+        "achievement_instances_source_owner_fk": {
+          "name": "achievement_instances_source_owner_fk",
           "tableFrom": "achievement_instances",
           "tableTo": "learner_facts",
           "columnsFrom": [
-            "source_fact_id"
+            "source_fact_id",
+            "learner_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "learner_id"
           ],
-          "onDelete": "set null",
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "achievement_instances_period_owner_fk": {
+          "name": "achievement_instances_period_owner_fk",
+          "tableFrom": "achievement_instances",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -144,6 +161,14 @@
             "learner_id",
             "achievement_key",
             "scope_key"
+          ]
+        },
+        "achievement_instances_id_learner_uq": {
+          "name": "achievement_instances_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
           ]
         }
       },
@@ -447,6 +472,21 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "events_learner_integration_owner_fk": {
+          "name": "events_learner_integration_owner_fk",
+          "tableFrom": "events",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id",
+            "integration_id"
+          ],
+          "columnsTo": [
+            "id",
+            "integration_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -457,6 +497,15 @@
           "columns": [
             "integration_id",
             "idempotency_key"
+          ]
+        },
+        "events_id_learner_integration_uq": {
+          "name": "events_id_learner_integration_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id",
+            "integration_id"
           ]
         }
       },
@@ -637,41 +686,19 @@
         }
       },
       "foreignKeys": {
-        "learner_facts_integration_id_integrations_id_fk": {
-          "name": "learner_facts_integration_id_integrations_id_fk",
-          "tableFrom": "learner_facts",
-          "tableTo": "integrations",
-          "columnsFrom": [
-            "integration_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "learner_facts_learner_id_learners_id_fk": {
-          "name": "learner_facts_learner_id_learners_id_fk",
-          "tableFrom": "learner_facts",
-          "tableTo": "learners",
-          "columnsFrom": [
-            "learner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "learner_facts_source_event_id_events_id_fk": {
-          "name": "learner_facts_source_event_id_events_id_fk",
+        "learner_facts_source_owner_fk": {
+          "name": "learner_facts_source_owner_fk",
           "tableFrom": "learner_facts",
           "tableTo": "events",
           "columnsFrom": [
-            "source_event_id"
+            "source_event_id",
+            "learner_id",
+            "integration_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "learner_id",
+            "integration_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -686,6 +713,14 @@
             "learner_id",
             "event_type",
             "semantic_key"
+          ]
+        },
+        "learner_facts_id_learner_uq": {
+          "name": "learner_facts_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
           ]
         }
       },
@@ -748,6 +783,14 @@
           "columns": [
             "integration_id",
             "external_learner_id"
+          ]
+        },
+        "learners_id_integration_uq": {
+          "name": "learners_id_integration_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "integration_id"
           ]
         }
       },
@@ -900,28 +943,17 @@
         }
       },
       "foreignKeys": {
-        "reward_notices_learner_id_learners_id_fk": {
-          "name": "reward_notices_learner_id_learners_id_fk",
-          "tableFrom": "reward_notices",
-          "tableTo": "learners",
-          "columnsFrom": [
-            "learner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reward_notices_achievement_instance_id_achievement_instances_id_fk": {
-          "name": "reward_notices_achievement_instance_id_achievement_instances_id_fk",
+        "reward_notices_achievement_owner_fk": {
+          "name": "reward_notices_achievement_owner_fk",
           "tableFrom": "reward_notices",
           "tableTo": "achievement_instances",
           "columnsFrom": [
-            "achievement_instance_id"
+            "achievement_instance_id",
+            "learner_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "learner_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -982,12 +1014,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "target_days": {
-          "name": "target_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "reconciliation_required": {
           "name": "reconciliation_required",
           "type": "boolean",
@@ -1030,6 +1056,21 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "weekly_rhythm_configs_period_owner_fk": {
+          "name": "weekly_rhythm_configs_period_owner_fk",
+          "tableFrom": "weekly_rhythm_configs",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1052,10 +1093,6 @@
         "weekly_rhythm_configs_eligible_days_range": {
           "name": "weekly_rhythm_configs_eligible_days_range",
           "value": "\"weekly_rhythm_configs\".\"eligible_days\" >= 0 AND \"weekly_rhythm_configs\".\"eligible_days\" <= 5"
-        },
-        "weekly_rhythm_configs_target_days_range": {
-          "name": "weekly_rhythm_configs_target_days_range",
-          "value": "\"weekly_rhythm_configs\".\"target_days\" >= 0 AND \"weekly_rhythm_configs\".\"target_days\" <= 4"
         },
         "weekly_rhythm_configs_status_valid": {
           "name": "weekly_rhythm_configs_status_valid",
