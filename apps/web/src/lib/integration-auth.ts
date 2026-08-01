@@ -142,8 +142,14 @@ export async function resolveIntegration(
     .from(integrations)
     .where(eq(integrations.slug, configured.slug))
     .limit(1);
-  if (!retry || retry.secretHash !== hash) {
+  if (!retry) {
     throw new Error(`Failed to resolve ${configured.slug} integration`);
+  }
+  if (retry.secretHash !== hash) {
+    await db
+      .update(integrations)
+      .set({ secretHash: hash, updatedAt: new Date() })
+      .where(eq(integrations.id, retry.id));
   }
   return {
     id: retry.id,
