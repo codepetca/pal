@@ -3,9 +3,10 @@ import { after, test } from "node:test";
 import { NextRequest } from "next/server";
 import { getPool } from "@pal/db";
 import { loadLearnerFromDb, resetLearnerInDb } from "@/lib/db-learner";
+import { resolveSandboxIntegration } from "@/lib/integration-auth";
 import { POST } from "./route";
 
-const secret = "route-test-sandbox-secret";
+const secret = "route-test-sandbox-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
 
 let openedDatabase = false;
@@ -85,13 +86,15 @@ test(
       ]);
       assert.deepEqual(concurrent.map((response) => response.status), [200, 200]);
 
-      const state = await loadLearnerFromDb(learnerId);
+      const integration = await resolveSandboxIntegration();
+      const state = await loadLearnerFromDb(integration.id, learnerId);
       assert.ok(state);
       assert.equal(state.economy.xp, 100);
       assert.equal(state.economy.xp_lifetime, 600);
       assert.equal(state.economy.level, 2);
     } finally {
-      await resetLearnerInDb(learnerId);
+      const integration = await resolveSandboxIntegration();
+      await resetLearnerInDb(integration.id, learnerId);
     }
   },
 );

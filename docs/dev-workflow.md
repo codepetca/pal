@@ -1,7 +1,7 @@
 # Development Workflow
 
 > Living document. Update this as the team evolves.
-> Last updated: 2026-07-25
+> Last updated: 2026-08-01
 
 ---
 
@@ -22,7 +22,9 @@ Open `apps/web/.env.local` and set:
 
 | Variable | What to put there | Needed when |
 |---|---|---|
-| `SANDBOX_INTEGRATION_SECRET` | Any long random string — generate one with `openssl rand -hex 24`. It's yours alone; it does not need to match anyone else's. | Only when exercising the legacy server-side event proxy; the widget fixture preview does not use it |
+| `PAL_INTEGRATION_SECRET` | Pika's 32+ character backend credential; generate with `openssl rand -hex 32` | Exercising Pika ingest or read-token minting |
+| `SANDBOX_INTEGRATION_SECRET` | A distinct 32+ character credential generated with `openssl rand -hex 32` | Exercising the sandbox event proxy |
+| `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
@@ -38,11 +40,11 @@ preview should show the 16-week Pal roadmap, companion, and collapsible **Fixtur
 preview** controls. Complete a daily log or earn the fish reward and confirm the
 public widget surfaces update.
 
-This preview is fixture-only and needs no Pal receiver or integration secret. It does
-not prove event ingestion, persistence, or read-token authorization. The legacy
-`/api/sandbox/events` proxy and `SANDBOX_INTEGRATION_SECRET` remain available for
-direct API development: the proxy attaches the secret server-side, and the browser
-never receives it.
+The roadmap and rewards are still fixture-backed. Companion actions also travel
+through the real receiver and persisted rule-engine state when the sandbox integration
+and database are configured. This does not yet prove the authenticated learner snapshot
+or reward acknowledgement boundary. `/api/sandbox/events` attaches the sandbox secret
+server-side; the browser never receives it.
 
 ---
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadLearnerFromDb } from "@/lib/db-learner";
+import { resolveSandboxIntegration } from "@/lib/integration-auth";
 
 // GET /api/v1/world/:learnerId
 // Returns current pet state, world state, and economy for a learner.
@@ -12,7 +13,8 @@ export async function GET(
 
   // TODO: validate read token from Authorization header
 
-  const state = await loadLearnerFromDb(learnerId);
+  const integration = await resolveSandboxIntegration();
+  const state = await loadLearnerFromDb(integration.id, learnerId);
 
   if (!state) {
     return NextResponse.json({ error: "learner_not_found" }, { status: 404 });
