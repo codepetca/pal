@@ -62,6 +62,10 @@ The package never receives:
 The browser receives only a short-lived learner-scoped token. Pal's integration
 secret stays on Pika's backend.
 
+Pal allows credentialed widget reads only from exact origins configured in
+`PAL_ALLOWED_WIDGET_ORIGINS`. Wildcards, path-bearing values, insecure non-local
+origins, and unlisted browser origins are rejected. Learner responses are never cached.
+
 `apiBaseUrl` must use HTTPS, except for credential-free localhost development.
 Custom snapshot and reward paths must resolve to that same API origin; the client
 validates the destination before requesting or attaching a learner token.

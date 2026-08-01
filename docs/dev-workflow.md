@@ -25,6 +25,7 @@ Open `apps/web/.env.local` and set:
 | `PAL_INTEGRATION_SECRET` | Pika's 32+ character backend credential; generate with `openssl rand -hex 32` | Exercising Pika ingest or read-token minting |
 | `SANDBOX_INTEGRATION_SECRET` | A distinct 32+ character credential generated with `openssl rand -hex 32` | Exercising the sandbox event proxy |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
+| `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
@@ -40,11 +41,12 @@ preview should show the 16-week Pal roadmap, companion, and collapsible **Fixtur
 preview** controls. Complete a daily log or earn the fish reward and confirm the
 public widget surfaces update.
 
-The roadmap and rewards are still fixture-backed. Companion actions also travel
-through the real receiver and persisted rule-engine state when the sandbox integration
-and database are configured. This does not yet prove the authenticated learner snapshot
-or reward acknowledgement boundary. `/api/sandbox/events` attaches the sandbox secret
-server-side; the browser never receives it.
+The roadmap and rewards in the current sandbox are still fixture-backed. Companion
+actions travel through the real receiver and persisted rule-engine state when the
+sandbox integration and database are configured. The authenticated snapshot and reward
+acknowledgement APIs now exist, but the sandbox will prove them only after pipeline mode
+switches from its composite fixture client to the real HTTP client. `/api/sandbox/events`
+attaches the sandbox secret server-side; the browser never receives it.
 
 ---
 

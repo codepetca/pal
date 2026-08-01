@@ -17,10 +17,9 @@
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
-The read-token route is implemented. The authenticated learner-snapshot and reward
-acknowledgement routes remain target pilot work. The fixture client in
-`@codepet/pal-widget` exists only for sandbox and visual development; it is not evidence
-that the production read boundary works.
+The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
+implemented. The fixture client in `@codepet/pal-widget` remains available only for
+visual development; production and pipeline-mode clients use these learner routes.
 
 ### Read-token request
 
@@ -46,6 +45,11 @@ The browser calls learner routes with:
 ```text
 Authorization: Bearer <short-lived learner-scoped read token>
 ```
+
+Cross-origin browser requests are accepted only when their exact HTTPS origin appears
+in `PAL_ALLOWED_WIDGET_ORIGINS` (HTTP is allowed only for localhost development).
+Responses use `Cache-Control: no-store`; preflights allow only `Authorization`,
+`Content-Type`, and the learner route methods.
 
 The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
@@ -97,8 +101,8 @@ Authorization: Bearer <integration_secret>
 Responses:
 - `401` — missing or invalid integration secret
 - `200 { "status": "processed", "mutations": [...] }` — rule engine ran, mutations applied. `mutations` is the full list the cascade applied, in order; the dev sandbox renders it.
-- `200 { "status": "duplicate" }` — idempotency key already seen, no reprocessing
-- `422` — unknown event type, disallowed metadata field, or a malformed/future-dated `occurred_at` (`future_occurred_at`: dated on a UTC day ahead of the server's, beyond a small clock-skew allowance — the streak engine is forward-only and a future day would freeze the learner's streak)
+- `200 { "status": "duplicate" }` — the idempotency key was already seen, or a second delivery identity asserted the same semantic fact (for example, another key for the same learner/activity date); no state is applied twice
+- `422` — unknown event type, disallowed metadata field, a revision to a closed Weekly Rhythm period (`closed_period_revision`), or a malformed/future-dated `occurred_at` (`future_occurred_at`: dated on a UTC day ahead of the server's, beyond a small clock-skew allowance — the streak engine is forward-only and a future day would freeze the learner's streak)
 
 `event_type` must be on the integration's allow-list. Derived events (`XP_CHANGED`, `LEVEL_UP`, `STREAK_MILESTONE` — see [rule-engine.md](rule-engine.md)) are produced inside the engine cascade and are **never ingestable**: an integration that could POST `LEVEL_UP` could grant its own students levels. They are rejected with `422 unknown_event_type`.
 

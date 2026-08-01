@@ -9,6 +9,11 @@ import {
 } from "@pal/db";
 import type { Db } from "@pal/db";
 import {
+  applyAchievementFact,
+  recordSemanticFact,
+  rejectClosedWeeklyRevision,
+} from "@/lib/achievement-state";
+import {
   defaultRulePack,
   processEvent,
   type IncomingEvent,
@@ -91,18 +96,22 @@ function toLearnerState(
 
 export type ProcessEventResult =
   | { status: "duplicate" }
+  | { status: "semantic_duplicate" }
+  | { status: "rejected"; error: "closed_period_revision" }
   | { status: "processed"; result: ProcessResult };
 
 /**
  * Processes an event in a single ACID transaction:
  * 1. Resolves the learner (creates on first use)
  * 2. Locks the learner row with SELECT ... FOR UPDATE
- * 3. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
+ * 3. Rejects a revision to a closed weekly period before persistence
+ * 4. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
  *    returns "duplicate" instead of applying the engine
- * 4. Reads current economy / pet / world state
- * 5. Runs the rule engine
- * 6. Upserts economy, pet_state, world_state
- * 7. Commits
+ * 5. Inserts its semantically unique fact; a second source identity for the
+ *    same behavior cannot change state
+ * 6. Reads current economy / pet / world state and runs the rule engine
+ * 7. Upserts state, scoped achievements, and reward notices
+ * 8. Commits
  */
 export async function processEventInDb(
   integrationId: string,
@@ -125,7 +134,16 @@ export async function processEventInDb(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`
     );
 
-    // 3. Idempotency check via unique constraint — atomic with the state write
+    // 3. Closed periods are immutable. Reject before the event ledger so the
+    // same non-retryable request deterministically receives the same response.
+    if (await rejectClosedWeeklyRevision(tx, learnerId, event)) {
+      return {
+        status: "rejected" as const,
+        error: "closed_period_revision" as const,
+      };
+    }
+
+    // 4. Delivery idempotency via unique constraint — atomic with state writes.
     const [inserted] = await tx
       .insert(events)
       .values({
@@ -143,7 +161,21 @@ export async function processEventInDb(
       return { status: "duplicate" as const };
     }
 
-    // 4. Read current state
+    // 5. Semantic dedup is independent from transport idempotency. For example,
+    // two deliveries with different keys but the same learner/activity date
+    // produce one daily-log fact and one set of effects.
+    const fact = await recordSemanticFact(tx, {
+      integrationId,
+      learnerId,
+      sourceEventId: inserted.id,
+      event,
+      idempotencyKey,
+    });
+    if (!fact) {
+      return { status: "semantic_duplicate" as const };
+    }
+
+    // 6. Read current state
     const [eco] = await tx
       .select()
       .from(economy)
@@ -164,10 +196,10 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 5. Run the engine
+    // 7. Run the engine
     const result = processEvent(event, state, defaultRulePack);
 
-    // 6. Upsert economy
+    // 8. Upsert economy
     await tx
       .insert(economy)
       .values({
@@ -196,7 +228,7 @@ export async function processEventInDb(
         },
       });
 
-    // 7. Upsert pet state
+    // 9. Upsert pet state
     await tx
       .insert(petState)
       .values({
@@ -217,7 +249,7 @@ export async function processEventInDb(
         },
       });
 
-    // 8. Upsert world state
+    // 10. Upsert world state
     await tx
       .insert(worldState)
       .values({
@@ -233,6 +265,9 @@ export async function processEventInDb(
           updatedAt: new Date(),
         },
       });
+
+    // 11. Persist fact-derived progress, awards, and one-time reward notices.
+    await applyAchievementFact(tx, learnerId, fact, event);
 
     return { status: "processed" as const, result };
   });
