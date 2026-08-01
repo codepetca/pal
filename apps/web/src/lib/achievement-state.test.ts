@@ -231,6 +231,7 @@ test(
       secret,
     });
     const periodKey = `reconcile-week-${crypto.randomUUID()}`;
+    const initialConfigurationKey = key();
     try {
       await processEventInDb(
         integration.id,
@@ -241,7 +242,7 @@ test(
           period_status: "closed",
           eligible_days: 0,
         }),
-        key(),
+        initialConfigurationKey,
       );
       await processEventInDb(
         integration.id,
@@ -252,6 +253,19 @@ test(
         }),
         key(),
       );
+      const acceptedRetry = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "closed",
+          eligible_days: 0,
+        }),
+        initialConfigurationKey,
+      );
+      assert.deepEqual(acceptedRetry, { status: "duplicate" });
+
       const contradictory = await processEventInDb(
         integration.id,
         externalLearnerId,
