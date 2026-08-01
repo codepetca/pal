@@ -15,6 +15,13 @@
       "when": 1784390199393,
       "tag": "0001_economy_lifetime_streak",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785589334883,
+      "tag": "0002_woozy_stark_industries",
+      "breakpoints": true
     }
   ]
 }
