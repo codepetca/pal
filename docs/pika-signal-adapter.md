@@ -344,7 +344,9 @@ injected fact produces immediate observable feedback.
 - The action controls expose all six version 1 normalized facts, including a
   three-day short-week revision, and construct only contract-allowed fields.
 - Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
-- Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
+- The current controls cover normal progress, shortened weeks, timing
+  classifications, and exact duplicate delivery. A later named-scenario library
+  should add out-of-order delivery, resubmission, deletion, and archive behavior.
 - Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
 - The control overlay is a development tool and is not exported from `@codepet/pal-widget`.
 - The browser obtains only a short-lived, learner-scoped read token. The sandbox
