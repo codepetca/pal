@@ -2,7 +2,6 @@ import {
   boolean,
   check,
   date,
-  foreignKey,
   index,
   integer,
   jsonb,
@@ -56,7 +55,6 @@ export const learners = pgTable(
   (t) => [
     // Also the lookup index for ingest and the world route.
     unique("learners_integration_external_uq").on(t.integrationId, t.externalLearnerId),
-    unique("learners_id_integration_uq").on(t.id, t.integrationId),
   ]
 );
 
@@ -82,16 +80,6 @@ export const events = pgTable(
     // ON CONFLICT DO NOTHING and treats "no row returned" as a duplicate,
     // rather than doing a read-then-write check that could race.
     unique("events_integration_idempotency_uq").on(t.integrationId, t.idempotencyKey),
-    unique("events_id_learner_integration_uq").on(
-      t.id,
-      t.learnerId,
-      t.integrationId,
-    ),
-    foreignKey({
-      columns: [t.learnerId, t.integrationId],
-      foreignColumns: [learners.id, learners.integrationId],
-      name: "events_learner_integration_owner_fk",
-    }).onDelete("cascade"),
     index("events_learner_occurred_idx").on(t.learnerId, t.occurredAt.desc()),
   ]
 );
@@ -104,9 +92,15 @@ export const learnerFacts = pgTable(
   "learner_facts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    integrationId: uuid("integration_id").notNull(),
-    learnerId: uuid("learner_id").notNull(),
-    sourceEventId: uuid("source_event_id").notNull(),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => integrations.id, { onDelete: "cascade" }),
+    learnerId: uuid("learner_id")
+      .notNull()
+      .references(() => learners.id, { onDelete: "cascade" }),
+    sourceEventId: uuid("source_event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
     eventType: text("event_type").notNull(),
     semanticKey: text("semantic_key").notNull(),
     periodKey: text("period_key"),
@@ -120,12 +114,6 @@ export const learnerFacts = pgTable(
       t.eventType,
       t.semanticKey,
     ),
-    unique("learner_facts_id_learner_uq").on(t.id, t.learnerId),
-    foreignKey({
-      columns: [t.sourceEventId, t.learnerId, t.integrationId],
-      foreignColumns: [events.id, events.learnerId, events.integrationId],
-      name: "learner_facts_source_owner_fk",
-    }).onDelete("cascade"),
     index("learner_facts_period_idx").on(t.learnerId, t.periodKey),
   ],
 );
@@ -167,6 +155,7 @@ export const weeklyRhythmConfigs = pgTable(
     configVersion: integer("config_version").notNull(),
     periodStatus: text("period_status").notNull(),
     eligibleDays: integer("eligible_days").notNull(),
+    targetDays: integer("target_days").notNull(),
     reconciliationRequired: boolean("reconciliation_required")
       .notNull()
       .default(false),
@@ -185,17 +174,13 @@ export const weeklyRhythmConfigs = pgTable(
       sql`${t.eligibleDays} >= 0 AND ${t.eligibleDays} <= 5`,
     ),
     check(
+      "weekly_rhythm_configs_target_days_range",
+      sql`${t.targetDays} >= 0 AND ${t.targetDays} <= 4`,
+    ),
+    check(
       "weekly_rhythm_configs_status_valid",
       sql`${t.periodStatus} IN ('open', 'closed')`,
     ),
-    foreignKey({
-      columns: [t.learnerId, t.periodKey],
-      foreignColumns: [
-        achievementPeriods.learnerId,
-        achievementPeriods.periodKey,
-      ],
-      name: "weekly_rhythm_configs_period_owner_fk",
-    }).onDelete("cascade"),
   ],
 );
 
@@ -215,7 +200,9 @@ export const achievementInstances = pgTable(
     progressCurrent: integer("progress_current"),
     progressTarget: integer("progress_target"),
     earnedAt: timestamp("earned_at", { withTimezone: true }),
-    sourceFactId: uuid("source_fact_id"),
+    sourceFactId: uuid("source_fact_id").references(() => learnerFacts.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -225,7 +212,6 @@ export const achievementInstances = pgTable(
       t.achievementKey,
       t.scopeKey,
     ),
-    unique("achievement_instances_id_learner_uq").on(t.id, t.learnerId),
     index("achievement_instances_period_idx").on(t.learnerId, t.periodKey),
     check(
       "achievement_instances_status_valid",
@@ -239,19 +225,6 @@ export const achievementInstances = pgTable(
       "achievement_instances_target_positive",
       sql`${t.progressTarget} IS NULL OR ${t.progressTarget} >= 1`,
     ),
-    foreignKey({
-      columns: [t.sourceFactId, t.learnerId],
-      foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
-      name: "achievement_instances_source_owner_fk",
-    }),
-    foreignKey({
-      columns: [t.learnerId, t.periodKey],
-      foreignColumns: [
-        achievementPeriods.learnerId,
-        achievementPeriods.periodKey,
-      ],
-      name: "achievement_instances_period_owner_fk",
-    }),
   ],
 );
 
@@ -259,8 +232,12 @@ export const rewardNotices = pgTable(
   "reward_notices",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    learnerId: uuid("learner_id").notNull(),
-    achievementInstanceId: uuid("achievement_instance_id").notNull(),
+    learnerId: uuid("learner_id")
+      .notNull()
+      .references(() => learners.id, { onDelete: "cascade" }),
+    achievementInstanceId: uuid("achievement_instance_id")
+      .notNull()
+      .references(() => achievementInstances.id, { onDelete: "cascade" }),
     rewardKey: text("reward_key").notNull(),
     title: text("title").notNull(),
     description: text("description").notNull(),
@@ -270,11 +247,6 @@ export const rewardNotices = pgTable(
   },
   (t) => [
     unique("reward_notices_achievement_uq").on(t.achievementInstanceId),
-    foreignKey({
-      columns: [t.achievementInstanceId, t.learnerId],
-      foreignColumns: [achievementInstances.id, achievementInstances.learnerId],
-      name: "reward_notices_achievement_owner_fk",
-    }).onDelete("cascade"),
     index("reward_notices_unseen_idx").on(t.learnerId, t.seenAt),
   ],
 );
