@@ -193,6 +193,10 @@ achievement evaluation, award/reward persistence, the learner snapshot API, and 
 reward acknowledgement API. The package fixture client remains available for isolated
 component tests; it is not the sandbox's source of learner state.
 
+Stateful sandbox routes are local-only by default. Preview use is fail-closed and may
+be enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, upstream deployment
+authentication, and an isolated, disposable preview database.
+
 ## Initial acceptance
 
 - The sandbox consumes `@codepet/pal-widget` through public package exports.

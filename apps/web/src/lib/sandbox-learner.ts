@@ -6,12 +6,19 @@ export function isSandboxLearnerId(value: unknown): value is string {
   return typeof value === "string" && SANDBOX_LEARNER_ID.test(value);
 }
 
-/** Sandbox mutation/read-token routes exist only in local and preview builds. */
+/** Sandbox routes run locally, or in an explicitly protected preview; never production. */
 export function isSandboxRuntimeAllowed(
-  env: { NODE_ENV?: string; VERCEL_ENV?: string } = process.env,
+  env: {
+    NODE_ENV?: string;
+    VERCEL_ENV?: string;
+    PAL_SANDBOX_PROTECTED_PREVIEW?: string;
+  } = process.env,
 ): boolean {
   if (env.VERCEL_ENV) {
-    return env.VERCEL_ENV === "preview" || env.VERCEL_ENV === "development";
+    if (env.VERCEL_ENV === "preview") {
+      return env.PAL_SANDBOX_PROTECTED_PREVIEW === "true";
+    }
+    return env.VERCEL_ENV === "development";
   }
   return env.NODE_ENV !== "production";
 }
