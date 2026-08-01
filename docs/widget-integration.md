@@ -182,14 +182,16 @@ Pal's sandbox imports only the package's public exports. It contains:
 
 - a minimal host shell with content and overlay layers;
 - light, dark, wide, and narrow host scenarios;
-- a clearly labeled fixture client for visual-state development;
+- the package's authenticated HTTP client, using a sandbox-only learner-token exchange;
 - the compact fictional-semester control panel; and
-- a pipeline mode, once implemented, that injects v1 events through Pal's real API.
+- all six v1 facts injected through Pal's real API, plus short-week revision,
+  duplicate replay, and reset controls.
 
 The control panel is an application-development tool and is not exported from the
-widget package. Fixture actions may update only the fixture client. Pipeline actions
-must pass through validation, deduplication, persistence, achievement evaluation,
-award/reward persistence, and the learner read API.
+widget package. Controls pass through validation, deduplication, persistence,
+achievement evaluation, award/reward persistence, the learner snapshot API, and the
+reward acknowledgement API. The package fixture client remains available for isolated
+component tests; it is not the sandbox's source of learner state.
 
 ## Initial acceptance
 
@@ -200,4 +202,4 @@ award/reward persistence, and the learner read API.
 - Controls retain visible focus and a 44px minimum target.
 - Celebration has a dismiss control and a reduced-motion treatment.
 - No integration secret or raw learner identifier enters the package.
-- Fixture mode is visibly distinct from proof of the real event pipeline.
+- The control log reports the receiver's real processed/duplicate result.

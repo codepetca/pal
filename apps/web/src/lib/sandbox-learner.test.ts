@@ -1,19 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSandboxLearnerId } from "./sandbox-learner";
+import {
+  isSandboxLearnerId,
+  isSandboxRuntimeAllowed,
+} from "./sandbox-learner";
 
-test("accepts only browser-scoped sandbox UUIDs", () => {
+test("accepts only unguessable browser-session sandbox learner IDs", () => {
   assert.equal(
     isSandboxLearnerId("sandbox-00000000-0000-4000-8000-000000000001"),
     true,
   );
-  for (const value of [
-    "test-learner-001",
-    "sandbox-known-name",
-    "sandbox-00000000-0000-0000-0000-000000000000",
-    "learner-from-another-integration",
-    null,
-  ]) {
-    assert.equal(isSandboxLearnerId(value), false);
-  }
+  assert.equal(isSandboxLearnerId("sandbox-student-1"), false);
+  assert.equal(isSandboxLearnerId("00000000-0000-4000-8000-000000000001"), false);
+});
+
+test("allows sandbox APIs locally and in previews, never production", () => {
+  assert.equal(
+    isSandboxRuntimeAllowed({ NODE_ENV: "development", VERCEL_ENV: undefined }),
+    true,
+  );
+  assert.equal(
+    isSandboxRuntimeAllowed({ NODE_ENV: "production", VERCEL_ENV: "preview" }),
+    true,
+  );
+  assert.equal(
+    isSandboxRuntimeAllowed({ NODE_ENV: "production", VERCEL_ENV: "production" }),
+    false,
+  );
+  assert.equal(
+    isSandboxRuntimeAllowed({ NODE_ENV: "production", VERCEL_ENV: "unexpected" }),
+    false,
+  );
+  assert.equal(
+    isSandboxRuntimeAllowed({ NODE_ENV: "production", VERCEL_ENV: undefined }),
+    false,
+  );
 });

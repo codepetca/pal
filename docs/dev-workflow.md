@@ -37,16 +37,19 @@ pnpm dev
 ```
 
 Open [localhost:3000/sandbox](http://localhost:3000/sandbox). The Pika-like host
-preview should show the 16-week Pal roadmap, companion, and collapsible **Fixture
-preview** controls. Complete a daily log or earn the fish reward and confirm the
-public widget surfaces update.
+preview should show the 16-week Pal roadmap, companion, and collapsible **Real
+pipeline** controls. Configure a week, complete daily logs, or finish an item on
+time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
+Advancing by one week automatically emits that new week's normal configuration fact,
+matching Pika's planned adapter behavior.
 
-The roadmap and rewards in the current sandbox are still fixture-backed. Companion
-actions travel through the real receiver and persisted rule-engine state when the
-sandbox integration and database are configured. The authenticated snapshot and reward
-acknowledgement APIs now exist, but the sandbox will prove them only after pipeline mode
-switches from its composite fixture client to the real HTTP client. `/api/sandbox/events`
-attaches the sandbox secret server-side; the browser never receives it.
+Every visible Pal surface in the sandbox is loaded through the authenticated learner
+snapshot API. `/api/sandbox/events` attaches the sandbox integration secret server-side,
+and `/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
+five-minute learner-scoped token; neither integration nor signing secrets reach the
+browser. Reward dismissal calls the real idempotent acknowledgement endpoint. Sandbox
+mutation/token routes are available locally and in Vercel previews, but return 404 in
+production.
 
 ---
 

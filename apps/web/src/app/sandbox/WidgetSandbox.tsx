@@ -1,13 +1,10 @@
 "use client";
 
 import {
-  createFixturePalClient,
   PalAchievements,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
-  type PalFixtureAction,
-  type PalFixtureController,
   type PalTheme,
   type PalViewport,
   usePalWidget,
@@ -31,11 +28,17 @@ import {
 import Image from "next/image";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { createSandboxPalClient } from "./sandbox-client";
+import {
+  createSandboxPalClient,
+  type SandboxPalClient,
+} from "./sandbox-client";
 import {
   addDays,
   eventForAction,
+  FICTIONAL_SEMESTER_START_ISO,
   isTodayOrEarlier,
+  semesterWeekForDate,
+  type SandboxAction,
   type SandboxEventRequest,
 } from "./sandbox-events";
 import styles from "./widget-sandbox.module.css";
@@ -63,8 +66,8 @@ const NAV_ITEMS = [
   icon: typeof NotePencil;
 }>;
 
-const FIXTURE_ACTIONS: Array<{
-  action: PalFixtureAction;
+const SANDBOX_ACTIONS: Array<{
+  action: SandboxAction;
   label: string;
   detail: string;
 }> = [
@@ -74,9 +77,29 @@ const FIXTURE_ACTIONS: Array<{
     detail: "platform.session.started",
   },
   {
+    action: "classroom-joined",
+    label: "Join classroom",
+    detail: "classroom.joined",
+  },
+  {
+    action: "week-configured",
+    label: "Configure this week",
+    detail: "Creates a 5-day Weekly Rhythm target",
+  },
+  {
+    action: "short-week-configured",
+    label: "Make it a short week",
+    detail: "Revises Weekly Rhythm to 3 eligible days",
+  },
+  {
     action: "daily-log-completed",
     label: "Complete daily log",
     detail: "Advances Weekly Rhythm, and grants XP",
+  },
+  {
+    action: "item-opened-early",
+    label: "Open item early",
+    detail: "Awards Ready Early",
   },
   {
     action: "on-time-finish",
@@ -89,18 +112,13 @@ const FIXTURE_ACTIONS: Array<{
     detail: "Adds a late completion badge",
   },
   {
-    action: "reward-earned",
-    label: "Earn fish reward",
-    detail: "Shows the celebration surface",
-  },
-  {
     action: "duplicate-replayed",
     label: "Replay duplicate",
     detail: "Must not change progress",
   },
 ];
 
-function FixtureControls({
+function SandboxControls({
   client,
   collapsed,
   onCollapsedChange,
@@ -113,8 +131,9 @@ function FixtureControls({
   canAddWeek,
   learnerId,
   sandboxError,
+  currentSemesterWeek,
 }: {
-  client: PalFixtureController;
+  client: SandboxPalClient;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
@@ -126,9 +145,10 @@ function FixtureControls({
   canAddWeek: boolean;
   learnerId: string;
   sandboxError: string | null;
+  currentSemesterWeek: number;
 }) {
   const [log, setLog] = useState<string[]>([
-    "Sandbox ready — companion state is persisted through the real pipeline.",
+    "Sandbox ready — every visible Pal surface uses the real pipeline.",
   ]);
   const [busy, setBusy] = useState(false);
   const lastRequest = useRef<SandboxEventRequest | null>(null);
@@ -146,16 +166,15 @@ function FixtureControls({
     return data;
   }
 
-  async function dispatch(action: PalFixtureAction) {
+  async function dispatch(action: SandboxAction) {
     if (busy) return;
     setBusy(true);
     try {
-      const fixtureResult = client.dispatch(action);
-
       if (action === "reset") {
         await post("/api/sandbox/reset", { learner_id: learnerId });
         lastRequest.current = null;
-        setLog((current) => ["Persisted learner reset", fixtureResult, ...current].slice(0, 6));
+        client.invalidateAccessToken();
+        setLog((current) => ["Persisted learner reset", ...current].slice(0, 6));
         onReset();
         return;
       }
@@ -169,17 +188,43 @@ function FixtureControls({
         if (action !== "duplicate-replayed") lastRequest.current = request;
         setLog((current) => [
           `→ ${request.event_type}: ${String(data.status)}`,
-          fixtureResult,
           ...current,
         ].slice(0, 6));
       } else {
         const detail =
           action === "duplicate-replayed"
             ? "Nothing to replay — send a real event first"
-            : fixtureResult;
+            : "This control does not emit an event";
         setLog((current) => [detail, ...current].slice(0, 6));
       }
 
+      await onRefresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sandbox request failed";
+      setLog((current) => [`Pipeline error: ${message}`, ...current].slice(0, 6));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function advanceWeek() {
+    if (busy || !canAddWeek) return;
+    setBusy(true);
+    try {
+      const nextDate = addDays(simulatedDate, 7);
+      const request = eventForAction(
+        "week-configured",
+        nextDate,
+        learnerId,
+      );
+      if (!request) throw new Error("Could not configure the next sandbox week");
+      const data = await post("/api/sandbox/events", request);
+      lastRequest.current = request;
+      onAddWeek();
+      setLog((current) => [
+        `→ advanced week: ${String(data.status)}`,
+        ...current,
+      ].slice(0, 6));
       await onRefresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sandbox request failed";
@@ -213,17 +258,19 @@ function FixtureControls({
         <div className={styles.controlPanel}>
           <header>
             <div>
-              <span className={styles.fixtureLabel}>Fixture preview</span>
+              <span className={styles.fixtureLabel}>Real pipeline</span>
               <h2>Semester controls</h2>
             </div>
             <p>
-              Companion events use the v1 receiver and persisted rule-engine state;
-              roadmap and reward states remain fixtures.
+              Controls send version 1 facts through Pal ingest. The roadmap,
+              companion, rewards, and acknowledgements all read persisted state.
             </p>
           </header>
 
           <div className={styles.dateBar}>
-            <span className={styles.dateLabel}>Semester / daily-log date</span>
+            <span className={styles.dateLabel}>
+              Semester week {currentSemesterWeek} / daily-log date
+            </span>
             <span className={styles.dateValue}>
               {simulatedDate.toLocaleDateString("en-US", {
                 weekday: "short",
@@ -233,17 +280,22 @@ function FixtureControls({
               })}
             </span>
             <div className={styles.dateButtons}>
-              <button type="button" onClick={onAddDay} disabled={!canAddDay} aria-label="Add 1 day">
+              <button type="button" onClick={onAddDay} disabled={busy || !canAddDay} aria-label="Add 1 day">
                 +1 day
               </button>
-              <button type="button" onClick={onAddWeek} disabled={!canAddWeek} aria-label="Add 1 week">
+              <button
+                type="button"
+                onClick={() => void advanceWeek()}
+                disabled={busy || !canAddWeek}
+                aria-label="Add 1 week and configure it"
+              >
                 +1 week
               </button>
             </div>
           </div>
 
           <div className={styles.controlActions}>
-            {FIXTURE_ACTIONS.map(({ action, label, detail }) => (
+            {SANDBOX_ACTIONS.map(({ action, label, detail }) => (
               <button type="button" key={action} disabled={busy} onClick={() => void dispatch(action)}>
                 <strong>{label}</strong>
                 <span>{detail}</span>
@@ -283,50 +335,42 @@ function SandboxExperience({
   onViewChange,
   onThemeChange,
   learnerId,
+  scopeKey,
+  onReset,
 }: {
-  client: PalFixtureController;
+  client: SandboxPalClient;
   theme: PalTheme;
   viewport: PalViewport;
   view: HostView;
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
   learnerId: string;
+  scopeKey: string;
+  onReset: () => void;
 }) {
   const [simulatedDate, setSimulatedDate] = useState(
-    () => new Date("2026-07-13T08:00:00Z"),
+    () => new Date(FICTIONAL_SEMESTER_START_ISO),
   );
   const [sandboxError, setSandboxError] = useState<string | null>(null);
   const canAddDay = isTodayOrEarlier(addDays(simulatedDate, 1));
   const canAddWeek = isTodayOrEarlier(addDays(simulatedDate, 7));
 
-  // Derive the current semester week from the simulated date.
-  // Semester starts 2026-07-13 (week 1). Each week is 7 days.
-  const currentSemesterWeek = useMemo(() => {
-    const semesterStart = new Date("2026-07-13T00:00:00Z");
-    const diffMs = simulatedDate.getTime() - semesterStart.getTime();
-    const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-    return Math.max(1, Math.min(16, Math.floor(diffDays / 7) + 1));
-  }, [simulatedDate]);
-
-  // Sync the fixture client snapshot whenever the week changes.
-  useEffect(() => {
-    client.setWeek?.(currentSemesterWeek);
-  }, [currentSemesterWeek, client]);
+  const currentSemesterWeek = useMemo(
+    () => semesterWeekForDate(simulatedDate),
+    [simulatedDate],
+  );
 
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [resetGeneration, setResetGeneration] = useState(0);
-  const fixtureScopeKey = `${learnerId}-${resetGeneration}-w${currentSemesterWeek}`;
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
 
   return (
     <PalProvider
-      key={fixtureScopeKey}
+      key={scopeKey}
       client={client}
-      initialSnapshot={client.peek()}
-      scopeKey={fixtureScopeKey}
+      scopeKey={scopeKey}
       density="comfortable"
       motion="system"
       theme={theme}
@@ -441,7 +485,7 @@ function SandboxExperience({
                   team tests how Pal fits naturally inside Pika.
                 </p>
                 <div className={styles.lessonCard}>
-                  <span>Fixture preview</span>
+                  <span>Host preview</span>
                   <h2>No {activeLabel.toLowerCase()} items yet</h2>
                   <p>Choose Achievements to return to the Pal roadmap.</p>
                 </div>
@@ -455,14 +499,18 @@ function SandboxExperience({
 
           </div>
 
-          <FixtureRefreshBridge>
+          <SandboxRefreshBridge>
             {(refresh) => (
-              <FixtureControls
+              <SandboxControls
                 client={client}
                 collapsed={controlsCollapsed}
                 onCollapsedChange={setControlsCollapsed}
                 onRefresh={refresh}
-                onReset={() => setResetGeneration((current) => current + 1)}
+                onReset={() => {
+                  setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
+                  setSandboxError(null);
+                  onReset();
+                }}
                 simulatedDate={simulatedDate}
                 onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
                 onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
@@ -470,9 +518,10 @@ function SandboxExperience({
                 canAddWeek={canAddWeek}
                 learnerId={learnerId}
                 sandboxError={sandboxError}
+                currentSemesterWeek={currentSemesterWeek}
               />
             )}
-          </FixtureRefreshBridge>
+          </SandboxRefreshBridge>
         </div>
 
         <div
@@ -489,7 +538,7 @@ function SandboxExperience({
   );
 }
 
-function FixtureRefreshBridge({
+function SandboxRefreshBridge({
   children,
 }: {
   children: (refresh: () => Promise<void>) => ReactNode;
@@ -526,20 +575,36 @@ function XpBar() {
 
 export function WidgetSandbox() {
   const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
-  const [client] = useState(() =>
-    createSandboxPalClient(createFixturePalClient(), learnerId),
-  );
+  const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
+  const [clientGeneration, setClientGeneration] = useState(0);
   const [theme, setTheme] = useState<PalTheme>("dark");
   const [viewport, setViewport] = useState<PalViewport>("wide");
   const [view, setView] = useState<HostView>("achievements");
 
   useEffect(() => {
+    setApiBaseUrl(window.location.origin);
     const query = window.matchMedia("(max-width: 48rem)");
     const updateViewport = () => setViewport(query.matches ? "narrow" : "wide");
     updateViewport();
     query.addEventListener("change", updateViewport);
     return () => query.removeEventListener("change", updateViewport);
   }, []);
+
+  const client = useMemo(
+    () =>
+      apiBaseUrl
+        ? createSandboxPalClient(learnerId, apiBaseUrl)
+        : null,
+    [apiBaseUrl, learnerId],
+  );
+
+  if (!client) {
+    return (
+      <main className={styles.sandbox} data-theme={theme}>
+        <p role="status">Preparing the Pal sandbox…</p>
+      </main>
+    );
+  }
 
   return (
     <SandboxExperience
@@ -550,6 +615,8 @@ export function WidgetSandbox() {
       onViewChange={setView}
       onThemeChange={setTheme}
       learnerId={learnerId}
+      scopeKey={`${learnerId}-${clientGeneration}`}
+      onReset={() => setClientGeneration((current) => current + 1)}
     />
   );
 }
