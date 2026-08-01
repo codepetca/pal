@@ -242,6 +242,7 @@ async function recomputeWeeklyRhythm(
       ),
     );
   const current = completionCount?.value ?? 0;
+  const targetDays = weeklyTarget(configuration.eligibleDays);
   const reconciliationRequired = current > configuration.eligibleDays;
   if (configuration.reconciliationRequired !== reconciliationRequired) {
     await db
@@ -262,7 +263,7 @@ async function recomputeWeeklyRhythm(
     )
     .limit(1);
 
-  if (configuration.targetDays === 0) {
+  if (targetDays === 0) {
     if (existing && existing.status !== "earned") {
       await db
         .delete(achievementInstances)
@@ -276,7 +277,7 @@ async function recomputeWeeklyRhythm(
   if (existing?.status === "earned") return;
 
   const earned =
-    !reconciliationRequired && current >= configuration.targetDays;
+    !reconciliationRequired && current >= targetDays;
   const status: AchievementStatus =
     earned
       ? "earned"
@@ -284,8 +285,8 @@ async function recomputeWeeklyRhythm(
         ? "incomplete"
         : "in-progress";
   const displayTarget = reconciliationRequired
-    ? Math.max(configuration.targetDays, current + 1)
-    : configuration.targetDays;
+    ? Math.max(targetDays, current + 1)
+    : targetDays;
 
   if (existing) {
     await db
@@ -344,7 +345,6 @@ async function applyWeeklyConfiguration(
       configVersion: version,
       periodStatus,
       eligibleDays,
-      targetDays: weeklyTarget(eligibleDays),
       configuredAt: new Date(event.occurred_at),
     });
   } else if (version > existing.configVersion) {
@@ -354,7 +354,6 @@ async function applyWeeklyConfiguration(
         configVersion: version,
         periodStatus,
         eligibleDays,
-        targetDays: weeklyTarget(eligibleDays),
         configuredAt: new Date(event.occurred_at),
         updatedAt: new Date(),
       })
