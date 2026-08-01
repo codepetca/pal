@@ -126,7 +126,11 @@ test(
 
       const [periodA] = await db
         .insert(achievementPeriods)
-        .values({ learnerId: learnerA.id, periodKey: "week-a", ordinal: 1 })
+        .values({
+          learnerId: learnerA.id,
+          periodKey: "week-a",
+          anchorAt: new Date(),
+        })
         .returning({ periodKey: achievementPeriods.periodKey });
 
       await assert.rejects(

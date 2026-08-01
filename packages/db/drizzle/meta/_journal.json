@@ -29,6 +29,13 @@
       "when": 1785591018853,
       "tag": "0003_enforce_achievement_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785591670208,
+      "tag": "0004_anchor_achievement_periods",
+      "breakpoints": true
     }
   ]
 }

@@ -140,7 +140,9 @@ export const achievementPeriods = pgTable(
       .notNull()
       .references(() => learners.id, { onDelete: "cascade" }),
     periodKey: text("period_key").notNull(),
-    ordinal: integer("ordinal").notNull(),
+    // Earliest authoritative behavior/configuration time seen for this opaque
+    // period. Snapshot ordering uses this, never delivery or row creation order.
+    anchorAt: timestamp("anchor_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -148,11 +150,6 @@ export const achievementPeriods = pgTable(
       t.learnerId,
       t.periodKey,
     ),
-    unique("achievement_periods_learner_ordinal_uq").on(
-      t.learnerId,
-      t.ordinal,
-    ),
-    check("achievement_periods_ordinal_positive", sql`${t.ordinal} >= 1`),
   ],
 );
 
