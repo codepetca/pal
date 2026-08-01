@@ -15,6 +15,7 @@ export interface ConfiguredIntegration {
 export interface AuthenticatedIntegration {
   id: string;
   slug: ConfiguredIntegration["slug"];
+  allowedEventTypes: readonly string[];
 }
 
 function secretHash(secret: string): Buffer {
@@ -87,7 +88,11 @@ export async function resolveIntegration(
 ): Promise<AuthenticatedIntegration> {
   const hash = secretHash(configured.secret).toString("hex");
   const [existing] = await db
-    .select({ id: integrations.id, secretHash: integrations.secretHash })
+    .select({
+      id: integrations.id,
+      secretHash: integrations.secretHash,
+      allowedEventTypes: integrations.allowedEventTypes,
+    })
     .from(integrations)
     .where(eq(integrations.slug, configured.slug))
     .limit(1);
@@ -99,7 +104,11 @@ export async function resolveIntegration(
         .set({ secretHash: hash, updatedAt: new Date() })
         .where(eq(integrations.id, existing.id));
     }
-    return { id: existing.id, slug: configured.slug };
+    return {
+      id: existing.id,
+      slug: configured.slug,
+      allowedEventTypes: existing.allowedEventTypes,
+    };
   }
 
   const [created] = await db
@@ -111,19 +120,36 @@ export async function resolveIntegration(
       allowedEventTypes: [...v1.V1_EVENT_TYPES],
     })
     .onConflictDoNothing()
-    .returning({ id: integrations.id });
+    .returning({
+      id: integrations.id,
+      allowedEventTypes: integrations.allowedEventTypes,
+    });
 
-  if (created) return { id: created.id, slug: configured.slug };
+  if (created) {
+    return {
+      id: created.id,
+      slug: configured.slug,
+      allowedEventTypes: created.allowedEventTypes,
+    };
+  }
 
   const [retry] = await db
-    .select({ id: integrations.id, secretHash: integrations.secretHash })
+    .select({
+      id: integrations.id,
+      secretHash: integrations.secretHash,
+      allowedEventTypes: integrations.allowedEventTypes,
+    })
     .from(integrations)
     .where(eq(integrations.slug, configured.slug))
     .limit(1);
   if (!retry || retry.secretHash !== hash) {
     throw new Error(`Failed to resolve ${configured.slug} integration`);
   }
-  return { id: retry.id, slug: configured.slug };
+  return {
+    id: retry.id,
+    slug: configured.slug,
+    allowedEventTypes: retry.allowedEventTypes,
+  };
 }
 
 export function sandboxIntegrationConfiguration(): ConfiguredIntegration {

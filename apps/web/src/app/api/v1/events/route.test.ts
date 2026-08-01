@@ -1,21 +1,28 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { NextRequest } from "next/server";
-import { getPool } from "@pal/db";
+import { eq } from "drizzle-orm";
+import { getDb, getPool, integrations } from "@pal/db";
+import { v1 } from "@pal/contract";
 import { loadLearnerFromDb, resetLearnerInDb } from "@/lib/db-learner";
-import { resolveSandboxIntegration } from "@/lib/integration-auth";
+import {
+  resolveIntegration,
+  resolveSandboxIntegration,
+} from "@/lib/integration-auth";
 import { POST } from "./route";
 
 const secret = "route-test-sandbox-secret-at-least-32-characters";
+const pikaSecret = "route-test-pika-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
+process.env.PAL_INTEGRATION_SECRET = pikaSecret;
 
 let openedDatabase = false;
 
-function request(body: unknown): NextRequest {
+function request(body: unknown, bearerSecret = secret): NextRequest {
   return new NextRequest("http://localhost/api/v1/events", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${secret}`,
+      Authorization: `Bearer ${bearerSecret}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -95,6 +102,49 @@ test(
     } finally {
       const integration = await resolveSandboxIntegration();
       await resetLearnerInDb(integration.id, learnerId);
+    }
+  },
+);
+
+test(
+  "enforces each integration's event allow-list before learner persistence",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const learnerId = `allow-list-${crypto.randomUUID()}`;
+    const pikaConfiguration = {
+      slug: "pika" as const,
+      name: "Pika",
+      secret: pikaSecret,
+    };
+    const pika = await resolveIntegration(pikaConfiguration);
+    const db = getDb();
+
+    try {
+      await db
+        .update(integrations)
+        .set({ allowedEventTypes: ["platform.session.started"] })
+        .where(eq(integrations.id, pika.id));
+
+      const rejected = await POST(
+        request(learningItemEvent(learnerId), pikaSecret),
+      );
+      assert.equal(rejected.status, 422);
+      assert.equal((await rejected.json()).error, "unknown_event_type");
+      assert.equal(await loadLearnerFromDb(pika.id, learnerId), null);
+
+      const accepted = await POST(request(learningItemEvent(learnerId)));
+      assert.equal(accepted.status, 200);
+      assert.equal((await accepted.json()).status, "processed");
+      const sandbox = await resolveSandboxIntegration();
+      assert.ok(await loadLearnerFromDb(sandbox.id, learnerId));
+      await resetLearnerInDb(sandbox.id, learnerId);
+    } finally {
+      await db
+        .update(integrations)
+        .set({ allowedEventTypes: [...v1.V1_EVENT_TYPES] })
+        .where(eq(integrations.id, pika.id));
+      await resetLearnerInDb(pika.id, learnerId);
     }
   },
 );

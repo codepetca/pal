@@ -42,7 +42,9 @@ test("mints a short-lived learner-scoped token without the external learner toke
 
 test("rejects altered and expired tokens", async () => {
   const result = await mintPalReadToken({ learnerId, integrationId, now });
-  const altered = `${result.token.slice(0, -1)}${result.token.endsWith("a") ? "b" : "a"}`;
+  const [header, payload, signature] = result.token.split(".");
+  const alteredPayload = `${payload[0] === "a" ? "b" : "a"}${payload.slice(1)}`;
+  const altered = [header, alteredPayload, signature].join(".");
 
   await assert.rejects(
     verifyPalReadToken(altered, "learner:read", now),
@@ -56,6 +58,75 @@ test("rejects altered and expired tokens", async () => {
     ),
     InvalidReadTokenError,
   );
+});
+
+async function signClaims(input: {
+  issuedAt?: number;
+  expiresAt: number;
+}) {
+  let token = new SignJWT({
+    integration_id: integrationId,
+    scope: "learner:read reward:ack",
+  })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuer(PAL_READ_TOKEN_ISSUER)
+    .setAudience(PAL_READ_TOKEN_AUDIENCE)
+    .setSubject(learnerId)
+    .setJti("00000000-0000-4000-8000-000000000003");
+  if (input.issuedAt !== undefined) token = token.setIssuedAt(input.issuedAt);
+  return token
+    .setExpirationTime(input.expiresAt)
+    .sign(new TextEncoder().encode(signingSecret));
+}
+
+test("rejects missing, future, and overlong issuance windows", async () => {
+  const issuedAt = Math.floor(now.getTime() / 1_000);
+  const tokens = [
+    await signClaims({
+      expiresAt: issuedAt + PAL_READ_TOKEN_TTL_SECONDS,
+    }),
+    await signClaims({
+      issuedAt: issuedAt + 31,
+      expiresAt: issuedAt + 31 + PAL_READ_TOKEN_TTL_SECONDS,
+    }),
+    await signClaims({
+      issuedAt,
+      expiresAt: issuedAt + PAL_READ_TOKEN_TTL_SECONDS + 1,
+    }),
+  ];
+
+  for (const token of tokens) {
+    await assert.rejects(
+      verifyPalReadToken(token, "learner:read", now),
+      InvalidReadTokenError,
+    );
+  }
+});
+
+test("rejects signing-key reuse across trust boundaries", async () => {
+  const originalPikaSecret = process.env.PAL_INTEGRATION_SECRET;
+  const originalSandboxSecret = process.env.SANDBOX_INTEGRATION_SECRET;
+  const restore = (name: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  };
+  try {
+    for (const envName of [
+      "PAL_INTEGRATION_SECRET",
+      "SANDBOX_INTEGRATION_SECRET",
+    ] as const) {
+      process.env.PAL_INTEGRATION_SECRET = originalPikaSecret;
+      process.env.SANDBOX_INTEGRATION_SECRET = originalSandboxSecret;
+      process.env[envName] = signingSecret;
+      await assert.rejects(
+        mintPalReadToken({ learnerId, integrationId, now }),
+        new RegExp(`distinct from ${envName}`),
+      );
+    }
+  } finally {
+    restore("PAL_INTEGRATION_SECRET", originalPikaSecret);
+    restore("SANDBOX_INTEGRATION_SECRET", originalSandboxSecret);
+  }
 });
 
 test("rejects a token that lacks the required scope", async () => {

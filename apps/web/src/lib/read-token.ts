@@ -29,6 +29,16 @@ function signingKey(): Uint8Array {
       "PAL_READ_TOKEN_SIGNING_SECRET must be configured with at least 32 characters",
     );
   }
+  for (const [name, integrationSecret] of [
+    ["PAL_INTEGRATION_SECRET", process.env.PAL_INTEGRATION_SECRET],
+    ["SANDBOX_INTEGRATION_SECRET", process.env.SANDBOX_INTEGRATION_SECRET],
+  ] as const) {
+    if (integrationSecret?.trim() === secret) {
+      throw new Error(
+        `PAL_READ_TOKEN_SIGNING_SECRET must be distinct from ${name}`,
+      );
+    }
+  }
   return new TextEncoder().encode(secret);
 }
 
@@ -90,11 +100,15 @@ export async function verifyPalReadToken(
         ? payload.scope.split(" ").filter(Boolean)
         : [],
     );
+    const nowSeconds = Math.floor((now ?? new Date()).getTime() / 1_000);
     if (
       protectedHeader.typ !== "JWT" ||
       !uuid(payload.sub) ||
       !uuid(integrationId) ||
+      typeof payload.iat !== "number" ||
       typeof payload.exp !== "number" ||
+      payload.iat > nowSeconds + PAL_READ_TOKEN_CLOCK_TOLERANCE_SECONDS ||
+      payload.exp - payload.iat !== PAL_READ_TOKEN_TTL_SECONDS ||
       typeof payload.jti !== "string" ||
       !scopes.has(requiredScope)
     ) {

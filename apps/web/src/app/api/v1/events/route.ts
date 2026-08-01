@@ -55,6 +55,15 @@ export async function POST(req: NextRequest) {
     metadata: event.metadata,
   };
   const integration = await resolveIntegration(configuredIntegration);
+  if (!integration.allowedEventTypes.includes(event.event_type)) {
+    return NextResponse.json(
+      {
+        error: "unknown_event_type",
+        detail: `${event.event_type} is not enabled for this integration`,
+      },
+      { status: 422 },
+    );
+  }
 
   // The engine decides what changes; processEventInDb runs the engine inside a
   // single ACID transaction with FOR UPDATE locking and constraint-based dedup.
