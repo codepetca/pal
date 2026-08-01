@@ -34,10 +34,10 @@ export function PalRewardCelebration({
   const titleId = useId();
 
   useEffect(() => {
-    if (!rewardId) return;
+    if (!rewardId || hostManaged) return;
     onOpenChange?.(true);
     return () => onOpenChange?.(false);
-  }, [onOpenChange, rewardId]);
+  }, [hostManaged, onOpenChange, rewardId]);
 
   useEffect(() => {
     if (

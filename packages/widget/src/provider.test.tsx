@@ -241,6 +241,36 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
   }
 });
 
+test("a host-managed reward does not publish a competing open lifecycle", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Fish for Pip",
+    description: "A reward notice",
+  });
+  const openChanges: boolean[] = [];
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={{
+          getSnapshot: async () => snapshot,
+          markRewardSeen: async () => undefined,
+        }}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-learner"
+      >
+        <PalRewardCelebration
+          hostManaged
+          onOpenChange={(open) => openChanges.push(open)}
+        />
+      </PalProvider>,
+    );
+  });
+
+  assert.deepEqual(openChanges, []);
+});
+
 test("an older snapshot refresh cannot resurrect an acknowledged reward", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

@@ -300,7 +300,13 @@ learner-scoped client and state, while Pika mounts three independent surfaces:
 >
   <PalAchievements />       // normal Pika content pane
   <PalCompanion />          // Pika-approved ambient layer
-  <PalRewardCelebration />  // Pika-approved celebration layer
+  <PikaModalLayer
+    isOpen={Boolean(palReward)}
+    onClose={() => palReward && void dismissReward(palReward.id)}
+    ariaLabel="Reward earned"
+  >
+    <PalRewardCelebration hostManaged />
+  </PikaModalLayer>
 </PalProvider>
 ```
 
@@ -309,6 +315,13 @@ Pika adds an **Achievements** navigation destination and renders
 page-covering overlay. Pika owns the host layout, standard interface styling, and
 whether the companion or celebration mounts on a given route. Pal owns everything
 inside each surface.
+
+The reward modal's open state is derived from Pal's first pending reward. Every
+Pika close path acknowledges that reward through `dismissReward`; it never hides
+the modal with local state alone. Pika's `ModalLayer` owns the portal, dialog label
+and semantics, inert background, focus containment/restoration, Escape and backdrop
+policy, and scroll lock. `PalRewardCelebration hostManaged` supplies only the reward
+content and acknowledgement action, avoiding nested dialog or keyboard ownership.
 
 Pika obtains a short-lived, learner-scoped read token from its backend and supplies
 it through the Pal client's `getAccessToken` callback. The integration secret, raw

@@ -5,9 +5,9 @@ package with three separately mountable learner surfaces sharing a provider:
 
 - `PalAchievements` — the complete vertical roadmap in Pika's content pane.
 - `PalCompanion` — a small ambient pet surface in a host-approved layer.
-- `PalRewardCelebration` — a dismissible, reduced-motion-aware reward dialog in a
-  host-approved layer. It focuses its Continue button, supports Escape dismissal,
-  and restores prior focus. A host may opt into modal keyboard behavior.
+- `PalRewardCelebration` — dismissible, reduced-motion-aware reward content in a
+  host-approved layer. In standalone mode Pal owns dialog/focus behavior; Pika uses
+  host-managed mode so its canonical modal layer owns that behavior.
 
 The separation is intentional. The roadmap is route content; the companion may
 outlive that route; a celebration has a one-time notification lifecycle. They share
@@ -34,10 +34,13 @@ const client = createPalHttpClient({
 >
   <PalAchievements />
   <PalCompanion />
-  <PalRewardCelebration
-    modal
-    onOpenChange={setPalCelebrationOpen}
-  />
+  <PikaModalLayer
+    isOpen={Boolean(palReward)}
+    onClose={() => palReward && void dismissReward(palReward.id)}
+    ariaLabel="Reward earned"
+  >
+    <PalRewardCelebration hostManaged />
+  </PikaModalLayer>
 </PalProvider>
 ```
 
@@ -74,11 +77,15 @@ Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
 
-When `modal` is true, the host must use `onOpenChange` to make its application
-region inert while the reward is open and must mount the component in a backdrop
-that intercepts pointer input. The widget then contains Tab focus, supports
-Escape, and restores the previously focused host control. Without that host
-lifecycle, omit `modal`; the component remains a focus-managed non-modal dialog.
+Standalone hosts may set `modal` and use `onOpenChange` to coordinate their own
+backdrop and inert application region; Pal then contains Tab focus, handles Escape,
+and restores focus. Pika instead derives open state from
+`usePalWidget().snapshot.rewards[0]`, calls `dismissReward(reward.id)` from every
+host close path, and renders `hostManaged` reward content inside `ModalLayer`.
+`ModalLayer` owns the portal, dialog label and semantics, inert background, focus
+containment/restoration, Escape, backdrop policy, and scroll lock. In host-managed
+mode Pal intentionally does not publish `onOpenChange` or run competing focus and
+keyboard behavior.
 
 `scopeKey` is a host-local opaque value that changes synchronously before the active
 learner context changes. Pal never transmits it. This prevents a previous learner's
@@ -97,6 +104,7 @@ Pika owns:
 
 - whether and where each surface mounts;
 - application shell, navigation, page width, and overlay boundaries;
+- host-managed reward dialog semantics, focus, Escape, inertness, and scroll lock;
 - the learner-token callback;
 - semantic host tokens, theme, focus expectations, and reduced-motion setting; and
 - failure containment so Pal cannot block academic work.
