@@ -86,7 +86,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: result.error,
-        detail: "A closed Weekly Rhythm period cannot be revised",
+        detail:
+          result.error === "closed_period_revision"
+            ? "A closed Weekly Rhythm period cannot be revised"
+            : "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
       },
       { status: 422 },
     );

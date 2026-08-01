@@ -10,7 +10,10 @@ import {
 import { resolveIntegration } from "@/lib/integration-auth";
 import { mintPalReadToken } from "@/lib/read-token";
 import { GET as getSnapshot, OPTIONS as snapshotOptions } from "./snapshot/route";
-import { POST as acknowledgeReward } from "./rewards/[rewardId]/seen/route";
+import {
+  OPTIONS as rewardOptions,
+  POST as acknowledgeReward,
+} from "./rewards/[rewardId]/seen/route";
 
 const secret = "learner-routes-sandbox-secret-at-least-32-characters";
 const pikaSecret = "learner-routes-pika-secret-at-least-32-characters";
@@ -48,6 +51,49 @@ test("rejects missing authentication and unapproved widget origins", async () =>
     ),
   );
   assert.equal(disallowed.status, 403);
+  assert.equal(disallowed.headers.get("cache-control"), "no-store");
+  assert.equal(disallowed.headers.get("vary"), "Origin");
+  assert.equal(disallowed.headers.get("access-control-allow-origin"), null);
+
+  const deniedRewardPreflight = await rewardOptions(
+    request(
+      "/api/v1/learner/rewards/not-a-reward/seen",
+      undefined,
+      "https://attacker.example",
+      "OPTIONS",
+    ),
+  );
+  assert.equal(deniedRewardPreflight.status, 403);
+  assert.equal(deniedRewardPreflight.headers.get("cache-control"), "no-store");
+  assert.equal(deniedRewardPreflight.headers.get("vary"), "Origin");
+  assert.equal(
+    deniedRewardPreflight.headers.get("access-control-allow-origin"),
+    null,
+  );
+
+  const deniedReward = await acknowledgeReward(
+    request(
+      "/api/v1/learner/rewards/not-a-reward/seen",
+      "untrusted-token",
+      "https://attacker.example",
+      "POST",
+    ),
+    { params: Promise.resolve({ rewardId: "not-a-reward" }) },
+  );
+  assert.equal(deniedReward.status, 403);
+  assert.equal(deniedReward.headers.get("cache-control"), "no-store");
+  assert.equal(deniedReward.headers.get("vary"), "Origin");
+
+  const unauthenticatedInvalidReward = await acknowledgeReward(
+    request(
+      "/api/v1/learner/rewards/not-a-reward/seen",
+      "untrusted-token",
+      allowedOrigin,
+      "POST",
+    ),
+    { params: Promise.resolve({ rewardId: "not-a-reward" }) },
+  );
+  assert.equal(unauthenticatedInvalidReward.status, 401);
 
   const preflight = await snapshotOptions(
     request("/api/v1/learner/snapshot", undefined, allowedOrigin, "OPTIONS"),

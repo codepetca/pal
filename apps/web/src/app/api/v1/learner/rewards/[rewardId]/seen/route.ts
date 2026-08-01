@@ -18,6 +18,10 @@ function responseHeaders(cors: Headers): Headers {
   return headers;
 }
 
+function deniedHeaders(): Headers {
+  return responseHeaders(new Headers({ Vary: "Origin" }));
+}
+
 function uuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -28,7 +32,10 @@ export async function OPTIONS(request: NextRequest) {
   const cors = widgetCorsHeaders(request);
   return cors
     ? new NextResponse(null, { status: 204, headers: responseHeaders(cors) })
-    : NextResponse.json({ error: "origin_not_allowed" }, { status: 403 });
+    : NextResponse.json(
+        { error: "origin_not_allowed" },
+        { status: 403, headers: deniedHeaders() },
+      );
 }
 
 export async function POST(
@@ -37,7 +44,10 @@ export async function POST(
 ) {
   const cors = widgetCorsHeaders(request);
   if (!cors) {
-    return NextResponse.json({ error: "origin_not_allowed" }, { status: 403 });
+    return NextResponse.json(
+      { error: "origin_not_allowed" },
+      { status: 403, headers: deniedHeaders() },
+    );
   }
   const token = bearerToken(request.headers.get("authorization"));
   if (!token) {
@@ -46,15 +56,15 @@ export async function POST(
       { status: 401, headers: responseHeaders(cors) },
     );
   }
-  const { rewardId } = await context.params;
-  if (!uuid(rewardId)) {
-    return NextResponse.json(
-      { error: "invalid_reward_id" },
-      { status: 422, headers: responseHeaders(cors) },
-    );
-  }
   try {
     const claims = await verifyPalReadToken(token, "reward:ack");
+    const { rewardId } = await context.params;
+    if (!uuid(rewardId)) {
+      return NextResponse.json(
+        { error: "invalid_reward_id" },
+        { status: 422, headers: responseHeaders(cors) },
+      );
+    }
     await acknowledgeLearnerReward(
       claims.integrationId,
       claims.learnerId,

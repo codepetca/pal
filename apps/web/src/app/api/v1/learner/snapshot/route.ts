@@ -18,17 +18,27 @@ function responseHeaders(cors: Headers): Headers {
   return headers;
 }
 
+function deniedHeaders(): Headers {
+  return responseHeaders(new Headers({ Vary: "Origin" }));
+}
+
 export async function OPTIONS(request: NextRequest) {
   const cors = widgetCorsHeaders(request);
   return cors
     ? new NextResponse(null, { status: 204, headers: responseHeaders(cors) })
-    : NextResponse.json({ error: "origin_not_allowed" }, { status: 403 });
+    : NextResponse.json(
+        { error: "origin_not_allowed" },
+        { status: 403, headers: deniedHeaders() },
+      );
 }
 
 export async function GET(request: NextRequest) {
   const cors = widgetCorsHeaders(request);
   if (!cors) {
-    return NextResponse.json({ error: "origin_not_allowed" }, { status: 403 });
+    return NextResponse.json(
+      { error: "origin_not_allowed" },
+      { status: 403, headers: deniedHeaders() },
+    );
   }
   const token = bearerToken(request.headers.get("authorization"));
   if (!token) {

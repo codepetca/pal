@@ -80,18 +80,43 @@ function factIdentity(
   }
 }
 
-export async function rejectClosedWeeklyRevision(
+export type WeeklyConfigurationError =
+  | "closed_period_revision"
+  | "contradictory_period_configuration";
+
+async function completionCount(
+  db: Db,
+  learnerId: string,
+  periodKey: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ value: sql<number>`count(*)::int` })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, "daily_log.completed"),
+        eq(learnerFacts.periodKey, periodKey),
+      ),
+    );
+  return result?.value ?? 0;
+}
+
+export async function weeklyConfigurationRejection(
   db: Db,
   learnerId: string,
   event: IncomingEvent,
-): Promise<boolean> {
-  if (event.event_type !== "daily_log_week.configured") return false;
+): Promise<WeeklyConfigurationError | null> {
+  if (event.event_type !== "daily_log_week.configured") return null;
   const periodKey = metadataString(event, "period_key");
   const version = metadataInteger(event, "config_version");
+  const eligibleDays = metadataInteger(event, "eligible_days");
+  const periodStatus = metadataString(event, "period_status");
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,
       periodStatus: weeklyRhythmConfigs.periodStatus,
+      reconciliationRequired: weeklyRhythmConfigs.reconciliationRequired,
     })
     .from(weeklyRhythmConfigs)
     .where(
@@ -101,19 +126,39 @@ export async function rejectClosedWeeklyRevision(
       ),
     )
     .limit(1);
-  return Boolean(
-    existing?.periodStatus === "closed" && version > existing.configVersion,
-  );
+  if (
+    periodStatus === "closed" &&
+    eligibleDays < (await completionCount(db, learnerId, periodKey))
+  ) {
+    return "contradictory_period_configuration";
+  }
+  if (
+    existing?.periodStatus === "closed" &&
+    version > existing.configVersion &&
+    (!existing.reconciliationRequired || periodStatus !== "closed")
+  ) {
+    return "closed_period_revision";
+  }
+  return null;
+}
+
+function authoritativePeriodAnchor(event: IncomingEvent): Date {
+  if (event.event_type === "daily_log.completed") {
+    return new Date(`${metadataString(event, "activity_day")}T00:00:00.000Z`);
+  }
+  return new Date(event.occurred_at);
 }
 
 async function ensurePeriod(
   db: Db,
   learnerId: string,
   periodKey: string | null,
+  event: IncomingEvent,
 ): Promise<void> {
   if (!periodKey) return;
+  const anchorAt = authoritativePeriodAnchor(event);
   const [existing] = await db
-    .select({ id: achievementPeriods.id })
+    .select({ id: achievementPeriods.id, anchorAt: achievementPeriods.anchorAt })
     .from(achievementPeriods)
     .where(
       and(
@@ -122,16 +167,20 @@ async function ensurePeriod(
       ),
     )
     .limit(1);
-  if (existing) return;
+  if (existing) {
+    if (anchorAt.getTime() < existing.anchorAt.getTime()) {
+      await db
+        .update(achievementPeriods)
+        .set({ anchorAt })
+        .where(eq(achievementPeriods.id, existing.id));
+    }
+    return;
+  }
 
-  const [maximum] = await db
-    .select({ value: sql<number>`coalesce(max(${achievementPeriods.ordinal}), 0)::int` })
-    .from(achievementPeriods)
-    .where(eq(achievementPeriods.learnerId, learnerId));
   await db.insert(achievementPeriods).values({
     learnerId,
     periodKey,
-    ordinal: (maximum?.value ?? 0) + 1,
+    anchorAt,
   });
 }
 
@@ -161,7 +210,7 @@ export async function recordSemanticFact(
     .onConflictDoNothing()
     .returning({ id: learnerFacts.id });
   if (!fact) return null;
-  await ensurePeriod(db, input.learnerId, identity.periodKey);
+  await ensurePeriod(db, input.learnerId, identity.periodKey, input.event);
   return { id: fact.id, periodKey: identity.periodKey };
 }
 
@@ -231,17 +280,7 @@ async function recomputeWeeklyRhythm(
     .limit(1);
   if (!configuration) return;
 
-  const [completionCount] = await db
-    .select({ value: sql<number>`count(*)::int` })
-    .from(learnerFacts)
-    .where(
-      and(
-        eq(learnerFacts.learnerId, learnerId),
-        eq(learnerFacts.eventType, "daily_log.completed"),
-        eq(learnerFacts.periodKey, periodKey),
-      ),
-    );
-  const current = completionCount?.value ?? 0;
+  const current = await completionCount(db, learnerId, periodKey);
   const targetDays = weeklyTarget(configuration.eligibleDays);
   const reconciliationRequired = current > configuration.eligibleDays;
   if (configuration.reconciliationRequired !== reconciliationRequired) {
@@ -263,7 +302,7 @@ async function recomputeWeeklyRhythm(
     )
     .limit(1);
 
-  if (targetDays === 0) {
+  if (targetDays === 0 && !reconciliationRequired) {
     if (existing && existing.status !== "earned") {
       await db
         .delete(achievementInstances)
@@ -279,7 +318,9 @@ async function recomputeWeeklyRhythm(
   const earned =
     !reconciliationRequired && current >= targetDays;
   const status: AchievementStatus =
-    earned
+    reconciliationRequired
+      ? "in-progress"
+      : earned
       ? "earned"
       : configuration.periodStatus === "closed"
         ? "incomplete"

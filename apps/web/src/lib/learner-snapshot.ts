@@ -148,7 +148,10 @@ export async function loadLearnerSnapshot(
         .select()
         .from(achievementPeriods)
         .where(eq(achievementPeriods.learnerId, learnerId))
-        .orderBy(asc(achievementPeriods.ordinal))
+        .orderBy(
+          asc(achievementPeriods.anchorAt),
+          asc(achievementPeriods.createdAt),
+        )
         .limit(SEMESTER_WEEKS),
       db
         .select()
@@ -168,11 +171,12 @@ export async function loadLearnerSnapshot(
             isNull(rewardNotices.seenAt),
           ),
         )
-        .orderBy(asc(rewardNotices.createdAt)),
+        .orderBy(asc(rewardNotices.createdAt))
+        .limit(100),
     ]);
 
   const periodNumbers = new Map(
-    periods.map((period) => [period.periodKey, period.ordinal]),
+    periods.map((period, index) => [period.periodKey, index + 1]),
   );
   const reconciliation = new Map(
     configurations.map((configuration) => [
@@ -182,7 +186,7 @@ export async function loadLearnerSnapshot(
   );
   const currentWeek = Math.max(
     1,
-    Math.min(SEMESTER_WEEKS, periods.at(-1)?.ordinal ?? 1),
+    Math.min(SEMESTER_WEEKS, periods.length || 1),
   );
   const weeks: PalRoadmapWeek[] = Array.from(
     { length: SEMESTER_WEEKS },
@@ -223,6 +227,9 @@ export async function loadLearnerSnapshot(
         : false,
     );
     if (achievement) weeks[weekNumber - 1].achievements.push(achievement);
+  }
+  for (const week of weeks) {
+    week.achievements = week.achievements.slice(0, 100);
   }
 
   const eco = economyRows[0];

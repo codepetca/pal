@@ -11,7 +11,8 @@ import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
   recordSemanticFact,
-  rejectClosedWeeklyRevision,
+  weeklyConfigurationRejection,
+  type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
 import {
   defaultRulePack,
@@ -97,7 +98,7 @@ function toLearnerState(
 export type ProcessEventResult =
   | { status: "duplicate" }
   | { status: "semantic_duplicate" }
-  | { status: "rejected"; error: "closed_period_revision" }
+  | { status: "rejected"; error: WeeklyConfigurationError }
   | { status: "processed"; result: ProcessResult };
 
 /**
@@ -134,12 +135,18 @@ export async function processEventInDb(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`
     );
 
-    // 3. Closed periods are immutable. Reject before the event ledger so the
-    // same non-retryable request deterministically receives the same response.
-    if (await rejectClosedWeeklyRevision(tx, learnerId, event)) {
+    // 3. Reject contradictory/invalid closed-period configuration before the
+    // event ledger. A closed period is immutable except for a narrowly scoped,
+    // still-closed correction while delayed facts require reconciliation.
+    const configurationError = await weeklyConfigurationRejection(
+      tx,
+      learnerId,
+      event,
+    );
+    if (configurationError) {
       return {
         status: "rejected" as const,
-        error: "closed_period_revision" as const,
+        error: configurationError,
       };
     }
 

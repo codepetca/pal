@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { getDb, getPool } from "@pal/db";
+import { asc, eq } from "drizzle-orm";
+import { achievementPeriods, getDb, getPool } from "@pal/db";
 import {
   getOrCreateLearnerIdentity,
   processEventInDb,
@@ -219,7 +220,7 @@ test(
 );
 
 test(
-  "reconciles short weeks, counts delayed facts, and freezes closed periods",
+  "rejects contradictory closure and permits only a valid closed correction",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -229,8 +230,19 @@ test(
       name: "Sandbox",
       secret,
     });
-    const periodKey = `short-week-${crypto.randomUUID()}`;
+    const periodKey = `reconcile-week-${crypto.randomUUID()}`;
     try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "closed",
+          eligible_days: 0,
+        }),
+        key(),
+      );
       await processEventInDb(
         integration.id,
         externalLearnerId,
@@ -240,43 +252,50 @@ test(
         }),
         key(),
       );
-      await processEventInDb(
-        integration.id,
-        externalLearnerId,
-        event("daily_log_week.configured", {
-          period_key: periodKey,
-          config_version: 1,
-          period_status: "open",
-          eligible_days: 3,
-        }),
-        key(),
-      );
-      await processEventInDb(
+      const contradictory = await processEventInDb(
         integration.id,
         externalLearnerId,
         event("daily_log_week.configured", {
           period_key: periodKey,
           config_version: 2,
           period_status: "closed",
-          eligible_days: 2,
+          eligible_days: 0,
         }),
         key(),
       );
-      const rejected = await processEventInDb(
+      assert.deepEqual(contradictory, {
+        status: "rejected",
+        error: "contradictory_period_configuration",
+      });
+
+      const reopened = await processEventInDb(
         integration.id,
         externalLearnerId,
         event("daily_log_week.configured", {
           period_key: periodKey,
-          config_version: 3,
+          config_version: 2,
+          period_status: "open",
+          eligible_days: 1,
+        }),
+        key(),
+      );
+      assert.deepEqual(reopened, {
+        status: "rejected",
+        error: "closed_period_revision",
+      });
+
+      const corrected = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 2,
           period_status: "closed",
           eligible_days: 1,
         }),
         key(),
       );
-      assert.deepEqual(rejected, {
-        status: "rejected",
-        error: "closed_period_revision",
-      });
+      assert.equal(corrected.status, "processed");
 
       const internalLearnerId = await getOrCreateLearnerIdentity(
         getDb(),
@@ -290,12 +309,77 @@ test(
       const rhythm = snapshot.roadmap.weeks[0].achievements.find(
         (achievement) => achievement.title === "Weekly Rhythm",
       );
-      assert.equal(rhythm?.status, "incomplete");
+      assert.equal(rhythm?.status, "earned");
       assert.deepEqual(rhythm?.progress, {
         current: 1,
-        target: 2,
-        label: "1 of 2 eligible days",
+        target: 1,
+        label: "1 of 1 eligible days",
       });
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "orders sixteen opaque periods by authoritative time, not delivery order",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `ordering-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKeys = Array.from(
+      { length: 16 },
+      (_, index) => `opaque-week-${String(index + 1).padStart(2, "0")}-${crypto.randomUUID()}`,
+    );
+    try {
+      for (let index = periodKeys.length - 1; index >= 0; index -= 1) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: periodKeys[index],
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            new Date(Date.UTC(2026, 0, 5 + index * 7, 12)).toISOString(),
+          ),
+          key(),
+        );
+      }
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const rows = await getDb()
+        .select({ periodKey: achievementPeriods.periodKey })
+        .from(achievementPeriods)
+        .where(eq(achievementPeriods.learnerId, learnerId))
+        .orderBy(asc(achievementPeriods.anchorAt));
+      assert.deepEqual(
+        rows.map((row) => row.periodKey),
+        periodKeys,
+      );
+
+      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.equal(snapshot.roadmap.currentWeek, 16);
+      assert.equal(
+        snapshot.roadmap.weeks.filter((week) =>
+          week.achievements.some(
+            (achievement) => achievement.title === "Weekly Rhythm",
+          ),
+        ).length,
+        16,
+      );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
