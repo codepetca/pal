@@ -21,6 +21,12 @@ test("allows only exact configured browser origins", () => {
     "https://pika.example",
   );
   assert.equal(widgetCorsHeaders(request("https://evil.example")), null);
+  assert.equal(
+    widgetCorsHeaders(request("https://pal.example"))?.get(
+      "access-control-allow-origin",
+    ),
+    "https://pal.example",
+  );
   assert.equal(widgetCorsHeaders(request())?.get("vary"), "Origin");
 });
 

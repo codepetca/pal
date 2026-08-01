@@ -23,7 +23,9 @@ function configuredOrigins(): Set<string> {
 export function widgetCorsHeaders(request: NextRequest): Headers | null {
   const origin = request.headers.get("origin");
   if (!origin) return new Headers({ Vary: "Origin" });
-  if (!configuredOrigins().has(origin)) return null;
+  if (origin !== request.nextUrl.origin && !configuredOrigins().has(origin)) {
+    return null;
+  }
   return new Headers({
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
