@@ -266,6 +266,19 @@ test(
       );
       assert.deepEqual(acceptedRetry, { status: "duplicate" });
 
+      const semanticRetry = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "closed",
+          eligible_days: 0,
+        }),
+        key(),
+      );
+      assert.deepEqual(semanticRetry, { status: "semantic_duplicate" });
+
       const contradictory = await processEventInDb(
         integration.id,
         externalLearnerId,
@@ -471,6 +484,86 @@ test(
       await resetLearnerInDb(sandbox.id, learnerA);
       await resetLearnerInDb(sandbox.id, learnerB);
       await resetLearnerInDb(pika.id, learnerA);
+    }
+  },
+);
+
+test(
+  "reads each learner snapshot entirely before or after a concurrent event commit",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `snapshot-consistency-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    let releaseRead = () => {};
+
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("platform.session.started", {}),
+        key(),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const before = await loadLearnerSnapshot(integration.id, learnerId);
+
+      let markScopeVerified = () => {};
+      const scopeVerified = new Promise<void>((resolve) => {
+        markScopeVerified = resolve;
+      });
+      const continueRead = new Promise<void>((resolve) => {
+        releaseRead = resolve;
+      });
+      const inFlightSnapshot = loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        async () => {
+          markScopeVerified();
+          await continueRead;
+        },
+      );
+
+      await scopeVerified;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event("learning_item.completed", {
+            item_token: `snapshot-item-${crypto.randomUUID()}`,
+            kind: "assignment",
+            period_key: `snapshot-period-${crypto.randomUUID()}`,
+            timing: "on_time",
+          }),
+          key(),
+        );
+      } finally {
+        releaseRead();
+      }
+
+      const duringCommit = await inFlightSnapshot;
+      const afterCommit = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.deepEqual(duringCommit, before);
+      assert.equal(afterCommit.rewards.length, before.rewards.length + 1);
+      assert.equal(
+        afterCommit.roadmap.weeks.some((week) =>
+          week.achievements.some(
+            (achievement) => achievement.title === "On-Time Finish",
+          ),
+        ),
+        true,
+      );
+    } finally {
+      releaseRead();
+      await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },
 );

@@ -4,6 +4,7 @@ import { v1 } from "@pal/contract";
 import {
   addDays,
   eventForAction,
+  eventsForAction,
   isTodayOrEarlier,
   periodKeyForDate,
   semesterWeekForDate,
@@ -62,6 +63,25 @@ test("creates a new semantic item identity for each genuine item action", () => 
   const second = eventForAction("on-time-finish", date, learnerId);
   assert.notEqual(first?.metadata.item_token, second?.metadata.item_token);
   assert.notEqual(first?.idempotency_key, second?.idempotency_key);
+});
+
+test("anchors a fictional week before a wall-clock item reaction", () => {
+  const simulatedDate = new Date("2026-04-14T08:00:00Z");
+  const now = new Date("2026-08-02T15:00:00Z");
+  const events = eventsForAction(
+    "on-time-finish",
+    simulatedDate,
+    learnerId,
+    now,
+  );
+
+  assert.equal(events.length, 2);
+  assert.equal(events[0].event_type, "daily_log_week.configured");
+  assert.equal(events[0].occurred_at, simulatedDate.toISOString());
+  assert.equal(events[0].metadata.period_key, "sandbox-week-01");
+  assert.equal(events[1].event_type, "learning_item.completed");
+  assert.equal(events[1].occurred_at, now.toISOString());
+  assert.equal(events[1].metadata.period_key, "sandbox-week-01");
 });
 
 test("date controls cannot advance beyond the ingestable UTC day", () => {

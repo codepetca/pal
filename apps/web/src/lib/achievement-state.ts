@@ -214,6 +214,29 @@ export async function recordSemanticFact(
   return { id: fact.id, periodKey: identity.periodKey };
 }
 
+export async function semanticFactAlreadyRecorded(
+  db: Db,
+  input: {
+    learnerId: string;
+    event: IncomingEvent;
+    idempotencyKey: string;
+  },
+): Promise<boolean> {
+  const identity = factIdentity(input.event, input.idempotencyKey);
+  const [existing] = await db
+    .select({ id: learnerFacts.id })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, input.learnerId),
+        eq(learnerFacts.eventType, input.event.event_type),
+        eq(learnerFacts.semanticKey, identity.semanticKey),
+      ),
+    )
+    .limit(1);
+  return Boolean(existing);
+}
+
 async function createScopedOutcome(
   db: Db,
   input: {

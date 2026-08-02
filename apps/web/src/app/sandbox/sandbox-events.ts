@@ -120,6 +120,37 @@ export function eventForAction(
   }
 }
 
+/**
+ * Item reactions use wall-clock time so the sandbox pet can visibly react.
+ * Establish the fictional academic period first so that real-time reactions
+ * cannot reorder the 16-week roadmap.
+ */
+export function eventsForAction(
+  action: SandboxAction,
+  simulatedDate: Date,
+  learnerId: string,
+  now = new Date(),
+): SandboxEventRequest[] {
+  const event = eventForAction(action, simulatedDate, learnerId, now);
+  if (!event) return [];
+
+  if (
+    action !== "item-opened-early" &&
+    action !== "on-time-finish" &&
+    action !== "late-finish"
+  ) {
+    return [event];
+  }
+
+  const periodConfiguration = eventForAction(
+    "week-configured",
+    simulatedDate,
+    learnerId,
+    now,
+  );
+  return periodConfiguration ? [periodConfiguration, event] : [event];
+}
+
 export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }

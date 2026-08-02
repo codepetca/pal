@@ -20,9 +20,9 @@ integration secret never leaves the backend.
 Steps 4 and 5 are implemented on Pal's API boundary: Pal authenticates Pika's backend,
 mints a five-minute token whose subject is Pal's internal learner UUID, serves the
 token-scoped roadmap/companion/reward snapshot, and acknowledges reward presentation
-idempotently. Pika still needs to install the published package and mount the native
-surfaces. The legacy learner-world endpoint does not enforce production reader
-authorization and must not be used as an integration boundary.
+idempotently. Pika installs the published package and mounts the native surfaces. The
+former learner-ID world endpoint has been retired; learner state is read only through
+the scoped snapshot boundary.
 
 For Pika, the selected presentation is the native React package `@codepet/pal-widget`.
 `PalAchievements` renders inside Pika's normal content pane. Pika separately mounts

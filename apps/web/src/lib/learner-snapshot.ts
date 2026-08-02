@@ -127,24 +127,36 @@ export async function loadLearnerSnapshot(
   integrationId: string,
   learnerId: string,
   db: Db = getDb(),
+  // Internal coordination seam used to prove transaction isolation under a
+  // deterministic concurrent write. Production callers leave this unset.
+  afterScopeVerified?: () => Promise<void>,
 ): Promise<PalWidgetSnapshot> {
-  const [learner] = await db
-    .select({ id: learners.id })
-    .from(learners)
-    .where(
-      and(
-        eq(learners.id, learnerId),
-        eq(learners.integrationId, integrationId),
-      ),
-    )
-    .limit(1);
-  if (!learner) throw new LearnerScopeError();
+  return db.transaction(
+    async (tx) => {
+      const [learner] = await tx
+        .select({ id: learners.id })
+        .from(learners)
+        .where(
+          and(
+            eq(learners.id, learnerId),
+            eq(learners.integrationId, integrationId),
+          ),
+        )
+        .limit(1);
+      if (!learner) throw new LearnerScopeError();
+      await afterScopeVerified?.();
 
-  const [economyRows, petRows, periods, instances, configurations, rewards] =
-    await Promise.all([
-      db.select().from(economy).where(eq(economy.learnerId, learnerId)).limit(1),
-      db.select().from(petState).where(eq(petState.learnerId, learnerId)).limit(1),
-      db
+      const economyRows = await tx
+        .select()
+        .from(economy)
+        .where(eq(economy.learnerId, learnerId))
+        .limit(1);
+      const petRows = await tx
+        .select()
+        .from(petState)
+        .where(eq(petState.learnerId, learnerId))
+        .limit(1);
+      const periods = await tx
         .select()
         .from(achievementPeriods)
         .where(eq(achievementPeriods.learnerId, learnerId))
@@ -152,17 +164,17 @@ export async function loadLearnerSnapshot(
           asc(achievementPeriods.anchorAt),
           asc(achievementPeriods.createdAt),
         )
-        .limit(SEMESTER_WEEKS),
-      db
+        .limit(SEMESTER_WEEKS);
+      const instances = await tx
         .select()
         .from(achievementInstances)
         .where(eq(achievementInstances.learnerId, learnerId))
-        .orderBy(asc(achievementInstances.createdAt)),
-      db
+        .orderBy(asc(achievementInstances.createdAt));
+      const configurations = await tx
         .select()
         .from(weeklyRhythmConfigs)
-        .where(eq(weeklyRhythmConfigs.learnerId, learnerId)),
-      db
+        .where(eq(weeklyRhythmConfigs.learnerId, learnerId));
+      const rewards = await tx
         .select()
         .from(rewardNotices)
         .where(
@@ -172,94 +184,102 @@ export async function loadLearnerSnapshot(
           ),
         )
         .orderBy(asc(rewardNotices.createdAt))
-        .limit(100),
-    ]);
+        .limit(100);
 
-  const periodNumbers = new Map(
-    periods.map((period, index) => [period.periodKey, index + 1]),
-  );
-  const reconciliation = new Map(
-    configurations.map((configuration) => [
-      configuration.periodKey,
-      configuration.reconciliationRequired,
-    ]),
-  );
-  const currentWeek = Math.max(
-    1,
-    Math.min(SEMESTER_WEEKS, periods.length || 1),
-  );
-  const weeks: PalRoadmapWeek[] = Array.from(
-    { length: SEMESTER_WEEKS },
-    (_, index) => {
-      const number = index + 1;
-      const status =
-        number < currentWeek
-          ? "past"
-          : number === currentWeek
-            ? "current"
-            : "future";
+      const periodNumbers = new Map(
+        periods.map((period, index) => [period.periodKey, index + 1]),
+      );
+      const reconciliation = new Map(
+        configurations.map((configuration) => [
+          configuration.periodKey,
+          configuration.reconciliationRequired,
+        ]),
+      );
+      const currentWeek = Math.max(
+        1,
+        Math.min(SEMESTER_WEEKS, periods.length || 1),
+      );
+      const weeks: PalRoadmapWeek[] = Array.from(
+        { length: SEMESTER_WEEKS },
+        (_, index) => {
+          const number = index + 1;
+          const status =
+            number < currentWeek
+              ? "past"
+              : number === currentWeek
+                ? "current"
+                : "future";
+          return {
+            id: `week-${number}`,
+            number,
+            label: `Week ${number}`,
+            dateLabel: `Semester week ${number}`,
+            status,
+            summary:
+              status === "past"
+                ? "Week complete"
+                : status === "current"
+                  ? "Your current progress"
+                  : "Opens when the week begins",
+            achievements: [],
+          };
+        },
+      );
+
+      for (const instance of instances) {
+        const weekNumber = instance.periodKey
+          ? periodNumbers.get(instance.periodKey)
+          : 1;
+        if (!weekNumber || weekNumber > SEMESTER_WEEKS) continue;
+        const achievement = achievementFromRow(
+          instance,
+          instance.periodKey
+            ? (reconciliation.get(instance.periodKey) ?? false)
+            : false,
+        );
+        if (achievement) weeks[weekNumber - 1].achievements.push(achievement);
+      }
+      for (const week of weeks) {
+        week.achievements = week.achievements.slice(0, 100);
+      }
+
+      const eco = economyRows[0];
+      const pet = petRows[0];
+      const mood = companionMood(
+        pet?.mood ?? "neutral",
+        pet?.moodExpiresAt ?? null,
+      );
       return {
-        id: `week-${number}`,
-        number,
-        label: `Week ${number}`,
-        dateLabel: `Semester week ${number}`,
-        status,
-        summary:
-          status === "past"
-            ? "Week complete"
-            : status === "current"
-              ? "Your current progress"
-              : "Opens when the week begins",
-        achievements: [],
+        schemaVersion: 1,
+        roadmap: {
+          semesterLabel: "Achievement semester",
+          currentWeek,
+          weeks,
+        },
+        companion: {
+          name: "Pip",
+          mood,
+          moodLabel: mood[0].toUpperCase() + mood.slice(1),
+          level: eco?.level ?? 1,
+          streak: eco?.streakCurrent ?? 0,
+          xp: eco?.xp ?? 0,
+          xpToNextLevel: Math.max(0, LEVEL_UP_COST_XP - (eco?.xp ?? 0)),
+          message: moodMessage(mood),
+          assetUrl: "/assets/pets/default.png",
+        },
+        rewards: rewards.map((reward) => ({
+          id: reward.id,
+          title: reward.title,
+          description: reward.description,
+          ...(reward.icon ? { icon: reward.icon } : {}),
+        })),
       };
     },
+    {
+      accessMode: "read only",
+      isolationLevel: "repeatable read",
+    },
   );
-
-  for (const instance of instances) {
-    const weekNumber = instance.periodKey
-      ? periodNumbers.get(instance.periodKey)
-      : 1;
-    if (!weekNumber || weekNumber > SEMESTER_WEEKS) continue;
-    const achievement = achievementFromRow(
-      instance,
-      instance.periodKey
-        ? (reconciliation.get(instance.periodKey) ?? false)
-        : false,
-    );
-    if (achievement) weeks[weekNumber - 1].achievements.push(achievement);
-  }
-  for (const week of weeks) {
-    week.achievements = week.achievements.slice(0, 100);
-  }
-
-  const eco = economyRows[0];
-  const pet = petRows[0];
-  const mood = companionMood(pet?.mood ?? "neutral", pet?.moodExpiresAt ?? null);
-  return {
-    schemaVersion: 1,
-    roadmap: {
-      semesterLabel: "Achievement semester",
-      currentWeek,
-      weeks,
-    },
-    companion: {
-      name: "Pip",
-      mood,
-      moodLabel: mood[0].toUpperCase() + mood.slice(1),
-      level: eco?.level ?? 1,
-      streak: eco?.streakCurrent ?? 0,
-      xp: eco?.xp ?? 0,
-      xpToNextLevel: Math.max(0, LEVEL_UP_COST_XP - (eco?.xp ?? 0)),
-      message: moodMessage(mood),
-      assetUrl: "/assets/pets/default.png",
-    },
-    rewards: rewards.map((reward) => ({
-      id: reward.id,
-      title: reward.title,
-      description: reward.description,
-      ...(reward.icon ? { icon: reward.icon } : {}),
-    })),
-  };
 }
 
 export async function acknowledgeLearnerReward(

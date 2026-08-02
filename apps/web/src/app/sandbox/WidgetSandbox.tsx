@@ -35,6 +35,7 @@ import {
 import {
   addDays,
   eventForAction,
+  eventsForAction,
   FICTIONAL_SEMESTER_START_ISO,
   isTodayOrEarlier,
   semesterWeekForDate,
@@ -179,13 +180,17 @@ function SandboxControls({
         return;
       }
 
-      const request =
+      const requests =
         action === "duplicate-replayed"
-          ? lastRequest.current
-          : eventForAction(action, simulatedDate, learnerId);
-      if (request) {
-        const data = await post("/api/sandbox/events", request);
-        if (action !== "duplicate-replayed") lastRequest.current = request;
+          ? (lastRequest.current ? [lastRequest.current] : [])
+          : eventsForAction(action, simulatedDate, learnerId);
+      if (requests.length > 0) {
+        let data: Record<string, unknown> = {};
+        for (const request of requests) {
+          data = await post("/api/sandbox/events", request);
+          if (action !== "duplicate-replayed") lastRequest.current = request;
+        }
+        const request = requests[requests.length - 1];
         setLog((current) => [
           `→ ${request.event_type}: ${String(data.status)}`,
           ...current,
