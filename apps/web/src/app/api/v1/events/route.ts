@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v1 } from "@pal/contract";
 import type { IncomingEvent } from "@pal/engine";
-import { isAuthorizedIngest } from "@/lib/ingest-auth";
+import { identifyIntegration, resolveIntegration } from "@/lib/integration-auth";
 import { processEventInDb } from "@/lib/db-learner";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
@@ -14,7 +14,10 @@ const CLOCK_SKEW_MS = 60 * 60 * 1000;
 // Receives a learning signal from an integration (e.g. Pika).
 // See docs/api.md for the full contract.
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedIngest(req.headers.get("authorization"))) {
+  const configuredIntegration = identifyIntegration(
+    req.headers.get("authorization"),
+  );
+  if (!configuredIntegration) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -51,11 +54,22 @@ export async function POST(req: NextRequest) {
     occurred_at: new Date(occurredAtMs).toISOString(),
     metadata: event.metadata,
   };
+  const integration = await resolveIntegration(configuredIntegration);
+  if (!integration.allowedEventTypes.includes(event.event_type)) {
+    return NextResponse.json(
+      {
+        error: "unknown_event_type",
+        detail: `${event.event_type} is not enabled for this integration`,
+      },
+      { status: 422 },
+    );
+  }
 
   // The engine decides what changes; processEventInDb runs the engine inside a
   // single ACID transaction with FOR UPDATE locking and constraint-based dedup.
   // Nothing else in the codebase is allowed to write learner state.
   const result = await processEventInDb(
+    integration.id,
     event.learner_id,
     engineEvent,
     event.idempotency_key,

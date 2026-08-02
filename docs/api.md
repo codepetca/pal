@@ -1,11 +1,11 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-07-25
+> Last updated: 2026-08-01
 
 ---
 
-## Endpoints (planned)
+## Endpoints
 
 | Method | Path | Who calls it | Purpose |
 |---|---|---|---|
@@ -17,9 +17,27 @@
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
-The read-token and learner-snapshot routes are target pilot work and are not
-implemented yet. The fixture client in `@codepet/pal-widget` exists only for sandbox and
-visual development. It is not evidence that the production read boundary works.
+The read-token route is implemented. The authenticated learner-snapshot and reward
+acknowledgement routes remain target pilot work. The fixture client in
+`@codepet/pal-widget` exists only for sandbox and visual development; it is not evidence
+that the production read boundary works.
+
+### Read-token request
+
+```text
+POST /api/v1/integration/read-token
+Authorization: Bearer <integration_secret>
+Content-Type: application/json
+
+{ "learner_id": "<pseudonymous_token>" }
+```
+
+The request accepts no other fields. Pal resolves or creates only the integration-scoped
+learner identity and returns a five-minute signed token plus `expires_at`. The response
+uses `Cache-Control: no-store`. Its subject is Pal's internal learner UUID; the external
+pseudonymous token is not placed in the browser token. Tokens are restricted to the Pal
+issuer, `pal-widget` audience, authenticated integration, learner, and the
+`learner:read` / `reward:ack` scopes.
 
 ## Widget read contract
 
@@ -52,7 +70,7 @@ versions the **API surface** — auth scheme, which endpoints exist, the error e
 The `schema_version` in the body versions the **payload** for a single event. They move
 independently; see [@pal/contract](../packages/contract/README.md#versioning).
 
-### Version 1 payloads (target)
+### Version 1 payloads
 
 Machine-readable schemas, types, and shared test fixtures live in
 [`packages/contract`](../packages/contract/README.md). That package is the source of
@@ -72,27 +90,6 @@ Authorization: Bearer <integration_secret>
     "kind": "assignment",
     "period_key": "2026-fall-week-03",
     "timing": "on_time"
-  }
-}
-```
-
-Ingest does not accept this shape yet — the contract package landed first so that both
-sides can build against it. Wiring it into the route is the follow-up.
-
-### Legacy prototype payloads (current)
-
-Sent without `schema_version`. Still the only shape ingest accepts today.
-
-```
-POST /api/v1/events
-Authorization: Bearer <integration_secret>
-{
-  "idempotency_key": "pika-assignment-abc123",
-  "learner_id": "<pseudonymous_hashed_id>",
-  "event_type": "assignment.completed",
-  "occurred_at": "2026-06-25T10:00:00Z",
-  "metadata": {
-    "on_time": true
   }
 }
 ```

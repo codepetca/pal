@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resetLearnerInDb } from "@/lib/db-learner";
+import { resolveSandboxIntegration } from "@/lib/integration-auth";
 import { isSandboxLearnerId } from "@/lib/sandbox-learner";
 
 // POST /api/sandbox/reset
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_sandbox_learner_id" }, { status: 422 });
   }
 
-  await resetLearnerInDb(learnerId);
+  const integration = await resolveSandboxIntegration();
+  await resetLearnerInDb(integration.id, learnerId);
   return NextResponse.json({ status: "reset" });
 }
