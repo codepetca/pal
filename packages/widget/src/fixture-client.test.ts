@@ -28,7 +28,7 @@ test("fixture actions update visible state while duplicate replay is inert", asy
     achievement.id.startsWith("weekly-rhythm"),
   );
 
-  assert.equal(rhythm?.progress?.current, 3);
+  assert.equal(rhythm?.progress?.current, 1);
 
   const beforeDuplicate = client.peek();
   const result = client.dispatch("duplicate-replayed");

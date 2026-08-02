@@ -39,7 +39,7 @@ function buildWeek(number: number, currentWeek: number): PalRoadmapWeek {
   const achievementStatus =
     status === "past" ? "earned" : status === "current" ? "in-progress" : "upcoming";
   const target = number === 3 ? 3 : 4;
-  const progress = status === "past" ? target : status === "current" ? 2 : 0;
+  const progress = status === "past" ? target : 0;
 
   return {
     id: `week-${number}`,
@@ -86,7 +86,7 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
       streak: 3,
       xp: 230,
       xpToNextLevel: 270,
-      message: "Two daily-log days complete this week.",
+      message: "Start your daily-log to earn this week's reward.",
       assetUrl: "/assets/pets/default.png",
     },
     rewards: [],

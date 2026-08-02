@@ -31,7 +31,7 @@ test("public surfaces render meaningful status without relying on color", () => 
 
   assert.match(html, /Your achievement path/);
   assert.match(html, /aria-current="step"/);
-  assert.match(html, /2 of 4 eligible days/);
+  assert.match(html, /0 of 4 eligible days/);
   assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
   assert.match(html, /data-pal-variant="responsive"/);
