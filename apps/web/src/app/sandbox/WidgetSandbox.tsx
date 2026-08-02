@@ -34,6 +34,12 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { createSandboxPalClient } from "./sandbox-client";
 import styles from "./widget-sandbox.module.css";
 
+/** Semester start date — used for simulated date, week calculation, and reset. */
+const SEMESTER_START = new Date("2025-09-08T08:00:00");
+
+/** Semester start at midnight — used for clean week math. */
+const SEMESTER_START_MIDNIGHT = new Date("2025-09-08T00:00:00");
+
 const TEST_LEARNER_ID = "test-learner-001";
 
 /** Maps fixture actions to real v1 event types + metadata for the live pipeline. */
@@ -298,7 +304,7 @@ function SandboxExperience({
   onViewChange: (view: HostView) => void;
   onThemeChange: (theme: PalTheme) => void;
 }) {
-  const [simulatedDate, setSimulatedDate] = useState(() => new Date("2026-07-13T08:00:00"));
+  const [simulatedDate, setSimulatedDate] = useState(() => new Date(SEMESTER_START));
 
   // Auto-increment simulated date by 1 day every 60 seconds
   useEffect(() => {
@@ -309,10 +315,9 @@ function SandboxExperience({
   }, []);
 
   // Derive the current semester week from the simulated date.
-  // Semester starts 2026-07-13 (week 1). Each week is 7 days.
+  // Semester starts Sep 8 2025 (week 1). Each week is 7 days.
   const currentSemesterWeek = useMemo(() => {
-    const semesterStart = new Date("2026-07-13T00:00:00");
-    const diffMs = simulatedDate.getTime() - semesterStart.getTime();
+    const diffMs = simulatedDate.getTime() - SEMESTER_START_MIDNIGHT.getTime();
     const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
     return Math.max(1, Math.min(16, Math.floor(diffDays / 7) + 1));
   }, [simulatedDate]);
@@ -328,7 +333,6 @@ function SandboxExperience({
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
-  const SEMESTER_START = useMemo(() => new Date("2026-07-13T08:00:00"), []);
   const fixtureScopeKey = `fixture-learner-${resetGeneration}-w${currentSemesterWeek}`;
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
