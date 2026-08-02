@@ -419,16 +419,114 @@
   font-size: 0.85rem;
 }
 
+/* Explicit width/height (not shrink-to-fit) so this box's own rect is the
+   whole visual footprint — cat plus grass — which is what the drag-bounds
+   clamp in WidgetSandbox.tsx measures to keep the widget on screen. Itself
+   takes no pointer events: .companionHitArea below (which fills it exactly)
+   is what's draggable. */
 .companionOverlay {
+  --cat-h: 10rem;
+  --cat-w: calc(var(--cat-h) * 1.4);
+  /* grass.png is 2502x2321 — width is derived from height at that exact
+     ratio so this box's aspect ratio matches the image's own exactly.
+     Mismatched aspect is what caused the visible "transparent rectangle":
+     with `background-size: contain` (see .grassPatch), a box wider than
+     the image's own shape leaves bare space on the sides instead of the
+     image filling it. */
+  --grass-h: calc(var(--cat-h) * 1.35);
+  --grass-w: calc(var(--grass-h) * 2502 / 2321);
+  --cat-top: calc(var(--cat-h) * 0.5);
+  --grass-top: calc(var(--cat-top) + var(--cat-h) - (var(--grass-h) / 2));
+
   position: absolute;
   z-index: 40;
   right: 1rem;
   bottom: 1rem;
+  width: var(--grass-w);
+  height: calc(var(--grass-top) + var(--grass-h));
   pointer-events: none;
 }
 
-.companionOverlay > :global(.pal-companion) {
+/* The draggable area — fills the whole overlay (cat and grass both), so
+   pressing down on either one starts the drag. A pointerdown that lands
+   within the cat sprite's own image bounds still alpha-tests that pixel
+   (see isTransparentAt in WidgetSandbox.tsx) and bails on a transparent
+   one; a pointerdown anywhere else in this box — the grass, or the
+   padding around the cat — always drags. */
+.companionHitArea {
+  position: absolute;
+  inset: 0;
   pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Belt-and-suspenders for the onDragStart preventDefault in
+   WidgetSandbox.tsx — older WebKit honours this property instead of (or as
+   well as) the dragstart event. Without either, dragging an <img> starts
+   the browser's native HTML5 drag instead of our pointer-based one. */
+.companionHitArea :global(img) {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.companionOverlay[data-dragging="true"] .companionHitArea {
+  cursor: grabbing;
+}
+
+/* Pure positioning wrapper for the cat — sits at the top of the hit area,
+   sized to the cat's own box. Not itself a pointer target: the hit area
+   above already covers this whole region. */
+.companionCatBox {
+  position: absolute;
+  top: var(--cat-top);
+  left: 50%;
+  width: var(--cat-w);
+  height: var(--cat-h);
+  transform: translateX(-50%);
+}
+
+/* Host-side chrome only — the sandbox drops the widget's default card look
+   (border, surface fill, shadow, blur) so only the sprite itself shows,
+   and enlarges the art box so mood detail reads clearly. */
+.companionCatBox :global(.pal-companion) {
+  border: none;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.companionCatBox :global(.pal-companion[data-pal-variant="compact"]) {
+  width: var(--cat-w);
+  padding: 0;
+}
+
+.companionCatBox :global(.pal-companion[data-pal-variant="compact"] .pal-companion-art) {
+  min-height: var(--cat-h);
+  border-radius: 0;
+  background: none;
+}
+
+/* The real grass art (apps/web/public/assets/pets/grass.png), not a CSS
+   shape. Anchored so its top overlaps the cat's lower body — cat reads as
+   sitting on it. Sits behind the cat via negative z-index, scoped to the
+   overlay's own stacking context. `contain` + bottom position shows the
+   whole image, uncropped, letterboxing rather than cutting off any of it. */
+.grassPatch {
+  position: absolute;
+  top: var(--grass-top);
+  left: 50%;
+  z-index: -1;
+  width: var(--grass-w);
+  height: var(--grass-h);
+  transform: translateX(-50%);
+  background-image: url("/assets/pets/grass.png");
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
 }
 
 .celebrationLayer {
