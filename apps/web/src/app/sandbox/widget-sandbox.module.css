@@ -306,6 +306,13 @@
   max-width: 100%;
 }
 
+/* Gamified roadmap viewer fills the content panel and owns its own scroll. */
+.roadmapPanel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .todayContent {
   display: grid;
   gap: 0.8rem;

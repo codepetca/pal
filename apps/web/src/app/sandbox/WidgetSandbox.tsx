@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  PalAchievements,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
@@ -33,6 +32,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { createSandboxPalClient } from "./sandbox-client";
 import styles from "./widget-sandbox.module.css";
+import { Dashboard, sampleRoadmap } from "@/roadmap";
 
 /** Semester start date — used for simulated date, week calculation, and reset. */
 const SEMESTER_START = new Date("2025-09-08T08:00:00");
@@ -147,6 +147,8 @@ function FixtureControls({
   simulatedDate,
   onAddDay,
   onAddWeek,
+  onEditCourse,
+  onRunAnimation,
 }: {
   client: PalFixtureController;
   collapsed: boolean;
@@ -157,6 +159,8 @@ function FixtureControls({
   simulatedDate: Date;
   onAddDay: () => void;
   onAddWeek: () => void;
+  onEditCourse: () => void;
+  onRunAnimation: () => void;
 }) {
   const [log, setLog] = useState<string[]>([
     "Fixture preview ready — no production state is connected.",
@@ -237,6 +241,18 @@ function FixtureControls({
             </div>
             <p>Visual states only. Real pipeline mode comes after the v1 receiver.</p>
           </header>
+
+          <span className={styles.fixtureLabel}>Roadmap</span>
+          <div className={styles.controlActions}>
+            <button type="button" onClick={onEditCourse}>
+              <strong>Edit course</strong>
+              <span>Units, chests &amp; collectables</span>
+            </button>
+            <button type="button" onClick={onRunAnimation}>
+              <strong>Run animation</strong>
+              <span>Replay the celebration overlay</span>
+            </button>
+          </div>
 
           <div className={styles.dateBar}>
             <span className={styles.dateLabel}>Simulated date</span>
@@ -330,6 +346,8 @@ function SandboxExperience({
   }
 
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
+  const [editingCourse, setEditingCourse] = useState(false);
+  const [runSignal, setRunSignal] = useState(0);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
@@ -423,7 +441,14 @@ function SandboxExperience({
 
           <main className={styles.content}>
             {view === "achievements" ? (
-              <PalAchievements />
+              <div className={styles.roadmapPanel}>
+                <Dashboard
+                  data={sampleRoadmap}
+                  editing={editingCourse}
+                  onEditingChange={setEditingCourse}
+                  runSignal={runSignal}
+                />
+              </div>
             ) : view === "today" ? (
               <section className={styles.todayContent}>
                 <div className={styles.noClassCard}>No class today</div>
@@ -478,6 +503,8 @@ function SandboxExperience({
                 simulatedDate={simulatedDate}
                 onAddDay={() => setSimulatedDate((prev) => new Date(prev.getTime() + 24 * 60 * 60 * 1000))}
                 onAddWeek={() => setSimulatedDate((prev) => new Date(prev.getTime() + 7 * 24 * 60 * 60 * 1000))}
+                onEditCourse={() => setEditingCourse(true)}
+                onRunAnimation={() => setRunSignal((n) => n + 1)}
               />
             )}
           </FixtureRefreshBridge>
