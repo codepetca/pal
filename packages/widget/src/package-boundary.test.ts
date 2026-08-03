@@ -133,17 +133,21 @@ test("sandbox consumes only the widget public package boundary", () => {
   }
 });
 
-test("sandbox distinguishes persisted companion state from fixture-only surfaces", () => {
-  assert.match(sandboxSource, /Fixture preview/);
-  assert.match(sandboxSource, /persisted rule-engine state/);
-  assert.match(sandboxSource, /roadmap and reward states remain fixtures/);
+test("sandbox reads every Pal surface from the persisted pipeline", () => {
+  assert.match(sandboxSource, /Real pipeline/);
+  assert.match(
+    sandboxSource,
+    /The roadmap,\s+companion, rewards, and acknowledgements all read persisted state/,
+  );
+  assert.doesNotMatch(sandboxSource, /initialSnapshot=/);
+  assert.doesNotMatch(sandboxSource, /Fixture preview/);
 });
 
 test("only the engine decides the companion's mood", () => {
-  // The client reports state read from the durable world endpoint. If it ever
-  // starts choosing a mood from a fixture action, the engine is no longer the
+  // The sandbox delegates snapshot reads to the public client. If it ever
+  // starts choosing a mood from a control action, the engine is no longer the
   // sole authority over learner state.
-  assert.match(sandboxClientSource, /api\/v1\/world/);
+  assert.match(sandboxClientSource, /createPalHttpClient/);
   assert.doesNotMatch(
     sandboxClientSource,
     /action === .*mood|mood = "(happy|excited|sleeping)"/,
@@ -152,9 +156,10 @@ test("only the engine decides the companion's mood", () => {
 
 test("sandbox reset rotates provider identity and controls start collapsed", () => {
   assert.match(sandboxSource, /useState\(true\)/);
-  assert.match(sandboxSource, /\$\{learnerId\}-\$\{resetGeneration\}/);
-  assert.match(sandboxSource, /key=\{fixtureScopeKey\}/);
-  assert.match(sandboxSource, /setResetGeneration\(\(current\) => current \+ 1\)/);
+  assert.match(sandboxSource, /\$\{learnerId\}-\$\{clientGeneration\}/);
+  assert.match(sandboxSource, /key=\{scopeKey\}/);
+  assert.match(sandboxSource, /setClientGeneration\(\(current\) => current \+ 1\)/);
+  assert.match(sandboxSource, /setSimulatedDate\(new Date\(FICTIONAL_SEMESTER_START_ISO\)\)/);
 });
 
 test("sandbox navigation keeps accessible names when labels are visually hidden", () => {

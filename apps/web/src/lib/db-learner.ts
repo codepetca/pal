@@ -11,6 +11,7 @@ import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
   recordSemanticFact,
+  semanticFactAlreadyRecorded,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
@@ -151,6 +152,20 @@ export async function processEventInDb(
       .limit(1);
     if (acceptedDelivery) {
       return { status: "duplicate" as const };
+    }
+
+    // A producer may accidentally assert the same source fact under a new
+    // transport key. Resolve that immutable identity before validations that
+    // depend on mutable learner state, so an accepted fact cannot later turn
+    // into a rejection as delayed events arrive.
+    if (
+      await semanticFactAlreadyRecorded(tx, {
+        learnerId,
+        event,
+        idempotencyKey,
+      })
+    ) {
+      return { status: "semantic_duplicate" as const };
     }
 
     // 4. Reject contradictory/invalid closed-period configuration before the

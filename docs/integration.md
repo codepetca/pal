@@ -20,9 +20,9 @@ integration secret never leaves the backend.
 Steps 4 and 5 are implemented on Pal's API boundary: Pal authenticates Pika's backend,
 mints a five-minute token whose subject is Pal's internal learner UUID, serves the
 token-scoped roadmap/companion/reward snapshot, and acknowledges reward presentation
-idempotently. Pika still needs to install the published package and mount the native
-surfaces. The legacy learner-world endpoint does not enforce production reader
-authorization and must not be used as an integration boundary.
+idempotently. Pika installs the published package and mounts the native surfaces. The
+former learner-ID world endpoint has been retired; learner state is read only through
+the scoped snapshot boundary.
 
 For Pika, the selected presentation is the native React package `@codepet/pal-widget`.
 `PalAchievements` renders inside Pika's normal content pane. Pika separately mounts
@@ -40,6 +40,7 @@ import {
   PalProvider,
   PalRewardCelebration,
   createPalHttpClient,
+  usePalWidget,
 } from '@codepet/pal-widget'
 
 const palClient = createPalHttpClient({
@@ -47,21 +48,36 @@ const palClient = createPalHttpClient({
   getAccessToken: mintLearnerScopedToken,
 })
 
-<PalProvider
-  client={palClient}
-  scopeKey={learnerSessionGeneration}
-  theme={theme}
->
-  <main><PalAchievements /></main>
-  <aside><PalCompanion /></aside>
-  <div><PalRewardCelebration /></div>
+function PikaPalSurfaces() {
+  const { dismissReward, snapshot } = usePalWidget()
+  const reward = snapshot?.rewards[0]
+
+  return <>
+    <main><PalAchievements /></main>
+    <aside><PalCompanion /></aside>
+    <PikaModalLayer
+      isOpen={Boolean(reward)}
+      onClose={() => reward && void dismissReward(reward.id)}
+      ariaLabel="Reward earned"
+    >
+      <PalRewardCelebration hostManaged />
+    </PikaModalLayer>
+  </>
+}
+
+<PalProvider client={palClient} scopeKey={learnerSessionGeneration} theme={theme}>
+  <PikaPalSurfaces />
 </PalProvider>
 ```
 
 `PalProvider` shares authorization, learner state, refreshes, and error handling. The
 three visible surfaces are separately mountable because their placement and lifecycle
 differ. Pika owns the host containers and supplies a narrow semantic `--pal-*` theme
-bridge; Pal owns their contents and behavior.
+bridge; Pal owns their contents. Pika derives reward-modal visibility from the first
+pending reward and acknowledges that reward through `dismissReward` from every close
+path. Pika's canonical `ModalLayer` owns the portal, dialog semantics, inertness,
+focus, Escape/backdrop policy, and scroll lock; `PalRewardCelebration hostManaged`
+does not compete for those behaviors.
 
 The package does not accept a raw learner ID, Pika user object, assignment data,
 integration secret, or Pika component dependency. See

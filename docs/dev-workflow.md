@@ -24,6 +24,7 @@ Open `apps/web/.env.local` and set:
 |---|---|---|
 | `PAL_INTEGRATION_SECRET` | Pika's 32+ character backend credential; generate with `openssl rand -hex 32` | Exercising Pika ingest or read-token minting |
 | `SANDBOX_INTEGRATION_SECRET` | A distinct 32+ character credential generated with `openssl rand -hex 32` | Exercising the sandbox event proxy |
+| `PAL_SANDBOX_PROTECTED_PREVIEW` | Leave unset/`false` locally. Set exactly `true` only on an access-protected Vercel preview backed by an isolated, disposable database | Enabling stateful sandbox routes in a preview deployment |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
@@ -37,16 +38,21 @@ pnpm dev
 ```
 
 Open [localhost:3000/sandbox](http://localhost:3000/sandbox). The Pika-like host
-preview should show the 16-week Pal roadmap, companion, and collapsible **Fixture
-preview** controls. Complete a daily log or earn the fish reward and confirm the
-public widget surfaces update.
+preview should show the 16-week Pal roadmap, companion, and collapsible **Real
+pipeline** controls. Configure a week, complete daily logs, or finish an item on
+time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
+Advancing by one week automatically emits that new week's normal configuration fact,
+matching Pika's planned adapter behavior.
 
-The roadmap and rewards in the current sandbox are still fixture-backed. Companion
-actions travel through the real receiver and persisted rule-engine state when the
-sandbox integration and database are configured. The authenticated snapshot and reward
-acknowledgement APIs now exist, but the sandbox will prove them only after pipeline mode
-switches from its composite fixture client to the real HTTP client. `/api/sandbox/events`
-attaches the sandbox secret server-side; the browser never receives it.
+Every visible Pal surface in the sandbox is loaded through the authenticated learner
+snapshot API. `/api/sandbox/events` attaches the sandbox integration secret server-side,
+and `/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
+five-minute learner-scoped token; neither integration nor signing secrets reach the
+browser. Reward dismissal calls the real idempotent acknowledgement endpoint. Sandbox
+mutation/token routes are available locally. In a Vercel preview they remain disabled
+unless `PAL_SANDBOX_PROTECTED_PREVIEW=true`; that opt-in is permitted only with Vercel
+Deployment Protection and an isolated, disposable preview database. They always return
+404 in production.
 
 ---
 
