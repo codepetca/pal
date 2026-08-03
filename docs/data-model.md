@@ -1,7 +1,7 @@
 # Data Model
 
 > Living document. Update as the schema evolves.
-> Last updated: 2026-07-14
+> Last updated: 2026-08-01
 
 The authoritative schema is `packages/db/src/schema.ts` — column-level detail,
 indexes, and foreign keys live there, not here. This document covers what the
@@ -22,9 +22,13 @@ These exist as tables today:
 
   Streak continuity is anchored on `streak_last_day` (the UTC calendar day the streak last advanced), not on `last_event_at` — otherwise any event, like an assignment, would stand in for a daily check-in.
 
-  > Schema gap: the `economy` table does not yet have `xp_lifetime` or `streak_last_day` columns, so the engine's economy state cannot be fully persisted until they are added.
 - **PetState** — mood, mood expiry, and animation per learner.
 - **WorldState** — stage and unlocked objects per learner.
+- **LearnerFact** — a privacy-safe, semantically unique fact derived from an accepted event. It prevents the same learner behavior from counting twice even if a producer changes the transport idempotency key.
+- **AchievementPeriod** — roadmap placement for an opaque academic period. Its anchor is the earliest authoritative behavior/configuration time seen for that period, so delivery order cannot reorder weeks.
+- **WeeklyRhythmConfig** — the highest accepted Pika opportunity configuration for one learner and period, including whether delayed facts require reconciliation.
+- **AchievementInstance** — one durable achievement outcome within its lifetime, classroom, item, or weekly scope. Earned outcomes are historical and are not revoked by later source-system edits.
+- **RewardNotice** — an exactly-once learner-facing reward notification linked to its achievement instance. A nullable acknowledgement timestamp makes reads retryable and acknowledgement idempotent.
 
 Economy, PetState, and WorldState each use `learner_id` as their primary key, so
 one row per learner is structurally guaranteed rather than merely intended.
@@ -32,7 +36,7 @@ one row per learner is structurally guaranteed rather than merely intended.
 Planned, not yet built:
 
 - **LearnerGroup** — a pseudonymous classroom or cohort.
-- **UnlockLedger** — append-only record of every achievement, badge, and world object unlocked.
+- **UnlockLedger** — a generalized append-only record for world objects beyond the current achievement and reward tables.
 - **AuditLog** — record of every rule engine evaluation and its mutations.
 
 ## Asset registry entities

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   getDb,
   economy,
@@ -8,6 +8,12 @@ import {
   worldState,
 } from "@pal/db";
 import type { Db } from "@pal/db";
+import {
+  applyAchievementFact,
+  recordSemanticFact,
+  weeklyConfigurationRejection,
+  type WeeklyConfigurationError,
+} from "@/lib/achievement-state";
 import {
   defaultRulePack,
   processEvent,
@@ -91,18 +97,23 @@ function toLearnerState(
 
 export type ProcessEventResult =
   | { status: "duplicate" }
+  | { status: "semantic_duplicate" }
+  | { status: "rejected"; error: WeeklyConfigurationError }
   | { status: "processed"; result: ProcessResult };
 
 /**
  * Processes an event in a single ACID transaction:
  * 1. Resolves the learner (creates on first use)
  * 2. Locks the learner row with SELECT ... FOR UPDATE
- * 3. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
+ * 3. Returns duplicate for an already-accepted delivery
+ * 4. Rejects contradictory or invalid closed-period configuration
+ * 5. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
  *    returns "duplicate" instead of applying the engine
- * 4. Reads current economy / pet / world state
- * 5. Runs the rule engine
- * 6. Upserts economy, pet_state, world_state
- * 7. Commits
+ * 6. Inserts its semantically unique fact; a second source identity for the
+ *    same behavior cannot change state
+ * 7. Reads current economy / pet / world state and runs the rule engine
+ * 8. Upserts state, scoped achievements, and reward notices
+ * 9. Commits
  */
 export async function processEventInDb(
   integrationId: string,
@@ -125,7 +136,41 @@ export async function processEventInDb(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`
     );
 
-    // 3. Idempotency check via unique constraint — atomic with the state write
+    // 3. Resolve an already-accepted delivery before any validation that reads
+    // mutable learner state. Otherwise a lost-response retry could turn from
+    // `processed` into a 422 after a delayed fact changes reconciliation state.
+    const [acceptedDelivery] = await tx
+      .select({ id: events.id })
+      .from(events)
+      .where(
+        and(
+          eq(events.integrationId, integrationId),
+          eq(events.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .limit(1);
+    if (acceptedDelivery) {
+      return { status: "duplicate" as const };
+    }
+
+    // 4. Reject contradictory/invalid closed-period configuration before the
+    // event ledger. A closed period is immutable except for a narrowly scoped,
+    // still-closed correction while delayed facts require reconciliation.
+    const configurationError = await weeklyConfigurationRejection(
+      tx,
+      learnerId,
+      event,
+    );
+    if (configurationError) {
+      return {
+        status: "rejected" as const,
+        error: configurationError,
+      };
+    }
+
+    // 5. The unique constraint remains the final delivery-idempotency guard.
+    // The learner lock serializes this integration's normal per-learner path;
+    // the constraint also handles a malformed key reused across learners.
     const [inserted] = await tx
       .insert(events)
       .values({
@@ -143,7 +188,21 @@ export async function processEventInDb(
       return { status: "duplicate" as const };
     }
 
-    // 4. Read current state
+    // 6. Semantic dedup is independent from transport idempotency. For example,
+    // two deliveries with different keys but the same learner/activity date
+    // produce one daily-log fact and one set of effects.
+    const fact = await recordSemanticFact(tx, {
+      integrationId,
+      learnerId,
+      sourceEventId: inserted.id,
+      event,
+      idempotencyKey,
+    });
+    if (!fact) {
+      return { status: "semantic_duplicate" as const };
+    }
+
+    // 7. Read current state
     const [eco] = await tx
       .select()
       .from(economy)
@@ -164,10 +223,10 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 5. Run the engine
+    // 8. Run the engine
     const result = processEvent(event, state, defaultRulePack);
 
-    // 6. Upsert economy
+    // 9. Upsert economy
     await tx
       .insert(economy)
       .values({
@@ -196,7 +255,7 @@ export async function processEventInDb(
         },
       });
 
-    // 7. Upsert pet state
+    // 9. Upsert pet state
     await tx
       .insert(petState)
       .values({
@@ -217,7 +276,7 @@ export async function processEventInDb(
         },
       });
 
-    // 8. Upsert world state
+    // 10. Upsert world state
     await tx
       .insert(worldState)
       .values({
@@ -233,6 +292,9 @@ export async function processEventInDb(
           updatedAt: new Date(),
         },
       });
+
+    // 11. Persist fact-derived progress, awards, and one-time reward notices.
+    await applyAchievementFact(tx, learnerId, fact, event);
 
     return { status: "processed" as const, result };
   });

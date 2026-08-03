@@ -75,8 +75,24 @@ export async function POST(req: NextRequest) {
     event.idempotency_key,
   );
 
-  if (result.status === "duplicate") {
+  if (
+    result.status === "duplicate" ||
+    result.status === "semantic_duplicate"
+  ) {
     return NextResponse.json({ status: "duplicate" });
+  }
+
+  if (result.status === "rejected") {
+    return NextResponse.json(
+      {
+        error: result.error,
+        detail:
+          result.error === "closed_period_revision"
+            ? "A closed Weekly Rhythm period cannot be revised"
+            : "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
+      },
+      { status: 422 },
+    );
   }
 
   if (result.result.truncated.length > 0) {

@@ -17,11 +17,12 @@
 The Pal client fetches achievement, pet, and world state directly from Pal. The
 integration secret never leaves the backend.
 
-Step 4 is implemented: Pal authenticates Pika's backend and mints a five-minute token
-whose subject is Pal's internal learner UUID. Step 5 remains incomplete until the
-authenticated learner-snapshot and reward acknowledgement routes land. The legacy
-learner-world endpoint does not enforce reader authorization and must not be used as a
-production embed boundary.
+Steps 4 and 5 are implemented on Pal's API boundary: Pal authenticates Pika's backend,
+mints a five-minute token whose subject is Pal's internal learner UUID, serves the
+token-scoped roadmap/companion/reward snapshot, and acknowledges reward presentation
+idempotently. Pika still needs to install the published package and mount the native
+surfaces. The legacy learner-world endpoint does not enforce production reader
+authorization and must not be used as an integration boundary.
 
 For Pika, the selected presentation is the native React package `@codepet/pal-widget`.
 `PalAchievements` renders inside Pika's normal content pane. Pika separately mounts
@@ -65,6 +66,10 @@ bridge; Pal owns their contents and behavior.
 The package does not accept a raw learner ID, Pika user object, assignment data,
 integration secret, or Pika component dependency. See
 [Widget integration](widget-integration.md).
+
+Configure every exact Pika browser origin in Pal's
+`PAL_ALLOWED_WIDGET_ORIGINS`. Pal rejects other browser origins before token
+verification and never uses a wildcard credentialed CORS policy.
 
 ## Pika integration (first integration)
 
