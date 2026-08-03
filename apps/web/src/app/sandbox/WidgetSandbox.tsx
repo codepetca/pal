@@ -20,6 +20,7 @@ import {
   CaretRight,
   ClipboardText,
   FileText,
+  Gear,
   Lightning,
   Megaphone,
   Moon,
@@ -30,6 +31,7 @@ import {
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import {
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useEffect,
@@ -54,7 +56,8 @@ type HostView =
   | "tests"
   | "calendar"
   | "syllabus"
-  | "announcements";
+  | "announcements"
+  | "settings";
 
 /**
  * The companion renders every mood/blink frame stacked on top of each
@@ -117,6 +120,7 @@ const NAV_ITEMS = [
   { label: "Syllabus", view: "syllabus", icon: BookOpen },
   { label: "Achievements", view: "achievements", icon: Trophy },
   { label: "Announcements", view: "announcements", icon: Megaphone },
+  { label: "Settings", view: "settings", icon: Gear },
 ] satisfies Array<{
   label: string;
   view: HostView;
@@ -335,6 +339,84 @@ function FixtureControls({
   );
 }
 
+function PalSettings({
+  widgetScale,
+  widgetVisible,
+  onWidgetScaleChange,
+  onWidgetVisibleChange,
+}: {
+  widgetScale: number;
+  widgetVisible: boolean;
+  onWidgetScaleChange: (scale: number) => void;
+  onWidgetVisibleChange: (visible: boolean) => void;
+}) {
+  return (
+    <section className={styles.settingsContent} aria-labelledby="settings-title">
+      <p className={styles.hostEyebrow}>Pika host preview</p>
+      <h1 id="settings-title">Settings</h1>
+
+      <section className={styles.settingsSection} aria-labelledby="pal-settings-title">
+        <header className={styles.settingsSectionHeader}>
+          <h2 id="pal-settings-title">Pal</h2>
+          <p>Widget control</p>
+        </header>
+
+        <div className={styles.settingsGrid}>
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Widget size</h3>
+                <p>Adjust the size of the Pal widget.</p>
+              </div>
+              <output htmlFor="pal-widget-size">{widgetScale.toFixed(1)}×</output>
+            </div>
+            <input
+              id="pal-widget-size"
+              className={styles.sizeSlider}
+              type="range"
+              min="0.4"
+              max="1.2"
+              step="0.1"
+              value={widgetScale}
+              aria-label="Pal widget size"
+              onInput={(event) => onWidgetScaleChange(Number(event.currentTarget.value))}
+            />
+            <div className={styles.sliderBounds} aria-hidden="true">
+              <span>0.4×</span>
+              <span>1.2×</span>
+            </div>
+          </article>
+
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Show widget</h3>
+                <p>Show or hide the Pal widget.</p>
+              </div>
+              <span className={styles.settingStatus}>
+                {widgetVisible ? "On" : "Off"}
+              </span>
+            </div>
+            <label className={styles.switchControl}>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={widgetVisible}
+                aria-label="Show Pal widget"
+                onChange={(event) => onWidgetVisibleChange(event.currentTarget.checked)}
+              />
+              <span className={styles.switchTrack} aria-hidden="true">
+                <span />
+              </span>
+              <span>{widgetVisible ? "Widget visible" : "Widget hidden"}</span>
+            </label>
+          </article>
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function SandboxExperience({
   client,
   theme,
@@ -377,6 +459,8 @@ function SandboxExperience({
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resetGeneration, setResetGeneration] = useState(0);
+  const [widgetScale, setWidgetScale] = useState(1);
+  const [widgetVisible, setWidgetVisible] = useState(true);
 
   // Host-owned placement (per the widget's boundary: "the host owns
   // placement, Pal owns everything rendered inside"). Position is written
@@ -570,6 +654,13 @@ function SandboxExperience({
                   ))}
                 </article>
               </section>
+            ) : view === "settings" ? (
+              <PalSettings
+                widgetScale={widgetScale}
+                widgetVisible={widgetVisible}
+                onWidgetScaleChange={setWidgetScale}
+                onWidgetVisibleChange={setWidgetVisible}
+              />
             ) : (
               <section className={styles.classroomContent}>
                 <p className={styles.hostEyebrow}>Pika host preview</p>
@@ -587,29 +678,32 @@ function SandboxExperience({
             )}
           </main>
 
-          <div
-            ref={companionOverlayRef}
-            className={styles.companionOverlay}
-            data-dragging={companionDragging ? "true" : "false"}
-          >
+          {widgetVisible ? (
             <div
-              className={styles.companionHitArea}
-              onPointerDown={handleCompanionPointerDown}
-              onPointerMove={handleCompanionPointerMove}
-              onPointerUp={endCompanionDrag}
-              onPointerCancel={endCompanionDrag}
-              // <img> is natively draggable; without this, a mousedown+move
-              // on the sprite starts the browser's own HTML5 image drag
-              // (ghost image, "no drop target" cursor) instead of our
-              // pointer-based drag, and fights it for the gesture.
-              onDragStart={(e) => e.preventDefault()}
+              ref={companionOverlayRef}
+              className={styles.companionOverlay}
+              data-dragging={companionDragging ? "true" : "false"}
+              style={{ "--widget-cat-h": `${widgetScale * 10}rem` } as CSSProperties}
             >
-              <div className={styles.grassPatch} aria-hidden="true" />
-              <div className={styles.companionCatBox}>
-                <PalCompanion variant="compact" />
+              <div
+                className={styles.companionHitArea}
+                onPointerDown={handleCompanionPointerDown}
+                onPointerMove={handleCompanionPointerMove}
+                onPointerUp={endCompanionDrag}
+                onPointerCancel={endCompanionDrag}
+                // <img> is natively draggable; without this, a mousedown+move
+                // on the sprite starts the browser's own HTML5 image drag
+                // (ghost image, "no drop target" cursor) instead of our
+                // pointer-based drag, and fights it for the gesture.
+                onDragStart={(e) => e.preventDefault()}
+              >
+                <div className={styles.grassPatch} aria-hidden="true" />
+                <div className={styles.companionCatBox}>
+                  <PalCompanion variant="compact" />
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
 
           </div>
 

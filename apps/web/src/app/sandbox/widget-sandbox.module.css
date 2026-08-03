@@ -419,13 +419,209 @@
   font-size: 0.85rem;
 }
 
+.settingsContent {
+  max-width: 64rem;
+  min-height: calc(100% - 2rem);
+  margin: 1rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  border: 1px solid var(--host-border);
+  border-radius: 0.5rem;
+  background: var(--host-surface);
+}
+
+.settingsContent > h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+}
+
+.settingsSection {
+  margin-top: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--host-border);
+  border-radius: 0.5rem;
+  background: var(--host-surface-2);
+}
+
+.settingsSectionHeader {
+  padding: 1.15rem 1.25rem;
+  border-bottom: 1px solid var(--host-border);
+}
+
+.settingsSectionHeader h2,
+.settingCard h3 {
+  margin: 0;
+}
+
+.settingsSectionHeader h2 {
+  font-size: 1.05rem;
+}
+
+.settingsSectionHeader p,
+.settingCard p {
+  margin: 0.35rem 0 0;
+  color: var(--host-muted);
+}
+
+.settingsSectionHeader p {
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.settingCard {
+  min-width: 0;
+  padding: 1.1rem;
+  border: 1px solid var(--host-border);
+  border-radius: 0.5rem;
+  background: var(--host-surface);
+}
+
+.settingTitleRow {
+  display: flex;
+  min-height: 3rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settingCard h3 {
+  font-size: 0.95rem;
+}
+
+.settingCard p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.settingTitleRow output,
+.settingStatus {
+  flex: 0 0 auto;
+  color: var(--host-primary);
+  font-size: 0.82rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.sizeSlider {
+  width: 100%;
+  height: 1.5rem;
+  margin: 1.15rem 0 0;
+  accent-color: var(--host-primary-solid);
+  cursor: pointer;
+}
+
+.sizeSlider::-webkit-slider-runnable-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--host-border-strong);
+}
+
+.sizeSlider::-webkit-slider-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: -0.35rem;
+  border: 2px solid var(--host-surface);
+  border-radius: 50%;
+  background: var(--host-primary-solid);
+  box-shadow: 0 0 0 1px var(--host-border-strong);
+  appearance: none;
+}
+
+.sizeSlider::-moz-range-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--host-border-strong);
+}
+
+.sizeSlider::-moz-range-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--host-surface);
+  border-radius: 50%;
+  background: var(--host-primary-solid);
+  box-shadow: 0 0 0 1px var(--host-border-strong);
+}
+
+.sliderBounds {
+  display: flex;
+  justify-content: space-between;
+  color: var(--host-muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.switchControl {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 1.15rem;
+  color: var(--host-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.switchControl input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.switchTrack {
+  position: relative;
+  width: 2.8rem;
+  height: 1.55rem;
+  border: 1px solid var(--host-border-strong);
+  border-radius: 999px;
+  background: var(--host-surface-2);
+  transition: background var(--pal-motion-duration-fast) var(--pal-motion-easing-standard);
+}
+
+.switchTrack > span {
+  position: absolute;
+  top: 0.19rem;
+  left: 0.2rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--host-muted);
+  transition: transform var(--pal-motion-duration-fast) var(--pal-motion-easing-standard);
+}
+
+.switchControl input:checked + .switchTrack {
+  border-color: var(--host-primary-solid);
+  background: var(--host-primary-solid);
+}
+
+.switchControl input:checked + .switchTrack > span {
+  background: #ffffff;
+  transform: translateX(1.25rem);
+}
+
+.sizeSlider:focus-visible,
+.switchControl input:focus-visible + .switchTrack {
+  outline: var(--pal-focus-width) solid var(--pal-focus-color);
+  outline-offset: var(--pal-focus-offset);
+}
+
 /* Explicit width/height (not shrink-to-fit) so this box's own rect is the
    whole visual footprint — cat plus grass — which is what the drag-bounds
    clamp in WidgetSandbox.tsx measures to keep the widget on screen. Itself
    takes no pointer events: .companionHitArea below (which fills it exactly)
    is what's draggable. */
 .companionOverlay {
-  --cat-h: 10rem;
+  --cat-h: var(--widget-cat-h, 10rem);
   --cat-w: calc(var(--cat-h) * 1.4);
   /* grass.png is tightly cropped to its 2502x1035 visible alpha bounds. */
   --grass-h: calc(var(--cat-h) * 0.6);
