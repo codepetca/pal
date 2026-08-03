@@ -31,6 +31,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
   useEffect,
   useMemo,
   useRef,
@@ -474,6 +475,58 @@ function PalSettings({
   );
 }
 
+function CompanionOverlay({
+  visible,
+  scale,
+  dragging,
+  overlayRef,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
+}: {
+  visible: boolean;
+  scale: number;
+  dragging: boolean;
+  overlayRef: RefObject<HTMLDivElement | null>;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerEnd: () => void;
+}) {
+  const { snapshot, state } = usePalWidget();
+
+  // The grass and cat are one visual unit. During initial loading or a
+  // fail-closed preview error, render neither instead of leaving a misleading
+  // grass-only widget behind.
+  if (!visible || state !== "ready" || !snapshot) return null;
+
+  return (
+    <div
+      ref={overlayRef}
+      className={styles.companionOverlay}
+      data-dragging={dragging ? "true" : "false"}
+      style={{ "--widget-cat-h": `${scale * 10}rem` } as CSSProperties}
+    >
+      <div
+        className={styles.companionHitArea}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        // <img> is natively draggable; without this, a mousedown+move
+        // on the sprite starts the browser's own HTML5 image drag
+        // (ghost image, "no drop target" cursor) instead of our
+        // pointer-based drag, and fights it for the gesture.
+        onDragStart={(event) => event.preventDefault()}
+      >
+        <div className={styles.grassPatch} aria-hidden="true" />
+        <div className={styles.companionCatBox}>
+          <PalCompanion variant="compact" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SandboxExperience({
   client,
   theme,
@@ -512,6 +565,10 @@ function SandboxExperience({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [widgetScale, setWidgetScale] = useState(1);
   const [widgetVisible, setWidgetVisible] = useState(true);
+
+  useEffect(() => {
+    if (sandboxError) setControlsCollapsed(false);
+  }, [sandboxError]);
 
   // Host-owned placement (per the widget's boundary: "the host owns
   // placement, Pal owns everything rendered inside"). Position is written
@@ -728,32 +785,15 @@ function SandboxExperience({
             )}
           </main>
 
-          {widgetVisible ? (
-            <div
-              ref={companionOverlayRef}
-              className={styles.companionOverlay}
-              data-dragging={companionDragging ? "true" : "false"}
-              style={{ "--widget-cat-h": `${widgetScale * 10}rem` } as CSSProperties}
-            >
-              <div
-                className={styles.companionHitArea}
-                onPointerDown={handleCompanionPointerDown}
-                onPointerMove={handleCompanionPointerMove}
-                onPointerUp={endCompanionDrag}
-                onPointerCancel={endCompanionDrag}
-                // <img> is natively draggable; without this, a mousedown+move
-                // on the sprite starts the browser's own HTML5 image drag
-                // (ghost image, "no drop target" cursor) instead of our
-                // pointer-based drag, and fights it for the gesture.
-                onDragStart={(e) => e.preventDefault()}
-              >
-                <div className={styles.grassPatch} aria-hidden="true" />
-                <div className={styles.companionCatBox}>
-                  <PalCompanion variant="compact" />
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <CompanionOverlay
+            visible={widgetVisible}
+            scale={widgetScale}
+            dragging={companionDragging}
+            overlayRef={companionOverlayRef}
+            onPointerDown={handleCompanionPointerDown}
+            onPointerMove={handleCompanionPointerMove}
+            onPointerEnd={endCompanionDrag}
+          />
 
           </div>
 

@@ -143,6 +143,25 @@ test("sandbox reads every Pal surface from the persisted pipeline", () => {
   assert.doesNotMatch(sandboxSource, /Fixture preview/);
 });
 
+test("sandbox never leaves a grass-only widget when the pipeline is unavailable", () => {
+  assert.match(
+    sandboxSource,
+    /function CompanionOverlay[\s\S]*const \{ snapshot, state \} = usePalWidget\(\)/,
+  );
+  assert.match(
+    sandboxSource,
+    /if \(!visible \|\| state !== "ready" \|\| !snapshot\) return null/,
+  );
+  assert.match(
+    sandboxSource,
+    /<CompanionOverlay[\s\S]*visible=\{widgetVisible\}/,
+  );
+  assert.match(
+    sandboxSource,
+    /if \(sandboxError\) setControlsCollapsed\(false\)/,
+  );
+});
+
 test("only the engine decides the companion's mood", () => {
   // The sandbox delegates snapshot reads to the public client. If it ever
   // starts choosing a mood from a control action, the engine is no longer the
