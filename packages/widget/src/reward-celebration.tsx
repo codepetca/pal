@@ -6,9 +6,15 @@ import { usePalWidget } from "./provider";
 
 export function PalRewardCelebration({
   modal = false,
+  hostManaged = false,
   onOpenChange,
 }: {
   modal?: boolean;
+  /**
+   * Leaves dialog semantics, focus containment, Escape, and focus restoration
+   * to the host application's approved modal owner.
+   */
+  hostManaged?: boolean;
   onOpenChange?: (open: boolean) => void;
 } = {}) {
   const {
@@ -28,13 +34,14 @@ export function PalRewardCelebration({
   const titleId = useId();
 
   useEffect(() => {
-    if (!rewardId) return;
+    if (!rewardId || hostManaged) return;
     onOpenChange?.(true);
     return () => onOpenChange?.(false);
-  }, [onOpenChange, rewardId]);
+  }, [hostManaged, onOpenChange, rewardId]);
 
   useEffect(() => {
     if (
+      hostManaged ||
       !rewardId ||
       typeof document === "undefined" ||
       typeof HTMLElement === "undefined"
@@ -56,22 +63,23 @@ export function PalRewardCelebration({
         queueMicrotask(restoreFocus);
       }
     };
-  }, [rewardId]);
+  }, [hostManaged, rewardId]);
 
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
 
   return (
     <section
-      aria-describedby={descriptionId}
-      aria-labelledby={titleId}
-      aria-modal={modal ? "true" : undefined}
+      aria-describedby={hostManaged ? undefined : descriptionId}
+      aria-labelledby={hostManaged ? undefined : titleId}
+      aria-modal={!hostManaged && modal ? "true" : undefined}
       className="pal-celebration"
       data-pal-density={density}
       data-pal-motion={motion}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       onKeyDown={(event) => {
+        if (hostManaged) return;
         if (event.key === "Tab" && modal) {
           event.preventDefault();
           continueButtonRef.current?.focus();
@@ -80,7 +88,7 @@ export function PalRewardCelebration({
           void dismissReward(reward.id);
         }
       }}
-      role="dialog"
+      role={hostManaged ? undefined : "dialog"}
     >
       <div className="pal-celebration-burst" aria-hidden="true">
         <span>✦</span><span>✧</span><span>✦</span>

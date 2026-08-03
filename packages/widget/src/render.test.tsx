@@ -61,3 +61,23 @@ test("roadmap renders all fictional semester weeks", () => {
   assert.match(html, /Week 16/);
   assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
 });
+
+test("host-managed rewards leave dialog and focus ownership to the host", () => {
+  const client = createFixturePalClient();
+  client.dispatch("reward-earned");
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="fixture-learner"
+    >
+      <PalRewardCelebration hostManaged />
+    </PalProvider>,
+  );
+
+  assert.match(html, /class="pal-celebration"/);
+  assert.doesNotMatch(html, /role="dialog"/);
+  assert.doesNotMatch(html, /aria-modal=/);
+  assert.doesNotMatch(html, /aria-labelledby=/);
+  assert.doesNotMatch(html, /aria-describedby=/);
+});

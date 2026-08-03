@@ -224,9 +224,11 @@ Weeks with three or more opportunities therefore allow one grace day. The UI com
 
 The week configuration excludes dates before enrolment or after withdrawal, non-class days, holidays, cancellations, and waived days. Configuration is unique by learner and `period_key`. Pal keeps the highest `config_version`, ignores older versions that arrive later, and recomputes the target for unawarded progress when an open-period revision arrives. A final higher version sets `period_status` to `closed`; later configuration revisions are rejected for that period.
 
-Qualification is frozen when Pika emits `daily_log.completed`: that fact is Pika's permanent assertion that the date qualified at the time of the behavior. A later cancellation, waiver, withdrawal, or schedule edit may remove only an unmet opportunity; it does not invalidate an already-emitted completion, and Pika must not reduce `eligible_days` below the number of distinct completion dates it has emitted for the period. This preserves positive achievement history without sending the learner's detailed schedule to Pal.
+Qualification is frozen when Pika emits `daily_log.completed`: that fact is Pika's permanent assertion that the date qualified at the time of the behavior. A later cancellation, waiver, withdrawal, or schedule edit may remove only an unmet opportunity; it does not invalidate an already-emitted completion, and Pika must not reduce `eligible_days` below the number of distinct completion dates it has emitted for the period. Pal rejects a contradictory closed configuration with `contradictory_period_configuration`. This preserves positive achievement history without sending the learner's detailed schedule to Pal.
 
-Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure because its emitted fact already confirms qualification. Pal recomputes the weekly target from the latest accepted configuration but never reclassifies or removes a stored completion date. If delivery order temporarily produces more distinct completion dates than the current `eligible_days`, Pal holds the period as pending reconciliation rather than awarding from contradictory inputs. Pal does not revoke an achievement already awarded if an open-period revision raises the target.
+Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure because its emitted fact already confirms qualification. Pal recomputes the weekly target from the latest accepted configuration but never reclassifies or removes a stored completion date. If delivery order temporarily produces more distinct completion dates than the current `eligible_days`, Pal holds the period as pending reconciliation rather than awarding from contradictory inputs. While that reconciliation flag is set, Pal accepts one or more higher-version corrections only if the period remains `closed` and `eligible_days` is at least the stored completion count; an accepted correction clears reconciliation. Other revisions to a closed period remain rejected. Pal does not revoke an achievement already awarded if an earlier consistent state earned it.
+
+Roadmap placement is likewise independent of delivery order. For each opaque `period_key`, Pal persists the earliest authoritative time it has seen: `activity_day` at midnight UTC for a daily-log completion, and `occurred_at` for the other period-scoped facts. The learner snapshot sorts periods by that anchor and maps the first 16 to Weeks 1–16. Receiving Week 8 before Week 7 therefore does not swap their roadmap positions, and a later fact with an earlier authoritative time can correct the anchor.
 
 ## Learning-item behavior without an assignment mirror
 
@@ -257,7 +259,7 @@ Do not introduce one-off `learning_item.available`, `learning_item.deadline_pass
 | The same delivery is retried | Pika reuses the idempotency key; Pal processes it once. |
 | The learner completes logs in several classrooms on one date | The adapter emits at most one `daily_log.completed`; Pal also counts the activity date once. |
 | A week is shortened or the learner joins/withdraws midweek | Pika sends a higher weekly configuration version; Pal recomputes the unawarded target. Already-emitted completion dates remain qualified, and `eligible_days` cannot fall below their count. |
-| An event arrives late or out of order | Pal uses the fact's activity date and period rather than its delivery time. |
+| An event arrives late or out of order | Pal counts it in the named period and orders periods by their earliest authoritative `activity_day`/`occurred_at`, never by delivery or row-creation order. |
 | An assignment deadline changes | Pika uses its current authoritative deadline when it classifies a later view or completion; Pal stores no deadline to synchronize. |
 | An assignment is deleted after a qualifying behavior | The historical behavior and any earned award remain. If no behavior occurred, Pal knew nothing about the assignment. |
 | A class is archived | Pika stops new behavior facts for that class and revises or closes affected weekly context; Pal retains earned history. |
@@ -298,7 +300,13 @@ learner-scoped client and state, while Pika mounts three independent surfaces:
 >
   <PalAchievements />       // normal Pika content pane
   <PalCompanion />          // Pika-approved ambient layer
-  <PalRewardCelebration />  // Pika-approved celebration layer
+  <PikaModalLayer
+    isOpen={Boolean(palReward)}
+    onClose={() => palReward && void dismissReward(palReward.id)}
+    ariaLabel="Reward earned"
+  >
+    <PalRewardCelebration hostManaged />
+  </PikaModalLayer>
 </PalProvider>
 ```
 
@@ -307,6 +315,13 @@ Pika adds an **Achievements** navigation destination and renders
 page-covering overlay. Pika owns the host layout, standard interface styling, and
 whether the companion or celebration mounts on a given route. Pal owns everything
 inside each surface.
+
+The reward modal's open state is derived from Pal's first pending reward. Every
+Pika close path acknowledges that reward through `dismissReward`; it never hides
+the modal with local state alone. Pika's `ModalLayer` owns the portal, dialog label
+and semantics, inert background, focus containment/restoration, Escape and backdrop
+policy, and scroll lock. `PalRewardCelebration hostManaged` supplies only the reward
+content and acknowledgement action, avoiding nested dialog or keyboard ownership.
 
 Pika obtains a short-lived, learner-scoped read token from its backend and supplies
 it through the Pal client's `getAccessToken` callback. The integration secret, raw
@@ -330,21 +345,26 @@ the primary host.
 
 ![Current Pal sandbox with Achievements selected in the Pika-like sidebar, a full-width weekly roadmap in the content pane, and the compact pet floating over the lower-right corner](assets/pika-pal-widget-sandbox.jpg)
 
-*Current fixture-driven sandbox. The roadmap uses the normal content pane; the pet and reward celebration are independent host overlays rather than a persistent right-side panel.*
+*Current sandbox appearance. The roadmap uses the normal content pane; the pet and reward celebration are independent host overlays rather than a persistent right-side panel.*
 
 A compact, collapsible semester-simulator control panel overlays that harness. The
 achievements and pet/world remain visible while a tester selects actions, so every
 injected fact produces immediate observable feedback.
 
 - The fictional semester contains 16 weeks and can move by day or week.
-- One event selector exposes the six version 1 normalized facts and only the fields allowed for the selected fact.
+- Advancing one week emits the new week's normal five-day configuration fact, mirroring
+  Pika's automatic weekly adapter job; it does not change roadmap state directly.
+- The action controls expose all six version 1 normalized facts, including a
+  three-day short-week revision, and construct only contract-allowed fields.
 - Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
-- Scenario fixtures cover normal progress, shortened weeks, timing classifications, duplicate and out-of-order delivery, resubmission, deletion, and archive behavior.
+- The current controls cover normal progress, shortened weeks, timing
+  classifications, and exact duplicate delivery. A later named-scenario library
+  should add out-of-order delivery, resubmission, deletion, and archive behavior.
 - Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
 - The control overlay is a development tool and is not exported from `@codepet/pal-widget`.
-- Fixture mode is explicitly labeled and changes only fixture-client state. Once the
-  receiver is ready, pipeline mode sends every action through the normal Pal API and
-  never mutates widget, achievement, or pet state directly.
+- The browser obtains only a short-lived, learner-scoped read token. The sandbox
+  integration secret stays in its server proxy, just as Pika's credential stays in
+  Pika's backend.
 
 ## What must be built in Pika
 
@@ -369,41 +389,33 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 
 ## What must be built in Pal
 
-- [ ] Production event persistence, learner locking, and idempotency
-- [ ] Expanded event validation and per-integration metadata allow-lists
-- [ ] Qualified-fact aggregation with distinct day/item/period uniqueness
+- [x] Production event persistence, learner locking, and idempotency
+- [x] Expanded event validation and per-integration metadata allow-lists
+- [x] Qualified-fact aggregation with distinct day/item/period uniqueness
 - [ ] General achievement definitions for counters, thresholds, scopes, and recurrence
-- [ ] Achievement-progress persistence (`current`, `target`, `status`, `earned_at`)
+- [x] Achievement-progress persistence (`current`, `target`, `status`, `earned_at`)
 - [ ] An append-only award/unlock ledger with scoped uniqueness
-- [ ] Weekly, learning-item, term, and lifetime achievement instances
-- [ ] Claimable reward state and one-time reward application
-- [ ] Achievement state in the learner-world API
+- [x] Weekly, learning-item, and lifetime achievement instances for the five pilot achievements
+- [x] Claimable reward state and one-time reward application
+- [x] Authenticated learner snapshot and reward acknowledgement APIs
 - [x] A portable `@codepet/pal-widget` package with a shared provider
 - [x] Separately mountable roadmap, companion, and celebration components
 - [x] A versioned learner snapshot/client contract
 - [x] A narrow, portable `--pal-*` theme contract
 - [x] Roadmap UI, badge status, accessibility treatment, and reward celebrations
 - [ ] An optional chrome-free embed wrapper for non-React hosts
-- [ ] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
+- [x] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
 - [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 
 ## Current implementation status
 
-The unpublished pilot `@codepet/pal-widget` package and its fixture-driven sandbox now exist. The
-sandbox renders a 16-week roadmap in a Pika-like host and can advance the fictional
-week, apply representative daily-log and on-time-completion outcomes, queue a reward,
-replay an inert duplicate, and reset its fictional learner. Those controls update
-fixture-client state only. They are not the version 1 fact selector, do not pass
-through Pal's ingest/persistence/rule pipeline, and do not yet provide the complete
-edge-case scenario library or expected-versus-actual comparison.
+The unpublished pilot `@codepet/pal-widget` package and real-pipeline sandbox now exist.
+The sandbox renders a 16-week roadmap in a Pika-like host, injects all six version 1
+facts, revises a week from five to three eligible days, replays the exact previous
+delivery, and resets its isolated fictional learner. Roadmap, companion, XP, rewards,
+and reward dismissal all flow through authenticated persisted APIs; controls never
+write widget state directly.
 
-The legacy ingest allow-list still accepts the five prototype event types documented
-in the integration guide, but no visible sandbox control invokes it. Within one warm
-process, that prototype deduplicates repeated deliveries by idempotency key, and its
-streak state prevents a second same-day check-in from advancing the streak or paying
-daily XP again. A cold start or a different serverless instance loses that
-deduplication state; durable, cross-instance idempotency remains target work.
-
-The version 1 event vocabulary and shared contract fixtures exist. The Pika
-adapter/outbox, qualified-fact layer, recurring achievement persistence, production
-learner snapshot receiver, and durable award ledger remain target work.
+The remaining sandbox work is a richer named scenario/expected-versus-actual library.
+The primary cross-project work still outstanding is Pika's adapter/outbox and native
+widget mounting, followed by end-to-end failure-containment and privacy verification.

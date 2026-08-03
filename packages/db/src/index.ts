@@ -1,18 +1,28 @@
 export * as schema from "./schema";
 export {
+  achievementInstances,
+  achievementPeriods,
   economy,
   events,
   integrations,
+  learnerFacts,
   learners,
   petState,
+  rewardNotices,
+  weeklyRhythmConfigs,
   worldState,
 } from "./schema";
 export type {
+  AchievementInstance,
+  AchievementPeriod,
   Economy,
   Event,
   Integration,
+  LearnerFact,
   Learner,
   PetState,
+  RewardNotice,
+  WeeklyRhythmConfig,
   WorldState,
 } from "./schema";
 // runMigrations is deliberately not re-exported here. Importing it would pull

@@ -1,15 +1,20 @@
-import { createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   getDb,
   economy,
   events,
-  integrations,
   learners,
   petState,
   worldState,
 } from "@pal/db";
 import type { Db } from "@pal/db";
+import {
+  applyAchievementFact,
+  recordSemanticFact,
+  semanticFactAlreadyRecorded,
+  weeklyConfigurationRejection,
+  type WeeklyConfigurationError,
+} from "@/lib/achievement-state";
 import {
   defaultRulePack,
   processEvent,
@@ -18,66 +23,11 @@ import {
   type ProcessResult,
 } from "@pal/engine";
 
-// The sandbox integration slug. In M1 this becomes configurable per-integration.
-const SANDBOX_SLUG = "sandbox";
-
-function hashSecret(secret: string): string {
-  return createHash("sha256").update(secret).digest("hex");
-}
-
-// ---------------------------------------------------------------------------
-// Integration lookup / creation
-// ---------------------------------------------------------------------------
-
-async function getOrCreateIntegration(db: Db): Promise<string> {
-  const secret = process.env.SANDBOX_INTEGRATION_SECRET;
-  if (!secret) throw new Error("SANDBOX_INTEGRATION_SECRET is not set");
-
-  const [existing] = await db
-    .select({ id: integrations.id })
-    .from(integrations)
-    .where(eq(integrations.slug, SANDBOX_SLUG))
-    .limit(1);
-
-  if (existing) return existing.id;
-
-  // Create on first use. If two requests race, the unique constraint catches
-  // the second and we fall through to the select below.
-  const [created] = await db
-    .insert(integrations)
-    .values({
-      slug: SANDBOX_SLUG,
-      name: "Sandbox",
-      secretHash: hashSecret(secret),
-      allowedEventTypes: [
-        "platform.session.started",
-        "classroom.joined",
-        "daily_log_week.configured",
-        "daily_log.completed",
-        "learning_item.viewed",
-        "learning_item.completed",
-      ],
-    })
-    .onConflictDoNothing()
-    .returning({ id: integrations.id });
-
-  if (created) return created.id;
-
-  const [retry] = await db
-    .select({ id: integrations.id })
-    .from(integrations)
-    .where(eq(integrations.slug, SANDBOX_SLUG))
-    .limit(1);
-
-  if (!retry) throw new Error("Failed to create or find sandbox integration");
-  return retry.id;
-}
-
 // ---------------------------------------------------------------------------
 // Learner lookup / creation  (by integration's external learner ID)
 // ---------------------------------------------------------------------------
 
-async function getOrCreateLearner(
+export async function getOrCreateLearnerIdentity(
   db: Db,
   integrationId: string,
   externalLearnerId: string
@@ -148,38 +98,94 @@ function toLearnerState(
 
 export type ProcessEventResult =
   | { status: "duplicate" }
+  | { status: "semantic_duplicate" }
+  | { status: "rejected"; error: WeeklyConfigurationError }
   | { status: "processed"; result: ProcessResult };
 
 /**
  * Processes an event in a single ACID transaction:
- * 1. Resolves the sandbox integration (creates on first use)
- * 2. Resolves the learner (creates on first use)
- * 3. Locks the learner row with SELECT ... FOR UPDATE
- * 4. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
+ * 1. Resolves the learner (creates on first use)
+ * 2. Locks the learner row with SELECT ... FOR UPDATE
+ * 3. Returns duplicate for an already-accepted delivery
+ * 4. Rejects contradictory or invalid closed-period configuration
+ * 5. Inserts the event — ON CONFLICT on (integration_id, idempotency_key)
  *    returns "duplicate" instead of applying the engine
- * 5. Reads current economy / pet / world state
- * 6. Runs the rule engine
- * 7. Upserts economy, pet_state, world_state
- * 8. Commits
+ * 6. Inserts its semantically unique fact; a second source identity for the
+ *    same behavior cannot change state
+ * 7. Reads current economy / pet / world state and runs the rule engine
+ * 8. Upserts state, scoped achievements, and reward notices
+ * 9. Commits
  */
 export async function processEventInDb(
+  integrationId: string,
   externalLearnerId: string,
   event: IncomingEvent,
   idempotencyKey: string
 ): Promise<ProcessEventResult> {
   const db = getDb();
-  const integrationId = await getOrCreateIntegration(db);
 
   return await db.transaction(async (tx) => {
     // 1. Get or create the learner inside the transaction so the lock works
-    const learnerId = await getOrCreateLearner(tx, integrationId, externalLearnerId);
+    const learnerId = await getOrCreateLearnerIdentity(
+      tx,
+      integrationId,
+      externalLearnerId,
+    );
 
     // 2. Lock the learner row — serializes all writes for this learner
     await tx.execute(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`
     );
 
-    // 3. Idempotency check via unique constraint — atomic with the state write
+    // 3. Resolve an already-accepted delivery before any validation that reads
+    // mutable learner state. Otherwise a lost-response retry could turn from
+    // `processed` into a 422 after a delayed fact changes reconciliation state.
+    const [acceptedDelivery] = await tx
+      .select({ id: events.id })
+      .from(events)
+      .where(
+        and(
+          eq(events.integrationId, integrationId),
+          eq(events.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .limit(1);
+    if (acceptedDelivery) {
+      return { status: "duplicate" as const };
+    }
+
+    // A producer may accidentally assert the same source fact under a new
+    // transport key. Resolve that immutable identity before validations that
+    // depend on mutable learner state, so an accepted fact cannot later turn
+    // into a rejection as delayed events arrive.
+    if (
+      await semanticFactAlreadyRecorded(tx, {
+        learnerId,
+        event,
+        idempotencyKey,
+      })
+    ) {
+      return { status: "semantic_duplicate" as const };
+    }
+
+    // 4. Reject contradictory/invalid closed-period configuration before the
+    // event ledger. A closed period is immutable except for a narrowly scoped,
+    // still-closed correction while delayed facts require reconciliation.
+    const configurationError = await weeklyConfigurationRejection(
+      tx,
+      learnerId,
+      event,
+    );
+    if (configurationError) {
+      return {
+        status: "rejected" as const,
+        error: configurationError,
+      };
+    }
+
+    // 5. The unique constraint remains the final delivery-idempotency guard.
+    // The learner lock serializes this integration's normal per-learner path;
+    // the constraint also handles a malformed key reused across learners.
     const [inserted] = await tx
       .insert(events)
       .values({
@@ -197,7 +203,21 @@ export async function processEventInDb(
       return { status: "duplicate" as const };
     }
 
-    // 4. Read current state
+    // 6. Semantic dedup is independent from transport idempotency. For example,
+    // two deliveries with different keys but the same learner/activity date
+    // produce one daily-log fact and one set of effects.
+    const fact = await recordSemanticFact(tx, {
+      integrationId,
+      learnerId,
+      sourceEventId: inserted.id,
+      event,
+      idempotencyKey,
+    });
+    if (!fact) {
+      return { status: "semantic_duplicate" as const };
+    }
+
+    // 7. Read current state
     const [eco] = await tx
       .select()
       .from(economy)
@@ -218,10 +238,10 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 5. Run the engine
+    // 8. Run the engine
     const result = processEvent(event, state, defaultRulePack);
 
-    // 6. Upsert economy
+    // 9. Upsert economy
     await tx
       .insert(economy)
       .values({
@@ -250,7 +270,7 @@ export async function processEventInDb(
         },
       });
 
-    // 7. Upsert pet state
+    // 9. Upsert pet state
     await tx
       .insert(petState)
       .values({
@@ -271,7 +291,7 @@ export async function processEventInDb(
         },
       });
 
-    // 8. Upsert world state
+    // 10. Upsert world state
     await tx
       .insert(worldState)
       .values({
@@ -288,6 +308,9 @@ export async function processEventInDb(
         },
       });
 
+    // 11. Persist fact-derived progress, awards, and one-time reward notices.
+    await applyAchievementFact(tx, learnerId, fact, event);
+
     return { status: "processed" as const, result };
   });
 }
@@ -297,10 +320,10 @@ export async function processEventInDb(
  * No lock, no transaction — just a read.
  */
 export async function loadLearnerFromDb(
+  integrationId: string,
   externalLearnerId: string
 ): Promise<LearnerState | null> {
   const db = getDb();
-  const integrationId = await getOrCreateIntegration(db);
 
   const [learner] = await db
     .select({ id: learners.id })
@@ -337,9 +360,11 @@ export async function loadLearnerFromDb(
  * Dev-only: deletes a learner and all cascaded state (events, economy,
  * pet_state, world_state). Used by the sandbox reset panel.
  */
-export async function resetLearnerInDb(externalLearnerId: string): Promise<void> {
+export async function resetLearnerInDb(
+  integrationId: string,
+  externalLearnerId: string,
+): Promise<void> {
   const db = getDb();
-  const integrationId = await getOrCreateIntegration(db);
 
   await db
     .delete(learners)

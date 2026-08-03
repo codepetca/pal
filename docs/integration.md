@@ -1,7 +1,7 @@
 # Integration Guide
 
 > Living document. Update as the integration API stabilizes.
-> Last updated: 2026-07-25
+> Last updated: 2026-08-01
 
 ---
 
@@ -17,7 +17,12 @@
 The Pal client fetches achievement, pet, and world state directly from Pal. The
 integration secret never leaves the backend.
 
-Steps 4–5 are target M3 behavior, not an implemented API flow. The current prototype has no read-token minting route, and its learner-world endpoint does not yet enforce reader authorization. Do not use the prototype endpoint as a production embed boundary.
+Steps 4 and 5 are implemented on Pal's API boundary: Pal authenticates Pika's backend,
+mints a five-minute token whose subject is Pal's internal learner UUID, serves the
+token-scoped roadmap/companion/reward snapshot, and acknowledges reward presentation
+idempotently. Pika installs the published package and mounts the native surfaces. The
+former learner-ID world endpoint has been retired; learner state is read only through
+the scoped snapshot boundary.
 
 For Pika, the selected presentation is the native React package `@codepet/pal-widget`.
 `PalAchievements` renders inside Pika's normal content pane. Pika separately mounts
@@ -35,6 +40,7 @@ import {
   PalProvider,
   PalRewardCelebration,
   createPalHttpClient,
+  usePalWidget,
 } from '@codepet/pal-widget'
 
 const palClient = createPalHttpClient({
@@ -42,44 +48,55 @@ const palClient = createPalHttpClient({
   getAccessToken: mintLearnerScopedToken,
 })
 
-<PalProvider
-  client={palClient}
-  scopeKey={learnerSessionGeneration}
-  theme={theme}
->
-  <main><PalAchievements /></main>
-  <aside><PalCompanion /></aside>
-  <div><PalRewardCelebration /></div>
+function PikaPalSurfaces() {
+  const { dismissReward, snapshot } = usePalWidget()
+  const reward = snapshot?.rewards[0]
+
+  return <>
+    <main><PalAchievements /></main>
+    <aside><PalCompanion /></aside>
+    <PikaModalLayer
+      isOpen={Boolean(reward)}
+      onClose={() => reward && void dismissReward(reward.id)}
+      ariaLabel="Reward earned"
+    >
+      <PalRewardCelebration hostManaged />
+    </PikaModalLayer>
+  </>
+}
+
+<PalProvider client={palClient} scopeKey={learnerSessionGeneration} theme={theme}>
+  <PikaPalSurfaces />
 </PalProvider>
 ```
 
 `PalProvider` shares authorization, learner state, refreshes, and error handling. The
 three visible surfaces are separately mountable because their placement and lifecycle
 differ. Pika owns the host containers and supplies a narrow semantic `--pal-*` theme
-bridge; Pal owns their contents and behavior.
+bridge; Pal owns their contents. Pika derives reward-modal visibility from the first
+pending reward and acknowledges that reward through `dismissReward` from every close
+path. Pika's canonical `ModalLayer` owns the portal, dialog semantics, inertness,
+focus, Escape/backdrop policy, and scroll lock; `PalRewardCelebration hostManaged`
+does not compete for those behaviors.
 
 The package does not accept a raw learner ID, Pika user object, assignment data,
 integration secret, or Pika component dependency. See
 [Widget integration](widget-integration.md).
 
+Configure every exact Pika browser origin in Pal's
+`PAL_ALLOWED_WIDGET_ORIGINS`. Pal rejects other browser origins before token
+verification and never uses a wildcard credentialed CORS policy.
+
 ## Pika integration (first integration)
 
-The event types below describe the current prototype contract. The target Pika adapter, normalized signal vocabulary, ownership boundary, duplicate semantics, and cross-project build checklist are documented in [Pika Signal Adapter and Achievement Pipeline](pika-signal-adapter.md).
+The normalized signal vocabulary, ownership boundary, duplicate semantics, and
+cross-project build checklist are documented in
+[Pika Signal Adapter and Achievement Pipeline](pika-signal-adapter.md).
 
-Pika sends these event types:
-- `assignment.completed` — on-time submissions carry `metadata.on_time: true`
-- `daily_checkin.created`
-- `resource.viewed`
-- `calendar.month_end` (via schedule, not Pika API)
-- `calendar.semester_end` (via schedule)
-
-The legacy ingest API still accepts these prototype events. The current widget
-sandbox does not send them: its clearly labeled fixture controls update only the
-fixture client for visual development. The default rule pack handles
-`assignment.completed`, `daily_checkin.created`, and `calendar.month_end`;
-`resource.viewed` and `calendar.semester_end` currently have no default effect.
-
-Streaks are **not** sent by the integration. Pal derives them from `daily_checkin.created`: consecutive calendar days advance the streak, a missed day resets it. An integration cannot report a streak milestone, because an integration that could report one could also invent one.
+Pika sends the six version 1 facts defined by `@pal/contract`: authenticated session,
+classroom join, weekly daily-log configuration, daily-log completion, learning-item
+view, and learning-item completion. Streaks and achievements are never sent by the
+integration; Pal derives them from accepted facts.
 
 ## Adding a new integration
 

@@ -1,11 +1,11 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-07-25
+> Last updated: 2026-08-01
 
 ---
 
-## Endpoints (planned)
+## Endpoints
 
 | Method | Path | Who calls it | Purpose |
 |---|---|---|---|
@@ -13,13 +13,29 @@
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
 | GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
-| GET | `/api/v1/world/:learner_id` | Legacy sandbox | Fetch prototype pet + world state |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
-The read-token and learner-snapshot routes are target pilot work and are not
-implemented yet. The fixture client in `@codepet/pal-widget` exists only for sandbox and
-visual development. It is not evidence that the production read boundary works.
+The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
+implemented. The fixture client in `@codepet/pal-widget` remains available only for
+visual development; production and pipeline-mode clients use these learner routes.
+
+### Read-token request
+
+```text
+POST /api/v1/integration/read-token
+Authorization: Bearer <integration_secret>
+Content-Type: application/json
+
+{ "learner_id": "<pseudonymous_token>" }
+```
+
+The request accepts no other fields. Pal resolves or creates only the integration-scoped
+learner identity and returns a five-minute signed token plus `expires_at`. The response
+uses `Cache-Control: no-store`. Its subject is Pal's internal learner UUID; the external
+pseudonymous token is not placed in the browser token. Tokens are restricted to the Pal
+issuer, `pal-widget` audience, authenticated integration, learner, and the
+`learner:read` / `reward:ack` scopes.
 
 ## Widget read contract
 
@@ -28,6 +44,11 @@ The browser calls learner routes with:
 ```text
 Authorization: Bearer <short-lived learner-scoped read token>
 ```
+
+Cross-origin browser requests are accepted only when their exact HTTPS origin appears
+in `PAL_ALLOWED_WIDGET_ORIGINS` (HTTP is allowed only for localhost development).
+Responses use `Cache-Control: no-store`; preflights allow only `Authorization`,
+`Content-Type`, and the learner route methods.
 
 The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
@@ -52,7 +73,7 @@ versions the **API surface** — auth scheme, which endpoints exist, the error e
 The `schema_version` in the body versions the **payload** for a single event. They move
 independently; see [@pal/contract](../packages/contract/README.md#versioning).
 
-### Version 1 payloads (target)
+### Version 1 payloads
 
 Machine-readable schemas, types, and shared test fixtures live in
 [`packages/contract`](../packages/contract/README.md). That package is the source of
@@ -76,32 +97,11 @@ Authorization: Bearer <integration_secret>
 }
 ```
 
-Ingest does not accept this shape yet — the contract package landed first so that both
-sides can build against it. Wiring it into the route is the follow-up.
-
-### Legacy prototype payloads (current)
-
-Sent without `schema_version`. Still the only shape ingest accepts today.
-
-```
-POST /api/v1/events
-Authorization: Bearer <integration_secret>
-{
-  "idempotency_key": "pika-assignment-abc123",
-  "learner_id": "<pseudonymous_hashed_id>",
-  "event_type": "assignment.completed",
-  "occurred_at": "2026-06-25T10:00:00Z",
-  "metadata": {
-    "on_time": true
-  }
-}
-```
-
 Responses:
 - `401` — missing or invalid integration secret
 - `200 { "status": "processed", "mutations": [...] }` — rule engine ran, mutations applied. `mutations` is the full list the cascade applied, in order; the dev sandbox renders it.
-- `200 { "status": "duplicate" }` — idempotency key already seen, no reprocessing
-- `422` — unknown event type, disallowed metadata field, or a malformed/future-dated `occurred_at` (`future_occurred_at`: dated on a UTC day ahead of the server's, beyond a small clock-skew allowance — the streak engine is forward-only and a future day would freeze the learner's streak)
+- `200 { "status": "duplicate" }` — the idempotency key was already seen, or a second delivery identity asserted the same semantic fact (for example, another key for the same learner/activity date); no state is applied twice
+- `422` — unknown event type, disallowed metadata field, an invalid revision to a closed Weekly Rhythm period (`closed_period_revision`), a closed configuration whose `eligible_days` is below the stored completion count (`contradictory_period_configuration`), or a malformed/future-dated `occurred_at` (`future_occurred_at`: dated on a UTC day ahead of the server's, beyond a small clock-skew allowance — the streak engine is forward-only and a future day would freeze the learner's streak)
 
 `event_type` must be on the integration's allow-list. Derived events (`XP_CHANGED`, `LEVEL_UP`, `STREAK_MILESTONE` — see [rule-engine.md](rule-engine.md)) are produced inside the engine cascade and are **never ingestable**: an integration that could POST `LEVEL_UP` could grant its own students levels. They are rejected with `422 unknown_event_type`.
 

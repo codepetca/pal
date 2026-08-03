@@ -13,6 +13,11 @@ routes live elsewhere and import from here.
 | `integrations` | registered external system, its secret hash, event allow-list, rule pack | integration |
 | `learners` | internal ID ↔ the integration's pseudonymous learner ID | learner |
 | `events` | immutable record of every received signal | event |
+| `learner_facts` | semantically unique normalized behavior derived from events | learner + fact type + semantic identity |
+| `achievement_periods` | stable roadmap order for opaque academic periods | learner + period |
+| `weekly_rhythm_configs` | latest accepted weekly opportunity configuration | learner + period |
+| `achievement_instances` | progress or an outcome for a scoped achievement | learner + achievement + scope |
+| `reward_notices` | one-time presentation notice attached to an award | awarded achievement |
 | `economy` | XP, level, streak | learner |
 | `pet_state` | mood, mood expiry, animation | learner |
 | `world_state` | stage, unlocked objects | learner |
@@ -28,13 +33,22 @@ Two constraints carry more weight than the rest:
   idempotency mechanism. Ingest inserts with `ON CONFLICT DO NOTHING` and treats
   "no row returned" as a duplicate, rather than doing a read-then-write check
   that two concurrent retries could both pass.
+- `UNIQUE (learner_id, event_type, semantic_key)` on `learner_facts` — a
+  producer cannot count the same activity date, classroom, item, or weekly
+  configuration revision twice by changing its transport idempotency key.
+- `UNIQUE (learner_id, achievement_key, scope_key)` on
+  `achievement_instances` — lifetime, per-classroom, per-item, and recurring
+  weekly awards share the same exactly-once rule.
+- `UNIQUE (achievement_instance_id)` on `reward_notices` — retrying an award
+  cannot queue a second celebration.
 
 ## Privacy
 
 No column holds a name, email, raw student ID, grade, score, ranking, or student
-writing. The only free-form field is `events.metadata`, gated at the API
-boundary by a per-event-type allow-list. Deleting a learner cascades to their
-events and all three state rows, so consent withdrawal is a single `DELETE`.
+writing. Free-form event/fact metadata is gated at the API boundary by a strict
+per-event-type allow-list. Period, item, and classroom keys are opaque
+integration-scoped tokens. Deleting a learner cascades to facts, achievements,
+rewards, events, and state, so consent withdrawal remains a single `DELETE`.
 
 ## Local setup
 
