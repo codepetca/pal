@@ -54,6 +54,9 @@ jobs:
       - name: Migrate from zero
         run: pnpm --filter @pal/db migrate
 
+      - name: Database ownership constraint tests
+        run: pnpm --filter @pal/db test
+
       # drizzle-kit check only validates the drizzle/ folder against itself —
       # stale snapshot format, malformed snapshots, two migrations claiming the
       # same parent (a bad merge). It never reads schema.ts.
