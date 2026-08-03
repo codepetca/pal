@@ -427,16 +427,13 @@
 .companionOverlay {
   --cat-h: 10rem;
   --cat-w: calc(var(--cat-h) * 1.4);
-  /* grass.png is 2502x2321 — width is derived from height at that exact
-     ratio so this box's aspect ratio matches the image's own exactly.
-     Mismatched aspect is what caused the visible "transparent rectangle":
-     with `background-size: contain` (see .grassPatch), a box wider than
-     the image's own shape leaves bare space on the sides instead of the
-     image filling it. */
-  --grass-h: calc(var(--cat-h) * 1.35);
-  --grass-w: calc(var(--grass-h) * 2502 / 2321);
+  /* grass.png is tightly cropped to its 2502x1035 visible alpha bounds. */
+  --grass-h: calc(var(--cat-h) * 0.6);
+  --grass-w: calc(var(--grass-h) * 2502 / 1035);
   --cat-top: calc(var(--cat-h) * 0.5);
-  --grass-top: calc(var(--cat-top) + var(--cat-h) - (var(--grass-h) / 2));
+  --cat-bottom: calc(var(--cat-top) + var(--cat-h));
+  /* Align the cat's bottom with the grass artwork's vertical midpoint. */
+  --grass-top: calc(var(--cat-bottom) - (var(--grass-h) / 2));
 
   position: absolute;
   z-index: 40;

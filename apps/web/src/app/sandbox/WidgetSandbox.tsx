@@ -58,8 +58,7 @@ type HostView =
 
 /**
  * The companion renders every mood/blink frame stacked on top of each
- * other and toggles between them with opacity (see PetSprite in
- * packages/widget/src/companion.tsx) rather than swapping the `src`, so
+ * other and toggles between them with opacity rather than swapping the `src`, so
  * the one the pointer actually landed on is whichever currently has
  * opacity 1.
  */
