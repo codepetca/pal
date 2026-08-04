@@ -181,9 +181,11 @@ test("sandbox navigation keeps accessible names when labels are visually hidden"
   assert.match(sandboxSource, /aria-label=\{label\}/);
 });
 
-test("sandbox keeps the companion in view when its size or viewport changes", () => {
-  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToViewport\)/);
-  assert.match(sandboxSource, /new ResizeObserver\(clampToViewport\)/);
+test("sandbox keeps the companion in its positioned container after size changes", () => {
+  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToContainer\)/);
+  assert.match(sandboxSource, /new ResizeObserver\(clampToContainer\)/);
+  assert.match(sandboxSource, /rect\.left - containerRect\.left/);
+  assert.match(sandboxSource, /e\.clientY - offset\.dy - containerRect\.top/);
   assert.match(sandboxSource, /\[widgetScale, widgetVisible\]/);
 });
 

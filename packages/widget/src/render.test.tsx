@@ -78,6 +78,7 @@ test("companion owns the complete portable cat-on-grass surface", () => {
 
   assert.match(html, /class="pal-companion-stage"/);
   assert.match(html, /class="pal-companion-grass"/);
+  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 3);
   assert.match(html, /https:\/\/pal\.example\/assets\/pets\/grass\.png/);
   assert.match(html, /--pal-companion-cat-height:12rem/);
   assert.doesNotMatch(html, /data-pal-variant=/);

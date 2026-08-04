@@ -288,6 +288,7 @@ function PetSprite({
         <img
           key={frame.src}
           className="pal-companion-sprite"
+          crossOrigin="anonymous"
           src={frame.src}
           alt=""
           width={frame.w}
@@ -371,6 +372,7 @@ function PalCompanion(
           <>
             <img
               className="pal-companion-grass"
+              crossOrigin="anonymous"
               src={siblingAssetUrl(companion.assetUrl, "grass.png")}
               alt=""
               width="2502"

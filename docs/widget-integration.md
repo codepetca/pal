@@ -82,6 +82,9 @@ validates the destination before requesting or attaching a learner token.
 Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
+Companion sprite and grass responses must also allow anonymous cross-origin image
+requests so Pal can preserve its transparent-pixel interaction boundary when the
+widget and artwork are served from different origins.
 
 Standalone hosts may set `modal` and use `onOpenChange` to coordinate their own
 backdrop and inert application region; Pal then contains Tab focus, handles Escape,

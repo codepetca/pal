@@ -523,14 +523,18 @@ function SandboxExperience({
     const overlay = companionOverlayRef.current;
     if (!overlay) return;
 
-    const clampToViewport = () => {
+    const clampToContainer = () => {
       const rect = overlay.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
 
-      const maxX = Math.max(window.innerWidth - rect.width, 0);
-      const maxY = Math.max(window.innerHeight - rect.height, 0);
-      const x = Math.min(Math.max(rect.left, 0), maxX);
-      const y = Math.min(Math.max(rect.top, 0), maxY);
+      const container = overlay.offsetParent;
+      const containerRect = container instanceof HTMLElement
+        ? container.getBoundingClientRect()
+        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const maxX = Math.max(containerRect.width - rect.width, 0);
+      const maxY = Math.max(containerRect.height - rect.height, 0);
+      const x = Math.min(Math.max(rect.left - containerRect.left, 0), maxX);
+      const y = Math.min(Math.max(rect.top - containerRect.top, 0), maxY);
 
       overlay.style.left = `${x}px`;
       overlay.style.top = `${y}px`;
@@ -538,13 +542,13 @@ function SandboxExperience({
       overlay.style.bottom = "auto";
     };
 
-    clampToViewport();
-    window.addEventListener("resize", clampToViewport);
-    const resizeObserver = new ResizeObserver(clampToViewport);
+    clampToContainer();
+    window.addEventListener("resize", clampToContainer);
+    const resizeObserver = new ResizeObserver(clampToContainer);
     resizeObserver.observe(overlay);
 
     return () => {
-      window.removeEventListener("resize", clampToViewport);
+      window.removeEventListener("resize", clampToContainer);
       resizeObserver.disconnect();
     };
   }, [widgetScale, widgetVisible]);
@@ -555,6 +559,10 @@ function SandboxExperience({
     const el = companionOverlayRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    const container = el.offsetParent;
+    const containerRect = container instanceof HTMLElement
+      ? container.getBoundingClientRect()
+      : { left: 0, top: 0 };
     companionDragOffset.current = {
       dx: e.clientX - rect.left,
       dy: e.clientY - rect.top,
@@ -567,8 +575,8 @@ function SandboxExperience({
     // drag's left/top), so this is a no-op visually. It guarantees the
     // sprite cannot move on press itself, only from here on with the
     // pointer, regardless of how that position was arrived at.
-    el.style.left = `${rect.left}px`;
-    el.style.top = `${rect.top}px`;
+    el.style.left = `${rect.left - containerRect.left}px`;
+    el.style.top = `${rect.top - containerRect.top}px`;
     el.style.right = "auto";
     el.style.bottom = "auto";
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -579,12 +587,22 @@ function SandboxExperience({
     const el = companionOverlayRef.current;
     const offset = companionDragOffset.current;
     if (!el || !offset) return;
-    // Clamped to the viewport so the whole widget — cat and grass together
-    // — always stays fully on screen, never partly cut off past an edge.
-    const maxX = Math.max(window.innerWidth - offset.width, 0);
-    const maxY = Math.max(window.innerHeight - offset.height, 0);
-    const x = Math.min(Math.max(e.clientX - offset.dx, 0), maxX);
-    const y = Math.min(Math.max(e.clientY - offset.dy, 0), maxY);
+    // Convert viewport pointer coordinates to the positioned classroom shell's
+    // coordinate space before clamping against its visible bounds.
+    const container = el.offsetParent;
+    const containerRect = container instanceof HTMLElement
+      ? container.getBoundingClientRect()
+      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const maxX = Math.max(containerRect.width - offset.width, 0);
+    const maxY = Math.max(containerRect.height - offset.height, 0);
+    const x = Math.min(
+      Math.max(e.clientX - offset.dx - containerRect.left, 0),
+      maxX,
+    );
+    const y = Math.min(
+      Math.max(e.clientY - offset.dy - containerRect.top, 0),
+      maxY,
+    );
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.right = "auto";
