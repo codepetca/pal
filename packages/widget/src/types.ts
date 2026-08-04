@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 export type PalTheme = "light" | "dark";
 export type PalDensity = "compact" | "comfortable";
@@ -102,8 +102,10 @@ export interface PalProviderProps {
   onError?: (error: Error) => void;
 }
 
-export interface PalCompanionProps {
-  variant?: "responsive" | "card" | "compact";
+export interface PalCompanionProps
+  extends Omit<ComponentPropsWithoutRef<"aside">, "children"> {
+  /** Scale for the pet surface. Values are clamped to 0.4–1.2. */
+  scale?: number;
 }
 
 export type PalFixtureAction =

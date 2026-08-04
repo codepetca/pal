@@ -48,6 +48,12 @@ The public client returns a versioned learner snapshot. The widget renders store
 Pal state; it never interprets Pika events or calculates achievement progress in the
 browser.
 
+`PalCompanion` is the complete cat-on-grass visual surface.
+Pal owns its artwork, animation, internal sizing, and transparent-pixel hit testing.
+The host may set `scale` and attach standard pointer handlers, but owns the containing
+layer, viewport placement, drag persistence, and collision rules. The sandbox follows
+this same boundary; it does not reconstruct or restyle the companion's internals.
+
 The package may receive:
 
 - a Pal client or the inputs needed to create one;
@@ -76,6 +82,9 @@ validates the destination before requesting or attaching a learner token.
 Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
+Companion sprite and grass responses must also allow anonymous cross-origin image
+requests so Pal can preserve its transparent-pixel interaction boundary when the
+widget and artwork are served from different origins.
 
 Standalone hosts may set `modal` and use `onOpenChange` to coordinate their own
 backdrop and inert application region; Pal then contains Tab focus, handles Escape,
@@ -112,6 +121,7 @@ Pika owns:
 Pal owns:
 
 - roadmap, achievement, badge, pet, and reward rendering;
+- the companion's cat-and-grass composition and internal hit boundary;
 - component accessibility inside each Pal surface;
 - learner snapshot types and refresh semantics;
 - asset resolution; and

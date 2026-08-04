@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  forwardRef,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { usePalWidget } from "./provider";
 import type { PalCompanionMood, PalCompanionProps, PalMotion } from "./types";
@@ -75,6 +82,10 @@ type SpriteSet = {
   byMood: Partial<Record<PalCompanionMood, Frame[]>>;
 };
 
+function siblingAssetUrl(restUrl: string, file: string): string {
+  return `${restUrl.slice(0, restUrl.lastIndexOf("/") + 1)}${file}`;
+}
+
 /**
  * Builds the frame table from the resting pose the snapshot points at.
  *
@@ -86,9 +97,8 @@ type SpriteSet = {
  * 404s on them, and the pet holds its resting pose.
  */
 function buildSprites(restUrl: string): SpriteSet {
-  const base = restUrl.slice(0, restUrl.lastIndexOf("/") + 1);
   const toFrame = (spec: FrameSpec): Frame => ({
-    src: `${base}${spec.file}.png`,
+    src: siblingAssetUrl(restUrl, `${spec.file}.png`),
     w: spec.w,
     h: spec.h,
     dx: spec.dx,
@@ -106,6 +116,49 @@ function buildSprites(restUrl: string): SpriteSet {
   }
 
   return { rest, blink, byMood };
+}
+
+function findVisibleSpriteImg(root: HTMLElement): HTMLImageElement | null {
+  const frames = root.querySelectorAll<HTMLImageElement>("img.pal-companion-sprite");
+  for (const frame of frames) {
+    if (window.getComputedStyle(frame).opacity === "1") return frame;
+  }
+  return null;
+}
+
+/**
+ * Keeps transparent cat pixels from becoming a surprising host drag target.
+ * The pet owns this knowledge so hosts never query Pal's private sprite DOM.
+ * Grass and layout space remain valid interaction targets.
+ */
+function isTransparentAt(
+  img: HTMLImageElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return false;
+
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+
+  const relX = (clientX - rect.left) / rect.width;
+  const relY = (clientY - rect.top) / rect.height;
+  if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
+
+  const x = Math.min(img.naturalWidth - 1, Math.max(0, Math.floor(relX * img.naturalWidth)));
+  const y = Math.min(img.naturalHeight - 1, Math.max(0, Math.floor(relY * img.naturalHeight)));
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+
+  try {
+    context.drawImage(img, 0, 0);
+    return context.getImageData(x, y, 1, 1).data[3] === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -235,6 +288,7 @@ function PetSprite({
         <img
           key={frame.src}
           className="pal-companion-sprite"
+          crossOrigin="anonymous"
           src={frame.src}
           alt=""
           width={frame.w}
@@ -268,46 +322,77 @@ function PetSprite({
   );
 }
 
-export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
+export const PalCompanion = forwardRef<HTMLElement, PalCompanionProps>(
+function PalCompanion(
+  {
+    scale = 1,
+    className,
+    style,
+    onPointerDown,
+    ...hostProps
+  },
+  ref,
+) {
   const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
   if (state === "error" || !snapshot) return null;
 
   const companion = snapshot.companion;
+  const companionScale = Number.isFinite(scale)
+    ? Math.min(1.2, Math.max(0.4, scale))
+    : 1;
+  const companionStyle = {
+    ...style,
+    "--pal-companion-cat-height": `${companionScale * 10}rem`,
+  } as CSSProperties;
+  const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    const activeFrame = findVisibleSpriteImg(event.currentTarget);
+    if (activeFrame && isTransparentAt(activeFrame, event.clientX, event.clientY)) {
+      return;
+    }
+    onPointerDown?.(event);
+  };
+  const label = `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`;
 
   return (
     <aside
-      className="pal-companion"
+      {...hostProps}
+      ref={ref}
+      className={["pal-companion", className].filter(Boolean).join(" ")}
+      style={companionStyle}
+      onPointerDown={handlePointerDown}
       data-pal-density={density}
       data-pal-motion={motion}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       data-pal-mood={companion.mood}
-      data-pal-variant={variant}
-      aria-label={`${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`}
+      aria-label={label}
     >
-      <div className="pal-companion-art" aria-hidden="true">
+      <div className="pal-companion-stage" aria-hidden="true">
         {companion.assetUrl ? (
-          <PetSprite
-            key={companion.assetUrl}
-            mood={companion.mood}
-            motion={motion}
-            restUrl={companion.assetUrl}
-          />
+          <>
+            <img
+              className="pal-companion-grass"
+              crossOrigin="anonymous"
+              src={siblingAssetUrl(companion.assetUrl, "grass.png")}
+              alt=""
+              width="2502"
+              height="1035"
+            />
+            <div className="pal-companion-art">
+              <PetSprite
+                key={companion.assetUrl}
+                mood={companion.mood}
+                motion={motion}
+                restUrl={companion.assetUrl}
+              />
+            </div>
+          </>
         ) : (
-          <span>🐾</span>
+          <div className="pal-companion-art">
+            <span>🐾</span>
+          </div>
         )}
-      </div>
-      <div className="pal-companion-copy">
-        <div className="pal-companion-title">
-          <strong>{companion.name}</strong>
-          <span>{companion.moodLabel}</span>
-        </div>
-        <p>{companion.message}</p>
-        <div className="pal-companion-stats" aria-label="Companion progress">
-          <span>Level {companion.level}</span>
-          <span>{companion.streak} day rhythm</span>
-        </div>
       </div>
     </aside>
   );
-}
+});

@@ -34,7 +34,6 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /2 of 4 eligible days/);
   assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
-  assert.match(html, /data-pal-variant="responsive"/);
   assert.match(html, /Level 2; 3 day rhythm/);
   assert.match(html, /A treat for Pip!/);
   assert.match(html, />Continue</);
@@ -60,6 +59,29 @@ test("roadmap renders all fictional semester weeks", () => {
   assert.match(html, /Week 1/);
   assert.match(html, /Week 16/);
   assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
+});
+
+test("companion owns the complete portable cat-on-grass surface", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.companion.assetUrl = "https://pal.example/assets/pets/default.png";
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+      motion="reduced"
+    >
+      <PalCompanion scale={1.2} />
+    </PalProvider>,
+  );
+
+  assert.match(html, /class="pal-companion-stage"/);
+  assert.match(html, /class="pal-companion-grass"/);
+  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 3);
+  assert.match(html, /https:\/\/pal\.example\/assets\/pets\/grass\.png/);
+  assert.match(html, /--pal-companion-cat-height:12rem/);
+  assert.doesNotMatch(html, /data-pal-variant=/);
 });
 
 test("host-managed rewards leave dialog and focus ownership to the host", () => {

@@ -54,7 +54,7 @@ function PikaPalSurfaces() {
 
   return <>
     <main><PalAchievements /></main>
-    <aside><PalCompanion /></aside>
+    <div className="pika-pal-layer"><PalCompanion /></div>
     <PikaModalLayer
       isOpen={Boolean(reward)}
       onClose={() => reward && void dismissReward(reward.id)}

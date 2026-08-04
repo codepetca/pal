@@ -143,19 +143,15 @@ test("sandbox reads every Pal surface from the persisted pipeline", () => {
   assert.doesNotMatch(sandboxSource, /Fixture preview/);
 });
 
-test("sandbox never leaves a grass-only widget when the pipeline is unavailable", () => {
+test("sandbox mounts the public companion without rebuilding its internals", () => {
   assert.match(
     sandboxSource,
-    /function CompanionOverlay[\s\S]*const \{ snapshot, state \} = usePalWidget\(\)/,
+    /<PalCompanion\s+scale=\{scale\}/,
   );
-  assert.match(
-    sandboxSource,
-    /if \(!visible \|\| state !== "ready" \|\| !snapshot\) return null/,
-  );
-  assert.match(
-    sandboxSource,
-    /<CompanionOverlay[\s\S]*visible=\{widgetVisible\}/,
-  );
+  assert.doesNotMatch(sandboxSource, /<PalCompanion[\s\S]*variant=/);
+  assert.doesNotMatch(sandboxSource, /pal-companion-sprite|querySelectorAll/);
+  assert.doesNotMatch(sandboxSource, /grassPatch|companionCatBox|companionHitArea/);
+  assert.doesNotMatch(sandboxStyles, /grass\.png|grassPatch|companionCatBox/);
   assert.match(
     sandboxSource,
     /if \(sandboxError\) setControlsCollapsed\(false\)/,
@@ -183,6 +179,21 @@ test("sandbox reset rotates provider identity and controls start collapsed", () 
 
 test("sandbox navigation keeps accessible names when labels are visually hidden", () => {
   assert.match(sandboxSource, /aria-label=\{label\}/);
+});
+
+test("sandbox keeps the companion in its positioned container after size changes", () => {
+  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToContainer\)/);
+  assert.match(sandboxSource, /new ResizeObserver\(clampToContainer\)/);
+  assert.match(sandboxSource, /rect\.left - containerRect\.left/);
+  assert.match(sandboxSource, /e\.clientY - offset\.dy - containerRect\.top/);
+  assert.match(sandboxSource, /\[widgetScale, widgetVisible\]/);
+});
+
+test("sandbox settings stack in narrow viewports", () => {
+  assert.match(
+    sandboxStyles,
+    /@media \(max-width: 720px\) \{[\s\S]*?\.settingsGrid \{[\s\S]*?grid-template-columns: 1fr/,
+  );
 });
 
 test("sandbox modal host makes application siblings inert and intercepts its backdrop", () => {
