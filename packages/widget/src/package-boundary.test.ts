@@ -181,6 +181,19 @@ test("sandbox navigation keeps accessible names when labels are visually hidden"
   assert.match(sandboxSource, /aria-label=\{label\}/);
 });
 
+test("sandbox keeps the companion in view when its size or viewport changes", () => {
+  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToViewport\)/);
+  assert.match(sandboxSource, /new ResizeObserver\(clampToViewport\)/);
+  assert.match(sandboxSource, /\[widgetScale, widgetVisible\]/);
+});
+
+test("sandbox settings stack in narrow viewports", () => {
+  assert.match(
+    sandboxStyles,
+    /@media \(max-width: 720px\) \{[\s\S]*?\.settingsGrid \{[\s\S]*?grid-template-columns: 1fr/,
+  );
+});
+
 test("sandbox modal host makes application siblings inert and intercepts its backdrop", () => {
   assert.match(sandboxSource, /inert=\{celebrationOpen \|\| undefined\}/);
   assert.match(sandboxSource, /<PalRewardCelebration[\s\S]*modal/);

@@ -867,6 +867,10 @@
 }
 
 @media (max-width: 720px) {
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+
   .appHeader {
     padding-inline: 0.7rem;
   }

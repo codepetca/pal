@@ -519,6 +519,36 @@ function SandboxExperience({
     height: number;
   } | null>(null);
 
+  useEffect(() => {
+    const overlay = companionOverlayRef.current;
+    if (!overlay) return;
+
+    const clampToViewport = () => {
+      const rect = overlay.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const maxX = Math.max(window.innerWidth - rect.width, 0);
+      const maxY = Math.max(window.innerHeight - rect.height, 0);
+      const x = Math.min(Math.max(rect.left, 0), maxX);
+      const y = Math.min(Math.max(rect.top, 0), maxY);
+
+      overlay.style.left = `${x}px`;
+      overlay.style.top = `${y}px`;
+      overlay.style.right = "auto";
+      overlay.style.bottom = "auto";
+    };
+
+    clampToViewport();
+    window.addEventListener("resize", clampToViewport);
+    const resizeObserver = new ResizeObserver(clampToViewport);
+    resizeObserver.observe(overlay);
+
+    return () => {
+      window.removeEventListener("resize", clampToViewport);
+      resizeObserver.disconnect();
+    };
+  }, [widgetScale, widgetVisible]);
+
   // Pal owns the surface's internal alpha hit-test. Pointer capture and the
   // resulting viewport placement remain host responsibilities.
   const handleCompanionPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
