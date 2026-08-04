@@ -381,6 +381,11 @@ function SandboxExperience({
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (sandboxError) setControlsCollapsed(false);
+  }, [sandboxError]);
+
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
 
