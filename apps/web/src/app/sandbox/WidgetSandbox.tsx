@@ -239,28 +239,41 @@ function SandboxControls({
     }
   }
 
+  const openButton = collapsed ? (
+    <button
+      className={styles.controlOpen}
+      type="button"
+      aria-expanded={false}
+      onClick={() => onCollapsedChange(false)}
+    >
+      <Lightning aria-hidden="true" size={17} weight="fill" />
+      <span>Open sandbox controls</span>
+    </button>
+  ) : null;
+
+  const closeButton = !collapsed ? (
+    <button
+      className={styles.controlClose}
+      type="button"
+      aria-label="Close sandbox controls"
+      onClick={() => onCollapsedChange(true)}
+    >
+      <X aria-hidden="true" size={18} weight="bold" />
+    </button>
+  ) : null;
+
   return (
     <aside
       className={styles.controls}
       data-collapsed={collapsed ? "true" : "false"}
       aria-label="Fictional semester controls"
     >
-      <button
-        className={styles.controlToggle}
-        type="button"
-        aria-expanded={!collapsed}
-        onClick={() => onCollapsedChange(!collapsed)}
-      >
-        {collapsed ? (
-          <Lightning aria-hidden="true" size={17} weight="fill" />
-        ) : (
-          <X aria-hidden="true" size={16} weight="bold" />
-        )}
-        <span>{collapsed ? "Open sandbox controls" : "Close"}</span>
-      </button>
-
-      {!collapsed ? (
+      {collapsed ? (
+        openButton
+      ) : (
         <div className={styles.controlPanel}>
+          {closeButton}
+
           <header>
             <div>
               <span className={styles.fixtureLabel}>Real pipeline</span>
@@ -327,7 +340,7 @@ function SandboxControls({
             Reset fictional learner
           </button>
         </div>
-      ) : null}
+      )}
     </aside>
   );
 }
@@ -386,7 +399,11 @@ function SandboxExperience({
       // current clock, so the pet returns to neutral without another event.
       refreshIntervalMs={15_000}
     >
-      <div className={styles.sandbox} data-theme={theme}>
+      <div
+        className={styles.sandbox}
+        data-theme={theme}
+        data-controls-collapsed={controlsCollapsed ? "true" : "false"}
+      >
         <div
           className={styles.applicationLayer}
           inert={celebrationOpen || undefined}
@@ -503,31 +520,31 @@ function SandboxExperience({
           </div>
 
           </div>
-
-          <SandboxRefreshBridge>
-            {(refresh) => (
-              <SandboxControls
-                client={client}
-                collapsed={controlsCollapsed}
-                onCollapsedChange={setControlsCollapsed}
-                onRefresh={refresh}
-                onReset={() => {
-                  setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
-                  setSandboxError(null);
-                  onReset();
-                }}
-                simulatedDate={simulatedDate}
-                onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
-                onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
-                canAddDay={canAddDay}
-                canAddWeek={canAddWeek}
-                learnerId={learnerId}
-                sandboxError={sandboxError}
-                currentSemesterWeek={currentSemesterWeek}
-              />
-            )}
-          </SandboxRefreshBridge>
         </div>
+
+        <SandboxRefreshBridge>
+          {(refresh) => (
+            <SandboxControls
+              client={client}
+              collapsed={controlsCollapsed}
+              onCollapsedChange={setControlsCollapsed}
+              onRefresh={refresh}
+              onReset={() => {
+                setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
+                setSandboxError(null);
+                onReset();
+              }}
+              simulatedDate={simulatedDate}
+              onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
+              onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
+              canAddDay={canAddDay}
+              canAddWeek={canAddWeek}
+              learnerId={learnerId}
+              sandboxError={sandboxError}
+              currentSemesterWeek={currentSemesterWeek}
+            />
+          )}
+        </SandboxRefreshBridge>
 
         <div
           className={styles.celebrationLayer}

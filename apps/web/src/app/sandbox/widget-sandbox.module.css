@@ -59,12 +59,20 @@
 
   width: 100%;
   height: 100dvh;
+  display: grid;
+  --controls-width: 0px;
+  grid-template-columns: minmax(0, 1fr) var(--controls-width);
   overflow: hidden;
   color: var(--host-text);
   background: var(--host-page);
+  transition: grid-template-columns 220ms ease-out;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
+}
+
+.sandbox[data-controls-collapsed="false"] {
+  --controls-width: min(21rem, 100vw);
 }
 
 .sandbox[data-theme="dark"] {
@@ -90,6 +98,7 @@
 }
 
 .applicationLayer {
+  min-width: 0;
   height: 100%;
 }
 
@@ -449,55 +458,88 @@
 }
 
 .controls {
-  position: fixed;
+  position: relative;
   z-index: 50;
-  bottom: 1rem;
-  left: 16rem;
-  width: min(21rem, calc(100vw - 17rem));
+  min-width: 0;
+  pointer-events: none;
 }
 
-.controlToggle {
+.controlOpen {
+  position: absolute;
+  top: 56rem;
+  right: 6.75rem;
+  pointer-events: auto;
   display: inline-flex;
-  min-height: 44px;
+  min-height: 40px;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0 0.8rem;
-  border: 1px solid rgb(255 255 255 / 0.18);
+  gap: 0.5rem;
+  padding: 0 1.1rem 0 0.85rem;
+  border: 1px solid rgb(147 197 253 / 0.35);
   border-radius: 999px;
-  color: #f8fafc;
-  background: rgb(8 15 28 / 0.94);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.28);
+  color: #f0f4ff;
+  background: linear-gradient(135deg, rgb(30 58 138 / 0.92), rgb(15 23 42 / 0.96));
+  box-shadow: 0 4px 20px rgb(37 99 235 / 0.25), 0 1px 4px rgb(0 0 0 / 0.3);
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 750;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
   cursor: pointer;
+  transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+  backdrop-filter: blur(8px);
 }
 
-.controls[data-collapsed="false"] .controlToggle {
-  position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  z-index: 1;
-  min-height: 36px;
-  padding: 0 0.65rem;
-  border-radius: 0.45rem;
-  box-shadow: none;
+.controlOpen:hover {
+  border-color: rgb(147 197 253 / 0.6);
+  box-shadow: 0 6px 24px rgb(37 99 235 / 0.35), 0 1px 4px rgb(0 0 0 / 0.3);
+  transform: translateY(-1px);
+}
+
+.controlOpen:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 12px rgb(37 99 235 / 0.2);
+}
+
+.controlClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0.25rem;
+  border: 0;
+  border-radius: 0.35rem;
+  color: #94a3b8;
+  background: transparent;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.controlClose:hover {
+  color: #f8fafc;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.controlClose:active {
+  background: rgb(255 255 255 / 0.1);
 }
 
 .controlPanel {
-  max-height: min(40rem, calc(100dvh - 6rem));
+  height: 100%;
   overflow-y: auto;
   padding: 1rem;
-  border: 1px solid rgb(255 255 255 / 0.15);
-  border-radius: 0.65rem;
+  border: 0;
+  border-left: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0;
   color: #f8fafc;
   background: rgb(8 15 28 / 0.97);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+  box-shadow: -12px 0 32px rgb(0 0 0 / 0.35);
   backdrop-filter: blur(12px);
+  pointer-events: auto;
 }
 
 .controlPanel header {
-  padding-right: 4.4rem;
+  padding-right: 0;
 }
 
 .controlPanel h2 {
@@ -654,11 +696,6 @@
   .classroomShell[data-sidebar-collapsed="true"] {
     grid-template-columns: 3rem minmax(0, 1fr);
   }
-
-  .controls {
-    left: 13rem;
-    width: min(21rem, calc(100vw - 14rem));
-  }
 }
 
 @media (max-width: 720px) {
@@ -695,14 +732,8 @@
     display: none !important;
   }
 
-  .controls {
-    bottom: 0.65rem;
-    left: 3.65rem;
-    width: min(20rem, calc(100vw - 9.5rem));
-  }
-
-  .controls[data-collapsed="true"] {
-    width: max-content;
+  .sandbox[data-controls-collapsed="false"] {
+    --controls-width: min(20rem, 100vw);
   }
 
   .companionOverlay {
@@ -716,6 +747,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sandbox,
   .sandbox *,
   .sandbox *::before,
   .sandbox *::after {
