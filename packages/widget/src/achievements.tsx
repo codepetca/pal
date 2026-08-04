@@ -84,7 +84,7 @@ export function PalAchievements() {
                   <h3>{week.label}</h3>
                   <p>{week.summary}</p>
                 </div>
-                <span>{week.dateLabel}</span>
+                <span className="pal-week-date">{week.dateLabel}</span>
               </header>
 
               {week.status !== "future" ? (
@@ -117,7 +117,9 @@ export function PalAchievements() {
                               )}
                             </span>
                             <span className="pal-node-copy">
-                              <strong>{achievement.title}</strong>
+                              <span role="heading" aria-level={4}>
+                                {achievement.title}
+                              </span>
                               <span className="pal-status">
                                 <span aria-hidden="true">
                                   {STATUS_ICONS[achievement.status]}

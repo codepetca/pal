@@ -89,6 +89,26 @@ test("companion owns the complete portable cat-on-grass surface", () => {
   assert.doesNotMatch(html, /data-pal-variant=/);
 });
 
+test("narrow roadmap preserves date labels and achievement heading navigation", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.roadmap.weeks[0]!.dateLabel = "Sep 8–12";
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+      viewport="narrow"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /data-pal-viewport="narrow"/);
+  assert.match(html, /class="pal-week-date">Sep 8–12/);
+  assert.match(html, /role="heading" aria-level="4">Weekly Rhythm/);
+});
+
 test("host-managed rewards leave dialog and focus ownership to the host", () => {
   const client = createFixturePalClient();
   client.dispatch("reward-earned");

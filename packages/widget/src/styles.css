@@ -435,8 +435,9 @@
   padding-right: 1.5rem;
 }
 
-.pal-node-copy > strong {
+.pal-node-copy > [role="heading"] {
   font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .pal-achievement-copy {
@@ -811,11 +812,19 @@
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  align-items: center;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-week-header > span {
-  display: none;
+.pal-surface[data-pal-viewport="narrow"] .pal-week-header > div:nth-child(2),
+.pal-surface[data-pal-viewport="narrow"] .pal-week-date {
+  grid-column: 2;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-date {
+  margin-left: 0;
+  white-space: normal;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-achievement-card > summary {

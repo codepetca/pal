@@ -70,6 +70,12 @@ test("widget controls and motion meet the accessibility contract", () => {
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
+  const narrowDateRule =
+    styles.match(
+      /data-pal-viewport="narrow"\] \.pal-week-date \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowDateRule, /grid-column: 2/);
+  assert.doesNotMatch(narrowDateRule, /display:\s*none/);
 });
 
 test("companion owns its portable visual composition without placement", () => {
