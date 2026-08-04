@@ -17,6 +17,7 @@ import {
   CaretRight,
   ClipboardText,
   FileText,
+  Gear,
   Lightning,
   Megaphone,
   Moon,
@@ -26,7 +27,16 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createSandboxPalClient,
@@ -51,7 +61,61 @@ type HostView =
   | "tests"
   | "calendar"
   | "syllabus"
-  | "announcements";
+  | "announcements"
+  | "settings";
+
+/**
+ * The companion renders every mood/blink frame stacked on top of each
+ * other and toggles between them with opacity rather than swapping the `src`, so
+ * the one the pointer actually landed on is whichever currently has
+ * opacity 1.
+ */
+function findVisibleSpriteImg(root: HTMLElement): HTMLImageElement | null {
+  const frames = root.querySelectorAll<HTMLImageElement>("img.pal-companion-sprite");
+  for (const frame of frames) {
+    if (window.getComputedStyle(frame).opacity === "1") return frame;
+  }
+  return null;
+}
+
+/**
+ * Alpha hit-test at a viewport point against the pixels of `img` as it is
+ * actually laid out on screen (getBoundingClientRect already reflects the
+ * sprite's transform/centring from companion.tsx, so no need to redo that
+ * math here). Fails open — returns false (i.e. "treat as opaque, allow the
+ * drag") on anything that stops a real read: not loaded yet, zero-size
+ * box, a point outside this image's own box entirely (the point landed on
+ * the grass or the padding around the cat, not on the cat image at all —
+ * nothing here to call transparent), or a canvas the browser refuses to
+ * read back (would only happen if the asset were served cross-origin,
+ * which it isn't here).
+ */
+function isTransparentAt(img: HTMLImageElement, clientX: number, clientY: number): boolean {
+  if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return false;
+
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+
+  const relX = (clientX - rect.left) / rect.width;
+  const relY = (clientY - rect.top) / rect.height;
+  if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
+
+  const x = Math.min(img.naturalWidth - 1, Math.max(0, Math.floor(relX * img.naturalWidth)));
+  const y = Math.min(img.naturalHeight - 1, Math.max(0, Math.floor(relY * img.naturalHeight)));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+
+  try {
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(x, y, 1, 1).data[3] === 0;
+  } catch {
+    return false;
+  }
+}
 
 const NAV_ITEMS = [
   { label: "Today", view: "today", icon: NotePencil },
@@ -61,6 +125,7 @@ const NAV_ITEMS = [
   { label: "Syllabus", view: "syllabus", icon: BookOpen },
   { label: "Achievements", view: "achievements", icon: Trophy },
   { label: "Announcements", view: "announcements", icon: Megaphone },
+  { label: "Settings", view: "settings", icon: Gear },
 ] satisfies Array<{
   label: string;
   view: HostView;
@@ -332,6 +397,136 @@ function SandboxControls({
   );
 }
 
+function PalSettings({
+  widgetScale,
+  widgetVisible,
+  onWidgetScaleChange,
+  onWidgetVisibleChange,
+}: {
+  widgetScale: number;
+  widgetVisible: boolean;
+  onWidgetScaleChange: (scale: number) => void;
+  onWidgetVisibleChange: (visible: boolean) => void;
+}) {
+  return (
+    <section className={styles.settingsContent} aria-labelledby="settings-title">
+      <p className={styles.hostEyebrow}>Pika host preview</p>
+      <h1 id="settings-title">Settings</h1>
+
+      <section className={styles.settingsSection} aria-labelledby="pal-settings-title">
+        <header className={styles.settingsSectionHeader}>
+          <h2 id="pal-settings-title">Pal</h2>
+          <p>Widget control</p>
+        </header>
+
+        <div className={styles.settingsGrid}>
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Widget size</h3>
+                <p>Adjust the size of the Pal widget.</p>
+              </div>
+              <output htmlFor="pal-widget-size">{widgetScale.toFixed(1)}×</output>
+            </div>
+            <input
+              id="pal-widget-size"
+              className={styles.sizeSlider}
+              type="range"
+              min="0.4"
+              max="1.2"
+              step="0.1"
+              value={widgetScale}
+              aria-label="Pal widget size"
+              onInput={(event) => onWidgetScaleChange(Number(event.currentTarget.value))}
+            />
+            <div className={styles.sliderBounds} aria-hidden="true">
+              <span>0.4×</span>
+              <span>1.2×</span>
+            </div>
+          </article>
+
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Show widget</h3>
+                <p>Show or hide the Pal widget.</p>
+              </div>
+              <span className={styles.settingStatus}>
+                {widgetVisible ? "On" : "Off"}
+              </span>
+            </div>
+            <label className={styles.switchControl}>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={widgetVisible}
+                aria-label="Show Pal widget"
+                onChange={(event) => onWidgetVisibleChange(event.currentTarget.checked)}
+              />
+              <span className={styles.switchTrack} aria-hidden="true">
+                <span />
+              </span>
+              <span>{widgetVisible ? "Widget visible" : "Widget hidden"}</span>
+            </label>
+          </article>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function CompanionOverlay({
+  visible,
+  scale,
+  dragging,
+  overlayRef,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
+}: {
+  visible: boolean;
+  scale: number;
+  dragging: boolean;
+  overlayRef: RefObject<HTMLDivElement | null>;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerEnd: () => void;
+}) {
+  const { snapshot, state } = usePalWidget();
+
+  // The grass and cat are one visual unit. During initial loading or a
+  // fail-closed preview error, render neither instead of leaving a misleading
+  // grass-only widget behind.
+  if (!visible || state !== "ready" || !snapshot) return null;
+
+  return (
+    <div
+      ref={overlayRef}
+      className={styles.companionOverlay}
+      data-dragging={dragging ? "true" : "false"}
+      style={{ "--widget-cat-h": `${scale * 10}rem` } as CSSProperties}
+    >
+      <div
+        className={styles.companionHitArea}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        // <img> is natively draggable; without this, a mousedown+move
+        // on the sprite starts the browser's own HTML5 image drag
+        // (ghost image, "no drop target" cursor) instead of our
+        // pointer-based drag, and fights it for the gesture.
+        onDragStart={(event) => event.preventDefault()}
+      >
+        <div className={styles.grassPatch} aria-hidden="true" />
+        <div className={styles.companionCatBox}>
+          <PalCompanion variant="compact" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SandboxExperience({
   client,
   theme,
@@ -368,6 +563,91 @@ function SandboxExperience({
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [widgetScale, setWidgetScale] = useState(1);
+  const [widgetVisible, setWidgetVisible] = useState(true);
+
+  useEffect(() => {
+    if (sandboxError) setControlsCollapsed(false);
+  }, [sandboxError]);
+
+  // Host-owned placement (per the widget's boundary: "the host owns
+  // placement, Pal owns everything rendered inside"). Position is written
+  // straight to the DOM node during drag rather than through setState:
+  // this component's subtree is large, and re-rendering it on every
+  // pointermove was what made dragging feel laggy. State only records
+  // whether a drag is in progress, for the grab/grabbing cursor.
+  const companionOverlayRef = useRef<HTMLDivElement>(null);
+  const [companionDragging, setCompanionDragging] = useState(false);
+  // width/height are the overlay's own footprint (cat + grass — see
+  // .companionOverlay in widget-sandbox.module.css, which is sized to
+  // exactly that), captured once at drag start so each move only clamps
+  // against them instead of re-measuring the DOM every pointer event.
+  const companionDragOffset = useRef<{
+    dx: number;
+    dy: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  // Pointerdown/move/up/cancel are bound to .companionHitArea (the cat's
+  // own box, not the grass or the overlay's padding) — see the JSX below.
+  // That alone would still start a drag on the transparent PNG margin
+  // inside that box, so pointerdown also alpha-hit-tests the pixel under
+  // the cursor against whichever sprite frame is currently visible, and
+  // bails without starting a drag if it's transparent. setPointerCapture
+  // on the hit area then keeps every subsequent move targeted at it no
+  // matter how far or how fast the pointer travels, in every direction,
+  // which is what makes the drag itself feel smooth.
+  const handleCompanionPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const activeFrame = findVisibleSpriteImg(e.currentTarget);
+    if (activeFrame && isTransparentAt(activeFrame, e.clientX, e.clientY)) {
+      return;
+    }
+
+    const el = companionOverlayRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    companionDragOffset.current = {
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    // Pin the current on-screen position as explicit left/top before
+    // anything else — rect already IS wherever it's sitting right now
+    // (whether that's the CSS default right/bottom corner or a previous
+    // drag's left/top), so this is a no-op visually. It guarantees the
+    // sprite cannot move on press itself, only from here on with the
+    // pointer, regardless of how that position was arrived at.
+    el.style.left = `${rect.left}px`;
+    el.style.top = `${rect.top}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setCompanionDragging(true);
+  };
+
+  const handleCompanionPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = companionOverlayRef.current;
+    const offset = companionDragOffset.current;
+    if (!el || !offset) return;
+    // Clamped to the viewport so the whole widget — cat and grass together
+    // — always stays fully on screen, never partly cut off past an edge.
+    const maxX = Math.max(window.innerWidth - offset.width, 0);
+    const maxY = Math.max(window.innerHeight - offset.height, 0);
+    const x = Math.min(Math.max(e.clientX - offset.dx, 0), maxX);
+    const y = Math.min(Math.max(e.clientY - offset.dy, 0), maxY);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  };
+
+  const endCompanionDrag = () => {
+    companionDragOffset.current = null;
+    setCompanionDragging(false);
+  };
+
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
 
@@ -481,6 +761,13 @@ function SandboxExperience({
                   ))}
                 </article>
               </section>
+            ) : view === "settings" ? (
+              <PalSettings
+                widgetScale={widgetScale}
+                widgetVisible={widgetVisible}
+                onWidgetScaleChange={setWidgetScale}
+                onWidgetVisibleChange={setWidgetVisible}
+              />
             ) : (
               <section className={styles.classroomContent}>
                 <p className={styles.hostEyebrow}>Pika host preview</p>
@@ -498,9 +785,15 @@ function SandboxExperience({
             )}
           </main>
 
-          <div className={styles.companionOverlay}>
-            <PalCompanion variant="compact" />
-          </div>
+          <CompanionOverlay
+            visible={widgetVisible}
+            scale={widgetScale}
+            dragging={companionDragging}
+            overlayRef={companionOverlayRef}
+            onPointerDown={handleCompanionPointerDown}
+            onPointerMove={handleCompanionPointerMove}
+            onPointerEnd={endCompanionDrag}
+          />
 
           </div>
 

@@ -9,3 +9,5 @@ dist
 .env.*.local
 .superpowers/
 .claude/worktrees/
+.codex-*.log
+.pnpm-store/
