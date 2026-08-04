@@ -143,19 +143,15 @@ test("sandbox reads every Pal surface from the persisted pipeline", () => {
   assert.doesNotMatch(sandboxSource, /Fixture preview/);
 });
 
-test("sandbox never leaves a grass-only widget when the pipeline is unavailable", () => {
+test("sandbox mounts the public companion without rebuilding its internals", () => {
   assert.match(
     sandboxSource,
-    /function CompanionOverlay[\s\S]*const \{ snapshot, state \} = usePalWidget\(\)/,
+    /<PalCompanion\s+scale=\{scale\}/,
   );
-  assert.match(
-    sandboxSource,
-    /if \(!visible \|\| state !== "ready" \|\| !snapshot\) return null/,
-  );
-  assert.match(
-    sandboxSource,
-    /<CompanionOverlay[\s\S]*visible=\{widgetVisible\}/,
-  );
+  assert.doesNotMatch(sandboxSource, /<PalCompanion[\s\S]*variant=/);
+  assert.doesNotMatch(sandboxSource, /pal-companion-sprite|querySelectorAll/);
+  assert.doesNotMatch(sandboxSource, /grassPatch|companionCatBox|companionHitArea/);
+  assert.doesNotMatch(sandboxStyles, /grass\.png|grassPatch|companionCatBox/);
   assert.match(
     sandboxSource,
     /if \(sandboxError\) setControlsCollapsed\(false\)/,

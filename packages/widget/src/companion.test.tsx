@@ -44,7 +44,9 @@ test("a missing mood frame falls back to the supplied rest image", async () => {
       );
     });
 
-    const images = renderer!.root.findAllByType("img");
+    const images = renderer!.root.findAll(
+      (node) => node.type === "img" && node.props.className === "pal-companion-sprite",
+    );
     const rest = images.find((image) => image.props.src === "/only/rest.png")!;
     const missing = images.find(
       (image) => image.props.src === "/only/happy-1.png",
@@ -107,7 +109,9 @@ test("the companion mounts only frames used by the current mood", async () => {
     });
 
     const sources = renderer!.root
-      .findAllByType("img")
+      .findAll(
+        (node) => node.type === "img" && node.props.className === "pal-companion-sprite",
+      )
       .map((image) => image.props.src);
     assert.deepEqual(sources, [
       "/pets/rest.png",
