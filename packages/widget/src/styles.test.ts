@@ -104,3 +104,24 @@ test("future-week treatment preserves muted-text contrast in both themes", () =>
     );
   }
 });
+
+test("status-filled roadmap nodes preserve text contrast in both themes", () => {
+  const successFills = hexFallbacks("--pal-effective-color-success");
+  const successText = hexFallbacks("--pal-effective-color-on-success");
+  const warningFills = hexFallbacks("--pal-effective-color-warning");
+  const warningText = hexFallbacks("--pal-effective-color-on-warning");
+
+  assert.equal(successFills.length, 2);
+  assert.equal(successText.length, 2);
+  assert.equal(warningFills.length, 2);
+  assert.equal(warningText.length, 2);
+
+  for (const themeIndex of [0, 1]) {
+    assert.ok(
+      contrastRatio(successText[themeIndex]!, successFills[themeIndex]!) >= 4.5,
+    );
+    assert.ok(
+      contrastRatio(warningText[themeIndex]!, warningFills[themeIndex]!) >= 4.5,
+    );
+  }
+});

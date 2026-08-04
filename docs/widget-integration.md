@@ -161,8 +161,10 @@ all properties because it wants native visual continuity:
   --pal-color-primary-solid-hover: var(--color-primary-solid-hover);
   --pal-color-success: var(--color-success);
   --pal-color-success-bg: var(--color-success-bg);
+  --pal-color-on-success: var(--color-on-success);
   --pal-color-warning: var(--color-warning);
   --pal-color-warning-bg: var(--color-warning-bg);
+  --pal-color-on-warning: var(--color-on-warning);
   --pal-font-family-ui: var(--font-family-ui);
   --pal-radius-control: var(--radius-control);
   --pal-radius-card: var(--radius-card);

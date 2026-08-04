@@ -16,8 +16,10 @@
   );
   --pal-effective-color-success: var(--pal-color-success, #166534);
   --pal-effective-color-success-bg: var(--pal-color-success-bg, #dcfce7);
+  --pal-effective-color-on-success: var(--pal-color-on-success, #ffffff);
   --pal-effective-color-warning: var(--pal-color-warning, #92400e);
   --pal-effective-color-warning-bg: var(--pal-color-warning-bg, #fef3c7);
+  --pal-effective-color-on-warning: var(--pal-color-on-warning, #ffffff);
   --pal-effective-radius-control: var(--pal-radius-control, 0.5rem);
   --pal-effective-radius-card: var(--pal-radius-card, 0.75rem);
   --pal-effective-shadow-panel: var(
@@ -71,11 +73,13 @@
     --pal-color-success-bg,
     rgb(22 101 52 / 0.35)
   );
+  --pal-effective-color-on-success: var(--pal-color-on-success, #052e16);
   --pal-effective-color-warning: var(--pal-color-warning, #fbbf24);
   --pal-effective-color-warning-bg: var(
     --pal-color-warning-bg,
     rgb(120 53 15 / 0.35)
   );
+  --pal-effective-color-on-warning: var(--pal-color-on-warning, #451a03);
   --pal-effective-shadow-panel: var(
     --pal-shadow-panel,
     0 8px 24px rgb(0 0 0 / 0.35)
@@ -261,6 +265,7 @@
 
 .pal-week[data-week-status="past"] .pal-week-marker {
   border-color: color-mix(in srgb, var(--pal-effective-color-success) 70%, #000);
+  color: var(--pal-effective-color-on-success);
   background: var(--pal-effective-color-success);
   box-shadow:
     0 0.42rem 0 color-mix(in srgb, var(--pal-effective-color-success) 60%, #000),
@@ -459,6 +464,7 @@
 
 [data-achievement-status="earned"] .pal-badge {
   border-color: color-mix(in srgb, var(--pal-effective-color-success) 70%, #000);
+  color: var(--pal-effective-color-on-success);
   background: var(--pal-effective-color-success);
   box-shadow:
     0 0.35rem 0 color-mix(in srgb, var(--pal-effective-color-success) 55%, #000),
@@ -471,6 +477,7 @@
 
 [data-achievement-status="incomplete"] .pal-badge {
   border-color: color-mix(in srgb, var(--pal-effective-color-warning) 70%, #000);
+  color: var(--pal-effective-color-on-warning);
   background: var(--pal-effective-color-warning);
   box-shadow:
     0 0.35rem 0 color-mix(in srgb, var(--pal-effective-color-warning) 55%, #000),
