@@ -30,7 +30,10 @@ test("public surfaces render meaningful status without relying on color", () => 
   );
 
   assert.match(html, /Your achievement path/);
+  assert.match(html, /aria-label="Semester achievement path"/);
   assert.match(html, /aria-current="step"/);
+  assert.match(html, /data-path-lane="left"/);
+  assert.match(html, /data-path-lane="right"/);
   assert.match(html, /2 of 4 eligible days/);
   assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
@@ -59,6 +62,8 @@ test("roadmap renders all fictional semester weeks", () => {
   assert.match(html, /Week 1/);
   assert.match(html, /Week 16/);
   assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
+  assert.equal((html.match(/class="pal-week-marker"/g) ?? []).length, 16);
+  assert.match(html, /Future achievements stay hidden until this week begins/);
 });
 
 test("companion owns the complete portable cat-on-grass surface", () => {

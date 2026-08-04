@@ -3,7 +3,8 @@
 `@codepet/pal-widget` is Pal's selected presentation boundary for Pika. It is one React
 package with three separately mountable learner surfaces sharing a provider:
 
-- `PalAchievements` — the complete vertical roadmap in Pika's content pane.
+- `PalAchievements` — the complete winding semester roadmap in Pika's content
+  pane, with expandable achievement nodes and locked future weeks.
 - `PalCompanion` — a small ambient pet surface in a host-approved layer.
 - `PalRewardCelebration` — dismissible, reduced-motion-aware reward content in a
   host-approved layer. In standalone mode Pal owns dialog/focus behavior; Pika uses
@@ -53,6 +54,12 @@ Pal owns its artwork, animation, internal sizing, and transparent-pixel hit test
 The host may set `scale` and attach standard pointer handlers, but owns the containing
 layer, viewport placement, drag persistence, and collision rules. The sandbox follows
 this same boundary; it does not reconstruct or restyle the companion's internals.
+
+The roadmap's lanes, path, badges, and expandable detail cards are presentation
+only. Week status, achievement status, progress, rewards, and current-week position
+all come from the authenticated snapshot. The static course editor and local
+"complete" actions from the earlier roadmap experiment are not part of the public
+widget.
 
 The package may receive:
 
