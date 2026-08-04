@@ -2,7 +2,7 @@
 
 Portable React surfaces for Pal achievements, companion state, and rewards.
 
-Once the first prerelease is published, install it with:
+Install the current prerelease with:
 
 ```bash
 pnpm add @codepet/pal-widget@alpha
