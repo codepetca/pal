@@ -466,8 +466,8 @@
 
 .controlOpen {
   position: absolute;
-  top: 56rem;
-  right: 6.75rem;
+  bottom: 1.5rem;
+  right: 7.25rem;
   pointer-events: auto;
   display: inline-flex;
   min-height: 40px;
