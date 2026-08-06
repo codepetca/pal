@@ -258,28 +258,41 @@ function SandboxControls({
     }
   }
 
+  const openButton = collapsed ? (
+    <button
+      className={styles.controlOpen}
+      type="button"
+      aria-expanded={false}
+      onClick={() => onCollapsedChange(false)}
+    >
+      <Lightning aria-hidden="true" size={17} weight="fill" />
+      <span>Open sandbox controls</span>
+    </button>
+  ) : null;
+
+  const closeButton = !collapsed ? (
+    <button
+      className={styles.controlClose}
+      type="button"
+      aria-label="Close sandbox controls"
+      onClick={() => onCollapsedChange(true)}
+    >
+      <X aria-hidden="true" size={18} weight="bold" />
+    </button>
+  ) : null;
+
   return (
     <aside
       className={styles.controls}
       data-collapsed={collapsed ? "true" : "false"}
       aria-label="Fictional semester controls"
     >
-      <button
-        className={styles.controlToggle}
-        type="button"
-        aria-expanded={!collapsed}
-        onClick={() => onCollapsedChange(!collapsed)}
-      >
-        {collapsed ? (
-          <Lightning aria-hidden="true" size={17} weight="fill" />
-        ) : (
-          <X aria-hidden="true" size={16} weight="bold" />
-        )}
-        <span>{collapsed ? "Open sandbox controls" : "Close"}</span>
-      </button>
-
-      {!collapsed ? (
+      {collapsed ? (
+        openButton
+      ) : (
         <div className={styles.controlPanel}>
+          {closeButton}
+
           <header>
             <div>
               <span className={styles.fixtureLabel}>Real pipeline</span>
@@ -363,7 +376,7 @@ function SandboxControls({
             Reset fictional learner
           </button>
         </div>
-      ) : null}
+      )}
     </aside>
   );
 }
@@ -535,7 +548,9 @@ function SandboxExperience({
   // pointermove was what made dragging feel laggy. State only records
   // whether a drag is in progress, for the grab/grabbing cursor.
   const companionOverlayRef = useRef<HTMLDivElement>(null);
+  const sandboxRef = useRef<HTMLDivElement>(null);
   const [companionDragging, setCompanionDragging] = useState(false);
+  const companionPosition = useRef<{ x: number; y: number } | null>(null);
   // Width/height are the public pet widget's complete visual footprint,
   // captured once at drag start so each move only clamps against them instead
   // of re-measuring the DOM every pointer event.
@@ -596,14 +611,17 @@ function SandboxExperience({
       width: rect.width,
       height: rect.height,
     };
+    const x = rect.left - containerRect.left;
+    const y = rect.top - containerRect.top;
+    companionPosition.current = { x, y };
     // Pin the current on-screen position as explicit left/top before
     // anything else — rect already IS wherever it's sitting right now
     // (whether that's the CSS default right/bottom corner or a previous
     // drag's left/top), so this is a no-op visually. It guarantees the
     // sprite cannot move on press itself, only from here on with the
     // pointer, regardless of how that position was arrived at.
-    el.style.left = `${rect.left - containerRect.left}px`;
-    el.style.top = `${rect.top - containerRect.top}px`;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
     el.style.right = "auto";
     el.style.bottom = "auto";
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -630,6 +648,7 @@ function SandboxExperience({
       Math.max(e.clientY - offset.dy - containerRect.top, 0),
       maxY,
     );
+    companionPosition.current = { x, y };
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.right = "auto";
@@ -640,6 +659,39 @@ function SandboxExperience({
     companionDragOffset.current = null;
     setCompanionDragging(false);
   };
+
+  useEffect(() => {
+    const sandbox = sandboxRef.current;
+    const el = companionOverlayRef.current;
+    const container = el?.offsetParent;
+
+    if (!sandbox || !el || !(container instanceof HTMLElement)) {
+      sandbox?.style.setProperty("--companion-width", "0px");
+      sandbox?.style.setProperty("--companion-height", "0px");
+      return;
+    }
+
+    const syncCompanionLayout = () => {
+      const companionRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      sandbox.style.setProperty("--companion-width", `${companionRect.width}px`);
+      sandbox.style.setProperty("--companion-height", `${companionRect.height}px`);
+
+      const position = companionPosition.current;
+      if (!position) return;
+
+      const maxX = Math.max(containerRect.width - companionRect.width, 0);
+      const maxY = Math.max(containerRect.height - companionRect.height, 0);
+      el.style.left = `${Math.min(Math.max(position.x, 0), maxX)}px`;
+      el.style.top = `${Math.min(Math.max(position.y, 0), maxY)}px`;
+    };
+
+    syncCompanionLayout();
+    const observer = new ResizeObserver(syncCompanionLayout);
+    observer.observe(container);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [widgetVisible]);
 
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
@@ -659,7 +711,12 @@ function SandboxExperience({
       // current clock, so the pet returns to neutral without another event.
       refreshIntervalMs={15_000}
     >
-      <div className={styles.sandbox} data-theme={theme}>
+      <div
+        ref={sandboxRef}
+        className={styles.sandbox}
+        data-theme={theme}
+        data-controls-collapsed={controlsCollapsed ? "true" : "false"}
+      >
         <div
           className={styles.applicationLayer}
           inert={celebrationOpen || undefined}
@@ -790,31 +847,32 @@ function SandboxExperience({
 
           </div>
 
-          <SandboxRefreshBridge>
-            {(refresh) => (
-              <SandboxControls
-                buildInfo={buildInfo}
-                client={client}
-                collapsed={controlsCollapsed}
-                onCollapsedChange={setControlsCollapsed}
-                onRefresh={refresh}
-                onReset={() => {
-                  setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
-                  setSandboxError(null);
-                  onReset();
-                }}
-                simulatedDate={simulatedDate}
-                onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
-                onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
-                canAddDay={canAddDay}
-                canAddWeek={canAddWeek}
-                learnerId={learnerId}
-                sandboxError={sandboxError}
-                currentSemesterWeek={currentSemesterWeek}
-              />
-            )}
-          </SandboxRefreshBridge>
         </div>
+
+        <SandboxRefreshBridge>
+          {(refresh) => (
+            <SandboxControls
+              buildInfo={buildInfo}
+              client={client}
+              collapsed={controlsCollapsed}
+              onCollapsedChange={setControlsCollapsed}
+              onRefresh={refresh}
+              onReset={() => {
+                setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
+                setSandboxError(null);
+                onReset();
+              }}
+              simulatedDate={simulatedDate}
+              onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
+              onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
+              canAddDay={canAddDay}
+              canAddWeek={canAddWeek}
+              learnerId={learnerId}
+              sandboxError={sandboxError}
+              currentSemesterWeek={currentSemesterWeek}
+            />
+          )}
+        </SandboxRefreshBridge>
 
         <div
           className={styles.celebrationLayer}
