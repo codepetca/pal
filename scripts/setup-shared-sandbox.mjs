@@ -11,7 +11,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { verifySharedSandbox } from "./verify-shared-sandbox.mjs";
+import {
+  verifyProductionRejectsSandboxSecret,
+  verifySharedSandbox,
+} from "./verify-shared-sandbox.mjs";
 
 const VERCEL_TEAM_ID = "team_jKbtHZ7k3VeEdJKdqf2GOToE";
 const VERCEL_PROJECT_ID = "prj_PZpZp2maD9iJLjom4YO8hmdKjSa4";
@@ -99,6 +102,9 @@ try {
   }
 
   await verifySharedSandbox(values.DATABASE_URL);
+  await verifyProductionRejectsSandboxSecret(
+    values.SANDBOX_INTEGRATION_SECRET,
+  );
   const contents = ALLOWED_ENV_NAMES.map(
     (name) => `${name}=${JSON.stringify(values[name])}`,
   ).join("\n");

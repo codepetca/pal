@@ -180,7 +180,16 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(sandboxVerifierSource, /create_role/);
   assert.match(sandboxVerifierSource, /production_connect/);
   assert.match(sandboxVerifierSource, /42501/);
+  assert.match(sandboxVerifierSource, /pal\.codepet\.ca/);
+  assert.match(sandboxVerifierSource, /api\/v1\/events/);
+  assert.match(sandboxVerifierSource, /api\/v1\/integration\/read-token/);
+  assert.match(sandboxVerifierSource, /response\.status !== 401/);
   assert.match(turboConfigSource, /PAL_SANDBOX_PROTECTED_PREVIEW/);
+  assert.match(turboConfigSource, /@pal\/web#build/);
+  assert.match(turboConfigSource, /PAL_INTEGRATION_SECRET/);
+  assert.match(turboConfigSource, /SANDBOX_INTEGRATION_SECRET/);
+  assert.match(turboConfigSource, /PAL_READ_TOKEN_SIGNING_SECRET/);
+  assert.match(turboConfigSource, /DATABASE_URL/);
   assert.match(turboConfigSource, /VERCEL_ENV/);
 });
 

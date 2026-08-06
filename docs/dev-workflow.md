@@ -26,6 +26,9 @@ verifies that the database uses the sandbox-only `pal_sandbox_app` role and that
 the role is denied access to production `neondb` before writing the file. The role
 owns `pal_sandbox` so preview builds can apply migrations there, but it is not a
 superuser, cannot create roles or databases, and has no access to production.
+Setup also proves that the Development sandbox credential receives `401` from
+both production integration endpoints, so local tools cannot write production
+learner state or mint production learner tokens.
 The command refuses to overwrite an existing local env file; move that file aside
 first if you intentionally want to switch configurations. Run
 `pnpm sandbox:verify` at any time to recheck the database and role boundary.

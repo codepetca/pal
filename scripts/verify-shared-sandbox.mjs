@@ -6,6 +6,36 @@ const { Client } = pg;
 const SANDBOX_DATABASE = "pal_sandbox";
 const SANDBOX_ROLE = "pal_sandbox_app";
 const PRODUCTION_DATABASE = "neondb";
+const PRODUCTION_ORIGIN = "https://pal.codepet.ca";
+const PRODUCTION_INTEGRATION_ENDPOINTS = [
+  "/api/v1/events",
+  "/api/v1/integration/read-token",
+];
+
+export async function verifyProductionRejectsSandboxSecret(
+  sandboxSecret,
+  fetchImpl = fetch,
+) {
+  if (typeof sandboxSecret !== "string" || sandboxSecret.length < 32) {
+    throw new Error("Sandbox integration secret is missing or too short");
+  }
+
+  for (const pathname of PRODUCTION_INTEGRATION_ENDPOINTS) {
+    const response = await fetchImpl(`${PRODUCTION_ORIGIN}${pathname}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sandboxSecret}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    if (response.status !== 401) {
+      throw new Error(
+        `Production accepted the sandbox integration secret at ${pathname}`,
+      );
+    }
+  }
+}
 
 export async function verifySharedSandbox(databaseUrl) {
   const sandboxUrl = new URL(databaseUrl);
@@ -70,7 +100,10 @@ export async function verifySharedSandbox(databaseUrl) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const result = await verifySharedSandbox(process.env.DATABASE_URL ?? "");
+  await verifyProductionRejectsSandboxSecret(
+    process.env.SANDBOX_INTEGRATION_SECRET ?? "",
+  );
   console.log(
-    `Verified database=${result.database} role=${result.role} production_connect=false`,
+    `Verified database=${result.database} role=${result.role} production_connect=false production_api_rejects=true`,
   );
 }
