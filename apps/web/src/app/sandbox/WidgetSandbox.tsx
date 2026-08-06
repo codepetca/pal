@@ -807,35 +807,12 @@ function SandboxExperience({
 
           </div>
 
-          <SandboxRefreshBridge>
-            {(refresh) => (
-              <SandboxControls
-                buildInfo={buildInfo}
-                client={client}
-                collapsed={controlsCollapsed}
-                onCollapsedChange={setControlsCollapsed}
-                onRefresh={refresh}
-                onReset={() => {
-                  setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
-                  setSandboxError(null);
-                  onReset();
-                }}
-                simulatedDate={simulatedDate}
-                onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
-                onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
-                canAddDay={canAddDay}
-                canAddWeek={canAddWeek}
-                learnerId={learnerId}
-                sandboxError={sandboxError}
-                currentSemesterWeek={currentSemesterWeek}
-              />
-            )}
-          </SandboxRefreshBridge>
         </div>
 
         <SandboxRefreshBridge>
           {(refresh) => (
             <SandboxControls
+              buildInfo={buildInfo}
               client={client}
               collapsed={controlsCollapsed}
               onCollapsedChange={setControlsCollapsed}
