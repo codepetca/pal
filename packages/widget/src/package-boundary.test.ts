@@ -170,6 +170,10 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(sandboxSetupSource, /verifySharedSandbox/);
   assert.match(sandboxVerifierSource, /pal_sandbox_app/);
   assert.match(sandboxVerifierSource, /has_database_privilege/);
+  assert.match(sandboxVerifierSource, /database_owner/);
+  assert.match(sandboxVerifierSource, /superuser/);
+  assert.match(sandboxVerifierSource, /create_database/);
+  assert.match(sandboxVerifierSource, /create_role/);
   assert.match(sandboxVerifierSource, /production_connect/);
   assert.match(sandboxVerifierSource, /42501/);
 });

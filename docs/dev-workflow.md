@@ -22,11 +22,13 @@ pnpm dev
 
 The setup command signs in to Vercel if needed, links the exact team-owned `pal`
 project, and writes four allow-listed variables to `apps/web/.env.local`. It
-verifies that the database uses the non-owner `pal_sandbox_app` role and that the
-role is denied access to production `neondb` before writing the file. The command
-refuses to overwrite an existing local env file; move that file aside first if
-you intentionally want to switch configurations. Run `pnpm sandbox:verify` at any
-time to recheck the database and role boundary.
+verifies that the database uses the sandbox-only `pal_sandbox_app` role and that
+the role is denied access to production `neondb` before writing the file. The role
+owns `pal_sandbox` so preview builds can apply migrations there, but it is not a
+superuser, cannot create roles or databases, and has no access to production.
+The command refuses to overwrite an existing local env file; move that file aside
+first if you intentionally want to switch configurations. Run
+`pnpm sandbox:verify` at any time to recheck the database and role boundary.
 
 Open [localhost:3000/sandbox](http://localhost:3000/sandbox). Changes under
 `packages/widget/src` are built directly from the workspace, so developers can

@@ -13,14 +13,28 @@ export async function verifySharedSandbox(databaseUrl) {
   await sandbox.connect();
   try {
     const identity = await sandbox.query(
-      "select current_database() as database, current_user as role, has_database_privilege(current_user, $1, $2) as production_connect",
+      `select
+        current_database() as database,
+        current_user as role,
+        has_database_privilege(current_user, $1, $2) as production_connect,
+        pg_get_userbyid(database.datdba) as database_owner,
+        role.rolsuper as superuser,
+        role.rolcreatedb as create_database,
+        role.rolcreaterole as create_role
+      from pg_database database
+      join pg_roles role on role.rolname = current_user
+      where database.datname = current_database()`,
       [PRODUCTION_DATABASE, "CONNECT"],
     );
     const row = identity.rows[0];
     if (
       row.database !== SANDBOX_DATABASE ||
       row.role !== SANDBOX_ROLE ||
-      row.production_connect !== false
+      row.production_connect !== false ||
+      row.database_owner !== SANDBOX_ROLE ||
+      row.superuser !== false ||
+      row.create_database !== false ||
+      row.create_role !== false
     ) {
       throw new Error(
         "Shared sandbox credentials are not isolated from production",
