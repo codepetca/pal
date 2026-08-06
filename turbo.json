@@ -3,6 +3,11 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "PAL_SANDBOX_PROTECTED_PREVIEW",
+        "VERCEL_ENV",
+        "VERCEL_GIT_COMMIT_SHA"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {

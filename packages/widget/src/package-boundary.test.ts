@@ -44,6 +44,10 @@ const sandboxVerifierSource = readFileSync(
   new URL("../../../scripts/verify-shared-sandbox.mjs", import.meta.url),
   "utf8",
 );
+const turboConfigSource = readFileSync(
+  new URL("../../../turbo.json", import.meta.url),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -176,6 +180,8 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(sandboxVerifierSource, /create_role/);
   assert.match(sandboxVerifierSource, /production_connect/);
   assert.match(sandboxVerifierSource, /42501/);
+  assert.match(turboConfigSource, /PAL_SANDBOX_PROTECTED_PREVIEW/);
+  assert.match(turboConfigSource, /VERCEL_ENV/);
 });
 
 test("sandbox reads every Pal surface from the persisted pipeline", () => {
