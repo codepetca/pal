@@ -215,6 +215,13 @@ Stateful sandbox routes are local-only by default. Preview use is fail-closed an
 be enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, upstream deployment
 authentication, and an isolated, disposable preview database.
 
+The stable hosted sandbox uses the protected `sandbox` preview branch and the
+separate `pal_sandbox` database. Its widget is built from that branch's workspace
+source; the version shown in the controls is the current package baseline, not an
+npm download. Pika uses a published, pinned npm package, so sandbox-only experiments
+need no release. Publish and adopt a new prerelease only when a package source,
+style, asset contract, or public API change is ready for Pika.
+
 ## Initial acceptance
 
 - The sandbox consumes `@codepet/pal-widget` through public package exports.

@@ -63,6 +63,12 @@ type HostView =
   | "announcements"
   | "settings";
 
+export type SandboxBuildInfo = {
+  source: "Local workspace" | "Protected preview";
+  widgetVersion: string;
+  revision?: string;
+};
+
 const NAV_ITEMS = [
   { label: "Today", view: "today", icon: NotePencil },
   { label: "Classwork", view: "classwork", icon: ClipboardText },
@@ -131,6 +137,7 @@ const SANDBOX_ACTIONS: Array<{
 ];
 
 function SandboxControls({
+  buildInfo,
   client,
   collapsed,
   onCollapsedChange,
@@ -145,6 +152,7 @@ function SandboxControls({
   sandboxError,
   currentSemesterWeek,
 }: {
+  buildInfo: SandboxBuildInfo;
   client: SandboxPalClient;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -282,6 +290,23 @@ function SandboxControls({
               companion, rewards, and acknowledgements all read persisted state.
             </p>
           </header>
+
+          <dl className={styles.buildInfo} aria-label="Sandbox build information">
+            <div>
+              <dt>Widget source</dt>
+              <dd>{buildInfo.source}</dd>
+            </div>
+            <div>
+              <dt>Package baseline</dt>
+              <dd>@codepet/pal-widget {buildInfo.widgetVersion}</dd>
+            </div>
+            {buildInfo.revision ? (
+              <div>
+                <dt>Revision</dt>
+                <dd><code>{buildInfo.revision}</code></dd>
+              </div>
+            ) : null}
+          </dl>
 
           <div className={styles.dateBar}>
             <span className={styles.dateLabel}>
@@ -459,6 +484,7 @@ function CompanionOverlay({
 }
 
 function SandboxExperience({
+  buildInfo,
   client,
   theme,
   viewport,
@@ -469,6 +495,7 @@ function SandboxExperience({
   scopeKey,
   onReset,
 }: {
+  buildInfo: SandboxBuildInfo;
   client: SandboxPalClient;
   theme: PalTheme;
   viewport: PalViewport;
@@ -766,6 +793,7 @@ function SandboxExperience({
           <SandboxRefreshBridge>
             {(refresh) => (
               <SandboxControls
+                buildInfo={buildInfo}
                 client={client}
                 collapsed={controlsCollapsed}
                 onCollapsedChange={setControlsCollapsed}
@@ -837,7 +865,7 @@ function XpBar() {
   );
 }
 
-export function WidgetSandbox() {
+export function WidgetSandbox({ buildInfo }: { buildInfo: SandboxBuildInfo }) {
   const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   const [clientGeneration, setClientGeneration] = useState(0);
@@ -872,6 +900,7 @@ export function WidgetSandbox() {
 
   return (
     <SandboxExperience
+      buildInfo={buildInfo}
       client={client}
       theme={theme}
       viewport={viewport}

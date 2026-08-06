@@ -25,6 +25,17 @@ const sandboxClientSource = readFileSync(
   ),
   "utf8",
 );
+const sandboxPageSource = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const homePageSource = readFileSync(
+  new URL("../../../apps/web/src/app/page.tsx", import.meta.url),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -131,6 +142,17 @@ test("sandbox consumes only the widget public package boundary", () => {
     assert.doesNotMatch(source, /packages\/widget\/src/);
     assert.doesNotMatch(source, /@codepet\/pal-widget\//);
   }
+});
+
+test("sandbox page is visible only in an allowed runtime and identifies its build", () => {
+  assert.match(sandboxPageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(sandboxPageSource, /notFound\(\)/);
+  assert.match(sandboxPageSource, /Protected preview/);
+  assert.match(sandboxPageSource, /Local workspace/);
+  assert.match(sandboxPageSource, /widgetPackage\.version/);
+  assert.match(homePageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(homePageSource, /redirect\("\/sandbox"\)/);
+  assert.doesNotMatch(homePageSource, /WidgetSandbox/);
 });
 
 test("sandbox reads every Pal surface from the persisted pipeline", () => {

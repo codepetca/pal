@@ -12,13 +12,40 @@ git clone https://github.com/codepetca/pal.git && cd pal
 pnpm install
 ```
 
-Then create your local env file. **It goes in `apps/web/`, not the repo root** — Next.js only reads env files from the app directory:
+The simplest setup uses the team's shared sandbox database and does not require
+Docker:
 
 ```bash
-cp .env.example apps/web/.env.local
+pnpm sandbox:setup
+pnpm dev
 ```
 
-Open `apps/web/.env.local` and set:
+The setup command signs in to Vercel if needed, links the `pal` project, and
+downloads its Development environment to `apps/web/.env.local`. That environment
+uses the isolated `pal_sandbox` database, never the production `neondb` database.
+The command refuses to overwrite an existing local env file; move that file aside
+first if you intentionally want to switch configurations.
+
+Open [localhost:3000/sandbox](http://localhost:3000/sandbox). Changes under
+`packages/widget/src` are built directly from the workspace, so developers can
+iterate without publishing to npm. The control panel identifies both that source
+and the package-version baseline. Pika continues to consume its pinned npm version
+until a new widget package is deliberately released and adopted there.
+
+If you prefer a fully isolated local database, copy `.env.example` to
+`apps/web/.env.local` and use the documented Docker Postgres service instead.
+**The env file goes in `apps/web/`, not the repo root** because Next.js reads env
+files from the app directory.
+
+The protected hosted sandbox lives at `https://pal-sandbox.codepet.ca`. Vercel
+Authentication limits access to approved developers. It runs from the persistent
+`sandbox` preview branch and uses the same shared `pal_sandbox` database as the
+one-command local setup. `https://pal.codepet.ca` remains the production API and
+cannot enable sandbox pages or mutation routes.
+
+### Environment reference
+
+For manual/local-Docker configuration, set:
 
 | Variable | What to put there | Needed when |
 |---|---|---|
@@ -31,13 +58,7 @@ Open `apps/web/.env.local` and set:
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
 
-**Check it works:**
-
-```bash
-pnpm dev
-```
-
-Open [localhost:3000/sandbox](http://localhost:3000/sandbox). The Pika-like host
+The Pika-like host
 preview should show the 16-week Pal roadmap, companion, and collapsible **Real
 pipeline** controls. Configure a week, complete daily logs, or finish an item on
 time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
@@ -51,8 +72,8 @@ five-minute learner-scoped token; neither integration nor signing secrets reach 
 browser. Reward dismissal calls the real idempotent acknowledgement endpoint. Sandbox
 mutation/token routes are available locally. In a Vercel preview they remain disabled
 unless `PAL_SANDBOX_PROTECTED_PREVIEW=true`; that opt-in is permitted only with Vercel
-Deployment Protection and an isolated, disposable preview database. They always return
-404 in production.
+Deployment Protection and the isolated sandbox database. They always return 404
+in production.
 
 ---
 

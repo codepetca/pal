@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @codepet/pal-widget build && turbo dev",
+    "sandbox:setup": "node scripts/setup-shared-sandbox.mjs",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck"
