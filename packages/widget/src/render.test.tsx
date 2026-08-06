@@ -30,7 +30,10 @@ test("public surfaces render meaningful status without relying on color", () => 
   );
 
   assert.match(html, /Your achievement path/);
+  assert.match(html, /aria-label="Semester achievement path"/);
   assert.match(html, /aria-current="step"/);
+  assert.match(html, /data-path-lane="left"/);
+  assert.match(html, /data-path-lane="right"/);
   assert.match(html, /2 of 4 eligible days/);
   assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
@@ -59,6 +62,8 @@ test("roadmap renders all fictional semester weeks", () => {
   assert.match(html, /Week 1/);
   assert.match(html, /Week 16/);
   assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
+  assert.equal((html.match(/class="pal-week-marker"/g) ?? []).length, 16);
+  assert.match(html, /Future achievements stay hidden until this week begins/);
 });
 
 test("companion owns the complete portable cat-on-grass surface", () => {
@@ -82,6 +87,26 @@ test("companion owns the complete portable cat-on-grass surface", () => {
   assert.match(html, /https:\/\/pal\.example\/assets\/pets\/grass\.png/);
   assert.match(html, /--pal-companion-cat-height:12rem/);
   assert.doesNotMatch(html, /data-pal-variant=/);
+});
+
+test("narrow roadmap preserves date labels and achievement heading navigation", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.roadmap.weeks[0]!.dateLabel = "Sep 8–12";
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+      viewport="narrow"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /data-pal-viewport="narrow"/);
+  assert.match(html, /class="pal-week-date">Sep 8–12/);
+  assert.match(html, /role="heading" aria-level="4">Weekly Rhythm/);
 });
 
 test("host-managed rewards leave dialog and focus ownership to the host", () => {

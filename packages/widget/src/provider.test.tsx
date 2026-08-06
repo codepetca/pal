@@ -77,6 +77,44 @@ test("a scope change never paints the previous learner snapshot", async () => {
   assert.match(failedLoad, /Achievements are temporarily unavailable/);
 });
 
+test("achievement details start open for the current week and preserve toggles", async () => {
+  const snapshot = createFixtureSnapshot();
+  const client: PalClient = {
+    getSnapshot: async () => snapshot,
+    markRewardSeen: async () => undefined,
+  };
+  let renderer!: ReactTestRenderer;
+
+  const achievements = (
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+    >
+      <PalAchievements />
+    </PalProvider>
+  );
+
+  await act(async () => {
+    renderer = create(achievements);
+  });
+
+  const currentDetails = renderer.root
+    .findAllByType("details")
+    .find((details) => details.props.open === true);
+  assert.ok(currentDetails);
+
+  await act(async () => {
+    currentDetails.props.onToggle({ currentTarget: { open: false } });
+  });
+  assert.equal(currentDetails.props.open, false);
+
+  await act(async () => {
+    renderer.update(achievements);
+  });
+  assert.equal(currentDetails.props.open, false);
+});
+
 test("reward acknowledgement is duplicate-safe, recoverable, and removed after success", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

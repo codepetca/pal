@@ -16,8 +16,10 @@
   );
   --pal-effective-color-success: var(--pal-color-success, #166534);
   --pal-effective-color-success-bg: var(--pal-color-success-bg, #dcfce7);
+  --pal-effective-color-on-success: #ffffff;
   --pal-effective-color-warning: var(--pal-color-warning, #92400e);
   --pal-effective-color-warning-bg: var(--pal-color-warning-bg, #fef3c7);
+  --pal-effective-color-on-warning: #ffffff;
   --pal-effective-radius-control: var(--pal-radius-control, 0.5rem);
   --pal-effective-radius-card: var(--pal-radius-card, 0.75rem);
   --pal-effective-shadow-panel: var(
@@ -71,11 +73,13 @@
     --pal-color-success-bg,
     rgb(22 101 52 / 0.35)
   );
+  --pal-effective-color-on-success: #052e16;
   --pal-effective-color-warning: var(--pal-color-warning, #fbbf24);
   --pal-effective-color-warning-bg: var(
     --pal-color-warning-bg,
     rgb(120 53 15 / 0.35)
   );
+  --pal-effective-color-on-warning: #451a03;
   --pal-effective-shadow-panel: var(
     --pal-shadow-panel,
     0 8px 24px rgb(0 0 0 / 0.35)
@@ -179,46 +183,100 @@
 .pal-roadmap-list {
   position: relative;
   display: grid;
-  gap: var(--pal-effective-density-stack);
+  gap: clamp(1.4rem, 4vw, 2.4rem);
+  max-width: 58rem;
   margin: 0 auto;
+  padding: 0.5rem 0 2rem;
 }
 
 .pal-roadmap-list::before {
   position: absolute;
-  top: 1.5rem;
-  bottom: 1.5rem;
-  left: 1.25rem;
-  width: 2px;
-  background: var(--pal-effective-color-border-strong);
+  top: 1rem;
+  bottom: 1rem;
+  left: 50%;
+  width: 0.8rem;
+  border: 2px solid color-mix(in srgb, var(--pal-effective-color-primary) 35%, transparent);
+  border-radius: 999px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--pal-effective-color-primary-solid) 0 0.55rem,
+    transparent 0.55rem 1.25rem
+  );
+  box-shadow: 0 0 0 0.3rem var(--pal-effective-color-surface-selected);
   content: "";
+  opacity: 0.55;
+  transform: translateX(-50%);
 }
 
 .pal-week {
   position: relative;
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr);
-  gap: 0.8rem;
+  z-index: 1;
+  width: min(42rem, calc(100% - 5.5rem));
+  transition: transform var(--pal-effective-motion-standard)
+    var(--pal-effective-motion-easing);
+}
+
+.pal-week[data-path-lane="left"] {
+  justify-self: start;
+}
+
+.pal-week[data-path-lane="middle"] {
+  justify-self: center;
+}
+
+.pal-week[data-path-lane="right"] {
+  justify-self: end;
 }
 
 .pal-week-marker {
-  z-index: 1;
   display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
+  flex: 0 0 auto;
+  width: 4rem;
+  height: 4rem;
   place-items: center;
-  border: 2px solid var(--pal-effective-color-border-strong);
+  align-content: center;
+  border: 3px solid color-mix(in srgb, var(--pal-effective-color-primary-solid) 75%, #000);
   border-radius: 50%;
-  color: var(--pal-effective-color-text-muted);
-  background: var(--pal-effective-color-surface);
-  font-size: 0.78rem;
+  color: var(--pal-effective-color-text-inverse);
+  background: var(--pal-effective-color-primary-solid);
+  box-shadow:
+    0 0.42rem 0 color-mix(in srgb, var(--pal-effective-color-primary-solid) 60%, #000),
+    inset 0 0.28rem 0 rgb(255 255 255 / 0.3);
+  font-size: 0.58rem;
   font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pal-week-marker strong {
+  margin-top: 0.1rem;
+  font-size: 1.25rem;
+  letter-spacing: 0;
 }
 
 .pal-week[data-week-status="current"] .pal-week-marker {
-  border-color: var(--pal-effective-color-primary-solid);
-  color: var(--pal-effective-color-text-inverse);
-  background: var(--pal-effective-color-primary-solid);
-  box-shadow: 0 0 0 4px var(--pal-effective-color-surface-selected);
+  box-shadow:
+    0 0.42rem 0 color-mix(in srgb, var(--pal-effective-color-primary-solid) 60%, #000),
+    inset 0 0.28rem 0 rgb(255 255 255 / 0.35),
+    0 0 0 0.35rem var(--pal-effective-color-surface-selected),
+    0 0 1.4rem color-mix(in srgb, var(--pal-effective-color-primary) 55%, transparent);
+}
+
+.pal-week[data-week-status="past"] .pal-week-marker {
+  border-color: color-mix(in srgb, var(--pal-effective-color-success) 70%, #000);
+  color: var(--pal-effective-color-on-success);
+  background: var(--pal-effective-color-success);
+  box-shadow:
+    0 0.42rem 0 color-mix(in srgb, var(--pal-effective-color-success) 60%, #000),
+    inset 0 0.28rem 0 rgb(255 255 255 / 0.28);
+}
+
+.pal-week[data-week-status="future"] .pal-week-marker {
+  border-color: var(--pal-effective-color-border-strong);
+  color: var(--pal-effective-color-text-muted);
+  background: var(--pal-effective-color-surface-muted);
+  box-shadow: 0 0.3rem 0 var(--pal-effective-color-border-strong);
 }
 
 .pal-week-card {
@@ -229,6 +287,7 @@
 }
 
 .pal-week[data-week-status="current"] .pal-week-card {
+  border-width: 2px;
   border-color: var(--pal-effective-color-primary);
   box-shadow: var(--pal-effective-shadow-panel);
 }
@@ -239,10 +298,19 @@
 
 .pal-week-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--pal-effective-space-control);
+  align-items: center;
+  gap: 0.9rem;
   padding: var(--pal-effective-space-card);
+  background: color-mix(
+    in srgb,
+    var(--pal-effective-color-surface-selected) 56%,
+    var(--pal-effective-color-surface)
+  );
+}
+
+.pal-week-header > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
 }
 
 .pal-week-header h3 {
@@ -261,36 +329,94 @@
 }
 
 .pal-week-header > span {
+  margin-left: auto;
   white-space: nowrap;
 }
 
 .pal-achievement-list {
   display: grid;
-  gap: var(--pal-effective-space-control);
-  padding: 0 var(--pal-effective-space-card) var(--pal-effective-space-card);
+  gap: 1rem;
+  padding: var(--pal-effective-space-card);
+  background: var(--pal-effective-color-surface);
+}
+
+.pal-achievement-stop {
+  position: relative;
+  width: min(100%, 29rem);
+}
+
+.pal-achievement-stop[data-node-lane="left"] {
+  justify-self: start;
+}
+
+.pal-achievement-stop[data-node-lane="middle"] {
+  justify-self: center;
+}
+
+.pal-achievement-stop[data-node-lane="right"] {
+  justify-self: end;
 }
 
 .pal-achievement-card {
+  border-radius: var(--pal-effective-radius-card);
+}
+
+.pal-achievement-card > summary {
+  position: relative;
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
-  gap: var(--pal-effective-space-control);
-  padding: var(--pal-effective-space-card);
+  grid-template-columns: 4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 4.5rem;
+  padding: 0.25rem 0.75rem 0.55rem 0.25rem;
   border: 1px solid var(--pal-effective-color-border);
-  border-radius: calc(var(--pal-effective-radius-card) - 0.2rem);
+  border-radius: var(--pal-effective-radius-card);
   background: var(--pal-effective-color-surface-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.pal-achievement-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pal-achievement-card > summary::after {
+  position: absolute;
+  right: 0.8rem;
+  color: var(--pal-effective-color-text-muted);
+  content: "+";
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.pal-achievement-card[open] > summary::after {
+  content: "−";
+}
+
+.pal-achievement-card > summary:hover {
+  border-color: var(--pal-effective-color-primary);
+  transform: translateY(-1px);
+}
+
+.pal-achievement-card > summary:focus-visible {
+  outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
+  outline-offset: var(--pal-effective-focus-offset);
 }
 
 .pal-badge {
   display: grid;
-  width: 3rem;
-  height: 3rem;
+  width: 3.75rem;
+  height: 3.75rem;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--pal-effective-color-border-strong);
+  border: 3px solid color-mix(in srgb, var(--pal-effective-color-primary-solid) 70%, #000);
   border-radius: 50%;
-  color: var(--pal-effective-color-primary);
-  background: var(--pal-effective-color-surface);
-  font-size: 1.4rem;
+  color: var(--pal-effective-color-text-inverse);
+  background: var(--pal-effective-color-primary-solid);
+  box-shadow:
+    0 0.35rem 0 color-mix(in srgb, var(--pal-effective-color-primary-solid) 58%, #000),
+    inset 0 0.24rem 0 rgb(255 255 255 / 0.32);
+  font-size: 1.55rem;
   font-weight: 900;
 }
 
@@ -303,20 +429,28 @@
   object-fit: contain;
 }
 
-.pal-achievement-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+.pal-node-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  padding-right: 1.5rem;
 }
 
-.pal-achievement-title-row h4 {
+.pal-node-copy > [role="heading"] {
   font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.pal-achievement-copy {
+  margin: 0 0.5rem;
+  padding: 0.85rem 1rem 1rem 4.5rem;
+  border: 1px solid var(--pal-effective-color-border);
+  border-top: 0;
+  border-radius: 0 0 var(--pal-effective-radius-card) var(--pal-effective-radius-card);
+  background: var(--pal-effective-color-surface);
 }
 
 .pal-achievement-copy > p {
-  margin-top: 0.3rem;
   color: var(--pal-effective-color-text-muted);
   font-size: 0.8rem;
   line-height: 1.45;
@@ -330,8 +464,26 @@
   color: var(--pal-effective-color-success);
 }
 
+[data-achievement-status="earned"] .pal-badge {
+  border-color: color-mix(in srgb, var(--pal-effective-color-success) 70%, #000);
+  color: var(--pal-effective-color-on-success);
+  background: var(--pal-effective-color-success);
+  box-shadow:
+    0 0.35rem 0 color-mix(in srgb, var(--pal-effective-color-success) 55%, #000),
+    inset 0 0.24rem 0 rgb(255 255 255 / 0.32);
+}
+
 [data-achievement-status="incomplete"] .pal-status {
   color: var(--pal-effective-color-warning);
+}
+
+[data-achievement-status="incomplete"] .pal-badge {
+  border-color: color-mix(in srgb, var(--pal-effective-color-warning) 70%, #000);
+  color: var(--pal-effective-color-on-warning);
+  background: var(--pal-effective-color-warning);
+  box-shadow:
+    0 0.35rem 0 color-mix(in srgb, var(--pal-effective-color-warning) 55%, #000),
+    inset 0 0.24rem 0 rgb(255 255 255 / 0.26);
 }
 
 .pal-progress-wrap {
@@ -379,8 +531,54 @@
   background: var(--pal-effective-color-warning-bg);
 }
 
-.pal-future-copy {
-  padding: 0 1rem 0.9rem;
+.pal-future-stop,
+.pal-empty-week-copy {
+  padding: var(--pal-effective-space-card);
+}
+
+.pal-future-stop {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.pal-locked-node {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3.25rem;
+  height: 3.25rem;
+  place-items: center;
+  border: 3px solid var(--pal-effective-color-border-strong);
+  border-radius: 50%;
+  color: var(--pal-effective-color-text-muted);
+  background: var(--pal-effective-color-surface-muted);
+  box-shadow: 0 0.3rem 0 var(--pal-effective-color-border-strong);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.pal-future-copy,
+.pal-empty-week-copy {
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.78rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-roadmap-list::before {
+  left: 1.9rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week {
+  width: calc(100% - 3.2rem);
+  justify-self: end;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-achievement-stop {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-achievement-copy {
+  padding-left: 1rem;
 }
 
 .pal-state {
@@ -614,21 +812,33 @@
   align-items: flex-start;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-week-header {
-  flex-direction: column;
+.pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header {
+  flex-wrap: wrap;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-week-header > span {
+.pal-surface[data-pal-viewport="narrow"] .pal-week-header {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  align-items: center;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-header > div:nth-child(2),
+.pal-surface[data-pal-viewport="narrow"] .pal-week-date {
+  grid-column: 2;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-date {
+  margin-left: 0;
   white-space: normal;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card {
-  grid-template-columns: 2.6rem minmax(0, 1fr);
+.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card > summary {
+  grid-template-columns: 3rem minmax(0, 1fr);
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-badge {
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.85rem;
+  height: 2.85rem;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {

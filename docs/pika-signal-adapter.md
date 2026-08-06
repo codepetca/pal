@@ -269,9 +269,11 @@ Do not introduce one-off `learning_item.available`, `learning_item.deadline_pass
 
 ## Selected roadmap presentation
 
-The first roadmap uses a simple vertical list of weekly rows. This is the selected direction because it maps directly to weekly achievement instances and is the least complex layout to build, populate, and make responsive.
+The first roadmap uses a winding vertical semester path. Weekly cards and their
+expandable badge nodes remain a direct presentation of Pal's persisted weekly
+achievement instances; the visual path does not introduce a second progress model.
 
-- Each row represents one academic week.
+- Each path stop represents one academic week.
 - Past weeks collapse to a compact result.
 - The current week is expanded and shows live progress.
 - Future weeks remain generic; Pal does not invent or mirror future assignments.
@@ -281,9 +283,11 @@ The first roadmap uses a simple vertical list of weekly rows. This is the select
 - Incomplete status is shown only when Pal received explicit opportunity context, such as a configured Weekly Rhythm week; absence of a learning-item event is not treated as an incomplete assignment.
 - Status always uses an icon and text in addition to color.
 
-![Concept mockup with Achievements selected in Pika's sidebar and the Pal vertical weekly roadmap rendered in the content pane](assets/pika-pal-roadmap-concept.png)
+![Early placement concept with Achievements selected in Pika's sidebar and Pal rendered in the content pane](assets/pika-pal-roadmap-concept.png)
 
-*Concept mockup only. Every card represents a Pal achievement or milestone, not a mirrored Pika assignment. Labels, visual styling, badge art, and the pet treatment may change during implementation.*
+*Historical placement concept only. The selected widget now uses the winding path
+described above; the image still illustrates the Pika content-pane boundary. Every
+card represents a Pal achievement or milestone, not a mirrored Pika assignment.*
 
 The roadmap is achievement state, not a raw event feed. Pal renders persisted progress and awards; the browser does not count signals.
 

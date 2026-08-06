@@ -1,6 +1,8 @@
 # `@codepet/pal-widget`
 
 Portable React surfaces for Pal achievements, companion state, and rewards.
+`PalAchievements` renders a winding semester path from the authenticated Pal
+snapshot; it does not calculate or mutate achievement progress in the browser.
 
 Install the current prerelease with:
 

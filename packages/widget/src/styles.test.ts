@@ -42,6 +42,14 @@ function hexFallbacks(variable: string): string[] {
   ].map((match) => match[1]!);
 }
 
+function hexAssignments(variable: string): string[] {
+  return [
+    ...styles.matchAll(
+      new RegExp(`${variable}: (#[0-9a-f]{6})`, "g"),
+    ),
+  ].map((match) => match[1]!);
+}
+
 test("widget exposes portable theme fallbacks and dark mode", () => {
   assert.match(styles, /var\(--pal-color-surface, #ffffff\)/);
   assert.match(styles, /data-pal-theme="dark"/);
@@ -70,6 +78,23 @@ test("widget controls and motion meet the accessibility contract", () => {
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
+  const narrowHeaderRule =
+    styles.match(
+      /data-pal-viewport="narrow"\] \.pal-roadmap-header \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowHeaderRule, /flex-wrap: wrap/);
+  const narrowDateRule =
+    styles.match(
+      /data-pal-viewport="narrow"\] \.pal-week-date \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowDateRule, /grid-column: 2/);
+  assert.doesNotMatch(narrowDateRule, /display:\s*none/);
+});
+
+test("achievement disclosure indicator is anchored to its summary", () => {
+  const summaryRule =
+    styles.match(/\.pal-achievement-card > summary \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(summaryRule, /position: relative/);
 });
 
 test("companion owns its portable visual composition without placement", () => {
@@ -101,6 +126,27 @@ test("future-week treatment preserves muted-text contrast in both themes", () =>
         textFallbacks[themeIndex]!,
         surfaceFallbacks[themeIndex]!,
       ) >= 4.5,
+    );
+  }
+});
+
+test("status-filled roadmap nodes preserve text contrast in both themes", () => {
+  const successFills = hexFallbacks("--pal-effective-color-success");
+  const successText = hexAssignments("--pal-effective-color-on-success");
+  const warningFills = hexFallbacks("--pal-effective-color-warning");
+  const warningText = hexAssignments("--pal-effective-color-on-warning");
+
+  assert.equal(successFills.length, 2);
+  assert.equal(successText.length, 2);
+  assert.equal(warningFills.length, 2);
+  assert.equal(warningText.length, 2);
+
+  for (const themeIndex of [0, 1]) {
+    assert.ok(
+      contrastRatio(successText[themeIndex]!, successFills[themeIndex]!) >= 4.5,
+    );
+    assert.ok(
+      contrastRatio(warningText[themeIndex]!, warningFills[themeIndex]!) >= 4.5,
     );
   }
 });
