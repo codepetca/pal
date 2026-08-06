@@ -16,10 +16,10 @@
   );
   --pal-effective-color-success: var(--pal-color-success, #166534);
   --pal-effective-color-success-bg: var(--pal-color-success-bg, #dcfce7);
-  --pal-effective-color-on-success: var(--pal-color-on-success, #ffffff);
+  --pal-effective-color-on-success: #ffffff;
   --pal-effective-color-warning: var(--pal-color-warning, #92400e);
   --pal-effective-color-warning-bg: var(--pal-color-warning-bg, #fef3c7);
-  --pal-effective-color-on-warning: var(--pal-color-on-warning, #ffffff);
+  --pal-effective-color-on-warning: #ffffff;
   --pal-effective-radius-control: var(--pal-radius-control, 0.5rem);
   --pal-effective-radius-card: var(--pal-radius-card, 0.75rem);
   --pal-effective-shadow-panel: var(
@@ -73,13 +73,13 @@
     --pal-color-success-bg,
     rgb(22 101 52 / 0.35)
   );
-  --pal-effective-color-on-success: var(--pal-color-on-success, #052e16);
+  --pal-effective-color-on-success: #052e16;
   --pal-effective-color-warning: var(--pal-color-warning, #fbbf24);
   --pal-effective-color-warning-bg: var(
     --pal-color-warning-bg,
     rgb(120 53 15 / 0.35)
   );
-  --pal-effective-color-on-warning: var(--pal-color-on-warning, #451a03);
+  --pal-effective-color-on-warning: #451a03;
   --pal-effective-shadow-panel: var(
     --pal-shadow-panel,
     0 8px 24px rgb(0 0 0 / 0.35)
@@ -809,6 +809,10 @@
 .pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header,
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header {
   align-items: flex-start;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header {
+  flex-wrap: wrap;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header {

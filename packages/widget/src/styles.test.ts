@@ -42,6 +42,14 @@ function hexFallbacks(variable: string): string[] {
   ].map((match) => match[1]!);
 }
 
+function hexAssignments(variable: string): string[] {
+  return [
+    ...styles.matchAll(
+      new RegExp(`${variable}: (#[0-9a-f]{6})`, "g"),
+    ),
+  ].map((match) => match[1]!);
+}
+
 test("widget exposes portable theme fallbacks and dark mode", () => {
   assert.match(styles, /var\(--pal-color-surface, #ffffff\)/);
   assert.match(styles, /data-pal-theme="dark"/);
@@ -70,6 +78,11 @@ test("widget controls and motion meet the accessibility contract", () => {
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
+  const narrowHeaderRule =
+    styles.match(
+      /data-pal-viewport="narrow"\] \.pal-roadmap-header \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowHeaderRule, /flex-wrap: wrap/);
   const narrowDateRule =
     styles.match(
       /data-pal-viewport="narrow"\] \.pal-week-date \{([^}]+)\}/,
@@ -113,9 +126,9 @@ test("future-week treatment preserves muted-text contrast in both themes", () =>
 
 test("status-filled roadmap nodes preserve text contrast in both themes", () => {
   const successFills = hexFallbacks("--pal-effective-color-success");
-  const successText = hexFallbacks("--pal-effective-color-on-success");
+  const successText = hexAssignments("--pal-effective-color-on-success");
   const warningFills = hexFallbacks("--pal-effective-color-warning");
-  const warningText = hexFallbacks("--pal-effective-color-on-warning");
+  const warningText = hexAssignments("--pal-effective-color-on-warning");
 
   assert.equal(successFills.length, 2);
   assert.equal(successText.length, 2);
