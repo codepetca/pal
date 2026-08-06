@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
 import { usePalWidget } from "./provider";
-import type { PalAchievementStatus } from "./types";
+import type { PalAchievement, PalAchievementStatus } from "./types";
 
 const STATUS_ICONS: Record<PalAchievementStatus, string> = {
   earned: "✓",
@@ -11,6 +13,68 @@ const STATUS_ICONS: Record<PalAchievementStatus, string> = {
 };
 
 const PATH_LANES = ["left", "middle", "right", "middle"] as const;
+
+function AchievementCard({
+  achievement,
+  initiallyOpen,
+}: {
+  achievement: PalAchievement;
+  initiallyOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+
+  return (
+    <details
+      className="pal-achievement-card"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="pal-badge" aria-hidden="true">
+          {achievement.badge.assetUrl ? (
+            <img
+              src={achievement.badge.assetUrl}
+              alt=""
+              width="64"
+              height="64"
+            />
+          ) : (
+            achievement.badge.icon ?? "★"
+          )}
+        </span>
+        <span className="pal-node-copy">
+          <span role="heading" aria-level={4}>
+            {achievement.title}
+          </span>
+          <span className="pal-status">
+            <span aria-hidden="true">
+              {STATUS_ICONS[achievement.status]}
+            </span>
+            {achievement.statusLabel}
+          </span>
+        </span>
+      </summary>
+      <div className="pal-achievement-copy">
+        <p>{achievement.description}</p>
+        {achievement.progress ? (
+          <div className="pal-progress-wrap">
+            <progress
+              value={achievement.progress.current}
+              max={achievement.progress.target}
+              aria-label={`${achievement.title}: ${achievement.progress.label}`}
+            />
+            <span>{achievement.progress.label}</span>
+          </div>
+        ) : null}
+        {achievement.rewardLabel ? (
+          <span className="pal-reward-label">
+            Reward: {achievement.rewardLabel}
+          </span>
+        ) : null}
+      </div>
+    </details>
+  );
+}
 
 export function PalAchievements() {
   const { density, error, motion, refresh, snapshot, state, theme, viewport } =
@@ -99,54 +163,10 @@ export function PalAchievements() {
                         ]}
                         key={achievement.id}
                       >
-                        <details
-                          className="pal-achievement-card"
-                          open={week.status === "current"}
-                        >
-                          <summary>
-                            <span className="pal-badge" aria-hidden="true">
-                              {achievement.badge.assetUrl ? (
-                                <img
-                                  src={achievement.badge.assetUrl}
-                                  alt=""
-                                  width="64"
-                                  height="64"
-                                />
-                              ) : (
-                                achievement.badge.icon ?? "★"
-                              )}
-                            </span>
-                            <span className="pal-node-copy">
-                              <span role="heading" aria-level={4}>
-                                {achievement.title}
-                              </span>
-                              <span className="pal-status">
-                                <span aria-hidden="true">
-                                  {STATUS_ICONS[achievement.status]}
-                                </span>
-                                {achievement.statusLabel}
-                              </span>
-                            </span>
-                          </summary>
-                          <div className="pal-achievement-copy">
-                            <p>{achievement.description}</p>
-                            {achievement.progress ? (
-                              <div className="pal-progress-wrap">
-                                <progress
-                                  value={achievement.progress.current}
-                                  max={achievement.progress.target}
-                                  aria-label={`${achievement.title}: ${achievement.progress.label}`}
-                                />
-                                <span>{achievement.progress.label}</span>
-                              </div>
-                            ) : null}
-                            {achievement.rewardLabel ? (
-                              <span className="pal-reward-label">
-                                Reward: {achievement.rewardLabel}
-                              </span>
-                            ) : null}
-                          </div>
-                        </details>
+                        <AchievementCard
+                          achievement={achievement}
+                          initiallyOpen={week.status === "current"}
+                        />
                       </li>
                     ))}
                   </ul>

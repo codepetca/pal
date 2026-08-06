@@ -362,6 +362,7 @@
 }
 
 .pal-achievement-card > summary {
+  position: relative;
   display: grid;
   grid-template-columns: 4rem minmax(0, 1fr);
   align-items: center;

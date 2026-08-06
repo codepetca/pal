@@ -91,6 +91,12 @@ test("responsive behavior follows the host viewport contract", () => {
   assert.doesNotMatch(narrowDateRule, /display:\s*none/);
 });
 
+test("achievement disclosure indicator is anchored to its summary", () => {
+  const summaryRule =
+    styles.match(/\.pal-achievement-card > summary \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(summaryRule, /position: relative/);
+});
+
 test("companion owns its portable visual composition without placement", () => {
   assert.match(styles, /\.pal-companion-grass/);
   assert.match(styles, /--pal-companion-cat-height/);
