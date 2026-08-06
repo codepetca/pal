@@ -61,6 +61,8 @@
   height: 100dvh;
   display: grid;
   --controls-width: 0px;
+  --companion-width: 0px;
+  --companion-height: 0px;
   grid-template-columns: minmax(0, 1fr) var(--controls-width);
   overflow: hidden;
   color: var(--host-text);
@@ -672,7 +674,7 @@
 .controlOpen {
   position: absolute;
   bottom: 1.5rem;
-  right: 7.25rem;
+  right: calc(1.75rem + var(--companion-width));
   pointer-events: auto;
   display: inline-flex;
   min-height: 40px;
@@ -975,6 +977,14 @@
 
   .sandbox[data-controls-collapsed="false"] {
     --controls-width: min(20rem, 100vw);
+  }
+
+  .controlOpen {
+    right: 1rem;
+    bottom: min(
+      calc(1.75rem + var(--companion-height)),
+      calc(100dvh - 3.5rem)
+    );
   }
 
   .companionOverlay {
