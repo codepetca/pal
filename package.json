@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "pnpm --filter @codepet/pal-widget build && turbo dev",
     "sandbox:setup": "node scripts/setup-shared-sandbox.mjs",
+    "sandbox:verify": "node --env-file=apps/web/.env.local scripts/verify-shared-sandbox.mjs",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck"

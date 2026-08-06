@@ -20,11 +20,13 @@ pnpm sandbox:setup
 pnpm dev
 ```
 
-The setup command signs in to Vercel if needed, links the `pal` project, and
-downloads its Development environment to `apps/web/.env.local`. That environment
-uses the isolated `pal_sandbox` database, never the production `neondb` database.
-The command refuses to overwrite an existing local env file; move that file aside
-first if you intentionally want to switch configurations.
+The setup command signs in to Vercel if needed, links the exact team-owned `pal`
+project, and writes four allow-listed variables to `apps/web/.env.local`. It
+verifies that the database uses the non-owner `pal_sandbox_app` role and that the
+role is denied access to production `neondb` before writing the file. The command
+refuses to overwrite an existing local env file; move that file aside first if
+you intentionally want to switch configurations. Run `pnpm sandbox:verify` at any
+time to recheck the database and role boundary.
 
 Open [localhost:3000/sandbox](http://localhost:3000/sandbox). Changes under
 `packages/widget/src` are built directly from the workspace, so developers can
@@ -51,7 +53,7 @@ For manual/local-Docker configuration, set:
 |---|---|---|
 | `PAL_INTEGRATION_SECRET` | Pika's 32+ character backend credential; generate with `openssl rand -hex 32` | Exercising Pika ingest or read-token minting |
 | `SANDBOX_INTEGRATION_SECRET` | A distinct 32+ character credential generated with `openssl rand -hex 32` | Exercising the sandbox event proxy |
-| `PAL_SANDBOX_PROTECTED_PREVIEW` | Leave unset/`false` locally. Set exactly `true` only on an access-protected Vercel preview backed by an isolated, disposable database | Enabling stateful sandbox routes in a preview deployment |
+| `PAL_SANDBOX_PROTECTED_PREVIEW` | Leave unset/`false` locally. Set exactly `true` only on the access-protected `sandbox` preview backed by the sandbox-only database role | Enabling stateful sandbox routes in the hosted sandbox |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
@@ -70,10 +72,11 @@ snapshot API. `/api/sandbox/events` attaches the sandbox integration secret serv
 and `/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
 five-minute learner-scoped token; neither integration nor signing secrets reach the
 browser. Reward dismissal calls the real idempotent acknowledgement endpoint. Sandbox
-mutation/token routes are available locally. In a Vercel preview they remain disabled
-unless `PAL_SANDBOX_PROTECTED_PREVIEW=true`; that opt-in is permitted only with Vercel
-Deployment Protection and the isolated sandbox database. They always return 404
-in production.
+mutation/token routes are available locally. Ordinary preview branches remain
+fail-closed and should use disposable data. The persistent `sandbox` preview is
+the one exception: it may use `PAL_SANDBOX_PROTECTED_PREVIEW=true` because Vercel
+Authentication is enforced and `pal_sandbox_app` cannot connect to production.
+Sandbox routes always return 404 in production.
 
 ---
 
