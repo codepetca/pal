@@ -11,3 +11,5 @@ dist
 .claude/worktrees/
 .codex-*.log
 .pnpm-store/
+.env*
+!.env.example

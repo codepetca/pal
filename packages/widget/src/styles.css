@@ -153,8 +153,7 @@
 
 .pal-week-chip,
 .pal-status,
-.pal-reward-label,
-.pal-companion-stats span {
+.pal-reward-label {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -451,37 +450,55 @@
   font-weight: 700;
 }
 
+/* The companion is one canonical, portable cat-on-grass surface. Pal owns its
+   complete visual footprint; hosts own only the containing layer and placement. */
 .pal-companion {
-  display: grid;
-  grid-template-columns: 5rem minmax(0, 1fr);
-  width: min(22rem, calc(100vw - 2rem));
-  gap: var(--pal-effective-space-control);
-  padding: var(--pal-effective-space-card);
-  border: 1px solid var(--pal-effective-color-border);
-  border-radius: var(--pal-effective-radius-card);
-  background: color-mix(in srgb, var(--pal-effective-color-surface) 94%, transparent);
-  box-shadow: var(--pal-effective-shadow-panel);
-  backdrop-filter: blur(10px);
+  --pal-companion-cat-h: var(--pal-companion-cat-height, 10rem);
+  --pal-companion-cat-w: calc(var(--pal-companion-cat-h) * 1.4);
+  --pal-companion-grass-h: calc(var(--pal-companion-cat-h) * 0.6);
+  --pal-companion-grass-w: calc(var(--pal-companion-grass-h) * 2502 / 1035);
+  --pal-companion-cat-top: calc(var(--pal-companion-cat-h) * 0.5);
+  --pal-companion-cat-bottom: calc(
+    var(--pal-companion-cat-top) + var(--pal-companion-cat-h)
+  );
+  --pal-companion-grass-top: calc(
+    var(--pal-companion-cat-bottom) - (var(--pal-companion-grass-h) / 2)
+  );
+
+  position: relative;
+  isolation: isolate;
+  display: block;
+  width: var(--pal-companion-grass-w);
+  height: calc(var(--pal-companion-grass-top) + var(--pal-companion-grass-h));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.pal-companion-stage {
+  position: absolute;
+  inset: 0;
 }
 
 .pal-companion-art {
-  position: relative;
-  display: grid;
-  min-height: 5rem;
-  place-items: center;
-  border-radius: calc(var(--pal-effective-radius-card) - 0.2rem);
-  background: linear-gradient(145deg, #dbeafe, #dcfce7);
-  font-size: 2rem;
+  position: absolute;
+  top: var(--pal-companion-cat-top);
+  left: 50%;
+  z-index: 1;
+  display: block;
+  width: var(--pal-companion-cat-w);
+  height: var(--pal-companion-cat-h);
+  min-height: 0;
+  border-radius: 0;
+  background: none;
+  transform: translateX(-50%);
 }
 
-/* Every pose is stacked in the same box and switched by opacity, so the frames
-   are taken out of flow and sized from the box height. `transform` is set per
-   frame in companion.tsx: centring plus a measured per-canvas nudge, so every
-   pose lands on the same spot. Vertically the canvases already agree, so
-   bottom-flush is correct for all of them.
-
-   No transition: a crossfade would show two poses at once, and the point of the
-   two-frame loop is that each drawing reads on its own. */
+/* Every pose is stacked in the same box and switched by opacity. No
+   transition: each authored drawing should read on its own. */
 .pal-companion-art .pal-companion-sprite {
   position: absolute;
   bottom: 0;
@@ -491,53 +508,24 @@
   height: 100%;
 }
 
-.pal-companion-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+.pal-companion-grass {
+  position: absolute;
+  top: var(--pal-companion-grass-top);
+  left: 50%;
+  z-index: 0;
+  display: block;
+  width: var(--pal-companion-grass-w);
+  max-width: none;
+  height: var(--pal-companion-grass-h);
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
-.pal-companion-title span {
-  color: var(--pal-effective-color-success);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.pal-companion-copy p {
-  margin-top: 0.25rem;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-
-.pal-companion-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.55rem;
-}
-
-.pal-companion-stats span {
-  padding: 0.25rem 0.45rem;
-  color: var(--pal-effective-color-primary);
-  background: var(--pal-effective-color-surface-selected);
-}
-
-.pal-companion[data-pal-variant="compact"] {
-  grid-template-columns: 1fr;
-  width: 5rem;
-  padding: 0.4rem;
-  border-radius: 999px;
-}
-
-.pal-companion[data-pal-variant="compact"] .pal-companion-art {
-  min-height: 4.1rem;
-  border-radius: 50%;
-}
-
-.pal-companion[data-pal-variant="compact"] .pal-companion-copy {
-  display: none;
+.pal-companion img {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .pal-celebration {
@@ -645,22 +633,4 @@
 
 .pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {
   grid-template-columns: 1fr;
-}
-
-.pal-companion[data-pal-viewport="narrow"][data-pal-variant="responsive"] {
-  grid-template-columns: 1fr;
-  width: 5rem;
-  padding: 0.4rem;
-  border-radius: 999px;
-}
-
-.pal-companion[data-pal-viewport="narrow"][data-pal-variant="responsive"]
-  .pal-companion-art {
-  min-height: 4.1rem;
-  border-radius: 50%;
-}
-
-.pal-companion[data-pal-viewport="narrow"][data-pal-variant="responsive"]
-  .pal-companion-copy {
-  display: none;
 }

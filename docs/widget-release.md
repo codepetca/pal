@@ -2,7 +2,9 @@
 
 `@codepet/pal-widget` is the public npm package consumed by Pika. The npm scope is
 owned by the `codepet` npm account; a separate npm organization is not required.
-The package remains unpublished until an owner deliberately runs the publish step.
+Alpha releases are published only when an owner deliberately runs the guarded
+publish step. `0.1.0-alpha.1` is the first published prerelease; each subsequent
+package change receives a new immutable alpha version.
 
 ## Release gates
 

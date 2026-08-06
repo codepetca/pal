@@ -72,6 +72,17 @@ test("responsive behavior follows the host viewport contract", () => {
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
+test("companion owns its portable visual composition without placement", () => {
+  assert.match(styles, /\.pal-companion-grass/);
+  assert.match(styles, /--pal-companion-cat-height/);
+
+  const companionRule =
+    styles.match(/\n\.pal-companion \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(companionRule, /position: relative/);
+  assert.doesNotMatch(companionRule, /position: (fixed|absolute|sticky)/);
+  assert.doesNotMatch(companionRule, /(^|\n)\s*(top|right|bottom|left):/);
+});
+
 test("future-week treatment preserves muted-text contrast in both themes", () => {
   const futureCardRule =
     styles.match(

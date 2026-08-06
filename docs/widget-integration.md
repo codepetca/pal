@@ -48,6 +48,12 @@ The public client returns a versioned learner snapshot. The widget renders store
 Pal state; it never interprets Pika events or calculates achievement progress in the
 browser.
 
+`PalCompanion` is the complete cat-on-grass visual surface.
+Pal owns its artwork, animation, internal sizing, and transparent-pixel hit testing.
+The host may set `scale` and attach standard pointer handlers, but owns the containing
+layer, viewport placement, drag persistence, and collision rules. The sandbox follows
+this same boundary; it does not reconstruct or restyle the companion's internals.
+
 The package may receive:
 
 - a Pal client or the inputs needed to create one;
@@ -76,6 +82,9 @@ validates the destination before requesting or attaching a learner token.
 Snapshot asset URLs are restricted to the Pal API origin by default. A Pal-owned
 CDN must be explicitly named in `allowedAssetOrigins`; insecure protocols and
 unlisted third-party origins are rejected before the snapshot enters React state.
+Companion sprite and grass responses must also allow anonymous cross-origin image
+requests so Pal can preserve its transparent-pixel interaction boundary when the
+widget and artwork are served from different origins.
 
 Standalone hosts may set `modal` and use `onOpenChange` to coordinate their own
 backdrop and inert application region; Pal then contains Tab focus, handles Escape,
@@ -112,6 +121,7 @@ Pika owns:
 Pal owns:
 
 - roadmap, achievement, badge, pet, and reward rendering;
+- the companion's cat-and-grass composition and internal hit boundary;
 - component accessibility inside each Pal surface;
 - learner snapshot types and refresh semantics;
 - asset resolution; and
@@ -201,9 +211,17 @@ achievement evaluation, award/reward persistence, the learner snapshot API, and 
 reward acknowledgement API. The package fixture client remains available for isolated
 component tests; it is not the sandbox's source of learner state.
 
-Stateful sandbox routes are local-only by default. Preview use is fail-closed and may
-be enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, upstream deployment
-authentication, and an isolated, disposable preview database.
+Stateful sandbox routes are local-only by default. Ordinary previews remain
+fail-closed and should use disposable data. The persistent `sandbox` preview is
+enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, Vercel Authentication,
+and the sandbox-only `pal_sandbox_app` role, which cannot connect to production.
+
+The stable hosted sandbox uses the protected `sandbox` preview branch and the
+separate `pal_sandbox` database. Its widget is built from that branch's workspace
+source; the version shown in the controls is the current package baseline, not an
+npm download. Pika uses a published, pinned npm package, so sandbox-only experiments
+need no release. Publish and adopt a new prerelease only when a package source,
+style, asset contract, or public API change is ready for Pika.
 
 ## Initial acceptance
 

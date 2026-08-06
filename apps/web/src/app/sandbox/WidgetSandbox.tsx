@@ -17,6 +17,7 @@ import {
   CaretRight,
   ClipboardText,
   FileText,
+  Gear,
   Lightning,
   Megaphone,
   Moon,
@@ -26,7 +27,15 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createSandboxPalClient,
@@ -51,7 +60,14 @@ type HostView =
   | "tests"
   | "calendar"
   | "syllabus"
-  | "announcements";
+  | "announcements"
+  | "settings";
+
+export type SandboxBuildInfo = {
+  source: "Local workspace" | "Protected preview";
+  widgetVersion: string;
+  revision?: string;
+};
 
 const NAV_ITEMS = [
   { label: "Today", view: "today", icon: NotePencil },
@@ -61,6 +77,7 @@ const NAV_ITEMS = [
   { label: "Syllabus", view: "syllabus", icon: BookOpen },
   { label: "Achievements", view: "achievements", icon: Trophy },
   { label: "Announcements", view: "announcements", icon: Megaphone },
+  { label: "Settings", view: "settings", icon: Gear },
 ] satisfies Array<{
   label: string;
   view: HostView;
@@ -120,6 +137,7 @@ const SANDBOX_ACTIONS: Array<{
 ];
 
 function SandboxControls({
+  buildInfo,
   client,
   collapsed,
   onCollapsedChange,
@@ -134,6 +152,7 @@ function SandboxControls({
   sandboxError,
   currentSemesterWeek,
 }: {
+  buildInfo: SandboxBuildInfo;
   client: SandboxPalClient;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -285,6 +304,23 @@ function SandboxControls({
             </p>
           </header>
 
+          <dl className={styles.buildInfo} aria-label="Sandbox build information">
+            <div>
+              <dt>Widget source</dt>
+              <dd>{buildInfo.source}</dd>
+            </div>
+            <div>
+              <dt>Package baseline</dt>
+              <dd>@codepet/pal-widget {buildInfo.widgetVersion}</dd>
+            </div>
+            {buildInfo.revision ? (
+              <div>
+                <dt>Revision</dt>
+                <dd><code>{buildInfo.revision}</code></dd>
+              </div>
+            ) : null}
+          </dl>
+
           <div className={styles.dateBar}>
             <span className={styles.dateLabel}>
               Semester week {currentSemesterWeek} / daily-log date
@@ -345,7 +381,123 @@ function SandboxControls({
   );
 }
 
+function PalSettings({
+  widgetScale,
+  widgetVisible,
+  onWidgetScaleChange,
+  onWidgetVisibleChange,
+}: {
+  widgetScale: number;
+  widgetVisible: boolean;
+  onWidgetScaleChange: (scale: number) => void;
+  onWidgetVisibleChange: (visible: boolean) => void;
+}) {
+  return (
+    <section className={styles.settingsContent} aria-labelledby="settings-title">
+      <p className={styles.hostEyebrow}>Pika host preview</p>
+      <h1 id="settings-title">Settings</h1>
+
+      <section className={styles.settingsSection} aria-labelledby="pal-settings-title">
+        <header className={styles.settingsSectionHeader}>
+          <h2 id="pal-settings-title">Pal</h2>
+          <p>Widget control</p>
+        </header>
+
+        <div className={styles.settingsGrid}>
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Widget size</h3>
+                <p>Adjust the size of the Pal widget.</p>
+              </div>
+              <output htmlFor="pal-widget-size">{widgetScale.toFixed(1)}×</output>
+            </div>
+            <input
+              id="pal-widget-size"
+              className={styles.sizeSlider}
+              type="range"
+              min="0.4"
+              max="1.2"
+              step="0.1"
+              value={widgetScale}
+              aria-label="Pal widget size"
+              onInput={(event) => onWidgetScaleChange(Number(event.currentTarget.value))}
+            />
+            <div className={styles.sliderBounds} aria-hidden="true">
+              <span>0.4×</span>
+              <span>1.2×</span>
+            </div>
+          </article>
+
+          <article className={styles.settingCard}>
+            <div className={styles.settingTitleRow}>
+              <div>
+                <h3>Show widget</h3>
+                <p>Show or hide the Pal widget.</p>
+              </div>
+              <span className={styles.settingStatus}>
+                {widgetVisible ? "On" : "Off"}
+              </span>
+            </div>
+            <label className={styles.switchControl}>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={widgetVisible}
+                aria-label="Show Pal widget"
+                onChange={(event) => onWidgetVisibleChange(event.currentTarget.checked)}
+              />
+              <span className={styles.switchTrack} aria-hidden="true">
+                <span />
+              </span>
+              <span>{widgetVisible ? "Widget visible" : "Widget hidden"}</span>
+            </label>
+          </article>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function CompanionOverlay({
+  visible,
+  scale,
+  dragging,
+  overlayRef,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
+}: {
+  visible: boolean;
+  scale: number;
+  dragging: boolean;
+  overlayRef: RefObject<HTMLDivElement | null>;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerEnd: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <div
+      ref={overlayRef}
+      className={styles.companionOverlay}
+      data-dragging={dragging ? "true" : "false"}
+    >
+      <PalCompanion
+        scale={scale}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onDragStart={(event) => event.preventDefault()}
+      />
+    </div>
+  );
+}
+
 function SandboxExperience({
+  buildInfo,
   client,
   theme,
   viewport,
@@ -356,6 +508,7 @@ function SandboxExperience({
   scopeKey,
   onReset,
 }: {
+  buildInfo: SandboxBuildInfo;
   client: SandboxPalClient;
   theme: PalTheme;
   viewport: PalViewport;
@@ -381,10 +534,125 @@ function SandboxExperience({
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [widgetScale, setWidgetScale] = useState(1);
+  const [widgetVisible, setWidgetVisible] = useState(true);
 
   useEffect(() => {
     if (sandboxError) setControlsCollapsed(false);
   }, [sandboxError]);
+
+  // Host-owned placement (per the widget's boundary: "the host owns
+  // placement, Pal owns everything rendered inside"). Position is written
+  // straight to the DOM node during drag rather than through setState:
+  // this component's subtree is large, and re-rendering it on every
+  // pointermove was what made dragging feel laggy. State only records
+  // whether a drag is in progress, for the grab/grabbing cursor.
+  const companionOverlayRef = useRef<HTMLDivElement>(null);
+  const [companionDragging, setCompanionDragging] = useState(false);
+  // Width/height are the public pet widget's complete visual footprint,
+  // captured once at drag start so each move only clamps against them instead
+  // of re-measuring the DOM every pointer event.
+  const companionDragOffset = useRef<{
+    dx: number;
+    dy: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const overlay = companionOverlayRef.current;
+    if (!overlay) return;
+
+    const clampToContainer = () => {
+      const rect = overlay.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const container = overlay.offsetParent;
+      const containerRect = container instanceof HTMLElement
+        ? container.getBoundingClientRect()
+        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const maxX = Math.max(containerRect.width - rect.width, 0);
+      const maxY = Math.max(containerRect.height - rect.height, 0);
+      const x = Math.min(Math.max(rect.left - containerRect.left, 0), maxX);
+      const y = Math.min(Math.max(rect.top - containerRect.top, 0), maxY);
+
+      overlay.style.left = `${x}px`;
+      overlay.style.top = `${y}px`;
+      overlay.style.right = "auto";
+      overlay.style.bottom = "auto";
+    };
+
+    clampToContainer();
+    window.addEventListener("resize", clampToContainer);
+    const resizeObserver = new ResizeObserver(clampToContainer);
+    resizeObserver.observe(overlay);
+
+    return () => {
+      window.removeEventListener("resize", clampToContainer);
+      resizeObserver.disconnect();
+    };
+  }, [widgetScale, widgetVisible]);
+
+  // Pal owns the surface's internal alpha hit-test. Pointer capture and the
+  // resulting viewport placement remain host responsibilities.
+  const handleCompanionPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    const el = companionOverlayRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const container = el.offsetParent;
+    const containerRect = container instanceof HTMLElement
+      ? container.getBoundingClientRect()
+      : { left: 0, top: 0 };
+    companionDragOffset.current = {
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    // Pin the current on-screen position as explicit left/top before
+    // anything else — rect already IS wherever it's sitting right now
+    // (whether that's the CSS default right/bottom corner or a previous
+    // drag's left/top), so this is a no-op visually. It guarantees the
+    // sprite cannot move on press itself, only from here on with the
+    // pointer, regardless of how that position was arrived at.
+    el.style.left = `${rect.left - containerRect.left}px`;
+    el.style.top = `${rect.top - containerRect.top}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setCompanionDragging(true);
+  };
+
+  const handleCompanionPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const el = companionOverlayRef.current;
+    const offset = companionDragOffset.current;
+    if (!el || !offset) return;
+    // Convert viewport pointer coordinates to the positioned classroom shell's
+    // coordinate space before clamping against its visible bounds.
+    const container = el.offsetParent;
+    const containerRect = container instanceof HTMLElement
+      ? container.getBoundingClientRect()
+      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const maxX = Math.max(containerRect.width - offset.width, 0);
+    const maxY = Math.max(containerRect.height - offset.height, 0);
+    const x = Math.min(
+      Math.max(e.clientX - offset.dx - containerRect.left, 0),
+      maxX,
+    );
+    const y = Math.min(
+      Math.max(e.clientY - offset.dy - containerRect.top, 0),
+      maxY,
+    );
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  };
+
+  const endCompanionDrag = () => {
+    companionDragOffset.current = null;
+    setCompanionDragging(false);
+  };
 
   const activeLabel =
     NAV_ITEMS.find((item) => item.view === view)?.label ?? "Today";
@@ -503,6 +771,13 @@ function SandboxExperience({
                   ))}
                 </article>
               </section>
+            ) : view === "settings" ? (
+              <PalSettings
+                widgetScale={widgetScale}
+                widgetVisible={widgetVisible}
+                onWidgetScaleChange={setWidgetScale}
+                onWidgetVisibleChange={setWidgetVisible}
+              />
             ) : (
               <section className={styles.classroomContent}>
                 <p className={styles.hostEyebrow}>Pika host preview</p>
@@ -520,11 +795,42 @@ function SandboxExperience({
             )}
           </main>
 
-          <div className={styles.companionOverlay}>
-            <PalCompanion variant="compact" />
-          </div>
+          <CompanionOverlay
+            visible={widgetVisible}
+            scale={widgetScale}
+            dragging={companionDragging}
+            overlayRef={companionOverlayRef}
+            onPointerDown={handleCompanionPointerDown}
+            onPointerMove={handleCompanionPointerMove}
+            onPointerEnd={endCompanionDrag}
+          />
 
           </div>
+
+          <SandboxRefreshBridge>
+            {(refresh) => (
+              <SandboxControls
+                buildInfo={buildInfo}
+                client={client}
+                collapsed={controlsCollapsed}
+                onCollapsedChange={setControlsCollapsed}
+                onRefresh={refresh}
+                onReset={() => {
+                  setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
+                  setSandboxError(null);
+                  onReset();
+                }}
+                simulatedDate={simulatedDate}
+                onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
+                onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
+                canAddDay={canAddDay}
+                canAddWeek={canAddWeek}
+                learnerId={learnerId}
+                sandboxError={sandboxError}
+                currentSemesterWeek={currentSemesterWeek}
+              />
+            )}
+          </SandboxRefreshBridge>
         </div>
 
         <SandboxRefreshBridge>
@@ -600,7 +906,7 @@ function XpBar() {
   );
 }
 
-export function WidgetSandbox() {
+export function WidgetSandbox({ buildInfo }: { buildInfo: SandboxBuildInfo }) {
   const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   const [clientGeneration, setClientGeneration] = useState(0);
@@ -635,6 +941,7 @@ export function WidgetSandbox() {
 
   return (
     <SandboxExperience
+      buildInfo={buildInfo}
       client={client}
       theme={theme}
       viewport={viewport}

@@ -5,6 +5,20 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
+    "@pal/web#build": {
+      "dependsOn": ["^build"],
+      "env": [
+        "DATABASE_URL",
+        "PAL_ALLOWED_WIDGET_ORIGINS",
+        "PAL_INTEGRATION_SECRET",
+        "PAL_READ_TOKEN_SIGNING_SECRET",
+        "PAL_SANDBOX_PROTECTED_PREVIEW",
+        "SANDBOX_INTEGRATION_SECRET",
+        "VERCEL_ENV",
+        "VERCEL_GIT_COMMIT_SHA"
+      ],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

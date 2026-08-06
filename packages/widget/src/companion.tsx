@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  forwardRef,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { usePalWidget } from "./provider";
 import type { PalCompanionMood, PalCompanionProps, PalMotion } from "./types";
@@ -17,15 +24,17 @@ const MOOD_FRAME_MS = 600;
 const BLINK_FRAME_MS = 70;
 const BLINK_EVERY_MS = 4000;
 
-// Every pose is drawn on a canvas of this height; only the widths differ.
-const CANVAS_H = 2048;
-const REST_W = 1952;
+// The source PNGs are tightly cropped to their visible alpha bounds. The rest
+// pose is the scale reference; other frames keep their authored size relative
+// to it and use measured offsets so independently cropped poses do not jump.
+const REST_H = 1676;
+const REST_W = 1720;
 
 // `dx` and `dy` register each frame against the resting pose, in that frame's
-// own canvas pixels, applied on top of centring the canvas and sitting it on the
-// box floor. The poses are drawn on canvases of different widths and the cat is
+// own cropped pixels, applied on top of centring the art and sitting it on the
+// box floor. The poses have different tight dimensions and the cat is
 // not placed identically on any two of them, so the obvious geometry — centre
-// the canvas, flush the bottom — lands the cat in a different spot on almost
+// each crop, flush the bottom — lands the cat in a different spot on almost
 // every frame, which reads as a twitch on each frame change.
 //
 // Deriving these for new art: sample both alpha masks, reduce each to a row and
@@ -36,15 +45,16 @@ const REST_W = 1952;
 // its bounding-box centre sideways while the body has not moved, so aligning
 // boxes would introduce exactly the drift this is meant to remove.
 //
-// Every canvas shares a 2048px height, so all frames render at one scale and
-// these offsets stay valid at any rendered size.
-type Frame = { src: string; w: number; dx: number; dy: number };
+// Frame heights are scaled against REST_H, keeping the authored proportions
+// and these offsets valid at any rendered size.
+type Frame = { src: string; w: number; h: number; dx: number; dy: number };
 
-type FrameSpec = { file: string; w: number; dx: number; dy: number };
+type FrameSpec = { file: string; w: number; h: number; dx: number; dy: number };
 
 const BLINK_SPECS: FrameSpec[] = [1, 2, 3, 4, 5].map((n) => ({
   file: `blinking-${n}`,
   w: REST_W,
+  h: REST_H,
   dx: 0,
   dy: 0,
 }));
@@ -57,12 +67,12 @@ const BLINK_SPECS: FrameSpec[] = [1, 2, 3, 4, 5].map((n) => ({
 // hold the body still through the loop.
 const MOOD_SPECS: Partial<Record<PalCompanionMood, FrameSpec[]>> = {
   happy: [
-    { file: "happy-1", w: 2126, dx: -58, dy: 0 },
-    { file: "happy-2", w: 2126, dx: -54, dy: 6 },
+    { file: "happy-1", w: 1836, h: 1676, dx: -58, dy: 0 },
+    { file: "happy-2", w: 1932, h: 1606, dx: 6, dy: -64 },
   ],
   excited: [
-    { file: "excited-1", w: 2502, dx: -12, dy: 4 },
-    { file: "excited-2", w: 2502, dx: -10, dy: 46 },
+    { file: "excited-1", w: 1727, h: 1676, dx: 2.5, dy: 4 },
+    { file: "excited-2", w: 1835, h: 1805, dx: 0.5, dy: -24 },
   ],
 };
 
@@ -71,6 +81,10 @@ type SpriteSet = {
   blink: Frame[];
   byMood: Partial<Record<PalCompanionMood, Frame[]>>;
 };
+
+function siblingAssetUrl(restUrl: string, file: string): string {
+  return `${restUrl.slice(0, restUrl.lastIndexOf("/") + 1)}${file}`;
+}
 
 /**
  * Builds the frame table from the resting pose the snapshot points at.
@@ -83,17 +97,17 @@ type SpriteSet = {
  * 404s on them, and the pet holds its resting pose.
  */
 function buildSprites(restUrl: string): SpriteSet {
-  const base = restUrl.slice(0, restUrl.lastIndexOf("/") + 1);
   const toFrame = (spec: FrameSpec): Frame => ({
-    src: `${base}${spec.file}.png`,
+    src: siblingAssetUrl(restUrl, `${spec.file}.png`),
     w: spec.w,
+    h: spec.h,
     dx: spec.dx,
     dy: spec.dy,
   });
 
   // The resting pose is the registration reference, so its offsets are zero by
   // definition, and it is the one frame addressed by the snapshot's own URL.
-  const rest: Frame = { src: restUrl, w: REST_W, dx: 0, dy: 0 };
+  const rest: Frame = { src: restUrl, w: REST_W, h: REST_H, dx: 0, dy: 0 };
   const blink: Frame[] = BLINK_SPECS.map(toFrame);
 
   const byMood: Partial<Record<PalCompanionMood, Frame[]>> = {};
@@ -102,6 +116,49 @@ function buildSprites(restUrl: string): SpriteSet {
   }
 
   return { rest, blink, byMood };
+}
+
+function findVisibleSpriteImg(root: HTMLElement): HTMLImageElement | null {
+  const frames = root.querySelectorAll<HTMLImageElement>("img.pal-companion-sprite");
+  for (const frame of frames) {
+    if (window.getComputedStyle(frame).opacity === "1") return frame;
+  }
+  return null;
+}
+
+/**
+ * Keeps transparent cat pixels from becoming a surprising host drag target.
+ * The pet owns this knowledge so hosts never query Pal's private sprite DOM.
+ * Grass and layout space remain valid interaction targets.
+ */
+function isTransparentAt(
+  img: HTMLImageElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return false;
+
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+
+  const relX = (clientX - rect.left) / rect.width;
+  const relY = (clientY - rect.top) / rect.height;
+  if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
+
+  const x = Math.min(img.naturalWidth - 1, Math.max(0, Math.floor(relX * img.naturalWidth)));
+  const y = Math.min(img.naturalHeight - 1, Math.max(0, Math.floor(relY * img.naturalHeight)));
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return false;
+
+  try {
+    context.drawImage(img, 0, 0);
+    return context.getImageData(x, y, 1, 1).data[3] === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -231,10 +288,11 @@ function PetSprite({
         <img
           key={frame.src}
           className="pal-companion-sprite"
+          crossOrigin="anonymous"
           src={frame.src}
           alt=""
           width={frame.w}
-          height={CANVAS_H}
+          height={frame.h}
           onLoad={() => {
             if (frame.src !== sprites.rest.src) {
               setLoadedFrames((current) => {
@@ -253,9 +311,10 @@ function PetSprite({
           }}
           style={{
             opacity: frame.src === activeSrc ? 1 : 0,
-            // Every term is a percentage of the frame's own rendered box, which
-            // maps 1:1 onto its canvas, so the registration holds at any size.
-            transform: `translate(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%), ${((frame.dy / CANVAS_H) * 100).toFixed(3)}%)`,
+            height: `${((frame.h / REST_H) * 100).toFixed(3)}%`,
+            // Offsets are percentages of this tightly cropped frame. This keeps
+            // every pose registered while avoiding transparent layout padding.
+            transform: `translate(calc(-50% + ${((frame.dx / frame.w) * 100).toFixed(3)}%), ${((frame.dy / frame.h) * 100).toFixed(3)}%)`,
           }}
         />
       ))}
@@ -263,46 +322,77 @@ function PetSprite({
   );
 }
 
-export function PalCompanion({ variant = "responsive" }: PalCompanionProps) {
+export const PalCompanion = forwardRef<HTMLElement, PalCompanionProps>(
+function PalCompanion(
+  {
+    scale = 1,
+    className,
+    style,
+    onPointerDown,
+    ...hostProps
+  },
+  ref,
+) {
   const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
   if (state === "error" || !snapshot) return null;
 
   const companion = snapshot.companion;
+  const companionScale = Number.isFinite(scale)
+    ? Math.min(1.2, Math.max(0.4, scale))
+    : 1;
+  const companionStyle = {
+    ...style,
+    "--pal-companion-cat-height": `${companionScale * 10}rem`,
+  } as CSSProperties;
+  const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    const activeFrame = findVisibleSpriteImg(event.currentTarget);
+    if (activeFrame && isTransparentAt(activeFrame, event.clientX, event.clientY)) {
+      return;
+    }
+    onPointerDown?.(event);
+  };
+  const label = `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`;
 
   return (
     <aside
-      className="pal-companion"
+      {...hostProps}
+      ref={ref}
+      className={["pal-companion", className].filter(Boolean).join(" ")}
+      style={companionStyle}
+      onPointerDown={handlePointerDown}
       data-pal-density={density}
       data-pal-motion={motion}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       data-pal-mood={companion.mood}
-      data-pal-variant={variant}
-      aria-label={`${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`}
+      aria-label={label}
     >
-      <div className="pal-companion-art" aria-hidden="true">
+      <div className="pal-companion-stage" aria-hidden="true">
         {companion.assetUrl ? (
-          <PetSprite
-            key={companion.assetUrl}
-            mood={companion.mood}
-            motion={motion}
-            restUrl={companion.assetUrl}
-          />
+          <>
+            <img
+              className="pal-companion-grass"
+              crossOrigin="anonymous"
+              src={siblingAssetUrl(companion.assetUrl, "grass.png")}
+              alt=""
+              width="2502"
+              height="1035"
+            />
+            <div className="pal-companion-art">
+              <PetSprite
+                key={companion.assetUrl}
+                mood={companion.mood}
+                motion={motion}
+                restUrl={companion.assetUrl}
+              />
+            </div>
+          </>
         ) : (
-          <span>🐾</span>
+          <div className="pal-companion-art">
+            <span>🐾</span>
+          </div>
         )}
-      </div>
-      <div className="pal-companion-copy">
-        <div className="pal-companion-title">
-          <strong>{companion.name}</strong>
-          <span>{companion.moodLabel}</span>
-        </div>
-        <p>{companion.message}</p>
-        <div className="pal-companion-stats" aria-label="Companion progress">
-          <span>Level {companion.level}</span>
-          <span>{companion.streak} day rhythm</span>
-        </div>
       </div>
     </aside>
   );
-}
+});

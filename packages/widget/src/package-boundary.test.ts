@@ -25,6 +25,29 @@ const sandboxClientSource = readFileSync(
   ),
   "utf8",
 );
+const sandboxPageSource = readFileSync(
+  new URL(
+    "../../../apps/web/src/app/sandbox/page.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const homePageSource = readFileSync(
+  new URL("../../../apps/web/src/app/page.tsx", import.meta.url),
+  "utf8",
+);
+const sandboxSetupSource = readFileSync(
+  new URL("../../../scripts/setup-shared-sandbox.mjs", import.meta.url),
+  "utf8",
+);
+const sandboxVerifierSource = readFileSync(
+  new URL("../../../scripts/verify-shared-sandbox.mjs", import.meta.url),
+  "utf8",
+);
+const turboConfigSource = readFileSync(
+  new URL("../../../turbo.json", import.meta.url),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -133,6 +156,43 @@ test("sandbox consumes only the widget public package boundary", () => {
   }
 });
 
+test("sandbox page is visible only in an allowed runtime and identifies its build", () => {
+  assert.match(sandboxPageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(sandboxPageSource, /notFound\(\)/);
+  assert.match(sandboxPageSource, /Protected preview/);
+  assert.match(sandboxPageSource, /Local workspace/);
+  assert.match(sandboxPageSource, /widgetPackage\.version/);
+  assert.match(homePageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(homePageSource, /redirect\("\/sandbox"\)/);
+  assert.doesNotMatch(homePageSource, /WidgetSandbox/);
+});
+
+test("shared sandbox setup is pinned, minimal, and verifies production isolation", () => {
+  assert.match(sandboxSetupSource, /VERCEL_TEAM_ID/);
+  assert.match(sandboxSetupSource, /VERCEL_PROJECT_ID/);
+  assert.match(sandboxSetupSource, /ALLOWED_ENV_NAMES/);
+  assert.match(sandboxSetupSource, /verifySharedSandbox/);
+  assert.match(sandboxVerifierSource, /pal_sandbox_app/);
+  assert.match(sandboxVerifierSource, /has_database_privilege/);
+  assert.match(sandboxVerifierSource, /database_owner/);
+  assert.match(sandboxVerifierSource, /superuser/);
+  assert.match(sandboxVerifierSource, /create_database/);
+  assert.match(sandboxVerifierSource, /create_role/);
+  assert.match(sandboxVerifierSource, /production_connect/);
+  assert.match(sandboxVerifierSource, /42501/);
+  assert.match(sandboxVerifierSource, /pal\.codepet\.ca/);
+  assert.match(sandboxVerifierSource, /api\/v1\/events/);
+  assert.match(sandboxVerifierSource, /api\/v1\/integration\/read-token/);
+  assert.match(sandboxVerifierSource, /response\.status !== 401/);
+  assert.match(turboConfigSource, /PAL_SANDBOX_PROTECTED_PREVIEW/);
+  assert.match(turboConfigSource, /@pal\/web#build/);
+  assert.match(turboConfigSource, /PAL_INTEGRATION_SECRET/);
+  assert.match(turboConfigSource, /SANDBOX_INTEGRATION_SECRET/);
+  assert.match(turboConfigSource, /PAL_READ_TOKEN_SIGNING_SECRET/);
+  assert.match(turboConfigSource, /DATABASE_URL/);
+  assert.match(turboConfigSource, /VERCEL_ENV/);
+});
+
 test("sandbox reads every Pal surface from the persisted pipeline", () => {
   assert.match(sandboxSource, /Real pipeline/);
   assert.match(
@@ -141,6 +201,21 @@ test("sandbox reads every Pal surface from the persisted pipeline", () => {
   );
   assert.doesNotMatch(sandboxSource, /initialSnapshot=/);
   assert.doesNotMatch(sandboxSource, /Fixture preview/);
+});
+
+test("sandbox mounts the public companion without rebuilding its internals", () => {
+  assert.match(
+    sandboxSource,
+    /<PalCompanion\s+scale=\{scale\}/,
+  );
+  assert.doesNotMatch(sandboxSource, /<PalCompanion[\s\S]*variant=/);
+  assert.doesNotMatch(sandboxSource, /pal-companion-sprite|querySelectorAll/);
+  assert.doesNotMatch(sandboxSource, /grassPatch|companionCatBox|companionHitArea/);
+  assert.doesNotMatch(sandboxStyles, /grass\.png|grassPatch|companionCatBox/);
+  assert.match(
+    sandboxSource,
+    /if \(sandboxError\) setControlsCollapsed\(false\)/,
+  );
 });
 
 test("only the engine decides the companion's mood", () => {
@@ -164,6 +239,21 @@ test("sandbox reset rotates provider identity and controls start collapsed", () 
 
 test("sandbox navigation keeps accessible names when labels are visually hidden", () => {
   assert.match(sandboxSource, /aria-label=\{label\}/);
+});
+
+test("sandbox keeps the companion in its positioned container after size changes", () => {
+  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToContainer\)/);
+  assert.match(sandboxSource, /new ResizeObserver\(clampToContainer\)/);
+  assert.match(sandboxSource, /rect\.left - containerRect\.left/);
+  assert.match(sandboxSource, /e\.clientY - offset\.dy - containerRect\.top/);
+  assert.match(sandboxSource, /\[widgetScale, widgetVisible\]/);
+});
+
+test("sandbox settings stack in narrow viewports", () => {
+  assert.match(
+    sandboxStyles,
+    /@media \(max-width: 720px\) \{[\s\S]*?\.settingsGrid \{[\s\S]*?grid-template-columns: 1fr/,
+  );
 });
 
 test("sandbox modal host makes application siblings inert and intercepts its backdrop", () => {
