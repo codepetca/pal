@@ -211,9 +211,17 @@ achievement evaluation, award/reward persistence, the learner snapshot API, and 
 reward acknowledgement API. The package fixture client remains available for isolated
 component tests; it is not the sandbox's source of learner state.
 
-Stateful sandbox routes are local-only by default. Preview use is fail-closed and may
-be enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, upstream deployment
-authentication, and an isolated, disposable preview database.
+Stateful sandbox routes are local-only by default. Ordinary previews remain
+fail-closed and should use disposable data. The persistent `sandbox` preview is
+enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, Vercel Authentication,
+and the sandbox-only `pal_sandbox_app` role, which cannot connect to production.
+
+The stable hosted sandbox uses the protected `sandbox` preview branch and the
+separate `pal_sandbox` database. Its widget is built from that branch's workspace
+source; the version shown in the controls is the current package baseline, not an
+npm download. Pika uses a published, pinned npm package, so sandbox-only experiments
+need no release. Publish and adopt a new prerelease only when a package source,
+style, asset contract, or public API change is ready for Pika.
 
 ## Initial acceptance
 
