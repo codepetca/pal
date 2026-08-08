@@ -91,9 +91,9 @@ test("responsive behavior follows the host viewport contract", () => {
   assert.doesNotMatch(narrowDateRule, /display:\s*none/);
 });
 
-test("achievement disclosure indicator is anchored to its summary", () => {
+test("achievement disclosure indicator is anchored to the week summary circle", () => {
   const summaryRule =
-    styles.match(/\.pal-achievement-card > summary \{([^}]+)\}/)?.[1] ?? "";
+    styles.match(/\.pal-week-summary \{([^}]+)\}/)?.[1] ?? "";
   assert.match(summaryRule, /position: relative/);
 });
 
@@ -109,12 +109,11 @@ test("companion owns its portable visual composition without placement", () => {
 });
 
 test("future-week treatment preserves muted-text contrast in both themes", () => {
-  const futureCardRule =
+  const futureMarkerRule =
     styles.match(
-      /\.pal-week\[data-week-status="future"\] \.pal-week-card \{([^}]+)\}/,
+      /\.pal-week\[data-week-status="future"\] \.pal-week-marker \{([^}]+)\}/,
     )?.[1] ?? "";
-  assert.doesNotMatch(futureCardRule, /opacity/);
-  assert.match(futureCardRule, /border-style: dashed/);
+  assert.doesNotMatch(futureMarkerRule, /opacity/);
 
   const textFallbacks = hexFallbacks("--pal-effective-color-text-muted");
   const surfaceFallbacks = hexFallbacks("--pal-effective-color-surface");

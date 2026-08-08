@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { usePalWidget } from "./provider";
-import type { PalAchievement, PalAchievementStatus } from "./types";
+import type { PalAchievement, PalAchievementStatus, PalRoadmapWeek } from "./types";
 
 const STATUS_ICONS: Record<PalAchievementStatus, string> = {
   earned: "✓",
@@ -16,44 +16,23 @@ const PATH_LANES = ["left", "middle", "right", "middle"] as const;
 
 function AchievementCard({
   achievement,
-  initiallyOpen,
 }: {
   achievement: PalAchievement;
   initiallyOpen: boolean;
 }) {
-  const [open, setOpen] = useState(initiallyOpen);
-
   return (
-    <details
-      className="pal-achievement-card"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>
-        <span className="pal-badge" aria-hidden="true">
-          {achievement.badge.assetUrl ? (
-            <img
-              src={achievement.badge.assetUrl}
-              alt=""
-              width="64"
-              height="64"
-            />
-          ) : (
-            achievement.badge.icon ?? "★"
-          )}
-        </span>
-        <span className="pal-node-copy">
-          <span role="heading" aria-level={4}>
-            {achievement.title}
+    <div className="pal-achievement-card">
+      <div className="pal-achievement-header">
+        <span className="pal-status">
+          <span aria-hidden="true">
+            {STATUS_ICONS[achievement.status]}
           </span>
-          <span className="pal-status">
-            <span aria-hidden="true">
-              {STATUS_ICONS[achievement.status]}
-            </span>
-            {achievement.statusLabel}
-          </span>
+          {achievement.statusLabel}
         </span>
-      </summary>
+        <span role="heading" aria-level={4}>
+          {achievement.title}
+        </span>
+      </div>
       <div className="pal-achievement-copy">
         <p>{achievement.description}</p>
         {achievement.progress ? (
@@ -72,6 +51,61 @@ function AchievementCard({
           </span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function WeekNode({
+  week,
+  initiallyOpen,
+}: {
+  week: PalRoadmapWeek;
+  initiallyOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+
+  return (
+    <details
+      className="pal-week-details"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="pal-week-summary">
+        <div className="pal-week-marker" aria-hidden="true">
+          <span>Week</span>
+          <strong>{week.number}</strong>
+        </div>
+      </summary>
+
+      {week.status !== "future" ? (
+        week.achievements.length > 0 ? (
+          <ul className="pal-achievement-list">
+            {week.achievements.map((achievement) => (
+              <li
+                className="pal-achievement-stop"
+                data-achievement-status={achievement.status}
+                key={achievement.id}
+              >
+                <AchievementCard
+                  achievement={achievement}
+                  initiallyOpen={false}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pal-empty-week-copy">
+            No achievements have been recorded for this week yet.
+          </p>
+        )
+      ) : (
+        <div className="pal-future-stop">
+          <span className="pal-locked-node" aria-hidden="true">○</span>
+          <p className="pal-future-copy">
+            Future achievements stay hidden until this week begins.
+          </p>
+        </div>
+      )}
     </details>
   );
 }
@@ -138,52 +172,10 @@ export function PalAchievements() {
             key={week.id}
             aria-current={week.status === "current" ? "step" : undefined}
           >
-            <article className="pal-week-card">
-              <header className="pal-week-header">
-                <div className="pal-week-marker" aria-hidden="true">
-                  <span>Week</span>
-                  <strong>{week.number}</strong>
-                </div>
-                <div>
-                  <h3>{week.label}</h3>
-                  <p>{week.summary}</p>
-                </div>
-                <span className="pal-week-date">{week.dateLabel}</span>
-              </header>
-
-              {week.status !== "future" ? (
-                week.achievements.length > 0 ? (
-                  <ul className="pal-achievement-list">
-                    {week.achievements.map((achievement, achievementIndex) => (
-                      <li
-                        className="pal-achievement-stop"
-                        data-achievement-status={achievement.status}
-                        data-node-lane={PATH_LANES[
-                          (weekIndex + achievementIndex) % PATH_LANES.length
-                        ]}
-                        key={achievement.id}
-                      >
-                        <AchievementCard
-                          achievement={achievement}
-                          initiallyOpen={week.status === "current"}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="pal-empty-week-copy">
-                    No achievements have been recorded for this week yet.
-                  </p>
-                )
-              ) : (
-                <div className="pal-future-stop">
-                  <span className="pal-locked-node" aria-hidden="true">○</span>
-                  <p className="pal-future-copy">
-                    Future achievements stay hidden until this week begins.
-                  </p>
-                </div>
-              )}
-            </article>
+            <WeekNode
+              week={week}
+              initiallyOpen={week.status === "current"}
+            />
           </li>
         ))}
       </ol>
