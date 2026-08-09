@@ -241,6 +241,24 @@ test("sandbox navigation keeps accessible names when labels are visually hidden"
   assert.match(sandboxSource, /aria-label=\{label\}/);
 });
 
+test("sandbox controls manage focus and hide covered navigation from interaction", () => {
+  assert.match(sandboxSource, /closeButtonRef\.current\?\.focus\(\)/);
+  assert.match(sandboxSource, /openButtonRef\.current\?\.focus\(\)/);
+  assert.match(sandboxSource, /aria-controls="sandbox-control-panel"/);
+  assert.equal(
+    sandboxSource.match(/inert=\{!controlsCollapsed \|\| undefined\}/g)?.length,
+    2,
+  );
+});
+
+test("sandbox keeps its launcher reachable in short viewports", () => {
+  assert.match(
+    sandboxStyles,
+    /\.navItems \{[^}]*min-height: 0;[^}]*overflow-y: auto;/s,
+  );
+  assert.match(sandboxStyles, /\.sidebarFooter \{[^}]*flex: 0 0 auto;/s);
+});
+
 test("sandbox keeps the companion in its positioned container after size changes", () => {
   assert.match(sandboxSource, /window\.addEventListener\("resize", clampToContainer\)/);
   assert.match(sandboxSource, /new ResizeObserver\(clampToContainer\)/);

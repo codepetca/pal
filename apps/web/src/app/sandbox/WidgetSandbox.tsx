@@ -172,6 +172,16 @@ function SandboxControls({
   ]);
   const [busy, setBusy] = useState(false);
   const lastRequest = useRef<SandboxEventRequest | null>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousCollapsed = useRef(collapsed);
+
+  useEffect(() => {
+    if (previousCollapsed.current === collapsed) return;
+    if (collapsed) openButtonRef.current?.focus();
+    else closeButtonRef.current?.focus();
+    previousCollapsed.current = collapsed;
+  }, [collapsed]);
 
   async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
     const res = await fetch(path, {
@@ -260,9 +270,11 @@ function SandboxControls({
 
   const openButton = collapsed ? (
     <button
+      ref={openButtonRef}
       className={styles.controlOpen}
       type="button"
       aria-expanded={false}
+      aria-controls="sandbox-control-panel"
       aria-label="Open sandbox controls"
       title="Open sandbox controls"
       onClick={() => onCollapsedChange(false)}
@@ -274,6 +286,7 @@ function SandboxControls({
 
   const closeButton = !collapsed ? (
     <button
+      ref={closeButtonRef}
       className={styles.controlClose}
       type="button"
       aria-label="Close sandbox controls"
@@ -292,7 +305,7 @@ function SandboxControls({
       {collapsed ? (
         openButton
       ) : (
-        <div className={styles.controlPanel}>
+        <div id="sandbox-control-panel" className={styles.controlPanel}>
           {closeButton}
 
           <header>
@@ -762,7 +775,10 @@ function SandboxExperience({
             data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
           >
           <nav className={styles.sidebar} aria-label="Fictional Pika classroom">
-            <div className={styles.navItems}>
+            <div
+              className={styles.navItems}
+              inert={!controlsCollapsed || undefined}
+            >
               {NAV_ITEMS.map(({ icon: Icon, label, view: itemView }) => (
                 <button
                   type="button"
@@ -808,6 +824,7 @@ function SandboxExperience({
               <button
                 className={styles.sidebarToggle}
                 type="button"
+                inert={!controlsCollapsed || undefined}
                 aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 onClick={() => setSidebarCollapsed((current) => !current)}
               >
