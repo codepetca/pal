@@ -291,7 +291,30 @@
 }
 
 .pal-week-details {
-  /* wrapper — no chrome */
+  position: relative;
+  width: fit-content;
+  margin-inline: auto;
+}
+
+.pal-week-card {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20rem;
+  max-width: 60vw;
+  z-index: 10;
+}
+
+.pal-week[data-path-lane="left"] .pal-week-card {
+  left: calc(100% + 1rem);
+}
+
+.pal-week[data-path-lane="right"] .pal-week-card {
+  right: calc(100% + 1rem);
+}
+
+.pal-week[data-path-lane="middle"] .pal-week-card {
+  left: calc(100% + 1rem);
 }
 
 .pal-week-stars {
@@ -325,27 +348,6 @@
   position: relative;
   display: flex;
   justify-content: center;
-  cursor: pointer;
-  list-style: none;
-}
-
-.pal-week-summary::-webkit-details-marker {
-  display: none;
-}
-
-.pal-week-summary::after {
-  position: absolute;
-  right: 0.3rem;
-  top: 50%;
-  color: var(--pal-effective-color-text-muted);
-  content: "+";
-  font-size: 1.3rem;
-  font-weight: 900;
-  transform: translateY(-50%);
-}
-
-.pal-week-details[open] > .pal-week-summary::after {
-  content: "−";
 }
 
 .pal-week-summary:hover .pal-week-marker {
@@ -837,6 +839,14 @@
 
 .pal-surface[data-pal-viewport="narrow"] .pal-achievement-card {
   padding: 0.6rem 0.8rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-card {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 0.75rem;
+  transform: none;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {

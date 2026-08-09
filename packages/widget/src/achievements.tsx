@@ -67,12 +67,14 @@ function WeekNode({
   const rhythmProgress = week.achievements.find((a) => a.progress)?.progress;
 
   return (
-    <details
+    <div
       className="pal-week-details"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
     >
-      <summary className="pal-week-summary">
+      <div className="pal-week-summary">
         <div className="pal-week-marker-wrap">
           <div className="pal-week-marker" aria-hidden="true">
             <span>Week</span>
@@ -99,38 +101,44 @@ function WeekNode({
             </div>
           ) : null}
         </div>
-      </summary>
+      </div>
 
-      {week.status !== "future" ? (
-        week.achievements.length > 0 ? (
-          <ul className="pal-achievement-list">
-            {week.achievements.map((achievement) => (
-              <li
-                className="pal-achievement-stop"
-                data-achievement-status={achievement.status}
-                key={achievement.id}
-              >
-                <AchievementCard
-                  achievement={achievement}
-                  initiallyOpen={false}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="pal-empty-week-copy">
-            No achievements have been recorded for this week yet.
-          </p>
-        )
-      ) : (
-        <div className="pal-future-stop">
-          <span className="pal-locked-node" aria-hidden="true">○</span>
-          <p className="pal-future-copy">
-            Future achievements stay hidden until this week begins.
-          </p>
+      {open ? (
+        <div
+          className="pal-week-card"
+        >
+          {week.status !== "future" ? (
+            week.achievements.length > 0 ? (
+              <ul className="pal-achievement-list">
+                {week.achievements.map((achievement) => (
+                  <li
+                    className="pal-achievement-stop"
+                    data-achievement-status={achievement.status}
+                    key={achievement.id}
+                  >
+                    <AchievementCard
+                      achievement={achievement}
+                      initiallyOpen={false}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pal-empty-week-copy">
+                No achievements have been recorded for this week yet.
+              </p>
+            )
+          ) : (
+            <div className="pal-future-stop">
+              <span className="pal-locked-node" aria-hidden="true">○</span>
+              <p className="pal-future-copy">
+                Future achievements stay hidden until this week begins.
+              </p>
+            </div>
+          )}
         </div>
-      )}
-    </details>
+      ) : null}
+    </div>
   );
 }
 
