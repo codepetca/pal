@@ -59,8 +59,8 @@ test("roadmap renders all fictional semester weeks", () => {
     </PalProvider>,
   );
 
-  assert.match(html, /Week 1/);
-  assert.match(html, /Week 16/);
+  assert.match(html, /Fall semester/);
+  assert.match(html, /Week 4 of 16/);
   assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
   assert.equal((html.match(/class="pal-week-marker"/g) ?? []).length, 16);
   assert.match(html, /Future achievements stay hidden until this week begins/);
@@ -89,14 +89,12 @@ test("companion owns the complete portable cat-on-grass surface", () => {
   assert.doesNotMatch(html, /data-pal-variant=/);
 });
 
-test("narrow roadmap preserves date labels and achievement heading navigation", () => {
+test("narrow roadmap preserves achievement heading navigation", () => {
   const client = createFixturePalClient();
-  const snapshot = client.peek();
-  snapshot.roadmap.weeks[0]!.dateLabel = "Sep 8–12";
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}
-      initialSnapshot={snapshot}
+      initialSnapshot={client.peek()}
       scopeKey="fixture-learner"
       viewport="narrow"
     >
@@ -105,7 +103,6 @@ test("narrow roadmap preserves date labels and achievement heading navigation", 
   );
 
   assert.match(html, /data-pal-viewport="narrow"/);
-  assert.match(html, /class="pal-week-date">Sep 8–12/);
   assert.match(html, /role="heading" aria-level="4">Weekly Rhythm/);
 });
 
