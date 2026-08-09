@@ -263,6 +263,8 @@ function SandboxControls({
       className={styles.controlOpen}
       type="button"
       aria-expanded={false}
+      aria-label="Open sandbox controls"
+      title="Open sandbox controls"
       onClick={() => onCollapsedChange(false)}
     >
       <Lightning aria-hidden="true" size={17} weight="fill" />
@@ -539,6 +541,7 @@ function SandboxExperience({
 
   useEffect(() => {
     if (sandboxError) setControlsCollapsed(false);
+    if (sandboxError) setSidebarCollapsed(false);
   }, [sandboxError]);
 
   // Host-owned placement (per the widget's boundary: "the host owns
@@ -715,7 +718,6 @@ function SandboxExperience({
         ref={sandboxRef}
         className={styles.sandbox}
         data-theme={theme}
-        data-controls-collapsed={controlsCollapsed ? "true" : "false"}
       >
         <div
           className={styles.applicationLayer}
@@ -775,18 +777,47 @@ function SandboxExperience({
                 </button>
               ))}
             </div>
-            <button
-              className={styles.sidebarToggle}
-              type="button"
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              onClick={() => setSidebarCollapsed((current) => !current)}
-            >
-              {sidebarCollapsed ? (
-                <CaretRight aria-hidden="true" size={23} />
-              ) : (
-                <CaretLeft aria-hidden="true" size={23} />
-              )}
-            </button>
+            <div className={styles.sidebarFooter}>
+              <SandboxRefreshBridge>
+                {(refresh) => (
+                  <SandboxControls
+                    buildInfo={buildInfo}
+                    client={client}
+                    collapsed={controlsCollapsed}
+                    onCollapsedChange={(collapsed) => {
+                      setControlsCollapsed(collapsed);
+                      if (!collapsed) setSidebarCollapsed(false);
+                    }}
+                    onRefresh={refresh}
+                    onReset={() => {
+                      setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
+                      setSandboxError(null);
+                      onReset();
+                    }}
+                    simulatedDate={simulatedDate}
+                    onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
+                    onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
+                    canAddDay={canAddDay}
+                    canAddWeek={canAddWeek}
+                    learnerId={learnerId}
+                    sandboxError={sandboxError}
+                    currentSemesterWeek={currentSemesterWeek}
+                  />
+                )}
+              </SandboxRefreshBridge>
+              <button
+                className={styles.sidebarToggle}
+                type="button"
+                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={() => setSidebarCollapsed((current) => !current)}
+              >
+                {sidebarCollapsed ? (
+                  <CaretRight aria-hidden="true" size={23} />
+                ) : (
+                  <CaretLeft aria-hidden="true" size={23} />
+                )}
+              </button>
+            </div>
           </nav>
 
           <main className={styles.content}>
@@ -848,32 +879,6 @@ function SandboxExperience({
           </div>
 
         </div>
-
-        <SandboxRefreshBridge>
-          {(refresh) => (
-            <SandboxControls
-              buildInfo={buildInfo}
-              client={client}
-              collapsed={controlsCollapsed}
-              onCollapsedChange={setControlsCollapsed}
-              onRefresh={refresh}
-              onReset={() => {
-                setSimulatedDate(new Date(FICTIONAL_SEMESTER_START_ISO));
-                setSandboxError(null);
-                onReset();
-              }}
-              simulatedDate={simulatedDate}
-              onAddDay={() => setSimulatedDate((prev) => addDays(prev, 1))}
-              onAddWeek={() => setSimulatedDate((prev) => addDays(prev, 7))}
-              canAddDay={canAddDay}
-              canAddWeek={canAddWeek}
-              learnerId={learnerId}
-              sandboxError={sandboxError}
-              currentSemesterWeek={currentSemesterWeek}
-            />
-          )}
-        </SandboxRefreshBridge>
-
         <div
           className={styles.celebrationLayer}
           data-open={celebrationOpen ? "true" : "false"}
