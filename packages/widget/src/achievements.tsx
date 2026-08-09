@@ -64,6 +64,8 @@ function WeekNode({
 }) {
   const [open, setOpen] = useState(initiallyOpen);
 
+  const rhythmProgress = week.achievements.find((a) => a.progress)?.progress;
+
   return (
     <details
       className="pal-week-details"
@@ -76,6 +78,24 @@ function WeekNode({
           <strong>{week.number}</strong>
         </div>
       </summary>
+
+      {rhythmProgress ? (
+        <div className="pal-week-stars" aria-label={`${rhythmProgress.current} of ${rhythmProgress.target} eligible days`}>
+          {Array.from({ length: rhythmProgress.target }, (_, i) => (
+            <span
+              key={i}
+              className={
+                i < rhythmProgress.current
+                  ? "pal-week-star pal-week-star--filled"
+                  : "pal-week-star"
+              }
+              aria-hidden="true"
+            >
+              ★
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {week.status !== "future" ? (
         week.achievements.length > 0 ? (

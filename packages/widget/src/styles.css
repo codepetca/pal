@@ -285,6 +285,29 @@
   /* wrapper — no chrome */
 }
 
+.pal-week-stars {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  line-height: 1;
+}
+
+.pal-week-star {
+  font-size: 1rem;
+  color: var(--pal-effective-color-border-strong);
+  transition: color var(--pal-effective-motion-standard)
+    var(--pal-effective-motion-easing);
+}
+
+.pal-week-star--filled {
+  color: #facc15;
+}
+
+.pal-surface[data-pal-theme="dark"] .pal-week-star--filled {
+  color: #fbbf24;
+}
+
 .pal-week-summary {
   position: relative;
   display: flex;
