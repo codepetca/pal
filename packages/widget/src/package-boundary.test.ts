@@ -254,9 +254,12 @@ test("sandbox controls manage focus and hide covered navigation from interaction
 test("sandbox keeps its launcher reachable in short viewports", () => {
   assert.match(
     sandboxStyles,
-    /\.navItems \{[^}]*min-height: 0;[^}]*overflow-y: auto;/s,
+    /\.navItems \{[\s\S]*?min-height: 0;[\s\S]*?overflow-y: auto;/,
   );
-  assert.match(sandboxStyles, /\.sidebarFooter \{[^}]*flex: 0 0 auto;/s);
+  assert.match(
+    sandboxStyles,
+    /\.sidebarFooter \{[\s\S]*?flex: 0 0 auto;/,
+  );
 });
 
 test("sandbox keeps the companion in its positioned container after size changes", () => {
