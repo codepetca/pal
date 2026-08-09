@@ -73,29 +73,33 @@ function WeekNode({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="pal-week-summary">
-        <div className="pal-week-marker" aria-hidden="true">
-          <span>Week</span>
-          <strong>{week.number}</strong>
+        <div className="pal-week-marker-wrap">
+          <div className="pal-week-marker" aria-hidden="true">
+            <span>Week</span>
+            <strong>{week.number}</strong>
+          </div>
+          {rhythmProgress ? (
+            <div
+              className="pal-week-stars"
+              aria-label={`${rhythmProgress.current} of ${rhythmProgress.target} eligible days`}
+            >
+              {Array.from({ length: rhythmProgress.target }, (_, i) => (
+                <span
+                  key={i}
+                  className={
+                    i < rhythmProgress.current
+                      ? "pal-week-star pal-week-star--filled"
+                      : "pal-week-star"
+                  }
+                  aria-hidden="true"
+                >
+                  ★
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </summary>
-
-      {rhythmProgress ? (
-        <div className="pal-week-stars" aria-label={`${rhythmProgress.current} of ${rhythmProgress.target} eligible days`}>
-          {Array.from({ length: rhythmProgress.target }, (_, i) => (
-            <span
-              key={i}
-              className={
-                i < rhythmProgress.current
-                  ? "pal-week-star pal-week-star--filled"
-                  : "pal-week-star"
-              }
-              aria-hidden="true"
-            >
-              ★
-            </span>
-          ))}
-        </div>
-      ) : null}
 
       {week.status !== "future" ? (
         week.achievements.length > 0 ? (
