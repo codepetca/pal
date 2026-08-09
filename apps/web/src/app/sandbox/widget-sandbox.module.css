@@ -59,22 +59,14 @@
 
   width: 100%;
   height: 100dvh;
-  display: grid;
-  --controls-width: 0px;
   --companion-width: 0px;
   --companion-height: 0px;
-  grid-template-columns: minmax(0, 1fr) var(--controls-width);
   overflow: hidden;
   color: var(--host-text);
   background: var(--host-page);
-  transition: grid-template-columns 220ms ease-out;
   font-family:
     Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
-}
-
-.sandbox[data-controls-collapsed="false"] {
-  --controls-width: min(21rem, 100vw);
 }
 
 .sandbox[data-theme="dark"] {
@@ -246,11 +238,15 @@
 
 .navItems {
   display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
   gap: 0.15rem;
+  overflow-y: auto;
   padding: 0.75rem;
 }
 
-.sidebar button {
+.navItems button,
+.sidebarToggle {
   display: flex;
   min-height: 3rem;
   align-items: center;
@@ -268,22 +264,24 @@
   cursor: pointer;
 }
 
-.sidebar button svg {
+.navItems button svg,
+.sidebarToggle svg {
   flex: 0 0 auto;
 }
 
-.sidebar button:hover {
+.navItems button:hover,
+.sidebarToggle:hover {
   color: var(--host-text);
   background: var(--host-surface-2);
 }
 
-.sidebar button[data-active="true"] {
+.navItems button[data-active="true"] {
   color: var(--host-selected-text);
   background: var(--host-selected);
   font-weight: 650;
 }
 
-.sidebar button[data-active="true"] svg {
+.navItems button[data-active="true"] svg {
   color: var(--host-selected-icon);
 }
 
@@ -291,13 +289,16 @@
   padding-inline: 0.15rem;
 }
 
-.classroomShell[data-sidebar-collapsed="true"] .sidebar button {
+.classroomShell[data-sidebar-collapsed="true"] .navItems button,
+.classroomShell[data-sidebar-collapsed="true"] .sidebarToggle,
+.classroomShell[data-sidebar-collapsed="true"] .sidebar .controlOpen {
   justify-content: center;
   gap: 0;
   padding: 0;
 }
 
-.classroomShell[data-sidebar-collapsed="true"] .sidebar button span {
+.classroomShell[data-sidebar-collapsed="true"] .navItems button span,
+.classroomShell[data-sidebar-collapsed="true"] .sidebar .controlOpen span {
   display: none;
 }
 
@@ -305,6 +306,10 @@
   min-height: 4.5rem !important;
   border-top: 1px solid var(--host-border) !important;
   border-radius: 0 !important;
+}
+
+.sidebarFooter {
+  flex: 0 0 auto;
 }
 
 .content {
@@ -668,52 +673,60 @@
   position: relative;
   z-index: 50;
   min-width: 0;
-  pointer-events: none;
+  margin: 0.6rem;
 }
 
-.controlOpen {
-  position: absolute;
-  bottom: 1.5rem;
-  right: calc(1.75rem + var(--companion-width));
-  pointer-events: auto;
+.controls[data-collapsed="false"] {
+  position: fixed;
+  top: 3rem;
+  bottom: 0;
+  left: 0;
+  width: min(18rem, calc(100vw - 1rem));
+  margin: 0;
+}
+
+.sidebar .controlOpen {
+  position: static;
   display: inline-flex;
-  min-height: 40px;
+  width: 100%;
+  min-height: 44px;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.5rem;
-  padding: 0 1.1rem 0 0.85rem;
-  border: 1px solid rgb(147 197 253 / 0.35);
-  border-radius: 999px;
-  color: #f0f4ff;
-  background: linear-gradient(135deg, rgb(30 58 138 / 0.92), rgb(15 23 42 / 0.96));
-  box-shadow: 0 4px 20px rgb(37 99 235 / 0.25), 0 1px 4px rgb(0 0 0 / 0.3);
+  padding: 0 0.8rem;
+  overflow: hidden;
+  border: 1px solid #1d4ed8;
+  border-radius: 0.5rem;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #4338ca);
+  box-shadow: 0 6px 18px rgb(37 99 235 / 0.28);
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 800;
   letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
-  transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
-  backdrop-filter: blur(8px);
 }
 
-.controlOpen:hover {
-  border-color: rgb(147 197 253 / 0.6);
-  box-shadow: 0 6px 24px rgb(37 99 235 / 0.35), 0 1px 4px rgb(0 0 0 / 0.3);
-  transform: translateY(-1px);
+.sidebar .controlOpen:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #1d4ed8, #3730a3);
 }
 
-.controlOpen:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 12px rgb(37 99 235 / 0.2);
+.sidebar .controlOpen:active {
+  background: linear-gradient(135deg, #1e40af, #312e81);
 }
 
 .controlClose {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-bottom: 0.25rem;
   border: 0;
   border-radius: 0.35rem;
   color: #94a3b8;
@@ -732,21 +745,21 @@
 }
 
 .controlPanel {
+  position: relative;
   height: 100%;
   overflow-y: auto;
   padding: 1rem;
   border: 0;
-  border-left: 1px solid rgb(255 255 255 / 0.15);
+  border-right: 1px solid rgb(255 255 255 / 0.15);
   border-radius: 0;
   color: #f8fafc;
   background: rgb(8 15 28 / 0.97);
-  box-shadow: -12px 0 32px rgb(0 0 0 / 0.35);
+  box-shadow: 8px 0 28px rgb(0 0 0 / 0.32);
   backdrop-filter: blur(12px);
-  pointer-events: auto;
 }
 
 .controlPanel header {
-  padding-right: 0;
+  padding-right: 2rem;
 }
 
 .controlPanel h2 {
@@ -935,6 +948,10 @@
   .classroomShell[data-sidebar-collapsed="true"] {
     grid-template-columns: 3rem minmax(0, 1fr);
   }
+
+  .controls[data-collapsed="false"] {
+    width: min(15rem, calc(100vw - 1rem));
+  }
 }
 
 @media (max-width: 720px) {
@@ -961,13 +978,16 @@
     padding-inline: 0.15rem;
   }
 
-  .sidebar button {
+  .navItems button,
+  .sidebarToggle,
+  .sidebar .controlOpen {
     justify-content: center;
     gap: 0;
     padding: 0;
   }
 
-  .sidebar button span {
+  .navItems button span,
+  .sidebar .controlOpen span {
     display: none;
   }
 
@@ -975,16 +995,19 @@
     display: none !important;
   }
 
-  .sandbox[data-controls-collapsed="false"] {
-    --controls-width: min(20rem, 100vw);
+  .controls {
+    margin: 0.25rem;
   }
 
-  .controlOpen {
-    right: 1rem;
-    bottom: min(
-      calc(1.75rem + var(--companion-height)),
-      calc(100dvh - 3.5rem)
-    );
+  .controls[data-collapsed="false"] {
+    width: min(18rem, calc(100vw - 3rem));
+    margin: 0;
+  }
+
+  .sidebar .controlOpen {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
   }
 
   .companionOverlay {
