@@ -124,10 +124,6 @@
 }
 
 .pal-roadmap-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--pal-effective-density-stack);
   margin: 0 auto var(--pal-effective-density-stack);
 }
 
@@ -135,12 +131,6 @@
   margin-top: 0.2rem;
   font-size: clamp(1.4rem, 3vw, 1.85rem);
   line-height: 1.15;
-}
-
-.pal-roadmap-header p:last-child {
-  margin-top: 0.45rem;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.9rem;
 }
 
 .pal-eyebrow {
@@ -169,71 +159,83 @@
   white-space: nowrap;
 }
 
-.pal-roadmap-list,
 .pal-achievement-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.pal-roadmap-list {
-  position: relative;
-  display: grid;
-  gap: var(--pal-effective-density-stack);
-  margin: 0 auto;
-}
-
-.pal-roadmap-list::before {
-  position: absolute;
-  top: 1.5rem;
-  bottom: 1.5rem;
-  left: 1.25rem;
-  width: 2px;
-  background: var(--pal-effective-color-border-strong);
-  content: "";
-}
-
-.pal-week {
-  position: relative;
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr);
-  gap: 0.8rem;
-}
-
-.pal-week-marker {
-  z-index: 1;
-  display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
-  place-items: center;
-  border: 2px solid var(--pal-effective-color-border-strong);
-  border-radius: 50%;
-  color: var(--pal-effective-color-text-muted);
-  background: var(--pal-effective-color-surface);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.pal-week[data-week-status="current"] .pal-week-marker {
-  border-color: var(--pal-effective-color-primary-solid);
-  color: var(--pal-effective-color-text-inverse);
-  background: var(--pal-effective-color-primary-solid);
-  box-shadow: 0 0 0 4px var(--pal-effective-color-surface-selected);
-}
-
-.pal-week-card {
-  overflow: hidden;
+/* A standing band of semester context, so the page opens with something to read
+   even in a week that has earned nothing yet. */
+.pal-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--pal-effective-space-card);
+  margin-bottom: var(--pal-effective-density-stack);
+  padding: var(--pal-effective-space-card);
   border: 1px solid var(--pal-effective-color-border);
   border-radius: var(--pal-effective-radius-card);
   background: var(--pal-effective-color-surface);
 }
 
-.pal-week[data-week-status="current"] .pal-week-card {
+.pal-summary-stat {
+  display: flex;
+  flex-direction: column;
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.pal-summary-value {
+  color: var(--pal-effective-color-text);
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pal-summary-track {
+  flex: 1;
+  min-width: 0;
+}
+
+.pal-week-card {
+  overflow: hidden;
+  margin-bottom: var(--pal-effective-density-stack);
+  border: 1px solid var(--pal-effective-color-border);
+  border-radius: var(--pal-effective-radius-card);
+  background: var(--pal-effective-color-surface);
+}
+
+/* Next week is a preview, not a destination: it says what is coming and nothing
+   more, and the lock says why it holds no rows yet. */
+.pal-week-next {
+  background: var(--pal-effective-color-surface-muted);
+}
+
+.pal-next-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.5rem;
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.pal-lock {
+  display: block;
+}
+
+.pal-week-card[data-week-status="current"] {
   border-color: var(--pal-effective-color-primary);
   box-shadow: var(--pal-effective-shadow-panel);
 }
 
-.pal-week[data-week-status="future"] .pal-week-card {
+.pal-week-card[data-week-status="future"] {
   border-style: dashed;
 }
 
@@ -342,34 +344,34 @@
   margin-top: 0.65rem;
 }
 
-.pal-progress-wrap progress {
+.pal-bar {
   width: 100%;
   height: 0.45rem;
   overflow: hidden;
-  border: 0;
-  border-radius: 999px;
-  color: var(--pal-effective-color-primary-solid);
-  background: var(--pal-effective-color-border);
-}
-
-.pal-progress-wrap progress::-webkit-progress-bar {
   border-radius: 999px;
   background: var(--pal-effective-color-border);
 }
 
-.pal-progress-wrap progress::-webkit-progress-value {
+/* Scaled rather than sized, so the fill can animate on the compositor and a
+   changing value slides instead of jumping. */
+.pal-bar-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
   border-radius: 999px;
   background: var(--pal-effective-color-primary-solid);
+  transform: scaleX(var(--pal-fill, 0));
+  transform-origin: left center;
+  animation: pal-fill var(--pal-effective-motion-deliberate)
+    var(--pal-effective-motion-easing) both;
+  transition: transform var(--pal-effective-motion-deliberate)
+    var(--pal-effective-motion-easing);
 }
 
-.pal-progress-wrap progress::-moz-progress-bar {
-  border-radius: 999px;
-  background: var(--pal-effective-color-primary-solid);
-}
-
-.pal-progress-wrap span {
+.pal-progress-wrap > span {
   color: var(--pal-effective-color-text-muted);
   font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .pal-reward-label {
@@ -379,8 +381,105 @@
   background: var(--pal-effective-color-warning-bg);
 }
 
-.pal-future-copy {
-  padding: 0 1rem 0.9rem;
+.pal-quiet-copy {
+  padding: 0 var(--pal-effective-space-card) var(--pal-effective-space-card);
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.78rem;
+}
+
+/* History is a drawer, not a page: past weeks stay one click away without
+   spending any vertical space until they are asked for. */
+.pal-history-toggle,
+.pal-history-week-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: var(--pal-effective-control-min);
+  padding: var(--pal-effective-space-control) var(--pal-effective-space-card);
+  border: 1px solid var(--pal-effective-color-border);
+  border-radius: var(--pal-effective-radius-control);
+  color: var(--pal-effective-color-text);
+  background: var(--pal-effective-color-surface);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
+    border-color var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
+    transform var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
+}
+
+.pal-history-toggle:hover:not(:disabled),
+.pal-history-week-toggle:hover {
+  border-color: var(--pal-effective-color-border-strong);
+  background: var(--pal-effective-color-surface-muted);
+}
+
+.pal-history-toggle:disabled {
+  color: var(--pal-effective-color-text-muted);
+  cursor: default;
+}
+
+.pal-count {
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  color: var(--pal-effective-color-text-muted);
+  background: var(--pal-effective-color-surface-muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pal-history-week-toggle .pal-count {
+  background: var(--pal-effective-color-surface);
+}
+
+.pal-chevron {
+  flex: 0 0 auto;
+  color: var(--pal-effective-color-text-muted);
+  transition: transform var(--pal-effective-motion-standard)
+    var(--pal-effective-motion-easing);
+}
+
+[data-open="true"] > .pal-chevron {
+  transform: rotate(90deg);
+}
+
+/* 0fr to 1fr animates where `height: auto` cannot, so open and close both move
+   and the content is never measured or clipped by a magic pixel height. */
+.pal-history-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--pal-effective-motion-standard)
+      var(--pal-effective-motion-easing),
+    opacity var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
+}
+
+.pal-history-body[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.pal-history-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.pal-history-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  list-style: none;
+}
+
+.pal-history-week .pal-achievement-list {
+  padding: 0.5rem 0 0.25rem;
 }
 
 .pal-state {
@@ -440,9 +539,20 @@
   opacity: 0.72;
 }
 
-.pal-button:focus-visible {
+.pal-button:focus-visible,
+.pal-week-tab:focus-visible,
+.pal-week-card:focus-visible {
   outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
   outline-offset: var(--pal-effective-focus-offset);
+}
+
+.pal-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .pal-celebration-error {
@@ -580,8 +690,75 @@
   pointer-events: none;
 }
 
+/* Entrance. Each element declares its own place in the sequence through
+   --pal-i, so a list staggers without any per-item CSS. */
+.pal-rise {
+  animation: pal-rise var(--pal-effective-motion-deliberate)
+    var(--pal-effective-motion-easing) both;
+  animation-delay: calc(var(--pal-i, 0) * 45ms);
+}
+
+/* Press feedback on the compositor: the card dips under the finger and springs
+   back without disturbing anything around it. */
+.pal-press {
+  touch-action: manipulation;
+}
+
+.pal-press:active {
+  transform: scale(0.97);
+}
+
+.pal-achievement-card {
+  transition:
+    border-color var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
+    background var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
+}
+
+.pal-achievement-card:hover {
+  border-color: var(--pal-effective-color-border-strong);
+  background: var(--pal-effective-color-surface);
+}
+
+.pal-badge {
+  transition: transform var(--pal-effective-motion-standard)
+    var(--pal-effective-motion-easing);
+}
+
+.pal-achievement-card:hover .pal-badge {
+  transform: scale(1.06) rotate(-3deg);
+}
+
+/* An earned badge announces itself once on arrival — the one moment on this
+   page where motion is the message rather than the transition. */
+[data-achievement-status="earned"] .pal-badge {
+  animation: pal-pop var(--pal-effective-motion-deliberate)
+    var(--pal-effective-motion-easing) both;
+  animation-delay: calc(var(--pal-i, 0) * 45ms + 120ms);
+}
+
 @keyframes pal-spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes pal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+/* Both ends are stated. An implicit `to` keyframe resolves against the
+   underlying transform, which a filling animation then holds at the `from`
+   value — leaving every bar rendered empty. */
+@keyframes pal-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(var(--pal-fill, 0)); }
+}
+
+@keyframes pal-pop {
+  0% { transform: scale(0.8); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
 }
 
 @keyframes pal-celebration-in {
@@ -599,14 +776,32 @@
   }
 
   .pal-spinner,
-  .pal-celebration {
+  .pal-celebration,
+  .pal-rise,
+  .pal-bar-fill,
+  [data-achievement-status="earned"] .pal-badge {
     animation: none;
+  }
+
+  /* Nothing may move under a reduced-motion preference, including the states
+     that are otherwise expressed only as movement. */
+  .pal-press:active,
+  .pal-achievement-card:hover .pal-badge {
+    transform: none;
   }
 }
 
 .pal-surface[data-pal-motion="reduced"] .pal-spinner,
+.pal-surface[data-pal-motion="reduced"] .pal-rise,
+.pal-surface[data-pal-motion="reduced"] .pal-bar-fill,
+.pal-surface[data-pal-motion="reduced"] [data-achievement-status="earned"] .pal-badge,
 .pal-celebration[data-pal-motion="reduced"] {
   animation: none;
+}
+
+.pal-surface[data-pal-motion="reduced"] .pal-press:active,
+.pal-surface[data-pal-motion="reduced"] .pal-achievement-card:hover .pal-badge {
+  transform: none;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header,
