@@ -27,7 +27,10 @@ function weeklyRhythm(
           : status === "incomplete"
             ? "Not completed"
             : "Upcoming",
-    badge: { label: "Weekly Rhythm", icon: "♫" },
+    badge: {
+      label: "Weekly Rhythm",
+      assetUrl: "/assets/badges/badge-checkin-7-day-v1.png",
+    },
     progress: { current, target, label: `${current} of ${target} eligible days` },
     rewardLabel: status === "earned" ? "Happy companion" : undefined,
   };
@@ -68,7 +71,10 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
     description: "Started your first authenticated Pika session.",
     status: "earned",
     statusLabel: "Earned",
-    badge: { label: "First Pika Login", icon: "★" },
+    badge: {
+      label: "First Pika Login",
+      assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
+    },
   });
 
   return {
@@ -164,7 +170,10 @@ export function createFixturePalClient(
             description: "Completed a learning item on time.",
             status: "earned",
             statusLabel: "Earned on time",
-            badge: { label: "On-Time Finish", icon: "✓" },
+            badge: {
+              label: "On-Time Finish",
+              assetUrl: "/assets/badges/badge-on-time-finish.png",
+            },
             rewardLabel: "Fish snack",
           });
         }

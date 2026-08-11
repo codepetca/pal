@@ -65,7 +65,10 @@ function achievementFromRow(
         title: "First Pika Login",
         description: "Started your first authenticated Pika session.",
         statusLabel: "Earned",
-        badge: { label: "First Pika Login", icon: "★" },
+        badge: {
+          label: "First Pika Login",
+          assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
+        },
       };
     case ACHIEVEMENT_KEYS.joinedClass:
       return {
@@ -73,7 +76,10 @@ function achievementFromRow(
         title: "Joined the Class",
         description: "Joined a new classroom.",
         statusLabel: "Earned",
-        badge: { label: "Joined the Class", icon: "⌂" },
+        badge: {
+          label: "Joined the Class",
+          assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
+        },
       };
     case ACHIEVEMENT_KEYS.weeklyRhythm: {
       const current = row.progressCurrent ?? 0;
@@ -91,7 +97,10 @@ function achievementFromRow(
             : row.status === "incomplete"
               ? "Not completed"
               : progressLabel,
-        badge: { label: "Weekly Rhythm", icon: "♫" },
+        badge: {
+          label: "Weekly Rhythm",
+          assetUrl: "/assets/badges/badge-checkin-7-day-v1.png",
+        },
         progress: { current, target, label: progressLabel },
         ...(row.status === "earned"
           ? { rewardLabel: "Happy companion" }
@@ -104,7 +113,10 @@ function achievementFromRow(
         title: "Ready Early",
         description: "Opened a learning item soon after it was released.",
         statusLabel: row.status === "earned" ? "Earned early" : "Opened later",
-        badge: { label: "Ready Early", icon: "◷" },
+        badge: {
+          label: "Ready Early",
+          assetUrl: "/assets/badges/badge-ready-early-v1.png",
+        },
       };
     case ACHIEVEMENT_KEYS.onTimeFinish:
       return {

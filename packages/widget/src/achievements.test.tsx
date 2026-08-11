@@ -3,13 +3,13 @@ import test from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { PalAchievements } from "./achievements";
-import { createFixturePalClient } from "./fixture-client";
+import { createFixturePalClient, createFixtureSnapshot } from "./fixture-client";
 import { PalProvider } from "./provider";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-test("collapsed achievement history is inert until each drawer opens", async () => {
+test("achievement trail omits future weeks and orders visible weeks newest first", async () => {
   const client = createFixturePalClient();
   let renderer: ReactTestRenderer | undefined;
 
@@ -26,33 +26,67 @@ test("collapsed achievement history is inert until each drawer opens", async () 
   });
 
   try {
-    const historyBodies = () =>
-      renderer!.root.findAll(
-        (node) =>
-          node.type === "div" && node.props.className === "pal-history-body",
-      );
-    const historyToggle = renderer!.root.find(
-      (node) =>
-        node.type === "button" &&
-        node.props.className === "pal-history-toggle pal-press",
+    const weeks = renderer!.root.findAll(
+      (node) => node.type === "li" && node.props.className === "pal-week",
     );
 
-    assert.equal(historyBodies()[0]!.props.inert, true);
-    assert.ok(historyBodies().slice(1).every((body) => body.props.inert === true));
+    assert.deepEqual(
+      weeks.map((week) => week.props["data-week-status"]),
+      ["current", "past", "past", "past"],
+    );
+    assert.deepEqual(
+      weeks.map((week) =>
+        week.find((node) => node.type === "h3").children.join(""),
+      ),
+      ["Week 4", "Week 3", "Week 2", "Week 1"],
+    );
+    assert.equal(
+      renderer!.root.findAll(
+        (node) => node.props["data-week-status"] === "future",
+      ).length,
+      0,
+    );
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
 
-    await act(async () => historyToggle.props.onClick());
-    assert.equal(historyBodies()[0]!.props.inert, undefined);
-    assert.ok(historyBodies().slice(1).every((body) => body.props.inert === true));
+test("past weeks without earned achievements do not claim a badge", async () => {
+  const snapshot = createFixtureSnapshot();
+  const weekThree = snapshot.roadmap.weeks.find((week) => week.number === 3)!;
+  weekThree.achievements[0]!.status = "incomplete";
+  weekThree.achievements[0]!.statusLabel = "Not completed";
+  const client = createFixturePalClient(snapshot);
+  let renderer: ReactTestRenderer | undefined;
 
-    const firstWeekToggle = renderer!.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.props.className === "pal-history-week-toggle pal-press",
-    )[0]!;
-    await act(async () => firstWeekToggle.props.onClick());
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={client.peek()}
+        scopeKey="past-without-badge"
+      >
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
 
-    assert.equal(historyBodies()[1]!.props.inert, undefined);
-    assert.ok(historyBodies().slice(2).every((body) => body.props.inert === true));
+  try {
+    const weekThreeNode = renderer!.root
+      .findAll((node) => node.type === "li" && node.props.className === "pal-week")
+      .find((week) =>
+        week.findAll((node) => node.type === "h3" && node.children.join("") === "Week 3")
+          .length > 0,
+      )!;
+
+    assert.equal(
+      weekThreeNode.findAll(
+        (node) =>
+          node.props.className === "pal-week-earned" ||
+          node.props.className === "pal-earned-badges",
+      ).length,
+      0,
+    );
   } finally {
     await act(async () => renderer?.unmount());
   }

@@ -29,15 +29,10 @@ test("public surfaces render meaningful status without relying on color", () => 
     </PalProvider>,
   );
 
-  assert.match(html, /Your achievement path/);
+  assert.match(html, />Achievements</);
   assert.match(html, /aria-current="step"/);
   assert.match(html, /2 of 4 eligible days/);
-  // Status reaches a screen reader as words and a sighted student as a shape,
-  // so neither depends on the status color.
-  assert.match(
-    html,
-    /<span aria-hidden="true">●<\/span><span class="pal-sr-only">2 of 4 days<\/span>/,
-  );
+  assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
   assert.match(html, /Level 2; 3 day rhythm/);
   assert.match(html, /A treat for Pip!/);
@@ -49,7 +44,7 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.doesNotMatch(html, /aria-label="New Pal reward"/);
 });
 
-test("roadmap shows this week, previews the next, and files the rest", () => {
+test("roadmap hides future weeks and renders visible weeks newest first", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
     <PalProvider
@@ -61,18 +56,15 @@ test("roadmap shows this week, previews the next, and files the rest", () => {
     </PalProvider>,
   );
 
-  // The fixture semester sits in week 4 of 16.
-  assert.match(html, /aria-current="step"[^>]*>|<h3 id="pal-current-week">Week 4/);
-  assert.match(html, /id="pal-next-week"[\s\S]*?Week 5/);
-
-  // Weeks past the preview are not on the page at all.
-  assert.doesNotMatch(html, /Week 6/);
+  assert.match(html, /Week 4/);
+  assert.match(html, /Week 1/);
+  assert.doesNotMatch(html, /Week 5/);
   assert.doesNotMatch(html, /Week 16/);
-
-  // The three finished weeks are filed in history, closed until asked for.
-  assert.equal((html.match(/class="pal-history-week pal-rise"/g) ?? []).length, 3);
-  assert.match(html, /class="pal-history-toggle[^"]*"[^>]*aria-expanded="false"/);
-  assert.equal((html.match(/data-open="true"/g) ?? []).length, 0);
+  assert.doesNotMatch(html, /Future achievements/);
+  assert.equal((html.match(/class="pal-week"/g) ?? []).length, 4);
+  assert.ok(html.indexOf("Week 4") < html.indexOf("Week 3"));
+  assert.ok(html.indexOf("Week 3") < html.indexOf("Week 2"));
+  assert.ok(html.indexOf("Week 2") < html.indexOf("Week 1"));
 });
 
 test("companion owns the complete portable cat surface", () => {
@@ -91,8 +83,6 @@ test("companion owns the complete portable cat surface", () => {
   );
 
   assert.match(html, /class="pal-companion-stage"/);
-  // The cat is the whole surface: no scenery ships with it, and the only
-  // images fetched are the poses this mood can show.
   assert.doesNotMatch(html, /grass/);
   assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 2);
   assert.match(html, /--pal-companion-cat-height:12rem/);

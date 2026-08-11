@@ -74,7 +74,7 @@ test("a scope change never paints the previous learner snapshot", async () => {
   });
   const failedLoad = JSON.stringify(renderer.toJSON());
   assert.doesNotMatch(failedLoad, /Learner A semester/);
-  assert.match(failedLoad, /Achievements are temporarily unavailable/);
+  assert.match(failedLoad, /Achievements unavailable/);
 });
 
 test("reward acknowledgement is duplicate-safe, recoverable, and removed after success", async () => {

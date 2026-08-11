@@ -118,19 +118,23 @@
 
 .pal-achievements {
   min-height: 100%;
-  padding: var(--pal-effective-density-gutter);
-  padding-top: var(--pal-effective-density-content-top);
+  padding: clamp(1.5rem, 4vw, 3rem);
   background: var(--pal-effective-color-page);
 }
 
 .pal-roadmap-header {
-  margin: 0 auto var(--pal-effective-density-stack);
+  margin: 0 auto clamp(2rem, 5vw, 3.5rem);
 }
 
 .pal-roadmap-header h2 {
-  margin-top: 0.2rem;
-  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  font-size: clamp(1.65rem, 3vw, 2rem);
   line-height: 1.15;
+}
+
+.pal-roadmap-header p {
+  margin-top: 0.35rem;
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.95rem;
 }
 
 .pal-eyebrow {
@@ -142,161 +146,157 @@
 }
 
 .pal-week-chip,
-.pal-status,
-.pal-reward-label {
+.pal-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
 }
 
 .pal-week-chip {
-  padding: 0.45rem 0.7rem;
+  padding: 0.35rem 0.65rem;
   color: var(--pal-effective-color-primary);
   background: var(--pal-effective-color-surface-selected);
   white-space: nowrap;
 }
 
+.pal-roadmap-list,
 .pal-achievement-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* A standing band of semester context, so the page opens with something to read
-   even in a week that has earned nothing yet. */
-.pal-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--pal-effective-space-card);
-  margin-bottom: var(--pal-effective-density-stack);
-  padding: var(--pal-effective-space-card);
-  border: 1px solid var(--pal-effective-color-border);
-  border-radius: var(--pal-effective-radius-card);
-  background: var(--pal-effective-color-surface);
+.pal-roadmap-list {
+  position: relative;
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  margin: 0 auto;
 }
 
-.pal-summary-stat {
-  display: flex;
-  flex-direction: column;
+.pal-week:not(:last-child)::before {
+  position: absolute;
+  top: 1.35rem;
+  bottom: calc(-1.35rem - clamp(1.5rem, 3vw, 2.5rem));
+  left: 1.3rem;
+  width: 1px;
+  background: var(--pal-effective-color-border-strong);
+  content: "";
+}
+
+.pal-week {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.65rem minmax(0, 1fr);
+  gap: clamp(0.9rem, 2vw, 1.35rem);
+}
+
+.pal-week-marker {
+  z-index: 1;
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border: 1px solid var(--pal-effective-color-border-strong);
+  border-radius: 50%;
   color: var(--pal-effective-color-text-muted);
-  font-size: 0.75rem;
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.pal-summary-value {
-  color: var(--pal-effective-color-text);
-  font-size: 1.6rem;
+  background: var(--pal-effective-color-surface);
+  font-size: 0.82rem;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
-.pal-summary-track {
-  flex: 1;
+.pal-week[data-week-status="current"] .pal-week-marker {
+  border-color: var(--pal-effective-color-primary-solid);
+  color: var(--pal-effective-color-text-inverse);
+  background: var(--pal-effective-color-primary-solid);
+  box-shadow: 0 0 0 3px var(--pal-effective-color-surface-selected);
+}
+
+.pal-week[data-week-status="past"] .pal-week-marker {
+  border-color: var(--pal-effective-color-success);
+  color: var(--pal-effective-color-success);
+}
+
+.pal-week-content {
   min-width: 0;
-}
-
-.pal-week-card {
-  overflow: hidden;
-  margin-bottom: var(--pal-effective-density-stack);
-  border: 1px solid var(--pal-effective-color-border);
-  border-radius: var(--pal-effective-radius-card);
-  background: var(--pal-effective-color-surface);
-}
-
-/* Next week is a preview, not a destination: it says what is coming and nothing
-   more, and the lock says why it holds no rows yet. */
-.pal-week-next {
-  background: var(--pal-effective-color-surface-muted);
-}
-
-.pal-next-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-right: 0.5rem;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.7rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  vertical-align: middle;
-}
-
-.pal-lock {
-  display: block;
-}
-
-.pal-week-card[data-week-status="current"] {
-  border-color: var(--pal-effective-color-primary);
-  box-shadow: var(--pal-effective-shadow-panel);
-}
-
-.pal-week-card[data-week-status="future"] {
-  border-style: dashed;
 }
 
 .pal-week-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
   gap: var(--pal-effective-space-control);
-  padding: var(--pal-effective-space-card);
 }
 
 .pal-week-header h3 {
-  font-size: 0.95rem;
+  font-size: 1.25rem;
 }
 
-.pal-week-header p,
-.pal-week-header > span,
-.pal-future-copy {
+.pal-week-earned {
   color: var(--pal-effective-color-text-muted);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
-.pal-week-header p {
-  margin-top: 0.25rem;
+.pal-week[data-week-status="current"] .pal-week-header h3 {
+  font-size: 1.5rem;
 }
 
-.pal-week-header > span {
-  white-space: nowrap;
+.pal-week[data-week-status="past"] .pal-week-content {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+  min-height: 7.5rem;
+  align-items: start;
+}
+
+.pal-week[data-week-status="past"] .pal-week-header {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .pal-achievement-list {
   display: grid;
-  gap: var(--pal-effective-space-control);
-  padding: 0 var(--pal-effective-space-card) var(--pal-effective-space-card);
+  gap: 0.75rem;
+  margin-top: 0.85rem;
 }
 
 .pal-achievement-card {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
-  gap: var(--pal-effective-space-control);
-  padding: var(--pal-effective-space-card);
-  border: 1px solid var(--pal-effective-color-border);
-  border-radius: calc(var(--pal-effective-radius-card) - 0.2rem);
-  background: var(--pal-effective-color-surface-muted);
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 1.5rem);
+  align-items: center;
+  min-height: 9rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid var(--pal-effective-color-primary);
+  border-radius: var(--pal-effective-radius-card);
+  background: color-mix(
+    in srgb,
+    var(--pal-effective-color-surface) 88%,
+    var(--pal-effective-color-primary-solid)
+  );
 }
 
 .pal-badge {
   display: grid;
-  width: 3rem;
-  height: 3rem;
+  width: 5.5rem;
+  height: 5.5rem;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--pal-effective-color-border-strong);
+  border: 0;
   border-radius: 50%;
   color: var(--pal-effective-color-primary);
-  background: var(--pal-effective-color-surface);
-  font-size: 1.4rem;
+  background: var(--pal-effective-color-surface-selected);
+  font-size: 2rem;
   font-weight: 900;
 }
 
-.pal-badge img,
+.pal-badge img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .pal-companion-art img,
 .pal-celebration-icon img {
   display: block;
@@ -305,26 +305,12 @@
   object-fit: contain;
 }
 
-.pal-achievement-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.pal-achievement-title-row h4 {
-  font-size: 0.9rem;
-}
-
-.pal-achievement-copy > p {
-  margin-top: 0.3rem;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.8rem;
-  line-height: 1.45;
+.pal-achievement-copy h4 {
+  font-size: 1.05rem;
 }
 
 .pal-status {
+  margin-top: 0.45rem;
   color: var(--pal-effective-color-text-muted);
 }
 
@@ -338,148 +324,57 @@
 
 .pal-progress-wrap {
   display: grid;
-  grid-template-columns: minmax(7rem, 1fr) auto;
+  grid-template-columns: minmax(8rem, 1fr) auto;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.65rem;
+  gap: 0.8rem;
+  max-width: 34rem;
+  margin-top: 0.8rem;
 }
 
-.pal-bar {
+.pal-progress-wrap progress {
   width: 100%;
   height: 0.45rem;
   overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: var(--pal-effective-color-primary-solid);
+  background: var(--pal-effective-color-border);
+}
+
+.pal-progress-wrap progress::-webkit-progress-bar {
   border-radius: 999px;
   background: var(--pal-effective-color-border);
 }
 
-/* Scaled rather than sized, so the fill can animate on the compositor and a
-   changing value slides instead of jumping. */
-.pal-bar-fill {
-  display: block;
-  width: 100%;
-  height: 100%;
+.pal-progress-wrap progress::-webkit-progress-value {
   border-radius: 999px;
   background: var(--pal-effective-color-primary-solid);
-  transform: scaleX(var(--pal-fill, 0));
-  transform-origin: left center;
-  animation: pal-fill var(--pal-effective-motion-deliberate)
-    var(--pal-effective-motion-easing) both;
-  transition: transform var(--pal-effective-motion-deliberate)
-    var(--pal-effective-motion-easing);
 }
 
-.pal-progress-wrap > span {
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
+.pal-progress-wrap progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--pal-effective-color-primary-solid);
 }
 
-.pal-reward-label {
-  margin-top: 0.65rem;
-  padding: 0.3rem 0.55rem;
-  color: var(--pal-effective-color-warning);
-  background: var(--pal-effective-color-warning-bg);
-}
-
-.pal-quiet-copy {
-  padding: 0 var(--pal-effective-space-card) var(--pal-effective-space-card);
+.pal-progress-wrap span {
   color: var(--pal-effective-color-text-muted);
   font-size: 0.78rem;
+  font-weight: 650;
 }
 
-/* History is a drawer, not a page: past weeks stay one click away without
-   spending any vertical space until they are asked for. */
-.pal-history-toggle,
-.pal-history-week-toggle {
+.pal-earned-badges {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  min-height: var(--pal-effective-control-min);
-  padding: var(--pal-effective-space-control) var(--pal-effective-space-card);
-  border: 1px solid var(--pal-effective-color-border);
-  border-radius: var(--pal-effective-radius-control);
-  color: var(--pal-effective-color-text);
-  background: var(--pal-effective-color-surface);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
-    border-color var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
-    transform var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
-}
-
-.pal-history-toggle:hover:not(:disabled),
-.pal-history-week-toggle:hover {
-  border-color: var(--pal-effective-color-border-strong);
-  background: var(--pal-effective-color-surface-muted);
-}
-
-.pal-history-toggle:disabled {
-  color: var(--pal-effective-color-text-muted);
-  cursor: default;
-}
-
-.pal-count {
-  margin-left: auto;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  color: var(--pal-effective-color-text-muted);
-  background: var(--pal-effective-color-surface-muted);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.pal-history-week-toggle .pal-count {
-  background: var(--pal-effective-color-surface);
-}
-
-.pal-chevron {
-  flex: 0 0 auto;
-  color: var(--pal-effective-color-text-muted);
-  transition: transform var(--pal-effective-motion-standard)
-    var(--pal-effective-motion-easing);
-}
-
-[data-open="true"] > .pal-chevron {
-  transform: rotate(90deg);
-}
-
-/* 0fr to 1fr animates where `height: auto` cannot, so open and close both move
-   and the content is never measured or clipped by a magic pixel height. */
-.pal-history-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows var(--pal-effective-motion-standard)
-      var(--pal-effective-motion-easing),
-    opacity var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
-}
-
-.pal-history-body[data-open="true"] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-
-.pal-history-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
-.pal-history-list {
-  display: grid;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.55rem;
   margin: 0;
-  padding: 0.5rem 0 0;
+  padding: 0;
   list-style: none;
 }
 
-.pal-history-week .pal-achievement-list {
-  padding: 0.5rem 0 0.25rem;
+.pal-earned-badges .pal-badge {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 1.6rem;
 }
 
 .pal-state {
@@ -539,22 +434,9 @@
   opacity: 0.72;
 }
 
-.pal-button:focus-visible,
-.pal-history-toggle:focus-visible,
-.pal-history-week-toggle:focus-visible,
-.pal-week-tab:focus-visible,
-.pal-week-card:focus-visible {
+.pal-button:focus-visible {
   outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
   outline-offset: var(--pal-effective-focus-offset);
-}
-
-.pal-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .pal-celebration-error {
@@ -670,75 +552,8 @@
   pointer-events: none;
 }
 
-/* Entrance. Each element declares its own place in the sequence through
-   --pal-i, so a list staggers without any per-item CSS. */
-.pal-rise {
-  animation: pal-rise var(--pal-effective-motion-deliberate)
-    var(--pal-effective-motion-easing) both;
-  animation-delay: calc(var(--pal-i, 0) * 45ms);
-}
-
-/* Press feedback on the compositor: the card dips under the finger and springs
-   back without disturbing anything around it. */
-.pal-press {
-  touch-action: manipulation;
-}
-
-.pal-press:active {
-  transform: scale(0.97);
-}
-
-.pal-achievement-card {
-  transition:
-    border-color var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
-    background var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
-}
-
-.pal-achievement-card:hover {
-  border-color: var(--pal-effective-color-border-strong);
-  background: var(--pal-effective-color-surface);
-}
-
-.pal-badge {
-  transition: transform var(--pal-effective-motion-standard)
-    var(--pal-effective-motion-easing);
-}
-
-.pal-achievement-card:hover .pal-badge {
-  transform: scale(1.06) rotate(-3deg);
-}
-
-/* An earned badge announces itself once on arrival — the one moment on this
-   page where motion is the message rather than the transition. */
-[data-achievement-status="earned"] .pal-badge {
-  animation: pal-pop var(--pal-effective-motion-deliberate)
-    var(--pal-effective-motion-easing) both;
-  animation-delay: calc(var(--pal-i, 0) * 45ms + 120ms);
-}
-
 @keyframes pal-spin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes pal-rise {
-  from {
-    opacity: 0;
-    transform: translateY(0.5rem);
-  }
-}
-
-/* Both ends are stated. An implicit `to` keyframe resolves against the
-   underlying transform, which a filling animation then holds at the `from`
-   value — leaving every bar rendered empty. */
-@keyframes pal-fill {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(var(--pal-fill, 0)); }
-}
-
-@keyframes pal-pop {
-  0% { transform: scale(0.8); }
-  60% { transform: scale(1.12); }
-  100% { transform: scale(1); }
 }
 
 @keyframes pal-celebration-in {
@@ -756,32 +571,14 @@
   }
 
   .pal-spinner,
-  .pal-celebration,
-  .pal-rise,
-  .pal-bar-fill,
-  [data-achievement-status="earned"] .pal-badge {
+  .pal-celebration {
     animation: none;
-  }
-
-  /* Nothing may move under a reduced-motion preference, including the states
-     that are otherwise expressed only as movement. */
-  .pal-press:active,
-  .pal-achievement-card:hover .pal-badge {
-    transform: none;
   }
 }
 
 .pal-surface[data-pal-motion="reduced"] .pal-spinner,
-.pal-surface[data-pal-motion="reduced"] .pal-rise,
-.pal-surface[data-pal-motion="reduced"] .pal-bar-fill,
-.pal-surface[data-pal-motion="reduced"] [data-achievement-status="earned"] .pal-badge,
 .pal-celebration[data-pal-motion="reduced"] {
   animation: none;
-}
-
-.pal-surface[data-pal-motion="reduced"] .pal-press:active,
-.pal-surface[data-pal-motion="reduced"] .pal-achievement-card:hover .pal-badge {
-  transform: none;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header,
@@ -790,7 +587,30 @@
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header {
-  flex-direction: column;
+  flex-wrap: wrap;
+}
+
+.pal-surface.pal-achievements[data-pal-viewport="narrow"] {
+  padding: 1.25rem 0.75rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card {
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week[data-week-status="past"] .pal-week-content {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card > .pal-badge {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header > span {
