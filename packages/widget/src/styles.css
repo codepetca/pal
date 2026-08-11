@@ -560,26 +560,19 @@
   font-weight: 700;
 }
 
-/* The companion is one canonical, portable cat-on-grass surface. Pal owns its
-   complete visual footprint; hosts own only the containing layer and placement. */
+/* The companion is one canonical, portable cat surface. Pal owns its complete
+   visual footprint; hosts own only the containing layer and placement. The box
+   is the cat and nothing else, so a host placing the pet is positioning the
+   animal rather than a patch of scenery around it. */
 .pal-companion {
   --pal-companion-cat-h: var(--pal-companion-cat-height, 10rem);
   --pal-companion-cat-w: calc(var(--pal-companion-cat-h) * 1.4);
-  --pal-companion-grass-h: calc(var(--pal-companion-cat-h) * 0.6);
-  --pal-companion-grass-w: calc(var(--pal-companion-grass-h) * 2502 / 1035);
-  --pal-companion-cat-top: calc(var(--pal-companion-cat-h) * 0.5);
-  --pal-companion-cat-bottom: calc(
-    var(--pal-companion-cat-top) + var(--pal-companion-cat-h)
-  );
-  --pal-companion-grass-top: calc(
-    var(--pal-companion-cat-bottom) - (var(--pal-companion-grass-h) / 2)
-  );
 
   position: relative;
   isolation: isolate;
   display: block;
-  width: var(--pal-companion-grass-w);
-  height: calc(var(--pal-companion-grass-top) + var(--pal-companion-grass-h));
+  width: var(--pal-companion-cat-w);
+  height: var(--pal-companion-cat-h);
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -595,7 +588,7 @@
 
 .pal-companion-art {
   position: absolute;
-  top: var(--pal-companion-cat-top);
+  top: 0;
   left: 50%;
   z-index: 1;
   display: block;
@@ -616,21 +609,6 @@
   width: auto;
   max-width: none;
   height: 100%;
-}
-
-.pal-companion-grass {
-  position: absolute;
-  top: var(--pal-companion-grass-top);
-  left: 50%;
-  z-index: 0;
-  display: block;
-  width: var(--pal-companion-grass-w);
-  max-width: none;
-  height: var(--pal-companion-grass-h);
-  object-fit: contain;
-  object-position: center bottom;
-  pointer-events: none;
-  transform: translateX(-50%);
 }
 
 .pal-companion img {

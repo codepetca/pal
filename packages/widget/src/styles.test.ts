@@ -89,7 +89,7 @@ test("responsive behavior follows the host viewport contract", () => {
 });
 
 test("companion owns its portable visual composition without placement", () => {
-  assert.match(styles, /\.pal-companion-grass/);
+  assert.doesNotMatch(styles, /grass/);
   assert.match(styles, /--pal-companion-cat-height/);
 
   const companionRule =

@@ -75,7 +75,7 @@ test("roadmap shows this week, previews the next, and files the rest", () => {
   assert.equal((html.match(/data-open="true"/g) ?? []).length, 0);
 });
 
-test("companion owns the complete portable cat-on-grass surface", () => {
+test("companion owns the complete portable cat surface", () => {
   const client = createFixturePalClient();
   const snapshot = client.peek();
   snapshot.companion.assetUrl = "https://pal.example/assets/pets/default.png";
@@ -91,9 +91,10 @@ test("companion owns the complete portable cat-on-grass surface", () => {
   );
 
   assert.match(html, /class="pal-companion-stage"/);
-  assert.match(html, /class="pal-companion-grass"/);
-  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 3);
-  assert.match(html, /https:\/\/pal\.example\/assets\/pets\/grass\.png/);
+  // The cat is the whole surface: no scenery ships with it, and the only
+  // images fetched are the poses this mood can show.
+  assert.doesNotMatch(html, /grass/);
+  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 2);
   assert.match(html, /--pal-companion-cat-height:12rem/);
   assert.doesNotMatch(html, /data-pal-variant=/);
 });
