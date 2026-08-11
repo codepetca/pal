@@ -635,8 +635,8 @@
   outline-offset: var(--pal-focus-offset);
 }
 
-/* Host-owned placement only. The public companion owns its complete
-   cat-on-grass visual footprint and internal interaction boundary. */
+/* Host-owned placement only. The public companion owns its complete cat visual
+   footprint and internal interaction boundary. */
 .companionOverlay {
   position: absolute;
   z-index: 40;

@@ -42,9 +42,10 @@ import {
 ```
 
 The host owns placement. Pal owns everything rendered inside each component.
-`PalCompanion` is the complete cat-on-grass surface used by Pika and the
-sandbox. Hosts may set its `scale` prop and attach pointer handlers without
-reaching into or restyling Pal's internal artwork.
+`PalCompanion` is the complete cat surface used by Pika and the sandbox. Hosts
+may set its `scale` prop and attach pointer handlers without reaching into or
+restyling Pal's internal artwork. The host owns any surrounding scenery or
+background.
 The package consumes scoped `--pal-*` semantic variables with portable defaults.
 
 Hosts that already own a modal layer should derive its open state from

@@ -314,8 +314,8 @@ Pika adds an **Achievements** navigation destination and renders
 `PalAchievements` inside its normal content pane. The roadmap is never a
 page-covering overlay. Pika owns the host layout, standard interface styling, and
 whether the companion or celebration mounts on a given route. Pal owns everything
-inside each surface, including the companion's complete cat-on-grass
-composition. Pika supplies only its containing layer and placement behavior.
+inside each surface, including the companion's complete cat composition. Pika
+supplies its containing layer, placement behavior, and any surrounding scenery.
 
 The reward modal's open state is derived from Pal's first pending reward. Every
 Pika close path acknowledges that reward through `dismissReward`; it never hides
