@@ -215,16 +215,17 @@
 }
 
 .classroomShell {
+  --sidebar-width: 15rem;
   position: relative;
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   height: calc(100dvh - 3rem);
   overflow: hidden;
   background: var(--host-page);
 }
 
 .classroomShell[data-sidebar-collapsed="true"] {
-  grid-template-columns: 3rem minmax(0, 1fr);
+  --sidebar-width: 3rem;
 }
 
 .sidebar {
@@ -324,6 +325,13 @@
 
 .content > :global(.pal-achievements) {
   max-width: 100%;
+}
+
+.palScene {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+  background: url("/assets/world/pal-page-background.png") center / cover no-repeat;
 }
 
 .todayContent {
@@ -656,6 +664,18 @@
   cursor: grabbing;
 }
 
+.companionOverlay[data-placement="pal"] {
+  left: calc(var(--sidebar-width) + (100% - var(--sidebar-width)) / 2);
+  right: auto;
+  bottom: calc(16.8% - (var(--companion-height) / 2));
+  transform: translateX(-50%);
+}
+
+.companionOverlay[data-placement="pal"] :global(.pal-companion) {
+  cursor: default;
+  touch-action: auto;
+}
+
 .celebrationLayer {
   position: absolute;
   z-index: 60;
@@ -946,11 +966,11 @@
 @media (max-width: 1100px) {
   .classroomShell,
   .classroomShell[data-sidebar-collapsed="true"] {
-    grid-template-columns: 12rem minmax(0, 1fr);
+    --sidebar-width: 12rem;
   }
 
   .classroomShell[data-sidebar-collapsed="true"] {
-    grid-template-columns: 3rem minmax(0, 1fr);
+    --sidebar-width: 3rem;
   }
 
   .controls[data-collapsed="false"] {
@@ -975,7 +995,7 @@
 
   .classroomShell,
   .classroomShell[data-sidebar-collapsed="true"] {
-    grid-template-columns: 3rem minmax(0, 1fr);
+    --sidebar-width: 3rem;
   }
 
   .navItems {
