@@ -59,7 +59,7 @@ export function PalAchievements() {
   if (!snapshot) return null;
 
   const visibleWeeks = snapshot.roadmap.weeks
-    .filter((week) => week.status !== "future")
+    .filter((week) => week.number <= snapshot.roadmap.currentWeek)
     .sort((a, b) => b.number - a.number);
 
   return (
@@ -75,6 +75,7 @@ export function PalAchievements() {
 
       <ol className="pal-roadmap-list">
         {visibleWeeks.map((week) => {
+          const isCurrent = week.number === snapshot.roadmap.currentWeek;
           const earnedAchievements = week.achievements.filter(
             (achievement) => achievement.status === "earned",
           );
@@ -82,9 +83,9 @@ export function PalAchievements() {
           return (
             <li
               className="pal-week"
-              data-week-status={week.status}
+              data-week-status={isCurrent ? "current" : "past"}
               key={week.id}
-              aria-current={week.status === "current" ? "step" : undefined}
+              aria-current={isCurrent ? "step" : undefined}
             >
               <div className="pal-week-marker" aria-hidden="true">
                 <span>{week.number}</span>
@@ -92,14 +93,14 @@ export function PalAchievements() {
               <article className="pal-week-content">
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>
-                  {week.status === "current" ? (
+                  {isCurrent ? (
                     <span className="pal-week-chip">This week</span>
                   ) : earnedAchievements.length > 0 ? (
                     <span className="pal-week-earned">Earned</span>
                   ) : null}
                 </header>
 
-                {week.status === "current" ? (
+                {isCurrent ? (
                   <ul className="pal-achievement-list">
                     {week.achievements.map((achievement) => (
                       <li

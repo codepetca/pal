@@ -10,7 +10,10 @@ import { PalProvider } from "./provider";
   .IS_REACT_ACT_ENVIRONMENT = true;
 
 test("achievement trail omits future weeks and orders visible weeks newest first", async () => {
-  const client = createFixturePalClient();
+  const snapshot = createFixtureSnapshot();
+  snapshot.roadmap.weeks[3]!.status = "future";
+  snapshot.roadmap.weeks[4]!.status = "current";
+  const client = createFixturePalClient(snapshot);
   let renderer: ReactTestRenderer | undefined;
 
   await act(async () => {
