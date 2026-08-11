@@ -540,6 +540,8 @@
 }
 
 .pal-button:focus-visible,
+.pal-history-toggle:focus-visible,
+.pal-history-week-toggle:focus-visible,
 .pal-week-tab:focus-visible,
 .pal-week-card:focus-visible {
   outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);

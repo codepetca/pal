@@ -61,6 +61,8 @@ test("every public theme property is consumed and portable", () => {
 test("widget controls and motion meet the accessibility contract", () => {
   assert.match(styles, /\.pal-button[\s\S]*min-height: var\(--pal-effective-control-min\)/);
   assert.match(styles, /\.pal-button:focus-visible/);
+  assert.match(styles, /\.pal-history-toggle:focus-visible/);
+  assert.match(styles, /\.pal-history-week-toggle:focus-visible/);
   assert.match(styles, /outline: var\(--pal-effective-focus-width\)/);
   assert.match(styles, /data-pal-motion="reduced"/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
