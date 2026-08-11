@@ -32,7 +32,12 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /Your achievement path/);
   assert.match(html, /aria-current="step"/);
   assert.match(html, /2 of 4 eligible days/);
-  assert.match(html, /Earned/);
+  // Status reaches a screen reader as words and a sighted student as a shape,
+  // so neither depends on the status color.
+  assert.match(
+    html,
+    /<span aria-hidden="true">●<\/span><span class="pal-sr-only">2 of 4 days<\/span>/,
+  );
   assert.match(html, /Pip, your Pal companion/);
   assert.match(html, /Level 2; 3 day rhythm/);
   assert.match(html, /A treat for Pip!/);
@@ -44,7 +49,7 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.doesNotMatch(html, /aria-label="New Pal reward"/);
 });
 
-test("roadmap renders all fictional semester weeks", () => {
+test("roadmap shows this week, previews the next, and files the rest", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
     <PalProvider
@@ -56,12 +61,21 @@ test("roadmap renders all fictional semester weeks", () => {
     </PalProvider>,
   );
 
-  assert.match(html, /Week 1/);
-  assert.match(html, /Week 16/);
-  assert.equal((html.match(/class="pal-week"/g) ?? []).length, 16);
+  // The fixture semester sits in week 4 of 16.
+  assert.match(html, /aria-current="step"[^>]*>|<h3 id="pal-current-week">Week 4/);
+  assert.match(html, /id="pal-next-week"[\s\S]*?Week 5/);
+
+  // Weeks past the preview are not on the page at all.
+  assert.doesNotMatch(html, /Week 6/);
+  assert.doesNotMatch(html, /Week 16/);
+
+  // The three finished weeks are filed in history, closed until asked for.
+  assert.equal((html.match(/class="pal-history-week pal-rise"/g) ?? []).length, 3);
+  assert.match(html, /class="pal-history-toggle[^"]*"[^>]*aria-expanded="false"/);
+  assert.equal((html.match(/data-open="true"/g) ?? []).length, 0);
 });
 
-test("companion owns the complete portable cat-on-grass surface", () => {
+test("companion owns the complete portable cat surface", () => {
   const client = createFixturePalClient();
   const snapshot = client.peek();
   snapshot.companion.assetUrl = "https://pal.example/assets/pets/default.png";
@@ -77,9 +91,10 @@ test("companion owns the complete portable cat-on-grass surface", () => {
   );
 
   assert.match(html, /class="pal-companion-stage"/);
-  assert.match(html, /class="pal-companion-grass"/);
-  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 3);
-  assert.match(html, /https:\/\/pal\.example\/assets\/pets\/grass\.png/);
+  // The cat is the whole surface: no scenery ships with it, and the only
+  // images fetched are the poses this mood can show.
+  assert.doesNotMatch(html, /grass/);
+  assert.equal((html.match(/crossorigin="anonymous"/g) ?? []).length, 2);
   assert.match(html, /--pal-companion-cat-height:12rem/);
   assert.doesNotMatch(html, /data-pal-variant=/);
 });

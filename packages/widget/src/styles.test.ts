@@ -61,10 +61,28 @@ test("every public theme property is consumed and portable", () => {
 test("widget controls and motion meet the accessibility contract", () => {
   assert.match(styles, /\.pal-button[\s\S]*min-height: var\(--pal-effective-control-min\)/);
   assert.match(styles, /\.pal-button:focus-visible/);
+  assert.match(styles, /\.pal-history-toggle:focus-visible/);
+  assert.match(styles, /\.pal-history-week-toggle:focus-visible/);
   assert.match(styles, /outline: var\(--pal-effective-focus-width\)/);
   assert.match(styles, /data-pal-motion="reduced"/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(styles, /\.pal-spinner,[\s\S]*\.pal-celebration[\s\S]*animation: none/);
+
+  // Every animation this surface adds has to be answerable by both motion
+  // switches, the OS preference and the host's explicit setting.
+  for (const animated of [
+    "\\.pal-rise",
+    "\\.pal-bar-fill",
+    '\\[data-achievement-status="earned"\\] \\.pal-badge',
+  ]) {
+    const mediaBlock =
+      styles.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+    assert.match(mediaBlock, new RegExp(animated));
+    assert.match(
+      styles,
+      new RegExp(`\\.pal-surface\\[data-pal-motion="reduced"\\] ${animated}`),
+    );
+  }
 });
 
 test("responsive behavior follows the host viewport contract", () => {
@@ -73,7 +91,7 @@ test("responsive behavior follows the host viewport contract", () => {
 });
 
 test("companion owns its portable visual composition without placement", () => {
-  assert.match(styles, /\.pal-companion-grass/);
+  assert.doesNotMatch(styles, /grass/);
   assert.match(styles, /--pal-companion-cat-height/);
 
   const companionRule =
@@ -86,10 +104,14 @@ test("companion owns its portable visual composition without placement", () => {
 test("future-week treatment preserves muted-text contrast in both themes", () => {
   const futureCardRule =
     styles.match(
-      /\.pal-week\[data-week-status="future"\] \.pal-week-card \{([^}]+)\}/,
+      /\.pal-week-card\[data-week-status="future"\] \{([^}]+)\}/,
     )?.[1] ?? "";
   assert.doesNotMatch(futureCardRule, /opacity/);
   assert.match(futureCardRule, /border-style: dashed/);
+
+  const nextWeekRule = styles.match(/\.pal-week-next \{([^}]+)\}/)?.[1] ?? "";
+  assert.doesNotMatch(nextWeekRule, /opacity/);
+  assert.match(nextWeekRule, /background: var\(--pal-effective-color-surface-muted\)/);
 
   const textFallbacks = hexFallbacks("--pal-effective-color-text-muted");
   const surfaceFallbacks = hexFallbacks("--pal-effective-color-surface");

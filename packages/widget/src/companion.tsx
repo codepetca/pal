@@ -129,7 +129,7 @@ function findVisibleSpriteImg(root: HTMLElement): HTMLImageElement | null {
 /**
  * Keeps transparent cat pixels from becoming a surprising host drag target.
  * The pet owns this knowledge so hosts never query Pal's private sprite DOM.
- * Grass and layout space remain valid interaction targets.
+ * The drawn cat is now the only interaction target the box contains.
  */
 function isTransparentAt(
   img: HTMLImageElement,
@@ -369,24 +369,14 @@ function PalCompanion(
     >
       <div className="pal-companion-stage" aria-hidden="true">
         {companion.assetUrl ? (
-          <>
-            <img
-              className="pal-companion-grass"
-              crossOrigin="anonymous"
-              src={siblingAssetUrl(companion.assetUrl, "grass.png")}
-              alt=""
-              width="2502"
-              height="1035"
+          <div className="pal-companion-art">
+            <PetSprite
+              key={companion.assetUrl}
+              mood={companion.mood}
+              motion={motion}
+              restUrl={companion.assetUrl}
             />
-            <div className="pal-companion-art">
-              <PetSprite
-                key={companion.assetUrl}
-                mood={companion.mood}
-                motion={motion}
-                restUrl={companion.assetUrl}
-              />
-            </div>
-          </>
+          </div>
         ) : (
           <div className="pal-companion-art">
             <span>🐾</span>

@@ -241,6 +241,12 @@ test("sandbox navigation keeps accessible names when labels are visually hidden"
   assert.match(sandboxSource, /aria-label=\{label\}/);
 });
 
+test("sandbox does not add a Pal destination to host navigation", () => {
+  assert.doesNotMatch(sandboxSource, /label: "Pal"/);
+  assert.doesNotMatch(sandboxSource, /\| "pal"/);
+  assert.doesNotMatch(sandboxStyles, /\.palScene/);
+});
+
 test("sandbox controls manage focus and hide covered navigation from interaction", () => {
   assert.match(sandboxSource, /closeButtonRef\.current\?\.focus\(\)/);
   assert.match(sandboxSource, /openButtonRef\.current\?\.focus\(\)/);
