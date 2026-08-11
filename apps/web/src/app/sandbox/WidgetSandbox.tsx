@@ -22,7 +22,6 @@ import {
   Megaphone,
   Moon,
   NotePencil,
-  PawPrint,
   Sun,
   Trophy,
   X,
@@ -57,7 +56,6 @@ import styles from "./widget-sandbox.module.css";
 type HostView =
   | "today"
   | "achievements"
-  | "pal"
   | "classwork"
   | "tests"
   | "calendar"
@@ -78,7 +76,6 @@ const NAV_ITEMS = [
   { label: "Calendar", view: "calendar", icon: CalendarBlank },
   { label: "Syllabus", view: "syllabus", icon: BookOpen },
   { label: "Achievements", view: "achievements", icon: Trophy },
-  { label: "Pal", view: "pal", icon: PawPrint },
   { label: "Announcements", view: "announcements", icon: Megaphone },
   { label: "Settings", view: "settings", icon: Gear },
 ] satisfies Array<{
@@ -480,7 +477,6 @@ function PalSettings({
 function CompanionOverlay({
   visible,
   scale,
-  fixed,
   dragging,
   overlayRef,
   onPointerDown,
@@ -489,7 +485,6 @@ function CompanionOverlay({
 }: {
   visible: boolean;
   scale: number;
-  fixed: boolean;
   dragging: boolean;
   overlayRef: RefObject<HTMLDivElement | null>;
   onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -503,14 +498,13 @@ function CompanionOverlay({
       ref={overlayRef}
       className={styles.companionOverlay}
       data-dragging={dragging ? "true" : "false"}
-      data-placement={fixed ? "pal" : "corner"}
     >
       <PalCompanion
         scale={scale}
-        onPointerDown={fixed ? undefined : onPointerDown}
-        onPointerMove={fixed ? undefined : onPointerMove}
-        onPointerUp={fixed ? undefined : onPointerEnd}
-        onPointerCancel={fixed ? undefined : onPointerEnd}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
         onDragStart={(event) => event.preventDefault()}
       />
     </div>
@@ -582,21 +576,6 @@ function SandboxExperience({
     width: number;
     height: number;
   } | null>(null);
-
-  // The Pal destination gives the companion a fixed home in the scene. Clear
-  // any drag-authored inline coordinates when changing destinations so CSS can
-  // move the same widget between its page position and the default corner.
-  useEffect(() => {
-    const overlay = companionOverlayRef.current;
-    if (!overlay) return;
-    companionPosition.current = null;
-    companionDragOffset.current = null;
-    setCompanionDragging(false);
-    overlay.style.removeProperty("left");
-    overlay.style.removeProperty("top");
-    overlay.style.removeProperty("right");
-    overlay.style.removeProperty("bottom");
-  }, [view]);
 
   useEffect(() => {
     const overlay = companionOverlayRef.current;
@@ -861,8 +840,6 @@ function SandboxExperience({
           <main className={styles.content}>
             {view === "achievements" ? (
               <PalAchievements />
-            ) : view === "pal" ? (
-              <section className={styles.palScene} aria-label="Pal companion home" />
             ) : view === "today" ? (
               <section className={styles.todayContent}>
                 <div className={styles.noClassCard}>No class today</div>
@@ -909,7 +886,6 @@ function SandboxExperience({
           <CompanionOverlay
             visible={widgetVisible}
             scale={widgetScale}
-            fixed={view === "pal"}
             dragging={companionDragging}
             overlayRef={companionOverlayRef}
             onPointerDown={handleCompanionPointerDown}

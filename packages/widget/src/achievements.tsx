@@ -280,6 +280,7 @@ export function PalAchievements() {
           className="pal-history-body"
           id="pal-history-body"
           data-open={historyOpen ? "true" : "false"}
+          inert={!historyOpen || undefined}
         >
           <div className="pal-history-inner">
             {past.length === 0 ? (
@@ -314,6 +315,7 @@ export function PalAchievements() {
                         className="pal-history-body"
                         id={`pal-history-week-${week.id}`}
                         data-open={open ? "true" : "false"}
+                        inert={!open || undefined}
                       >
                         <div className="pal-history-inner">
                           <AchievementList week={week} />
