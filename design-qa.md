@@ -74,6 +74,8 @@ complete trail. The one-pixel source/implementation height difference is ignored
   and advance horizontally with consistent spacing.
 - Verified badge focus exposes `First Pika Login — Earned`; the same tooltip is
   exposed on hover, and the focus target has the full accessible label.
+- Verified the hover disclosure remains visible while the pointer moves from the
+  badge across its bridge and onto the tooltip content.
 - Verified the narrow host viewport has no horizontal overflow.
 - Checked browser warnings and errors after the interaction sequence: none.
 

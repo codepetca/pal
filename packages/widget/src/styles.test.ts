@@ -102,3 +102,21 @@ test("roadmap muted text preserves contrast in both themes", () => {
     );
   }
 });
+
+test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {
+  const tooltipRule =
+    styles.match(/\.pal-badge-tooltip \{([^}]+)\}/)?.[1] ?? "";
+  const tooltipBridgeRule =
+    styles.match(/\.pal-badge-tooltip::after \{([^}]+)\}/)?.[1] ?? "";
+  const visibleTooltipRule =
+    styles.match(
+      /\.pal-badge-control:hover \.pal-badge-tooltip,[\s\S]*?\.pal-badge-control:focus-visible \.pal-badge-tooltip \{([^}]+)\}/,
+    )?.[1] ?? "";
+
+  assert.match(tooltipRule, /visibility: hidden/);
+  assert.match(tooltipRule, /pointer-events: none/);
+  assert.match(tooltipBridgeRule, /top: 100%/);
+  assert.match(tooltipBridgeRule, /height: 0\.6rem/);
+  assert.match(visibleTooltipRule, /visibility: visible/);
+  assert.match(visibleTooltipRule, /pointer-events: auto/);
+});
