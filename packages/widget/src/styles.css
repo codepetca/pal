@@ -233,8 +233,11 @@
 
 .pal-badge-control {
   position: relative;
-  display: block;
+  display: grid;
+  min-width: var(--pal-effective-control-min);
+  min-height: var(--pal-effective-control-min);
   border-radius: 50%;
+  place-items: center;
   cursor: help;
 }
 
@@ -555,15 +558,6 @@
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header > span {
   white-space: normal;
-}
-
-.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card {
-  grid-template-columns: 2.6rem minmax(0, 1fr);
-}
-
-.pal-surface[data-pal-viewport="narrow"] .pal-badge {
-  width: 2.6rem;
-  height: 2.6rem;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {

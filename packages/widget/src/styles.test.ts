@@ -120,3 +120,25 @@ test("badge tooltips stay hoverable while the pointer enters the disclosure", ()
   assert.match(visibleTooltipRule, /visibility: visible/);
   assert.match(visibleTooltipRule, /pointer-events: auto/);
 });
+
+test("badge controls keep a minimum 44px target in the narrow cascade", () => {
+  const badgeControlRule =
+    styles.match(/\.pal-badge-control \{([^}]+)\}/)?.[1] ?? "";
+  const narrowBadgeRules = [
+    ...styles.matchAll(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-badge \{([^}]+)\}/g,
+    ),
+  ];
+
+  assert.match(
+    badgeControlRule,
+    /min-width: var\(--pal-effective-control-min\)/,
+  );
+  assert.match(
+    badgeControlRule,
+    /min-height: var\(--pal-effective-control-min\)/,
+  );
+  assert.equal(narrowBadgeRules.length, 1);
+  assert.match(narrowBadgeRules[0]?.[1] ?? "", /width: 3\.5rem/);
+  assert.match(narrowBadgeRules[0]?.[1] ?? "", /height: 3\.5rem/);
+});
