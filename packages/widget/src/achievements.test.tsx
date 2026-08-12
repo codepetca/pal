@@ -49,6 +49,23 @@ test("achievement trail omits future weeks and orders visible weeks newest first
       ).length,
       0,
     );
+    assert.equal(
+      renderer!.root.findAll((node) => node.props.className === "pal-week-chip")
+        .length,
+      0,
+    );
+    const badgeControls = renderer!.root.findAll(
+      (node) => node.props.className === "pal-badge-control",
+    );
+    assert.ok(badgeControls.length > 0);
+    assert.ok(badgeControls.every((badge) => badge.props.tabIndex === 0));
+    assert.ok(
+      badgeControls.every((badge) =>
+        badge.findAll(
+          (node) => node.props.className === "pal-badge-tooltip",
+        ).length === 1,
+      ),
+    );
   } finally {
     await act(async () => renderer?.unmount());
   }
@@ -85,8 +102,7 @@ test("past weeks without earned achievements do not claim a badge", async () => 
     assert.equal(
       weekThreeNode.findAll(
         (node) =>
-          node.props.className === "pal-week-earned" ||
-          node.props.className === "pal-earned-badges",
+          node.props.className === "pal-week-badges",
       ).length,
       0,
     );

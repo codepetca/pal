@@ -4,22 +4,31 @@ import { usePalWidget } from "./provider";
 import type { PalAchievement } from "./types";
 
 function AchievementBadge({ achievement }: { achievement: PalAchievement }) {
+  const detail = achievement.progress?.label ?? achievement.statusLabel;
+  const tooltip = `${achievement.title} — ${detail}`;
+
   return (
     <span
-      className="pal-badge"
-      aria-label={achievement.badge.label}
+      className="pal-badge-control"
+      aria-label={tooltip}
       role="img"
+      tabIndex={0}
     >
-      {achievement.badge.assetUrl ? (
-        <img
-          src={achievement.badge.assetUrl}
-          alt=""
-          width="80"
-          height="80"
-        />
-      ) : (
-        achievement.badge.icon ?? "★"
-      )}
+      <span className="pal-badge" aria-hidden="true">
+        {achievement.badge.assetUrl ? (
+          <img
+            src={achievement.badge.assetUrl}
+            alt=""
+            width="80"
+            height="80"
+          />
+        ) : (
+          achievement.badge.icon ?? "★"
+        )}
+      </span>
+      <span className="pal-badge-tooltip" aria-hidden="true">
+        {tooltip}
+      </span>
     </span>
   );
 }
@@ -79,6 +88,9 @@ export function PalAchievements() {
           const earnedAchievements = week.achievements.filter(
             (achievement) => achievement.status === "earned",
           );
+          const visibleAchievements = isCurrent
+            ? week.achievements
+            : earnedAchievements;
 
           return (
             <li
@@ -93,43 +105,11 @@ export function PalAchievements() {
               <article className="pal-week-content">
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>
-                  {isCurrent ? (
-                    <span className="pal-week-chip">This week</span>
-                  ) : earnedAchievements.length > 0 ? (
-                    <span className="pal-week-earned">Earned</span>
-                  ) : null}
                 </header>
 
-                {isCurrent ? (
-                  <ul className="pal-achievement-list">
-                    {week.achievements.map((achievement) => (
-                      <li
-                        className="pal-achievement-card"
-                        data-achievement-status={achievement.status}
-                        key={achievement.id}
-                      >
-                        <AchievementBadge achievement={achievement} />
-                        <div className="pal-achievement-copy">
-                          <h4>{achievement.title}</h4>
-                          {achievement.progress ? (
-                            <div className="pal-progress-wrap">
-                              <progress
-                                value={achievement.progress.current}
-                                max={achievement.progress.target}
-                                aria-label={`${achievement.title}: ${achievement.progress.label}`}
-                              />
-                              <span>{achievement.progress.label}</span>
-                            </div>
-                          ) : (
-                            <span className="pal-status">{achievement.statusLabel}</span>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : earnedAchievements.length > 0 ? (
-                  <ul className="pal-earned-badges" aria-label={`${week.label} achievements`}>
-                    {earnedAchievements.map((achievement) => (
+                {visibleAchievements.length > 0 ? (
+                  <ul className="pal-week-badges" aria-label={`${week.label} achievements`}>
+                    {visibleAchievements.map((achievement) => (
                       <li key={achievement.id}>
                         <AchievementBadge achievement={achievement} />
                       </li>

@@ -145,24 +145,8 @@
   text-transform: uppercase;
 }
 
-.pal-week-chip,
-.pal-status {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.pal-week-chip {
-  padding: 0.35rem 0.65rem;
-  color: var(--pal-effective-color-primary);
-  background: var(--pal-effective-color-surface-selected);
-  white-space: nowrap;
-}
-
 .pal-roadmap-list,
-.pal-achievement-list {
+.pal-week-badges {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -219,6 +203,10 @@
 }
 
 .pal-week-content {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+  min-height: 6rem;
+  align-items: start;
   min-width: 0;
 }
 
@@ -233,60 +221,39 @@
   font-size: 1.25rem;
 }
 
-.pal-week-earned {
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.875rem;
-}
-
 .pal-week[data-week-status="current"] .pal-week-header h3 {
   font-size: 1.5rem;
 }
 
-.pal-week[data-week-status="past"] .pal-week-content {
-  display: grid;
-  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
-  min-height: 7.5rem;
-  align-items: start;
-}
-
-.pal-week[data-week-status="past"] .pal-week-header {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.pal-achievement-list {
-  display: grid;
+.pal-week-badges {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 0.85rem;
 }
 
-.pal-achievement-card {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  gap: clamp(1rem, 3vw, 1.5rem);
-  align-items: center;
-  min-height: 9rem;
-  padding: clamp(1rem, 3vw, 1.5rem);
-  border: 1px solid var(--pal-effective-color-primary);
-  border-radius: var(--pal-effective-radius-card);
-  background: color-mix(
-    in srgb,
-    var(--pal-effective-color-surface) 88%,
-    var(--pal-effective-color-primary-solid)
-  );
+.pal-badge-control {
+  position: relative;
+  display: block;
+  border-radius: 50%;
+  cursor: help;
+}
+
+.pal-badge-control:focus-visible {
+  outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
+  outline-offset: var(--pal-effective-focus-offset);
 }
 
 .pal-badge {
   display: grid;
-  width: 5.5rem;
-  height: 5.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
   place-items: center;
   overflow: hidden;
   border: 0;
   border-radius: 50%;
   color: var(--pal-effective-color-primary);
   background: var(--pal-effective-color-surface-selected);
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 900;
 }
 
@@ -305,76 +272,34 @@
   object-fit: contain;
 }
 
-.pal-achievement-copy h4 {
-  font-size: 1.05rem;
+.pal-badge-tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.55rem);
+  left: 50%;
+  z-index: 3;
+  width: max-content;
+  max-width: 15rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--pal-effective-color-border-strong);
+  border-radius: var(--pal-effective-radius-control);
+  color: var(--pal-effective-color-text);
+  background: var(--pal-effective-color-surface);
+  box-shadow: var(--pal-effective-shadow-panel);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.2rem);
+  transition:
+    opacity var(--pal-effective-motion-fast) var(--pal-effective-motion-easing),
+    transform var(--pal-effective-motion-fast) var(--pal-effective-motion-easing);
 }
 
-.pal-status {
-  margin-top: 0.45rem;
-  color: var(--pal-effective-color-text-muted);
-}
-
-[data-achievement-status="earned"] .pal-status {
-  color: var(--pal-effective-color-success);
-}
-
-[data-achievement-status="incomplete"] .pal-status {
-  color: var(--pal-effective-color-warning);
-}
-
-.pal-progress-wrap {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) auto;
-  align-items: center;
-  gap: 0.8rem;
-  max-width: 34rem;
-  margin-top: 0.8rem;
-}
-
-.pal-progress-wrap progress {
-  width: 100%;
-  height: 0.45rem;
-  overflow: hidden;
-  border: 0;
-  border-radius: 999px;
-  color: var(--pal-effective-color-primary-solid);
-  background: var(--pal-effective-color-border);
-}
-
-.pal-progress-wrap progress::-webkit-progress-bar {
-  border-radius: 999px;
-  background: var(--pal-effective-color-border);
-}
-
-.pal-progress-wrap progress::-webkit-progress-value {
-  border-radius: 999px;
-  background: var(--pal-effective-color-primary-solid);
-}
-
-.pal-progress-wrap progress::-moz-progress-bar {
-  border-radius: 999px;
-  background: var(--pal-effective-color-primary-solid);
-}
-
-.pal-progress-wrap span {
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.pal-earned-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pal-earned-badges .pal-badge {
-  width: 4.5rem;
-  height: 4.5rem;
-  font-size: 1.6rem;
+.pal-badge-control:hover .pal-badge-tooltip,
+.pal-badge-control:focus-visible .pal-badge-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .pal-state {
@@ -594,23 +519,24 @@
   padding: 1.25rem 0.75rem;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card {
-  grid-template-columns: 3.5rem minmax(0, 1fr);
-}
-
-.pal-surface[data-pal-viewport="narrow"] .pal-week[data-week-status="past"] .pal-week-content {
+.pal-surface[data-pal-viewport="narrow"] .pal-week-content {
   grid-template-columns: 1fr;
   gap: 0.75rem;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-achievement-card > .pal-badge {
+.pal-surface[data-pal-viewport="narrow"] .pal-badge {
   width: 3.5rem;
   height: 3.5rem;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-progress-wrap {
-  grid-template-columns: 1fr;
-  gap: 0.35rem;
+.pal-surface[data-pal-viewport="narrow"] .pal-badge-tooltip {
+  left: 0;
+  transform: translateY(0.2rem);
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-badge-control:hover .pal-badge-tooltip,
+.pal-surface[data-pal-viewport="narrow"] .pal-badge-control:focus-visible .pal-badge-tooltip {
+  transform: translateY(0);
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header > span {
