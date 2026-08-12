@@ -79,7 +79,6 @@ export function PalAchievements() {
     >
       <header className="pal-roadmap-header">
         <h2 id="pal-roadmap-title">Achievements</h2>
-        <p>{snapshot.roadmap.semesterLabel}</p>
       </header>
 
       <ol className="pal-roadmap-list">

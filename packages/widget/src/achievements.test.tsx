@@ -54,6 +54,10 @@ test("achievement trail omits future weeks and orders visible weeks newest first
         .length,
       0,
     );
+    assert.equal(
+      JSON.stringify(renderer!.toJSON()).includes(snapshot.roadmap.semesterLabel),
+      false,
+    );
     const badgeControls = renderer!.root.findAll(
       (node) => node.props.className === "pal-badge-control",
     );

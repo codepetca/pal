@@ -131,12 +131,6 @@
   line-height: 1.15;
 }
 
-.pal-roadmap-header p {
-  margin-top: 0.35rem;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.95rem;
-}
-
 .pal-eyebrow {
   color: var(--pal-effective-color-primary);
   font-size: 0.75rem;
@@ -523,7 +517,6 @@
   animation: none;
 }
 
-.pal-surface[data-pal-viewport="narrow"] .pal-roadmap-header,
 .pal-surface[data-pal-viewport="narrow"] .pal-week-header {
   align-items: flex-start;
 }

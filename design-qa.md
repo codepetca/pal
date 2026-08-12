@@ -45,13 +45,13 @@ complete trail. The one-pixel source/implementation height difference is ignored
 - Image quality and asset fidelity: Weekly Rhythm and login/check-in outcomes now
   use the repository's real PNG badge art. Existing Pika, Phosphor, and Pal pet
   assets remain unchanged; no new placeholder drawing was introduced.
-- Copy and content: persistent copy is reduced to `Achievements`, semester label,
-  and week labels. Badge name plus status/progress appears only on badge hover or
-  keyboard focus. Descriptions, rewards, dates, the `This week` chip, semester
+- Copy and content: persistent copy is reduced to `Achievements` and week labels.
+  Badge name plus status/progress appears only on badge hover or keyboard focus.
+  Descriptions, rewards, dates, the `This week` chip, semester subtitle and
   denominator, and all future-week copy are gone.
-- The live comparison uses Week 5 and `Achievement semester`, while the selected
-  mock uses Week 4 and `Fall semester`. These are intentional data-driven values;
-  the hierarchy and ordering are the matched design behaviors.
+- The live comparison uses Week 5 while the selected mock uses Week 4. This is an
+  intentional data-driven value; the hierarchy and ordering are the matched
+  design behaviors.
 - No actionable P0, P1, or P2 findings remain.
 
 ## Comparison history
