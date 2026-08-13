@@ -4,6 +4,7 @@ import {
   achievementPeriods,
   economy,
   getDb,
+  learnerFacts,
   learners,
   petState,
   rewardNotices,
@@ -186,6 +187,20 @@ export async function loadLearnerSnapshot(
         .select()
         .from(weeklyRhythmConfigs)
         .where(eq(weeklyRhythmConfigs.learnerId, learnerId));
+      const calendarFacts = await tx
+        .select({
+          periodKey: learnerFacts.periodKey,
+          occurredAt: learnerFacts.occurredAt,
+          metadata: learnerFacts.metadata,
+        })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.eventType, "daily_log_week.configured"),
+          ),
+        )
+        .orderBy(asc(learnerFacts.occurredAt));
       const rewards = await tx
         .select()
         .from(rewardNotices)
@@ -198,19 +213,51 @@ export async function loadLearnerSnapshot(
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
 
-      const periodNumbers = new Map(
-        periods.map((period, index) => [period.periodKey, index + 1]),
-      );
+      const latestCalendarFact = calendarFacts.at(-1);
+      const currentTermToken = latestCalendarFact
+        ? (latestCalendarFact.metadata as Record<string, unknown>).term_token
+        : undefined;
+      const authoritativeWeekNumbers = new Map<string, number>();
+      for (const fact of calendarFacts) {
+        const metadata = fact.metadata as Record<string, unknown>;
+        const weekIndex = metadata.week_index;
+        if (
+          fact.periodKey &&
+          typeof currentTermToken === "string" &&
+          metadata.term_token === currentTermToken &&
+          Number.isInteger(weekIndex) &&
+          (weekIndex as number) >= 1 &&
+          (weekIndex as number) <= SEMESTER_WEEKS
+        ) {
+          authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
+        }
+      }
+      const periodNumbers = new Map<string, number>();
+      const claimedWeeks = new Set(authoritativeWeekNumbers.values());
+      let fallbackWeek = 1;
+      for (const period of periods) {
+        const authoritativeWeek = authoritativeWeekNumbers.get(period.periodKey);
+        if (authoritativeWeek) {
+          periodNumbers.set(period.periodKey, authoritativeWeek);
+          continue;
+        }
+        // Once the producer supplies an authoritative term calendar, roadmap
+        // placement is scoped to that term. Legacy and earlier-term periods do
+        // not leak into empty slots in the current 16-week roadmap.
+        if (typeof currentTermToken === "string") continue;
+        while (claimedWeeks.has(fallbackWeek)) fallbackWeek += 1;
+        if (fallbackWeek > SEMESTER_WEEKS) break;
+        periodNumbers.set(period.periodKey, fallbackWeek);
+        claimedWeeks.add(fallbackWeek);
+        fallbackWeek += 1;
+      }
       const reconciliation = new Map(
         configurations.map((configuration) => [
           configuration.periodKey,
           configuration.reconciliationRequired,
         ]),
       );
-      const currentWeek = Math.max(
-        1,
-        Math.min(SEMESTER_WEEKS, periods.length || 1),
-      );
+      const currentWeek = Math.max(1, ...periodNumbers.values());
       const weeks: PalRoadmapWeek[] = Array.from(
         { length: SEMESTER_WEEKS },
         (_, index) => {

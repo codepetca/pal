@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { v1 } from "@pal/contract";
 import {
+  FICTIONAL_SEMESTER_END_DAY,
+  FICTIONAL_SEMESTER_START_ISO,
   addDays,
   eventForAction,
   eventsForAction,
@@ -45,6 +47,21 @@ test("builds all six contract-valid pilot facts", () => {
 
   const completion = events[5];
   assert.equal(completion?.occurred_at, now.toISOString());
+
+  const configuredWeek = events[2];
+  assert.deepEqual(
+    configuredWeek?.metadata,
+    {
+      period_key: "sandbox-week-01",
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "sandbox-term-2026",
+      term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
+      term_end_day: FICTIONAL_SEMESTER_END_DAY,
+      week_index: 1,
+    },
+  );
 });
 
 test("maps the fictional semester to stable, distinct week keys", () => {

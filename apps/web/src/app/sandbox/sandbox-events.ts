@@ -23,6 +23,7 @@ export type SandboxEventRequest = {
 // though the production receiver correctly rejects future-dated facts.
 export const FICTIONAL_SEMESTER_START_ISO = "2026-04-13T08:00:00.000Z";
 const SEMESTER_START = new Date(FICTIONAL_SEMESTER_START_ISO);
+export const FICTIONAL_SEMESTER_END_DAY = "2026-08-02";
 
 export function semesterWeekForDate(date: Date): number {
   const diffDays = Math.floor(
@@ -78,6 +79,10 @@ export function eventForAction(
           config_version: action === "week-configured" ? 1 : 2,
           period_status: "open",
           eligible_days: action === "week-configured" ? 5 : 3,
+          term_token: "sandbox-term-2026",
+          term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
+          term_end_day: FICTIONAL_SEMESTER_END_DAY,
+          week_index: semesterWeekForDate(simulatedDate),
         },
       };
     case "daily-log-completed":

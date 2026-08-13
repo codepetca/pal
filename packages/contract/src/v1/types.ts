@@ -51,6 +51,13 @@ export type V1Metadata = {
     config_version: number;
     period_status: "open" | "closed";
     eligible_days: number;
+    // Optional during the producer rollout. When present, these four fields
+    // travel together so Pal can place an observed period at its authoritative
+    // term position instead of numbering periods by arrival/history count.
+    term_token?: OpaqueToken;
+    term_start_day?: string;
+    term_end_day?: string;
+    week_index?: number;
   };
 
   // At least one qualifying log on that date. One fact per learner/date, even

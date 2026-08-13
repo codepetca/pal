@@ -570,6 +570,111 @@ test(
 );
 
 test(
+  "places a late-joining learner at the producer's authoritative term week",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `late-join-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `late-join-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            week_index: 7,
+          },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.equal(snapshot.roadmap.currentWeek, 7);
+      assert.equal(snapshot.roadmap.weeks[0].achievements.length, 0);
+      assert.ok(
+        snapshot.roadmap.weeks[6].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "rejects a second period that claims an occupied term week",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `calendar-conflict-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const calendar = {
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      week_index: 7,
+    };
+    try {
+      const first = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...calendar, period_key: `period-a-${crypto.randomUUID()}` },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(first.status, "processed");
+
+      const second = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...calendar, period_key: `period-b-${crypto.randomUUID()}` },
+          "2026-10-12T13:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.deepEqual(second, {
+        status: "rejected",
+        error: "conflicting_period_calendar",
+      });
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "keeps learner rewards and snapshots isolated across learners and integrations",
   { skip: !process.env.DATABASE_URL },
   async () => {

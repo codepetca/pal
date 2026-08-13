@@ -53,9 +53,17 @@
       "error": "invalid_occurred_at",
       "why": "occurred_at is an absolute instant. Offsets are rejected so no consumer has to guess a timezone."
     },
+    "partial-term-calendar.json": {
+      "error": "invalid_metadata",
+      "why": "Term identity, range, and week position form one authoritative calendar assertion and cannot be sent partially."
+    },
     "raw-learner-email.json": {
       "error": "invalid_learner_id",
       "why": "learner_id must be a pseudonymous token. An email is both non-URL-safe and a privacy violation."
+    },
+    "reversed-term-range.json": {
+      "error": "invalid_metadata",
+      "why": "An academic term cannot end before it starts."
     },
     "session-started-with-metadata.json": {
       "error": "invalid_metadata",

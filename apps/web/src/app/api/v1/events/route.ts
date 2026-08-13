@@ -89,6 +89,8 @@ export async function POST(req: NextRequest) {
         detail:
           result.error === "closed_period_revision"
             ? "A closed Weekly Rhythm period cannot be revised"
+            : result.error === "conflicting_period_calendar"
+              ? "A period's term range and week position must remain stable and unique"
             : "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
       },
       { status: 422 },

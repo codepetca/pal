@@ -128,6 +128,7 @@ Shared value rules:
 
 - Opaque tokens are stable within an integration, contain 1–128 URL-safe characters, and cannot be reversed without Pika's private mapping.
 - `period_key` is a stable opaque academic-week identifier of 1–64 URL-safe characters. It is not derived by Pal from delivery time.
+- `term_token` is a stable opaque term identifier. `term_start_day`, `term_end_day`, and `week_index` are an optional additive calendar group: when one is sent, all four are required. `week_index` is Pika's authoritative 1–16 roadmap position; Pal does not recalculate it from delivery time or learner history.
 - `activity_day` is an ISO `YYYY-MM-DD` calendar date determined in the classroom's authoritative timezone.
 - Idempotency keys may use readable prefixes, but their tokens remain opaque and contain no learner, classroom, or assignment names.
 
@@ -135,7 +136,7 @@ Shared value rules:
 |---|---|---|
 | `platform.session.started` | `{}` | One authenticated session; a stable source session token is used in the idempotency key. |
 | `classroom.joined` | `classroom_token` | One created learner enrolment in that classroom. Revisiting an existing enrolment is not a join. |
-| `daily_log_week.configured` | `period_key`, `config_version` (integer >= 1), `period_status` (`open` or `closed`), `eligible_days` (integer 0–5) | One configuration revision. The idempotency key includes a stable revision token, not merely the period. Version 1 models a Monday–Friday daily-log week. |
+| `daily_log_week.configured` | Required: `period_key`, `config_version` (integer >= 1), `period_status` (`open` or `closed`), `eligible_days` (integer 0–5). Optional as one all-or-none group: `term_token`, `term_start_day`, `term_end_day`, `week_index` (integer 1–16). | One configuration revision. The idempotency key includes a stable revision token, not merely the period. Version 1 models a Monday–Friday daily-log week. |
 | `daily_log.completed` | `period_key`, `activity_day` | One qualifying learner/date fact, even if several classroom logs were completed. |
 | `learning_item.viewed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`within_24h_of_release` or `later`) | The first genuine learner-initiated open of that item across its lifecycle. Background fetches, preload, and later reopens do not qualify. |
 | `learning_item.completed` | `item_token`, `kind` (`assignment` in version 1), `period_key`, `timing` (`on_time` or `late`) | The first authoritative valid completion of that item. Unsubmit/resubmit does not create another version 1 fact. |
@@ -188,7 +189,11 @@ At or before the start of every academic week, Pika automatically sends one lear
     "period_key": "2026-fall-week-03",
     "config_version": 2,
     "period_status": "open",
-    "eligible_days": 3
+    "eligible_days": 3,
+    "term_token": "term-2026-fall",
+    "term_start_day": "2026-08-31",
+    "term_end_day": "2026-12-18",
+    "week_index": 3
   }
 }
 ```
@@ -228,7 +233,9 @@ Qualification is frozen when Pika emits `daily_log.completed`: that fact is Pika
 
 Completion facts are stored even if they arrive before the configuration and are evaluated against the highest accepted version once it is available. A delayed completion may still count after closure because its emitted fact already confirms qualification. Pal recomputes the weekly target from the latest accepted configuration but never reclassifies or removes a stored completion date. If delivery order temporarily produces more distinct completion dates than the current `eligible_days`, Pal holds the period as pending reconciliation rather than awarding from contradictory inputs. While that reconciliation flag is set, Pal accepts one or more higher-version corrections only if the period remains `closed` and `eligible_days` is at least the stored completion count; an accepted correction clears reconciliation. Other revisions to a closed period remain rejected. Pal does not revoke an achievement already awarded if an earlier consistent state earned it.
 
-Roadmap placement is likewise independent of delivery order. For each opaque `period_key`, Pal persists the earliest authoritative time it has seen: `activity_day` at midnight UTC for a daily-log completion, and `occurred_at` for the other period-scoped facts. The learner snapshot sorts periods by that anchor and maps the first 16 to Weeks 1–16. Receiving Week 8 before Week 7 therefore does not swap their roadmap positions, and a later fact with an earlier authoritative time can correct the anchor.
+Roadmap placement is likewise independent of delivery order. New producers send the optional calendar group on `daily_log_week.configured`; Pal uses `term_token` to select the latest observed term and places each period at its authoritative `week_index`. This means a learner who first enrols in Week 7 opens on Week 7 rather than having that first observed period relabelled Week 1. Pal rejects a period whose calendar fields change and rejects two period keys claiming the same term/week position.
+
+For compatibility during rollout, periods without the optional calendar group retain the original behavior: Pal persists the earliest authoritative time seen for each opaque `period_key`, sorts by that anchor, and maps the first 16 observed periods to Weeks 1–16. Pika should add the full calendar group before relying on absolute term placement.
 
 ## Learning-item behavior without an assignment mirror
 

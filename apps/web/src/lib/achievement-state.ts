@@ -82,7 +82,35 @@ function factIdentity(
 
 export type WeeklyConfigurationError =
   | "closed_period_revision"
-  | "contradictory_period_configuration";
+  | "contradictory_period_configuration"
+  | "conflicting_period_calendar";
+
+const TERM_CALENDAR_KEYS = [
+  "term_token",
+  "term_start_day",
+  "term_end_day",
+  "week_index",
+] as const;
+
+function termCalendarMetadata(
+  event: IncomingEvent,
+): Record<(typeof TERM_CALENDAR_KEYS)[number], string | number> | null {
+  if (event.event_type !== "daily_log_week.configured") return null;
+  if (event.metadata.week_index === undefined) return null;
+  return {
+    term_token: metadataString(event, "term_token"),
+    term_start_day: metadataString(event, "term_start_day"),
+    term_end_day: metadataString(event, "term_end_day"),
+    week_index: metadataInteger(event, "week_index"),
+  };
+}
+
+function hasSameTermCalendar(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+): boolean {
+  return TERM_CALENDAR_KEYS.every((key) => left[key] === right[key]);
+}
 
 async function completionCount(
   db: Db,
@@ -112,6 +140,7 @@ export async function weeklyConfigurationRejection(
   const version = metadataInteger(event, "config_version");
   const eligibleDays = metadataInteger(event, "eligible_days");
   const periodStatus = metadataString(event, "period_status");
+  const calendar = termCalendarMetadata(event);
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,
@@ -138,6 +167,66 @@ export async function weeklyConfigurationRejection(
     (!existing.reconciliationRequired || periodStatus !== "closed")
   ) {
     return "closed_period_revision";
+  }
+  if (calendar) {
+    const [samePeriodCalendar] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          eq(learnerFacts.periodKey, periodKey),
+          sql`${learnerFacts.metadata} ? 'week_index'`,
+        ),
+      )
+      .limit(1);
+    if (
+      samePeriodCalendar &&
+      (samePeriodCalendar.metadata as Record<string, unknown>).week_index !== undefined &&
+      !hasSameTermCalendar(
+        samePeriodCalendar.metadata as Record<string, unknown>,
+        calendar,
+      )
+    ) {
+      return "conflicting_period_calendar";
+    }
+
+    const [sameTermCalendar] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+        ),
+      )
+      .limit(1);
+    if (
+      sameTermCalendar &&
+      ((sameTermCalendar.metadata as Record<string, unknown>).term_start_day !==
+        calendar.term_start_day ||
+        (sameTermCalendar.metadata as Record<string, unknown>).term_end_day !==
+          calendar.term_end_day)
+    ) {
+      return "conflicting_period_calendar";
+    }
+
+    const [occupiedWeek] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+          sql`${learnerFacts.metadata}->>'week_index' = ${String(calendar.week_index)}`,
+          sql`${learnerFacts.periodKey} <> ${periodKey}`,
+        ),
+      )
+      .limit(1);
+    if (occupiedWeek) return "conflicting_period_calendar";
   }
   return null;
 }
