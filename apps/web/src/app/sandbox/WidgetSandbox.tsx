@@ -1,10 +1,15 @@
 "use client";
 
 import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
   PalAchievements,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
+  type PalFixtureAction,
+  type PalFixtureActionContext,
+  type PalFixtureController,
   type PalTheme,
   type PalViewport,
   usePalWidget,
@@ -64,10 +69,21 @@ type HostView =
   | "settings";
 
 export type SandboxBuildInfo = {
-  source: "Local workspace" | "Protected preview";
+  source:
+    | "Local fixture"
+    | "Local persisted pipeline"
+    | "Public fixture preview";
   widgetVersion: string;
   revision?: string;
 };
+
+export type SandboxMode = "fixture" | "persisted";
+
+type SandboxClient = PalFixtureController | SandboxPalClient;
+
+function isFixtureClient(client: SandboxClient): client is PalFixtureController {
+  return "dispatch" in client;
+}
 
 const NAV_ITEMS = [
   { label: "Today", view: "today", icon: NotePencil },
@@ -153,7 +169,7 @@ function SandboxControls({
   currentSemesterWeek,
 }: {
   buildInfo: SandboxBuildInfo;
-  client: SandboxPalClient;
+  client: SandboxClient;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onRefresh: () => Promise<void>;
@@ -167,8 +183,11 @@ function SandboxControls({
   sandboxError: string | null;
   currentSemesterWeek: number;
 }) {
+  const fixture = isFixtureClient(client);
   const [log, setLog] = useState<string[]>([
-    "Sandbox ready — every visible Pal surface uses the real pipeline.",
+    fixture
+      ? "Fixture ready — every visible surface uses the public Pal widget."
+      : "Persisted sandbox ready — events use the real local pipeline.",
   ]);
   const [busy, setBusy] = useState(false);
   const lastRequest = useRef<SandboxEventRequest | null>(null);
@@ -200,6 +219,22 @@ function SandboxControls({
     if (busy) return;
     setBusy(true);
     try {
+      if (isFixtureClient(client)) {
+        const context: PalFixtureActionContext | undefined =
+          action === "daily-log-completed"
+            ? { activityDay: simulatedDate.toISOString().slice(0, 10) }
+            : action === "item-opened-early" ||
+                action === "on-time-finish" ||
+                action === "late-finish"
+              ? { itemToken: crypto.randomUUID() }
+              : undefined;
+        const detail = client.dispatch(action as PalFixtureAction, context);
+        if (action === "reset") onReset();
+        setLog((current) => [detail, ...current].slice(0, 6));
+        await onRefresh();
+        return;
+      }
+
       if (action === "reset") {
         await post("/api/sandbox/reset", { learner_id: learnerId });
         lastRequest.current = null;
@@ -245,6 +280,14 @@ function SandboxControls({
     if (busy || !canAddWeek) return;
     setBusy(true);
     try {
+      if (isFixtureClient(client)) {
+        const detail = client.dispatch("advance-week");
+        onAddWeek();
+        setLog((current) => [detail, ...current].slice(0, 6));
+        await onRefresh();
+        return;
+      }
+
       const nextDate = addDays(simulatedDate, 7);
       const request = eventForAction(
         "week-configured",
@@ -310,13 +353,22 @@ function SandboxControls({
 
           <header>
             <div>
-              <span className={styles.fixtureLabel}>Real pipeline</span>
+              <span className={styles.fixtureLabel}>
+                {fixture ? "Production-shaped fixture" : "Real pipeline"}
+              </span>
               <h2>Semester controls</h2>
             </div>
-            <p>
-              Controls send version 1 facts through Pal ingest. The roadmap,
-              companion, rewards, and acknowledgements all read persisted state.
-            </p>
+            {fixture ? (
+              <p>
+                Controls update an in-memory learner snapshot through the same
+                public Pal provider and widget surfaces used in production.
+              </p>
+            ) : (
+              <p>
+                Controls send version 1 facts through Pal ingest. The roadmap,
+                companion, rewards, and acknowledgements all read persisted state.
+              </p>
+            )}
           </header>
 
           <dl className={styles.buildInfo} aria-label="Sandbox build information">
@@ -514,6 +566,7 @@ function CompanionOverlay({
 function SandboxExperience({
   buildInfo,
   client,
+  mode,
   theme,
   viewport,
   view,
@@ -524,7 +577,8 @@ function SandboxExperience({
   onReset,
 }: {
   buildInfo: SandboxBuildInfo;
-  client: SandboxPalClient;
+  client: SandboxClient;
+  mode: SandboxMode;
   theme: PalTheme;
   viewport: PalViewport;
   view: HostView;
@@ -725,7 +779,7 @@ function SandboxExperience({
       // Moods expire on the engine's timestamp: happy runs 30 minutes and
       // excited an hour. Refreshing reads the durable state against the
       // current clock, so the pet returns to neutral without another event.
-      refreshIntervalMs={15_000}
+      refreshIntervalMs={mode === "persisted" ? 15_000 : 0}
     >
       <div
         ref={sandboxRef}
@@ -945,7 +999,13 @@ function XpBar() {
   );
 }
 
-export function WidgetSandbox({ buildInfo }: { buildInfo: SandboxBuildInfo }) {
+export function WidgetSandbox({
+  buildInfo,
+  mode,
+}: {
+  buildInfo: SandboxBuildInfo;
+  mode: SandboxMode;
+}) {
   const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   const [clientGeneration, setClientGeneration] = useState(0);
@@ -963,11 +1023,13 @@ export function WidgetSandbox({ buildInfo }: { buildInfo: SandboxBuildInfo }) {
   }, []);
 
   const client = useMemo(
-    () =>
-      apiBaseUrl
-        ? createSandboxPalClient(learnerId, apiBaseUrl)
-        : null,
-    [apiBaseUrl, learnerId],
+    () => {
+      if (mode === "fixture") {
+        return createFixturePalClient(createEmptyFixtureSnapshot());
+      }
+      return apiBaseUrl ? createSandboxPalClient(learnerId, apiBaseUrl) : null;
+    },
+    [apiBaseUrl, learnerId, mode],
   );
 
   if (!client) {
@@ -982,6 +1044,7 @@ export function WidgetSandbox({ buildInfo }: { buildInfo: SandboxBuildInfo }) {
     <SandboxExperience
       buildInfo={buildInfo}
       client={client}
+      mode={mode}
       theme={theme}
       viewport={viewport}
       view={view}

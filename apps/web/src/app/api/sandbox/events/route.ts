@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST as ingestEvent } from "@/app/api/v1/events/route";
 import {
   isSandboxLearnerId,
-  isSandboxRuntimeAllowed,
+  isPersistedSandboxRuntimeAllowed,
 } from "@/lib/sandbox-learner";
 
 // POST /api/sandbox/events
@@ -11,7 +11,7 @@ import {
 // backend (like Pika's): it attaches the secret and forwards the event
 // to the real, durable ingest endpoint.
 export async function POST(req: NextRequest) {
-  if (!isSandboxRuntimeAllowed()) {
+  if (!isPersistedSandboxRuntimeAllowed()) {
     return NextResponse.json(
       { error: "not_found" },
       { status: 404, headers: { "Cache-Control": "no-store" } },

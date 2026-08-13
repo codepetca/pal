@@ -122,7 +122,9 @@ Nothing mutates these directly. Only the rule engine produces mutations, and mut
 | **Student Viewer** | Students (inside Pika or direct) | See their pet and evolving world |
 | **Dev Sandbox** | Developers, operators | Fire test events, preview rules, see world state — no Pika needed |
 
-The sandbox is the student viewer plus an event-firing panel pointed at a test integration. Same codebase, different config.
+The sandbox is the student viewer plus a scenario panel. Public PR previews use a
+fresh in-memory snapshot; optional local persisted mode points the same panel at an
+isolated test integration. Same widget codebase, different client configuration.
 
 ---
 

@@ -261,6 +261,11 @@
   object-fit: contain;
 }
 
+.pal-badge-control[data-achievement-result="not-earned"] .pal-badge {
+  opacity: 0.48;
+  filter: grayscale(1);
+}
+
 .pal-companion-art img,
 .pal-celebration-icon img {
   display: block;

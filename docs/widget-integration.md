@@ -202,28 +202,25 @@ Pal's sandbox imports only the package's public exports. It contains:
 
 - a minimal host shell with content and overlay layers;
 - light, dark, wide, and narrow host scenarios;
-- the package's authenticated HTTP client, using a sandbox-only learner-token exchange;
+- the package's in-memory fixture client for public previews;
+- the package's authenticated HTTP client for optional local persisted testing;
 - the compact fictional-semester control panel; and
-- all six v1 facts injected through Pal's real API, plus short-week revision,
-  duplicate replay, and reset controls.
+- all six v1 fact-shaped scenarios, plus short-week revision, duplicate replay,
+  and reset controls. Local persisted mode injects them through Pal's real API.
 
 The control panel is an application-development tool and is not exported from the
-widget package. Controls pass through validation, deduplication, persistence,
-achievement evaluation, award/reward persistence, the learner snapshot API, and the
-reward acknowledgement API. The package fixture client remains available for isolated
-component tests; it is not the sandbox's source of learner state.
+widget package. In public previews its actions update a fresh in-memory snapshot. In
+optional local persisted mode the same controls pass through validation,
+deduplication, persistence, achievement evaluation, award/reward persistence, the
+learner snapshot API, and the reward acknowledgement API. CI asserts parity for the
+Weekly Rhythm activation-and-advance scenario against disposable Postgres.
 
-Stateful sandbox routes are local-only by default. Ordinary previews remain
-fail-closed and should use disposable data. The persistent `sandbox` preview is
-enabled only with `PAL_SANDBOX_PROTECTED_PREVIEW=true`, Vercel Authentication,
-and the sandbox-only `pal_sandbox_app` role, which cannot connect to production.
-
-The stable hosted sandbox uses the protected `sandbox` preview branch and the
-separate `pal_sandbox` database. Its widget is built from that branch's workspace
-source; the version shown in the controls is the current package baseline, not an
-npm download. Pika uses a published, pinned npm package, so sandbox-only experiments
-need no release. Publish and adopt a new prerelease only when a package source,
-style, asset contract, or public API change is ready for Pika.
+Persisted sandbox routes are local-only and fail closed with 404 in Vercel previews and
+production. Preview deployments therefore need no database, sandbox integration secret,
+or read-token signing key. The widget is built from each branch's workspace source; the
+version shown in the controls is the package baseline, not an npm download. Pika uses a
+published, pinned npm package, so publish and adopt a prerelease only when a package
+source, style, asset contract, or public API change is ready for Pika.
 
 ## Initial acceptance
 
@@ -234,4 +231,4 @@ style, asset contract, or public API change is ready for Pika.
 - Controls retain visible focus and a 44px minimum target.
 - Celebration has a dismiss control and a reduced-motion treatment.
 - No integration secret or raw learner identifier enters the package.
-- The control log reports the receiver's real processed/duplicate result.
+- Persisted local mode reports the receiver's real processed/duplicate result.

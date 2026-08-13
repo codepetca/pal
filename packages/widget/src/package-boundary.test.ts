@@ -48,6 +48,19 @@ const turboConfigSource = readFileSync(
   new URL("../../../turbo.json", import.meta.url),
   "utf8",
 );
+const vercelConfig = JSON.parse(
+  readFileSync(
+    new URL("../../../apps/web/vercel.json", import.meta.url),
+    "utf8",
+  ),
+) as { buildCommand?: string };
+const vercelBuildSource = readFileSync(
+  new URL(
+    "../../../apps/web/scripts/vercel-build.mjs",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const widgetPackage = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as {
@@ -157,12 +170,13 @@ test("sandbox consumes only the widget public package boundary", () => {
 });
 
 test("sandbox page is visible only in an allowed runtime and identifies its build", () => {
-  assert.match(sandboxPageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(sandboxPageSource, /isSandboxPageAllowed\(\)/);
   assert.match(sandboxPageSource, /notFound\(\)/);
-  assert.match(sandboxPageSource, /Protected preview/);
-  assert.match(sandboxPageSource, /Local workspace/);
+  assert.match(sandboxPageSource, /Public fixture preview/);
+  assert.match(sandboxPageSource, /Local persisted pipeline/);
+  assert.match(sandboxPageSource, /PAL_SANDBOX_MODE === "persisted"/);
   assert.match(sandboxPageSource, /widgetPackage\.version/);
-  assert.match(homePageSource, /isSandboxRuntimeAllowed\(\)/);
+  assert.match(homePageSource, /isSandboxPageAllowed\(\)/);
   assert.match(homePageSource, /redirect\("\/sandbox"\)/);
   assert.doesNotMatch(homePageSource, /WidgetSandbox/);
 });
@@ -171,6 +185,7 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(sandboxSetupSource, /VERCEL_TEAM_ID/);
   assert.match(sandboxSetupSource, /VERCEL_PROJECT_ID/);
   assert.match(sandboxSetupSource, /ALLOWED_ENV_NAMES/);
+  assert.match(sandboxSetupSource, /PAL_SANDBOX_MODE=persisted/);
   assert.match(sandboxSetupSource, /verifySharedSandbox/);
   assert.match(sandboxVerifierSource, /pal_sandbox_app/);
   assert.match(sandboxVerifierSource, /has_database_privilege/);
@@ -184,7 +199,7 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(sandboxVerifierSource, /api\/v1\/events/);
   assert.match(sandboxVerifierSource, /api\/v1\/integration\/read-token/);
   assert.match(sandboxVerifierSource, /response\.status !== 401/);
-  assert.match(turboConfigSource, /PAL_SANDBOX_PROTECTED_PREVIEW/);
+  assert.match(turboConfigSource, /PAL_SANDBOX_MODE/);
   assert.match(turboConfigSource, /@pal\/web#build/);
   assert.match(turboConfigSource, /PAL_INTEGRATION_SECRET/);
   assert.match(turboConfigSource, /SANDBOX_INTEGRATION_SECRET/);
@@ -193,14 +208,28 @@ test("shared sandbox setup is pinned, minimal, and verifies production isolation
   assert.match(turboConfigSource, /VERCEL_ENV/);
 });
 
-test("sandbox reads every Pal surface from the persisted pipeline", () => {
+test("Vercel previews build without migrations while production keeps its release gate", () => {
+  assert.equal(vercelConfig.buildCommand, "node scripts/vercel-build.mjs");
+  assert.match(vercelBuildSource, /VERCEL_ENV === "production"/);
+  assert.match(vercelBuildSource, /\["--filter", "@pal\/db", "migrate"\]/);
+  assert.doesNotMatch(vercelBuildSource, /VERCEL_ENV === "preview"/);
+  assert.match(vercelBuildSource, /\["turbo", "build", "--filter=@pal\/web"\]/);
+});
+
+test("sandbox uses one public widget boundary for fixture and persisted clients", () => {
+  assert.match(sandboxSource, /createFixturePalClient\(createEmptyFixtureSnapshot\(\)\)/);
+  assert.match(sandboxSource, /createSandboxPalClient\(learnerId, apiBaseUrl\)/);
+  assert.match(sandboxSource, /<PalProvider/);
+  assert.match(sandboxSource, /<PalAchievements \/>/);
+  assert.match(sandboxSource, /<PalCompanion/);
+  assert.match(sandboxSource, /<PalRewardCelebration/);
+  assert.match(sandboxSource, /Production-shaped fixture/);
   assert.match(sandboxSource, /Real pipeline/);
   assert.match(
     sandboxSource,
     /The roadmap,\s+companion, rewards, and acknowledgements all read persisted state/,
   );
   assert.doesNotMatch(sandboxSource, /initialSnapshot=/);
-  assert.doesNotMatch(sandboxSource, /Fixture preview/);
 });
 
 test("sandbox mounts the public companion without rebuilding its internals", () => {

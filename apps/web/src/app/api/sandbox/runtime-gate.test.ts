@@ -24,44 +24,24 @@ async function sandboxRouteStatuses(): Promise<number[]> {
   return responses.map((response) => response.status);
 }
 
-test("all sandbox APIs fail closed in unprotected previews", async () => {
+test("all persisted sandbox APIs fail closed in public previews", async () => {
   const previousVercelEnv = process.env.VERCEL_ENV;
-  const previousOptIn = process.env.PAL_SANDBOX_PROTECTED_PREVIEW;
   try {
     process.env.VERCEL_ENV = "preview";
-    for (const value of [undefined, "false", "TRUE", "unexpected"]) {
-      if (value === undefined) {
-        delete process.env.PAL_SANDBOX_PROTECTED_PREVIEW;
-      } else {
-        process.env.PAL_SANDBOX_PROTECTED_PREVIEW = value;
-      }
-      assert.deepEqual(await sandboxRouteStatuses(), [404, 404, 404]);
-    }
-  } finally {
-    if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV;
-    else process.env.VERCEL_ENV = previousVercelEnv;
-    if (previousOptIn === undefined) {
-      delete process.env.PAL_SANDBOX_PROTECTED_PREVIEW;
-    } else {
-      process.env.PAL_SANDBOX_PROTECTED_PREVIEW = previousOptIn;
-    }
-  }
-});
-
-test("production stays closed even when the preview opt-in is true", async () => {
-  const previousVercelEnv = process.env.VERCEL_ENV;
-  const previousOptIn = process.env.PAL_SANDBOX_PROTECTED_PREVIEW;
-  try {
-    process.env.VERCEL_ENV = "production";
-    process.env.PAL_SANDBOX_PROTECTED_PREVIEW = "true";
     assert.deepEqual(await sandboxRouteStatuses(), [404, 404, 404]);
   } finally {
     if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV;
     else process.env.VERCEL_ENV = previousVercelEnv;
-    if (previousOptIn === undefined) {
-      delete process.env.PAL_SANDBOX_PROTECTED_PREVIEW;
-    } else {
-      process.env.PAL_SANDBOX_PROTECTED_PREVIEW = previousOptIn;
-    }
+  }
+});
+
+test("production keeps persisted sandbox APIs closed", async () => {
+  const previousVercelEnv = process.env.VERCEL_ENV;
+  try {
+    process.env.VERCEL_ENV = "production";
+    assert.deepEqual(await sandboxRouteStatuses(), [404, 404, 404]);
+  } finally {
+    if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousVercelEnv;
   }
 });

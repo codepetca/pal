@@ -3,14 +3,22 @@
 import { usePalWidget } from "./provider";
 import type { PalAchievement } from "./types";
 
-function AchievementBadge({ achievement }: { achievement: PalAchievement }) {
+function AchievementBadge({
+  achievement,
+}: {
+  achievement: PalAchievement;
+}) {
+  const notEarned = achievement.status === "incomplete";
   const detail = achievement.progress?.label ?? achievement.statusLabel;
-  const tooltip = `${achievement.title} — ${detail}`;
+  const tooltip = notEarned
+    ? `${achievement.title} — Not completed${achievement.progress ? ` (${detail})` : ""}`
+    : `${achievement.title} — ${detail}`;
 
   return (
     <span
       className="pal-badge-control"
       aria-label={tooltip}
+      data-achievement-result={notEarned ? "not-earned" : achievement.status}
       role="img"
       tabIndex={0}
     >
@@ -84,12 +92,7 @@ export function PalAchievements() {
       <ol className="pal-roadmap-list">
         {visibleWeeks.map((week) => {
           const isCurrent = week.number === snapshot.roadmap.currentWeek;
-          const earnedAchievements = week.achievements.filter(
-            (achievement) => achievement.status === "earned",
-          );
-          const visibleAchievements = isCurrent
-            ? week.achievements
-            : earnedAchievements;
+          const visibleAchievements = week.achievements;
 
           return (
             <li
@@ -110,7 +113,9 @@ export function PalAchievements() {
                   <ul className="pal-week-badges" aria-label={`${week.label} achievements`}>
                     {visibleAchievements.map((achievement) => (
                       <li key={achievement.id}>
-                        <AchievementBadge achievement={achievement} />
+                        <AchievementBadge
+                          achievement={achievement}
+                        />
                       </li>
                     ))}
                   </ul>

@@ -110,16 +110,27 @@ export interface PalCompanionProps
 
 export type PalFixtureAction =
   | "advance-week"
+  | "classroom-joined"
   | "daily-log-completed"
+  | "item-opened-early"
   | "on-time-finish"
   | "late-finish"
+  | "short-week-configured"
+  | "week-configured"
   | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";
 
+export interface PalFixtureActionContext {
+  /** Stable source date used to deduplicate one daily log per activity day. */
+  activityDay?: string;
+  /** Stable source identity used to distinguish genuine learning items. */
+  itemToken?: string;
+}
+
 export interface PalFixtureController extends PalClient {
-  dispatch(action: PalFixtureAction): string;
+  dispatch(action: PalFixtureAction, context?: PalFixtureActionContext): string;
   peek(): PalWidgetSnapshot;
   /** Override the current week number (1-16), rebuilding the snapshot. */
   setWeek?(week: number): void;
