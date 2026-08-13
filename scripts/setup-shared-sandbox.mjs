@@ -105,9 +105,12 @@ try {
   await verifyProductionRejectsSandboxSecret(
     values.SANDBOX_INTEGRATION_SECRET,
   );
-  const contents = ALLOWED_ENV_NAMES.map(
-    (name) => `${name}=${JSON.stringify(values[name])}`,
-  ).join("\n");
+  const contents = [
+    ...ALLOWED_ENV_NAMES.map(
+      (name) => `${name}=${JSON.stringify(values[name])}`,
+    ),
+    "PAL_SANDBOX_MODE=persisted",
+  ].join("\n");
   writeFileSync(localEnv, `${contents}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -118,5 +121,5 @@ try {
 }
 
 console.log(
-  "Shared sandbox environment installed and production access denied. Run `pnpm dev`, then open http://localhost:3000/sandbox.",
+  "Optional local persisted sandbox installed and production access denied. Run `pnpm dev`, then open http://localhost:3000/sandbox.",
 );

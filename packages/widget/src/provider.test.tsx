@@ -24,7 +24,7 @@ function deferred<T>() {
 
 function snapshotNamed(name: string): PalWidgetSnapshot {
   const snapshot = createFixtureSnapshot();
-  snapshot.roadmap.semesterLabel = name;
+  snapshot.roadmap.weeks[3]!.label = name;
   return snapshot;
 }
 
@@ -33,7 +33,7 @@ const concurrentRendererOptions = {
 } as unknown as Parameters<typeof create>[1];
 
 test("a scope change never paints the previous learner snapshot", async () => {
-  const learnerA = snapshotNamed("Learner A semester");
+  const learnerA = snapshotNamed("Learner A current week");
   const learnerBRequest = deferred<PalWidgetSnapshot>();
   const clientA: PalClient = {
     getSnapshot: async () => learnerA,
@@ -56,7 +56,7 @@ test("a scope change never paints the previous learner snapshot", async () => {
       </PalProvider>,
     );
   });
-  assert.match(JSON.stringify(renderer.toJSON()), /Learner A semester/);
+  assert.match(JSON.stringify(renderer.toJSON()), /Learner A current week/);
 
   await act(async () => {
     renderer.update(
@@ -65,7 +65,7 @@ test("a scope change never paints the previous learner snapshot", async () => {
       </PalProvider>,
     );
   });
-  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Learner A semester/);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Learner A current week/);
   assert.match(JSON.stringify(renderer.toJSON()), /Loading achievements/);
 
   await act(async () => {
@@ -73,8 +73,8 @@ test("a scope change never paints the previous learner snapshot", async () => {
     await learnerBRequest.promise.catch(() => undefined);
   });
   const failedLoad = JSON.stringify(renderer.toJSON());
-  assert.doesNotMatch(failedLoad, /Learner A semester/);
-  assert.match(failedLoad, /Achievements are temporarily unavailable/);
+  assert.doesNotMatch(failedLoad, /Learner A current week/);
+  assert.match(failedLoad, /Achievements unavailable/);
 });
 
 test("reward acknowledgement is duplicate-safe, recoverable, and removed after success", async () => {

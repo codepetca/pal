@@ -3,14 +3,14 @@ import { resetLearnerInDb } from "@/lib/db-learner";
 import { resolveSandboxIntegration } from "@/lib/integration-auth";
 import {
   isSandboxLearnerId,
-  isSandboxRuntimeAllowed,
+  isPersistedSandboxRuntimeAllowed,
 } from "@/lib/sandbox-learner";
 
 // POST /api/sandbox/reset
 // Dev-only: clears a learner's state so the sandbox panel can be replayed
 // from scratch. Not part of the real API contract in docs/api.md.
 export async function POST(req: NextRequest) {
-  if (!isSandboxRuntimeAllowed()) {
+  if (!isPersistedSandboxRuntimeAllowed()) {
     return NextResponse.json(
       { error: "not_found" },
       { status: 404, headers: { "Cache-Control": "no-store" } },

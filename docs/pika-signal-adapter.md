@@ -353,19 +353,23 @@ achievements and pet/world remain visible while a tester selects actions, so eve
 injected fact produces immediate observable feedback.
 
 - The fictional semester contains 16 weeks and can move by day or week.
-- Advancing one week emits the new week's normal five-day configuration fact, mirroring
-  Pika's automatic weekly adapter job; it does not change roadmap state directly.
+- In persisted local mode, advancing one week emits the new week's normal five-day
+  configuration fact, mirroring Pika's automatic weekly adapter job. Public previews
+  apply the equivalent transition to an in-memory production-shaped snapshot.
 - The action controls expose all six version 1 normalized facts, including a
   three-day short-week revision, and construct only contract-allowed fields.
-- Testers can inject a fact, replay the same delivery to verify idempotency, and reset only the fictional sandbox learner.
+- Testers can exercise every fact-shaped scenario and reset the fictional learner.
+  Persisted local mode additionally proves receiver idempotency with an exact replay.
 - The current controls cover normal progress, shortened weeks, timing
   classifications, and exact duplicate delivery. A later named-scenario library
   should add out-of-order delivery, resubmission, deletion, and archive behavior.
-- Injected facts pass through Pal's normal validation, deduplication, aggregation, rule, progress, award, reward, and learner-world path. The control panel must not mutate achievement or pet state directly.
+- Persisted local actions pass through Pal's normal validation, deduplication,
+  aggregation, rule, progress, award, reward, and learner-world path. CI compares the
+  fixture's Weekly Rhythm activation-and-advance result with that persisted path.
 - The control overlay is a development tool and is not exported from `@codepet/pal-widget`.
-- The browser obtains only a short-lived, learner-scoped read token. The sandbox
-  integration secret stays in its server proxy, just as Pika's credential stays in
-  Pika's backend.
+- Only persisted local mode obtains a short-lived, learner-scoped read token; its
+  sandbox integration secret stays in the local server proxy. Public previews have
+  neither credential nor database access.
 
 ## What must be built in Pika
 
@@ -405,17 +409,17 @@ Most raw timestamps and state already exist in Pika. The new work is reliable no
 - [x] A narrow, portable `--pal-*` theme contract
 - [x] Roadmap UI, badge status, accessibility treatment, and reward celebrations
 - [ ] An optional chrome-free embed wrapper for non-React hosts
-- [x] A compact 16-week sandbox simulator overlay that injects normalized facts through the real Pal pipeline while achievements and pet/world state remain visible
+- [x] A compact 16-week sandbox simulator with public in-memory previews, optional local real-pipeline mode, and CI parity coverage
 - [ ] Tests for retries, concurrent duplicate signals, multiple logs on one day, shortened weeks, schedule revisions, repeated weekly awards, resubmissions, deleted assignments, and archived classes
 
 ## Current implementation status
 
-The unpublished pilot `@codepet/pal-widget` package and real-pipeline sandbox now exist.
-The sandbox renders a 16-week roadmap in a Pika-like host, injects all six version 1
-facts, revises a week from five to three eligible days, replays the exact previous
-delivery, and resets its isolated fictional learner. Roadmap, companion, XP, rewards,
-and reward dismissal all flow through authenticated persisted APIs; controls never
-write widget state directly.
+The unpublished pilot `@codepet/pal-widget` package and dual-mode sandbox now exist.
+Every PR preview renders a fresh 16-week in-memory learner through the same public
+provider, snapshot contract, roadmap, companion, and reward surfaces used by Pika.
+Optional local persisted mode runs all six version 1 facts, schedule revision,
+duplicate replay, and reset through authenticated APIs and Postgres. CI compares Weekly
+Rhythm activation and week advancement between the fixture and real pipeline.
 
 The remaining sandbox work is a richer named scenario/expected-versus-actual library.
 The primary cross-project work still outstanding is Pika's adapter/outbox and native

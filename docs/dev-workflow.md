@@ -1,7 +1,7 @@
 # Development Workflow
 
 > Living document. Update this as the team evolves.
-> Last updated: 2026-08-01
+> Last updated: 2026-08-12
 
 ---
 
@@ -12,8 +12,18 @@ git clone https://github.com/codepetca/pal.git && cd pal
 pnpm install
 ```
 
-The simplest setup uses the team's shared sandbox database and does not require
-Docker:
+The default sandbox is an in-memory learner and needs no database or secrets:
+
+```bash
+pnpm dev
+```
+
+Open [localhost:3000/sandbox](http://localhost:3000/sandbox). Each refresh starts
+a fresh learner. The sandbox uses the same public `PalProvider`, `PalAchievements`,
+`PalCompanion`, `PalRewardCelebration`, and snapshot shape that Pika uses.
+
+When changing ingest, persistence, snapshot construction, or achievement rules, enable
+the optional local persisted mode:
 
 ```bash
 pnpm sandbox:setup
@@ -21,10 +31,11 @@ pnpm dev
 ```
 
 The setup command signs in to Vercel if needed, links the exact team-owned `pal`
-project, and writes four allow-listed variables to `apps/web/.env.local`. It
+project, and writes four allow-listed secrets/connections plus
+`PAL_SANDBOX_MODE=persisted` to `apps/web/.env.local`. It
 verifies that the database uses the sandbox-only `pal_sandbox_app` role and that
 the role is denied access to production `neondb` before writing the file. The role
-owns `pal_sandbox` so preview builds can apply migrations there, but it is not a
+owns `pal_sandbox` for local integration work, but it is not a
 superuser, cannot create roles or databases, and has no access to production.
 Setup also proves that the Development sandbox credential receives `401` from
 both production integration endpoints, so local tools cannot write production
@@ -33,8 +44,7 @@ The command refuses to overwrite an existing local env file; move that file asid
 first if you intentionally want to switch configurations. Run
 `pnpm sandbox:verify` at any time to recheck the database and role boundary.
 
-Open [localhost:3000/sandbox](http://localhost:3000/sandbox). Changes under
-`packages/widget/src` are built directly from the workspace, so developers can
+Changes under `packages/widget/src` are built directly from the workspace, so developers can
 iterate without publishing to npm. The control panel identifies both that source
 and the package-version baseline. Pika continues to consume its pinned npm version
 until a new widget package is deliberately released and adopted there.
@@ -44,11 +54,10 @@ If you prefer a fully isolated local database, copy `.env.example` to
 **The env file goes in `apps/web/`, not the repo root** because Next.js reads env
 files from the app directory.
 
-The protected hosted sandbox lives at `https://pal-sandbox.codepet.ca`. Vercel
-Authentication limits access to approved developers. It runs from the persistent
-`sandbox` preview branch and uses the same shared `pal_sandbox` database as the
-one-command local setup. `https://pal.codepet.ca` remains the production API and
-cannot enable sandbox pages or mutation routes.
+Every Vercel PR preview serves the fixture sandbox publicly. Preview builds receive no
+sandbox database, integration credential, or learner-token signing key. All persisted
+sandbox APIs return 404 in previews and production. `https://pal.codepet.ca` remains
+the production API and cannot enable the sandbox page or mutation routes.
 
 ### Environment reference
 
@@ -58,30 +67,30 @@ For manual/local-Docker configuration, set:
 |---|---|---|
 | `PAL_INTEGRATION_SECRET` | Pika's 32+ character backend credential; generate with `openssl rand -hex 32` | Exercising Pika ingest or read-token minting |
 | `SANDBOX_INTEGRATION_SECRET` | A distinct 32+ character credential generated with `openssl rand -hex 32` | Exercising the sandbox event proxy |
-| `PAL_SANDBOX_PROTECTED_PREVIEW` | Leave unset/`false` locally. Set exactly `true` only on the access-protected `sandbox` preview backed by the sandbox-only database role | Enabling stateful sandbox routes in the hosted sandbox |
+| `PAL_SANDBOX_MODE` | `fixture` (default) or `persisted` | Selecting the local sandbox source; previews always force `fixture` |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
 
-The Pika-like host
-preview should show the 16-week Pal roadmap, companion, and collapsible **Real
-pipeline** controls. Configure a week, complete daily logs, or finish an item on
+The Pika-like host preview should show the 16-week Pal roadmap, companion, and
+collapsible semester controls. Configure a week, complete daily logs, or finish an item on
 time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
 Advancing by one week automatically emits that new week's normal configuration fact,
 matching Pika's planned adapter behavior.
 
-Every visible Pal surface in the sandbox is loaded through the authenticated learner
-snapshot API. `/api/sandbox/events` attaches the sandbox integration secret server-side,
-and `/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
-five-minute learner-scoped token; neither integration nor signing secrets reach the
-browser. Reward dismissal calls the real idempotent acknowledgement endpoint. Sandbox
-mutation/token routes are available locally. Ordinary preview branches remain
-fail-closed and should use disposable data. The persistent `sandbox` preview is
-the one exception: it may use `PAL_SANDBOX_PROTECTED_PREVIEW=true` because Vercel
-Authentication is enforced and `pal_sandbox_app` cannot connect to production.
-Sandbox routes always return 404 in production.
+In fixture mode, every visible surface reads an in-memory snapshot through the public
+provider and reward acknowledgement mutates only that browser's client. In persisted
+mode, `/api/sandbox/events` attaches the sandbox integration secret server-side and
+`/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
+five-minute learner-scoped token; neither secret reaches the browser. Reward dismissal
+calls the real idempotent acknowledgement endpoint. Those persisted routes are local-only
+and return 404 in every Vercel preview and in production.
+
+CI runs the persisted event → Postgres → snapshot path against disposable Postgres and
+compares its Weekly Rhythm roadmap with the public fixture. This preserves production
+pipeline confidence without putting a shared database behind a public preview.
 
 ---
 

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
-import { isSandboxRuntimeAllowed } from "@/lib/sandbox-learner";
+import { isSandboxPageAllowed } from "@/lib/sandbox-learner";
 
 export default function HomePage() {
-  if (isSandboxRuntimeAllowed()) redirect("/sandbox");
+  if (isSandboxPageAllowed()) redirect("/sandbox");
 
   return (
     <main>

@@ -46,9 +46,11 @@ Any learning platform can integrate this way. Pika is the first.
 ## The dev sandbox
 
 Developers working on Pal use a built-in host sandbox to exercise the same public
-`@codepet/pal-widget` surfaces that Pika consumes. A collapsible control panel starts with
-explicit fixture scenarios and evolves into a real-pipeline event injector; it never
-ships in the learner widget.
+`@codepet/pal-widget` provider and surfaces that Pika consumes. Public PR previews use
+a fresh in-memory learner, so every developer can open them without credentials and
+without exposing a database. Set up the optional local persisted mode to run the same
+controls through event ingest, Postgres, and the learner snapshot API. CI compares the
+fixture's Weekly Rhythm scenario with that real pipeline.
 
 ## Team
 

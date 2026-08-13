@@ -5,7 +5,7 @@ import { resolveSandboxIntegration } from "@/lib/integration-auth";
 import { mintPalReadToken } from "@/lib/read-token";
 import {
   isSandboxLearnerId,
-  isSandboxRuntimeAllowed,
+  isPersistedSandboxRuntimeAllowed,
 } from "@/lib/sandbox-learner";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,11 @@ function noStore(body: unknown, status = 200): NextResponse {
   });
 }
 
-// Development/preview only. This mirrors a host backend exchanging its own
+// Local development only. This mirrors a host backend exchanging its own
 // authenticated learner identity for a short-lived Pal browser credential.
 // The sandbox integration secret never leaves this server.
 export async function POST(req: NextRequest) {
-  if (!isSandboxRuntimeAllowed()) {
+  if (!isPersistedSandboxRuntimeAllowed()) {
     return noStore({ error: "not_found" }, 404);
   }
 

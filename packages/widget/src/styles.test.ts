@@ -61,32 +61,18 @@ test("every public theme property is consumed and portable", () => {
 test("widget controls and motion meet the accessibility contract", () => {
   assert.match(styles, /\.pal-button[\s\S]*min-height: var\(--pal-effective-control-min\)/);
   assert.match(styles, /\.pal-button:focus-visible/);
-  assert.match(styles, /\.pal-history-toggle:focus-visible/);
-  assert.match(styles, /\.pal-history-week-toggle:focus-visible/);
   assert.match(styles, /outline: var\(--pal-effective-focus-width\)/);
   assert.match(styles, /data-pal-motion="reduced"/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(styles, /\.pal-spinner,[\s\S]*\.pal-celebration[\s\S]*animation: none/);
-
-  // Every animation this surface adds has to be answerable by both motion
-  // switches, the OS preference and the host's explicit setting.
-  for (const animated of [
-    "\\.pal-rise",
-    "\\.pal-bar-fill",
-    '\\[data-achievement-status="earned"\\] \\.pal-badge',
-  ]) {
-    const mediaBlock =
-      styles.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/)?.[0] ?? "";
-    assert.match(mediaBlock, new RegExp(animated));
-    assert.match(
-      styles,
-      new RegExp(`\\.pal-surface\\[data-pal-motion="reduced"\\] ${animated}`),
-    );
-  }
 });
 
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
+  assert.match(
+    styles,
+    /\.pal-surface\.pal-achievements\[data-pal-viewport="narrow"\]/,
+  );
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
@@ -101,18 +87,8 @@ test("companion owns its portable visual composition without placement", () => {
   assert.doesNotMatch(companionRule, /(^|\n)\s*(top|right|bottom|left):/);
 });
 
-test("future-week treatment preserves muted-text contrast in both themes", () => {
-  const futureCardRule =
-    styles.match(
-      /\.pal-week-card\[data-week-status="future"\] \{([^}]+)\}/,
-    )?.[1] ?? "";
-  assert.doesNotMatch(futureCardRule, /opacity/);
-  assert.match(futureCardRule, /border-style: dashed/);
-
-  const nextWeekRule = styles.match(/\.pal-week-next \{([^}]+)\}/)?.[1] ?? "";
-  assert.doesNotMatch(nextWeekRule, /opacity/);
-  assert.match(nextWeekRule, /background: var\(--pal-effective-color-surface-muted\)/);
-
+test("roadmap muted text preserves contrast in both themes", () => {
+  assert.doesNotMatch(styles, /data-week-status="future"/);
   const textFallbacks = hexFallbacks("--pal-effective-color-text-muted");
   const surfaceFallbacks = hexFallbacks("--pal-effective-color-surface");
   assert.equal(textFallbacks.length, 2);
@@ -125,4 +101,44 @@ test("future-week treatment preserves muted-text contrast in both themes", () =>
       ) >= 4.5,
     );
   }
+});
+
+test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {
+  const tooltipRule =
+    styles.match(/\.pal-badge-tooltip \{([^}]+)\}/)?.[1] ?? "";
+  const tooltipBridgeRule =
+    styles.match(/\.pal-badge-tooltip::after \{([^}]+)\}/)?.[1] ?? "";
+  const visibleTooltipRule =
+    styles.match(
+      /\.pal-badge-control:hover \.pal-badge-tooltip,[\s\S]*?\.pal-badge-control:focus-visible \.pal-badge-tooltip \{([^}]+)\}/,
+    )?.[1] ?? "";
+
+  assert.match(tooltipRule, /visibility: hidden/);
+  assert.match(tooltipRule, /pointer-events: none/);
+  assert.match(tooltipBridgeRule, /top: 100%/);
+  assert.match(tooltipBridgeRule, /height: 0\.6rem/);
+  assert.match(visibleTooltipRule, /visibility: visible/);
+  assert.match(visibleTooltipRule, /pointer-events: auto/);
+});
+
+test("badge controls keep a minimum 44px target in the narrow cascade", () => {
+  const badgeControlRule =
+    styles.match(/\.pal-badge-control \{([^}]+)\}/)?.[1] ?? "";
+  const narrowBadgeRules = [
+    ...styles.matchAll(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-badge \{([^}]+)\}/g,
+    ),
+  ];
+
+  assert.match(
+    badgeControlRule,
+    /min-width: var\(--pal-effective-control-min\)/,
+  );
+  assert.match(
+    badgeControlRule,
+    /min-height: var\(--pal-effective-control-min\)/,
+  );
+  assert.equal(narrowBadgeRules.length, 1);
+  assert.match(narrowBadgeRules[0]?.[1] ?? "", /width: 3\.5rem/);
+  assert.match(narrowBadgeRules[0]?.[1] ?? "", /height: 3\.5rem/);
 });

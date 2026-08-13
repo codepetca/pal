@@ -1,6 +1,10 @@
 export { PalAchievements } from "./achievements";
 export { PalCompanion } from "./companion";
-export { createFixturePalClient, createFixtureSnapshot } from "./fixture-client";
+export {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+  createFixtureSnapshot,
+} from "./fixture-client";
 export { createPalHttpClient, type PalHttpClientOptions } from "./http-client";
 export { PalProvider, usePalWidget } from "./provider";
 export { PalRewardCelebration } from "./reward-celebration";
@@ -24,6 +28,7 @@ export type {
   PalCompanionState,
   PalDensity,
   PalFixtureAction,
+  PalFixtureActionContext,
   PalFixtureController,
   PalProgress,
   PalProviderProps,

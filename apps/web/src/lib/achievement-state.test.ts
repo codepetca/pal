@@ -3,6 +3,11 @@ import { after, test } from "node:test";
 import { asc, eq } from "drizzle-orm";
 import { achievementPeriods, getDb, getPool } from "@pal/db";
 import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+  type PalWidgetSnapshot,
+} from "@codepet/pal-widget";
+import {
   getOrCreateLearnerIdentity,
   processEventInDb,
   resetLearnerInDb,
@@ -13,6 +18,12 @@ import {
   LearnerScopeError,
   loadLearnerSnapshot,
 } from "@/lib/learner-snapshot";
+import {
+  addDays,
+  eventForAction,
+  eventsForAction,
+  FICTIONAL_SEMESTER_START_ISO,
+} from "@/app/sandbox/sandbox-events";
 
 const secret = "achievement-state-test-secret-at-least-32-characters";
 const pikaSecret = "achievement-state-pika-secret-at-least-32-characters";
@@ -32,6 +43,151 @@ function event(
 function key(): string {
   return `achievement-test-${crypto.randomUUID()}`;
 }
+
+function weeklyRhythmRoadmap(snapshot: PalWidgetSnapshot) {
+  return {
+    currentWeek: snapshot.roadmap.currentWeek,
+    weeks: snapshot.roadmap.weeks.slice(0, 2).map((week) => {
+      const rhythm = week.achievements.find(
+        (achievement) => achievement.title === "Weekly Rhythm",
+      );
+      return {
+        number: week.number,
+        status: week.status,
+        rhythm: rhythm
+          ? {
+              status: rhythm.status,
+              progress: rhythm.progress,
+            }
+          : null,
+      };
+    }),
+  };
+}
+
+function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
+  const achievements = snapshot.roadmap.weeks.flatMap(
+    (week) => week.achievements,
+  );
+  return {
+    onTime: achievements.filter(
+      (achievement) =>
+        achievement.title === "On-Time Finish" &&
+        achievement.status === "earned",
+    ).length,
+    rewards: snapshot.rewards.length,
+    companion: {
+      mood: snapshot.companion.mood,
+      message: snapshot.companion.message,
+      xp: snapshot.companion.xp,
+      streak: snapshot.companion.streak,
+    },
+  };
+}
+
+test(
+  "public fixture matches the persisted Weekly Rhythm scenario",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `fixture-parity-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const weekOne = new Date(FICTIONAL_SEMESTER_START_ISO);
+    const weekTwo = addDays(weekOne, 7);
+    const fixture = createFixturePalClient(createEmptyFixtureSnapshot());
+
+    try {
+      fixture.dispatch("daily-log-completed", { activityDay: "2026-04-13" });
+      fixture.dispatch("daily-log-completed", { activityDay: "2026-04-13" });
+      fixture.dispatch("on-time-finish", { itemToken: "parity-item-a" });
+      fixture.dispatch("late-finish", { itemToken: "parity-item-a" });
+      fixture.dispatch("on-time-finish", { itemToken: "parity-item-b" });
+      fixture.dispatch("advance-week");
+
+      const duplicateDailyLog = eventForAction(
+        "daily-log-completed",
+        weekOne,
+        externalLearnerId,
+      );
+      const firstItem = eventForAction(
+        "on-time-finish",
+        weekOne,
+        externalLearnerId,
+      );
+      const secondItem = eventForAction(
+        "on-time-finish",
+        weekOne,
+        externalLearnerId,
+      );
+      const duplicateItem = eventForAction(
+        "late-finish",
+        weekOne,
+        externalLearnerId,
+      );
+      const requests = [
+        ...eventsForAction("daily-log-completed", weekOne, externalLearnerId),
+        duplicateDailyLog,
+        firstItem
+          ? {
+              ...firstItem,
+              metadata: { ...firstItem.metadata, item_token: "parity-item-a" },
+            }
+          : null,
+        duplicateItem
+          ? {
+              ...duplicateItem,
+              metadata: {
+                ...duplicateItem.metadata,
+                item_token: "parity-item-a",
+              },
+            }
+          : null,
+        secondItem
+          ? {
+              ...secondItem,
+              metadata: { ...secondItem.metadata, item_token: "parity-item-b" },
+            }
+          : null,
+        eventForAction("week-configured", weekTwo, externalLearnerId),
+      ].filter((request) => request !== null);
+
+      for (const request of requests) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          {
+            event_type: request.event_type,
+            occurred_at: request.occurred_at,
+            metadata: request.metadata,
+          },
+          request.idempotency_key,
+        );
+      }
+
+      const internalLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const persisted = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+
+      assert.deepEqual(
+        weeklyRhythmRoadmap(fixture.peek()),
+        weeklyRhythmRoadmap(persisted),
+      );
+      assert.deepEqual(itemOutcomeCounts(fixture.peek()), itemOutcomeCounts(persisted));
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
 
 test(
   "persists the five pilot achievements, semantic deduplication, and one reward",

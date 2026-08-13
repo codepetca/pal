@@ -121,9 +121,9 @@ export function eventForAction(
 }
 
 /**
- * Item reactions use wall-clock time so the sandbox pet can visibly react.
- * Establish the fictional academic period first so that real-time reactions
- * cannot reorder the 16-week roadmap.
+ * Actions that depend on weekly opportunity context establish the fictional
+ * academic period first. Item reactions use wall-clock time, so anchoring the
+ * period also prevents them from reordering the 16-week roadmap.
  */
 export function eventsForAction(
   action: SandboxAction,
@@ -135,6 +135,7 @@ export function eventsForAction(
   if (!event) return [];
 
   if (
+    action !== "daily-log-completed" &&
     action !== "item-opened-early" &&
     action !== "on-time-finish" &&
     action !== "late-finish"

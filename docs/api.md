@@ -17,8 +17,9 @@
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
 The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
-implemented. The fixture client in `@codepet/pal-widget` remains available only for
-visual development; production and pipeline-mode clients use these learner routes.
+implemented. The fixture client in `@codepet/pal-widget` powers visual development
+and public PR previews; production and optional local persisted clients use these
+learner routes.
 
 ### Read-token request
 

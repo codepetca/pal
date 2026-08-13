@@ -84,6 +84,21 @@ test("anchors a fictional week before a wall-clock item reaction", () => {
   assert.equal(events[1].metadata.period_key, "sandbox-week-01");
 });
 
+test("configures Weekly Rhythm before a daily log can advance it", () => {
+  const simulatedDate = new Date("2026-04-14T08:00:00Z");
+  const events = eventsForAction(
+    "daily-log-completed",
+    simulatedDate,
+    learnerId,
+    new Date("2026-08-02T15:00:00Z"),
+  );
+
+  assert.equal(events.length, 2);
+  assert.equal(events[0].event_type, "daily_log_week.configured");
+  assert.equal(events[1].event_type, "daily_log.completed");
+  assert.equal(events[0].metadata.period_key, events[1].metadata.period_key);
+});
+
 test("date controls cannot advance beyond the ingestable UTC day", () => {
   const today = new Date("2026-07-31T20:00:00Z");
   assert.equal(isTodayOrEarlier(addDays(today, 1), today), false);

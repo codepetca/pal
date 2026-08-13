@@ -1,72 +1,87 @@
-# Pika widget sandbox design QA
+# Reversed achievement trail design QA
 
-- Source visual: `/Users/stew/.codex/worktrees/pal/pika-widget/apps/web/public/assets/mockups/pika-student/pika-student-dashboard-expanded.jpg`
-- Implementation screenshot: `/tmp/pal-design-qa-floating/implementation-1280x720.jpg`
-- Side-by-side comparison: `/tmp/pal-design-qa-floating/comparison-1280x720.jpg`
-- Focused comparison: `/tmp/pal-design-qa-floating/focused-floating-pet.jpg`
-- Remediation desktop comparison: `/tmp/pal-design-qa-remediation/source-vs-dark.jpg`
-- Remediation focused evidence: `/tmp/pal-design-qa-remediation/focused-fixes.jpg`
-- Remediation mobile evidence: `/tmp/pal-design-qa-remediation/mobile-open.jpg`
-- Viewport: 1280 × 720 CSS pixels
-- Responsive viewport: 389 × 843 CSS pixels (390 px target, rounded by the browser's 0.67 display-density override)
-- Source dimensions: 1280 × 720 pixels
-- Implementation dimensions: 1280 × 720 pixels after normalizing the in-app browser's 0.67 display-density capture to its verified 1280 × 720 CSS viewport
-- State: dark Pika host shell, expanded sidebar, Achievements selected, fixture controls collapsed, Week 4 of 16
+- Source visual truth: `/Users/stew/.codex/generated_images/019fee04-dfa0-7e10-b55f-b955be5152f4/exec-2f80015e-8db8-4da3-90d2-749d5a206d4d.png`
+- Browser-rendered implementation: `/tmp/pal-achievement-reverse/refined-css1440-atlas.png`
+- Normalized implementation evidence: `/tmp/pal-achievement-reverse/implementation-final-1440x923.png`
+- Full comparison: `/tmp/pal-achievement-reverse/comparison-full.png`
+- Focused comparison: `/tmp/pal-achievement-reverse/comparison-css1440-upper.png`
+- Viewport: 1440 × 1023 CSS pixels at device pixel ratio 0.67
+- Source dimensions: 1440 × 1024 pixels
+- Implementation capture dimensions: 1440 × 1023 pixels
+- State: dark Pika shell, expanded navigation, Achievements selected, current Week 5 with four past weeks and 2 of 4 Weekly Rhythm days
+
+## Capture normalization
+
+The in-app browser's 0.67-density raster capture repeats the visible surface when
+the viewport override is active. The browser-rendered file is retained above.
+The upper achievement region was normalized from its first visible frame for the
+focused comparison, while DOM measurements and a lower scroll state verified the
+complete trail. The one-pixel source/implementation height difference is ignored.
 
 ## Evidence
 
-- Full-view evidence: the complete Pika header, expanded navigation, full-width Pal achievement path, floating companion, and collapsed sandbox control are visible in the side-by-side comparison.
-- Focused-region evidence: the lower-right comparison confirms that the compact pet floats independently over the dashboard and is not housed in a persistent right-side panel.
+- Full-view evidence: the Pika header, navigation, selected Achievements state,
+  current goal, descending trail, existing companion overlay, and collapsed
+  sandbox control remain in their host-owned positions.
+- Focused evidence: each desktop week row places its label and real badge assets
+  on one horizontal axis. The blue numbered marker identifies the current week.
+- DOM evidence: visible week order was Week 5, Week 4, Week 3, Week 2, Week 1.
+  Future-week element count was zero. The trail ended at Week 1.
+- Responsive evidence: at 389 × 843 CSS pixels, the document, main surface, and
+  achievement surface had equal client and scroll widths. Week labels and badge
+  rows stack at the host's narrow viewport without horizontal overflow.
 
 ## Findings
 
-- Pika shell proportions, dark palette, header, left navigation, and active state align with the supplied sandbox backdrop.
-- Layout rhythm: the achievement roadmap owns the full content pane; removing the right grid track avoids making Pal depend on a Pika region that is not consistently present.
-- Typography: Pika shell weights and hierarchy remain consistent with the reference; Pal retains its own roadmap hierarchy inside the host pane.
-- Colors and tokens: the host continues to use the Pika-like dark surfaces, borders, muted text, and blue selected state.
-- Image and icon fidelity: the supplied Pika logo, Phosphor navigation icons, and existing Pal pet asset remain sharp and correctly scaled. No substitute glyph or placeholder was introduced.
-- Copy and content: Achievements remains the only added Pika destination; the roadmap and pet messaging remain Pal-owned content.
-- The central content intentionally differs: the source shows Pika's Today page, while the implementation shows Pal's achievement roadmap inside the same host shell.
-- The source's right-side Today content is not treated as a persistent rail. Per the clarified product direction, the implementation expands the main pane and renders the pet as an independent compact overlay.
-- The fixture control remains a small overlay and does not replace or reflow the host UI.
-- No P0, P1, or P2 visual issues remained after the comparison.
-
-## Review remediation
-
-1. P1 light-theme contrast: selected navigation previously used white text on
-   `#dbeafe`. Theme-aware selected text and icon tokens now render the active
-   item with `#1e3a8a` text on `#dbeafe`, a measured 8.49:1 contrast ratio.
-2. P1 collapsed navigation semantics: visually hidden labels previously removed
-   the accessible name. Every host navigation button now keeps an explicit
-   `aria-label`; all seven destinations remain uniquely discoverable by role and
-   name after collapsing the sidebar.
-3. P2 mobile overlay collision: fixture controls and the floating pet previously
-   shared the same lower-right space. The mobile controls reserve a separate pet
-   column. At the verified responsive viewport, expanded controls end at
-   295.94 px and the companion begins at 299.18 px, leaving the overlays
-   visually and interactively separate.
-4. Post-fix desktop light, desktop dark, collapsed-sidebar, and responsive
-   comparisons passed with no remaining P0, P1, or P2 visual issue.
+- Fonts and typography: the implementation preserves the host's Inter-like UI
+  family and recreates the selected hierarchy with a 2 rem page title, 1.5 rem
+  current-week label, 1.25 rem past-week labels, and compact supporting text.
+- Spacing and layout rhythm: desktop rows use a consistent label column followed
+  by a wrapping horizontal badge strip. The connector runs from the current
+  marker and ends at Week 1. No disabled or teaser step extends the trail.
+- Colors and tokens: the page continues to consume the existing Pika-to-Pal
+  semantic bridge for navy surfaces, blue current state, green earned state,
+  muted text, borders, focus styling, and dark/light themes.
+- Image quality and asset fidelity: Weekly Rhythm and login/check-in outcomes now
+  use the repository's real PNG badge art. Existing Pika, Phosphor, and Pal pet
+  assets remain unchanged; no new placeholder drawing was introduced.
+- Copy and content: persistent copy is reduced to `Achievements` and week labels.
+  Badge name plus status/progress appears only on badge hover or keyboard focus.
+  Descriptions, rewards, dates, the `This week` chip, semester subtitle and
+  denominator, and all future-week copy are gone.
+- The live comparison uses Week 5 while the selected mock uses Week 4. This is an
+  intentional data-driven value; the hierarchy and ordering are the matched
+  design behaviors.
+- No actionable P0, P1, or P2 findings remain.
 
 ## Comparison history
 
-1. Earlier implementation: P1 architecture mismatch. The companion was placed inside a faux persistent right rail, making Pal depend on a Pika layout region that is not guaranteed to exist.
-2. Fix: removed the right grid track and contextual panel, expanded the roadmap across the full Pika content pane, and changed the companion to a compact lower-right overlay.
-3. Post-fix comparison at 1280 × 720: passed. The focused lower-right evidence confirms the pet is independent of the main layout; no P0, P1, or P2 issue remains.
+1. Initial implementation: P1 asset mismatch from glyph badge fallbacks and P2
+   density mismatch from compressed past-week rows.
+2. Fixes: mapped supported achievements to existing PNG assets, enlarged the
+   current badge/card, stacked earned labels, and increased past-row height.
+3. Post-fix comparison: real badges render sharply, the current week remains the
+   dominant stop, and completed weeks read as a deliberate descending trail.
+4. Requested refinement: badges now sit horizontally beside every desktop week;
+   the current-week chip was removed and replaced by the existing blue marker.
 
 ## Interaction QA
 
-- Switched from Achievements to Today and back to Achievements.
-- Confirmed the floating pet remains visible across Pika destinations.
-- Opened the sandbox fixture controls.
-- Triggered the fish reward and dismissed the celebration.
-- Confirmed the companion changed to its excited state after the reward.
-- Switched to the light preview and confirmed the selected Achievements state
-  remains clearly visible.
-- Collapsed the sidebar and confirmed Today, Classwork, Tests, Calendar,
-  Syllabus, Achievements, and Announcements retain accessible button names.
-- Opened fixture controls at the responsive viewport and confirmed their bounds
-  do not overlap the floating pet.
+- Navigated from Achievements to Today and back to Achievements.
+- Confirmed the same data-driven current/past state returned after navigation.
+- Verified zero future-week elements before and after navigation.
+- Verified five desktop badges share the same top coordinate as the Week 1 label
+  and advance horizontally with consistent spacing.
+- Verified badge focus exposes `First Pika Login — Earned`; the same tooltip is
+  exposed on hover, and the focus target has the full accessible label.
+- Verified the hover disclosure remains visible while the pointer moves from the
+  badge across its bridge and onto the tooltip content.
+- Verified the narrow host viewport has no horizontal overflow.
 - Checked browser warnings and errors after the interaction sequence: none.
+
+## Follow-up polish
+
+- P3: the browser capture's density tiling makes the saved full-frame comparison
+  less clean than the live preview, but does not affect the rendered page.
 
 final result: passed
