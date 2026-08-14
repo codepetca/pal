@@ -130,14 +130,10 @@ function isCompatibleCalendarRevision(
 
   const leftAdaptive = left.term_week_count !== undefined;
   const rightAdaptive = right.term_week_count !== undefined;
-  if (!leftAdaptive) {
-    return !rightAdaptive || right.term_week_count === 16;
-  }
-  return (
-    rightAdaptive &&
-    left.term_week_count === right.term_week_count &&
-    left.week_start_day === right.week_start_day
-  );
+  const leftWeekCount = leftAdaptive ? left.term_week_count : 16;
+  const rightWeekCount = rightAdaptive ? right.term_week_count : 16;
+  if (leftWeekCount !== rightWeekCount) return false;
+  return !leftAdaptive || !rightAdaptive || left.week_start_day === right.week_start_day;
 }
 
 function isCompatibleTermRevision(
@@ -151,10 +147,9 @@ function isCompatibleTermRevision(
   ) {
     return false;
   }
-  if (left.term_week_count === undefined) {
-    return right.term_week_count === undefined || right.term_week_count === 16;
-  }
-  return left.term_week_count === right.term_week_count;
+  const leftWeekCount = left.term_week_count ?? 16;
+  const rightWeekCount = right.term_week_count ?? 16;
+  return leftWeekCount === rightWeekCount;
 }
 
 async function completionCount(
