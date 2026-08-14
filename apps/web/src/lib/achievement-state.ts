@@ -17,6 +17,10 @@ export const ACHIEVEMENT_KEYS = {
   onTimeFinish: "on-time-finish",
 } as const;
 
+const FIRST_WEEKLY_CONFIGURATION_FACT =
+  "internal.daily_log_week.first_configuration";
+const DAILY_LOG_SETTLEMENT_FACT = "internal.daily_log.reward_settlement";
+
 type AchievementStatus = "earned" | "in-progress" | "incomplete";
 
 interface FactIdentity {
@@ -158,6 +162,24 @@ async function firstConfigurationTimeZone(
   learnerId: string,
   periodKey: string,
 ): Promise<string | null> {
+  const [marker] = await db
+    .select({ metadata: learnerFacts.metadata })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, FIRST_WEEKLY_CONFIGURATION_FACT),
+        eq(learnerFacts.periodKey, periodKey),
+      ),
+    )
+    .limit(1);
+  if (marker) {
+    const timeZone = (marker.metadata as Record<string, unknown>).term_timezone;
+    return typeof timeZone === "string" ? timeZone : null;
+  }
+
+  // Backward-compatible fallback for periods created before durable first-config
+  // markers existed. New periods never depend on timestamp/UUID ordering.
   const [configuration] = await db
     .select({ metadata: learnerFacts.metadata })
     .from(learnerFacts)
@@ -182,6 +204,17 @@ async function completionCount(
   periodKey: string,
   firstTimeZoneOverride?: string,
 ): Promise<number> {
+  const [firstConfigurationMarker] = await db
+    .select({ id: learnerFacts.id })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, FIRST_WEEKLY_CONFIGURATION_FACT),
+        eq(learnerFacts.periodKey, periodKey),
+      ),
+    )
+    .limit(1);
   const timeZone =
     firstTimeZoneOverride ??
     (await firstConfigurationTimeZone(db, learnerId, periodKey));
@@ -193,6 +226,15 @@ async function completionCount(
         eq(learnerFacts.learnerId, learnerId),
         eq(learnerFacts.eventType, "daily_log.completed"),
         eq(learnerFacts.periodKey, periodKey),
+        firstConfigurationMarker
+          ? sql`exists (
+              select 1
+              from learner_facts as daily_log_settlements
+              where daily_log_settlements.learner_id = ${learnerId}
+                and daily_log_settlements.event_type = ${DAILY_LOG_SETTLEMENT_FACT}
+                and daily_log_settlements.semantic_key = ${learnerFacts.id}::text
+            )`
+          : undefined,
         timeZone
           ? sql`to_char(${learnerFacts.occurredAt} AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') = ${learnerFacts.metadata}->>'activity_day'`
           : undefined,
@@ -420,17 +462,99 @@ export async function weeklyConfigurationExists(
   return Boolean(configuration);
 }
 
-export async function validPendingDailyLogEvents(
+export async function recordFirstWeeklyConfigurationMarker(
+  db: Db,
+  input: {
+    integrationId: string;
+    learnerId: string;
+    sourceEventId: string;
+    event: IncomingEvent;
+  },
+): Promise<void> {
+  if (input.event.event_type !== "daily_log_week.configured") return;
+  const periodKey = metadataString(input.event, "period_key");
+  const timeZoneValue = termCalendarMetadata(input.event)?.term_timezone;
+  await db
+    .insert(learnerFacts)
+    .values({
+      integrationId: input.integrationId,
+      learnerId: input.learnerId,
+      sourceEventId: input.sourceEventId,
+      eventType: FIRST_WEEKLY_CONFIGURATION_FACT,
+      semanticKey: periodKey,
+      periodKey,
+      occurredAt: new Date(input.event.occurred_at),
+      metadata:
+        typeof timeZoneValue === "string"
+          ? { term_timezone: timeZoneValue }
+          : {},
+    })
+    .onConflictDoNothing();
+}
+
+async function recordDailyLogSettlement(
+  db: Db,
+  input: {
+    integrationId: string;
+    learnerId: string;
+    sourceEventId: string;
+    completionFactId: string;
+    periodKey: string;
+    occurredAt: Date;
+  },
+): Promise<void> {
+  await db
+    .insert(learnerFacts)
+    .values({
+      integrationId: input.integrationId,
+      learnerId: input.learnerId,
+      sourceEventId: input.sourceEventId,
+      eventType: DAILY_LOG_SETTLEMENT_FACT,
+      semanticKey: input.completionFactId,
+      periodKey: input.periodKey,
+      occurredAt: input.occurredAt,
+      metadata: { status: "valid" },
+    })
+    .onConflictDoNothing();
+}
+
+export async function recordImmediateDailyLogSettlement(
+  db: Db,
+  input: {
+    integrationId: string;
+    learnerId: string;
+    sourceEventId: string;
+    factId: string;
+    event: IncomingEvent;
+  },
+): Promise<void> {
+  if (input.event.event_type !== "daily_log.completed") return;
+  await recordDailyLogSettlement(db, {
+    integrationId: input.integrationId,
+    learnerId: input.learnerId,
+    sourceEventId: input.sourceEventId,
+    completionFactId: input.factId,
+    periodKey: metadataString(input.event, "period_key"),
+    occurredAt: new Date(input.event.occurred_at),
+  });
+}
+
+export async function settlePendingDailyLogEvents(
   db: Db,
   learnerId: string,
   event: IncomingEvent,
 ): Promise<IncomingEvent[]> {
   if (event.event_type !== "daily_log_week.configured") return [];
   const periodKey = metadataString(event, "period_key");
+  const settlementLimit = metadataInteger(event, "eligible_days");
+  if (settlementLimit === 0) return [];
   const timeZoneValue = termCalendarMetadata(event)?.term_timezone;
   const timeZone = typeof timeZoneValue === "string" ? timeZoneValue : null;
   const facts = await db
     .select({
+      id: learnerFacts.id,
+      integrationId: learnerFacts.integrationId,
+      sourceEventId: learnerFacts.sourceEventId,
       occurredAt: learnerFacts.occurredAt,
       metadata: learnerFacts.metadata,
     })
@@ -440,29 +564,38 @@ export async function validPendingDailyLogEvents(
         eq(learnerFacts.learnerId, learnerId),
         eq(learnerFacts.eventType, "daily_log.completed"),
         eq(learnerFacts.periodKey, periodKey),
+        timeZone
+          ? sql`to_char(${learnerFacts.occurredAt} AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') = ${learnerFacts.metadata}->>'activity_day'`
+          : undefined,
+        sql`not exists (
+          select 1
+          from learner_facts as daily_log_settlements
+          where daily_log_settlements.learner_id = ${learnerId}
+            and daily_log_settlements.event_type = ${DAILY_LOG_SETTLEMENT_FACT}
+            and daily_log_settlements.semantic_key = ${learnerFacts.id}::text
+        )`,
       ),
-    );
-  return facts
-    .filter(({ occurredAt, metadata }) => {
-      if (!timeZone) return true;
-      return (
-        (metadata as Record<string, unknown>).activity_day ===
-        calendarDayInTimeZone(occurredAt, timeZone)
-      );
-    })
-    .sort((left, right) => {
-      const leftDay = String(
-        (left.metadata as Record<string, unknown>).activity_day,
-      );
-      const rightDay = String(
-        (right.metadata as Record<string, unknown>).activity_day,
-      );
-      return (
-        leftDay.localeCompare(rightDay) ||
-        left.occurredAt.getTime() - right.occurredAt.getTime()
-      );
-    })
-    .map(({ occurredAt, metadata }) => ({
+    )
+    .orderBy(
+      sql`${learnerFacts.metadata}->>'activity_day'`,
+      asc(learnerFacts.occurredAt),
+      asc(learnerFacts.id),
+    )
+    // Read one overflow row to prove the transaction's work stays bounded;
+    // only the configured number (at most five) is settled.
+    .limit(settlementLimit + 1);
+  const settledFacts = facts.slice(0, settlementLimit);
+  for (const fact of settledFacts) {
+    await recordDailyLogSettlement(db, {
+      integrationId: fact.integrationId,
+      learnerId,
+      sourceEventId: fact.sourceEventId,
+      completionFactId: fact.id,
+      periodKey,
+      occurredAt: fact.occurredAt,
+    });
+  }
+  return settledFacts.map(({ occurredAt, metadata }) => ({
       event_type: "daily_log.completed" as const,
       occurred_at: occurredAt.toISOString(),
       metadata: metadata as IncomingEvent["metadata"],
