@@ -22,6 +22,7 @@ const FIRST_WEEKLY_CONFIGURATION_FACT =
 const DAILY_LOG_PENDING_FACT = "internal.daily_log.reward_pending";
 const DAILY_LOG_SETTLEMENT_FACT = "internal.daily_log.reward_settlement";
 const MAX_DAILY_LOG_DAYS_PER_PERIOD = 5;
+const MAX_DAILY_LOG_FACTS_PER_PERIOD = MAX_DAILY_LOG_DAYS_PER_PERIOD * 2;
 
 type AchievementStatus = "earned" | "in-progress" | "incomplete";
 
@@ -214,9 +215,10 @@ async function boundedDailyLogFacts(
   learnerId: string,
   periodKey: string,
 ): Promise<DailyLogFactRow[]> {
-  // Version 1 permits at most five distinct source days per academic period.
-  // Read one overflow row so invalid legacy data is detected without sorting
-  // or materializing an unbounded JSON result.
+  // Version 1 permits five qualifying days. A configured period may retain up
+  // to five immutable, timezone-quarantined facts while corrected days occupy
+  // the five reward slots. Read one overflow row so legacy corruption remains
+  // detectable without materializing an unbounded result.
   return db
     .select({
       id: learnerFacts.id,
@@ -233,7 +235,7 @@ async function boundedDailyLogFacts(
         eq(learnerFacts.periodKey, periodKey),
       ),
     )
-    .limit(MAX_DAILY_LOG_DAYS_PER_PERIOD + 1);
+    .limit(MAX_DAILY_LOG_FACTS_PER_PERIOD + 1);
 }
 
 function calendarValidDailyLogFacts(
@@ -250,7 +252,22 @@ function calendarValidDailyLogFacts(
   });
 }
 
-async function completionCount(
+async function validCompletionFacts(
+  db: Db,
+  learnerId: string,
+  periodKey: string,
+  firstTimeZoneOverride?: string,
+): Promise<DailyLogFactRow[]> {
+  const timeZone =
+    firstTimeZoneOverride ??
+    (await firstConfigurationTimeZone(db, learnerId, periodKey));
+  return calendarValidDailyLogFacts(
+    await boundedDailyLogFacts(db, learnerId, periodKey),
+    timeZone,
+  );
+}
+
+async function settledCompletionCount(
   db: Db,
   learnerId: string,
   periodKey: string,
@@ -267,12 +284,11 @@ async function completionCount(
       ),
     )
     .limit(1);
-  const timeZone =
-    firstTimeZoneOverride ??
-    (await firstConfigurationTimeZone(db, learnerId, periodKey));
-  const facts = calendarValidDailyLogFacts(
-    await boundedDailyLogFacts(db, learnerId, periodKey),
-    timeZone,
+  const facts = await validCompletionFacts(
+    db,
+    learnerId,
+    periodKey,
+    firstTimeZoneOverride,
   );
   if (!firstConfigurationMarker || facts.length === 0) return facts.length;
   const settlementMarkers = await db
@@ -325,12 +341,12 @@ export async function weeklyConfigurationRejection(
   if (
     periodStatus === "closed" &&
     eligibleDays <
-      (await completionCount(
+      (await validCompletionFacts(
         db,
         learnerId,
         periodKey,
         firstConfigurationTimeZoneOverride,
-      ))
+      )).length
   ) {
     return "contradictory_period_configuration";
   }
@@ -458,9 +474,6 @@ export async function dailyLogCalendarStatus(
   if (event.event_type !== "daily_log.completed") return "not-daily-log";
   const periodKey = metadataString(event, "period_key");
   const existingFacts = await boundedDailyLogFacts(db, learnerId, periodKey);
-  if (existingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD) {
-    return "period-limit-exceeded";
-  }
   const [configuration] = await db
     .select({ id: weeklyRhythmConfigs.id })
     .from(weeklyRhythmConfigs)
@@ -471,7 +484,11 @@ export async function dailyLogCalendarStatus(
       ),
     )
     .limit(1);
-  if (!configuration) return "pending";
+  if (!configuration) {
+    return existingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD
+      ? "period-limit-exceeded"
+      : "pending";
+  }
 
   const [calendar] = await db
     .select({ metadata: learnerFacts.metadata })
@@ -487,11 +504,21 @@ export async function dailyLogCalendarStatus(
     .limit(1);
   const timeZone = (calendar?.metadata as Record<string, unknown> | undefined)
     ?.term_timezone;
-  if (typeof timeZone !== "string") return "valid";
-  return metadataString(event, "activity_day") ===
-    calendarDayInTimeZone(new Date(event.occurred_at), timeZone)
-    ? "valid"
-    : "invalid";
+  if (
+    typeof timeZone === "string" &&
+    metadataString(event, "activity_day") !==
+      calendarDayInTimeZone(new Date(event.occurred_at), timeZone)
+  ) {
+    return "invalid";
+  }
+  const qualifyingFacts = calendarValidDailyLogFacts(
+    existingFacts,
+    typeof timeZone === "string" ? timeZone : null,
+  );
+  return qualifyingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD ||
+    existingFacts.length >= MAX_DAILY_LOG_FACTS_PER_PERIOD
+    ? "period-limit-exceeded"
+    : "valid";
 }
 
 export type WeeklyConfigurationDisposition =
@@ -644,7 +671,7 @@ export async function settlePendingDailyLogEvents(
   const timeZoneValue = termCalendarMetadata(event)?.term_timezone;
   const timeZone = typeof timeZoneValue === "string" ? timeZoneValue : null;
   const boundedFacts = await boundedDailyLogFacts(db, learnerId, periodKey);
-  if (boundedFacts.length > MAX_DAILY_LOG_DAYS_PER_PERIOD) return [];
+  if (boundedFacts.length > MAX_DAILY_LOG_FACTS_PER_PERIOD) return [];
 
   const existingSettlements = await db
     .select({ completionFactId: learnerFacts.semanticKey })
@@ -882,7 +909,7 @@ async function recomputeWeeklyRhythm(
     .limit(1);
   if (!configuration) return false;
 
-  const current = await completionCount(db, learnerId, periodKey);
+  const current = await settledCompletionCount(db, learnerId, periodKey);
   const targetDays = weeklyTarget(configuration.eligibleDays);
   const reconciliationRequired = current > configuration.eligibleDays;
   if (configuration.reconciliationRequired !== reconciliationRequired) {
