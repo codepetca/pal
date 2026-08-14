@@ -424,6 +424,35 @@ export const achievementInstances = pgTable(
   ],
 );
 
+// Durable learner title awards. Delayed delivery may correct an award to an
+// earlier source fact; snapshot reads select the latest chronological award,
+// with story titles winning same-action ties.
+export const titleAwards = pgTable(
+  "title_awards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id")
+      .notNull()
+      .references(() => learners.id, { onDelete: "cascade" }),
+    titleId: text("title_id").notNull(),
+    kind: text("kind").notNull(),
+    sourceFactId: uuid("source_fact_id").notNull(),
+    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("title_awards_learner_title_uq").on(t.learnerId, t.titleId),
+    check("title_awards_title_nonempty", sql`length(btrim(${t.titleId})) > 0`),
+    check("title_awards_kind_valid", sql`${t.kind} IN ('behavior', 'story')`),
+    foreignKey({
+      columns: [t.sourceFactId, t.learnerId],
+      foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
+      name: "title_awards_source_owner_fk",
+    }).onDelete("cascade"),
+    index("title_awards_current_idx").on(t.learnerId, t.earnedAt.desc()),
+  ],
+);
+
 export const rewardNotices = pgTable(
   "reward_notices",
   {
@@ -530,6 +559,7 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   rewardGrants: many(learnerRewardGrants),
   weeklyRhythmConfigs: many(weeklyRhythmConfigs),
   achievementInstances: many(achievementInstances),
+  titleAwards: many(titleAwards),
   rewardNotices: many(rewardNotices),
   economy: one(economy),
   petState: one(petState),
@@ -556,6 +586,17 @@ export const learnerFactsRelations = relations(learnerFacts, ({ one }) => ({
   sourceEvent: one(events, {
     fields: [learnerFacts.sourceEventId],
     references: [events.id],
+  }),
+}));
+
+export const titleAwardsRelations = relations(titleAwards, ({ one }) => ({
+  learner: one(learners, {
+    fields: [titleAwards.learnerId],
+    references: [learners.id],
+  }),
+  sourceFact: one(learnerFacts, {
+    fields: [titleAwards.sourceFactId, titleAwards.learnerId],
+    references: [learnerFacts.id, learnerFacts.learnerId],
   }),
 }));
 
@@ -685,3 +726,4 @@ export type LearnerRewardGrant = typeof learnerRewardGrants.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;
+export type TitleAward = typeof titleAwards.$inferSelect;

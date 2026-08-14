@@ -14,6 +14,7 @@ import {
   PIP_STORY_VERSION,
   type PalStoryPlan,
 } from "@codepet/pal-widget/progression";
+import { awardLearnerTitle } from "@/lib/title-awards";
 
 const STORY_REWARD_PREFIX = "story:";
 const LEGACY_TERM_PERIODS = 16;
@@ -216,6 +217,8 @@ export async function awardStoryCollectibleForPeriod(
   learnerId: string,
   periodKey: string,
   achievementInstanceId: string,
+  sourceFactId: string,
+  earnedAt: Date,
 ): Promise<void> {
   const [assignment] = await db
     .select({ chapterId: storyPlanChapters.chapterId })
@@ -230,6 +233,16 @@ export async function awardStoryCollectibleForPeriod(
   if (!assignment) return;
   const chapter = getPalStoryChapterDefinition(assignment.chapterId);
   if (!chapter) throw new Error(`Unknown story reward chapter: ${assignment.chapterId}`);
+
+  if (chapter.title) {
+    await awardLearnerTitle(db, {
+      learnerId,
+      titleId: chapter.title.id,
+      kind: "story",
+      sourceFactId,
+      earnedAt,
+    });
+  }
 
   await db
     .insert(rewardNotices)

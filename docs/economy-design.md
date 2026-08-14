@@ -122,6 +122,9 @@ older widget/API pair.
   never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
 - Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
   Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
+  Each award is stored with its authoritative event time so the display keeps
+  the most recently earned title across later snapshots and delayed delivery;
+  a story title wins when one action awards multiple titles at the same time.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once earned, that week's slot reveals its collectible (at

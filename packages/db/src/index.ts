@@ -12,6 +12,7 @@ export {
   rewardNotices,
   storyPlanChapters,
   storyPlans,
+  titleAwards,
   weeklyRhythmConfigs,
   worldState,
 } from "./schema";
@@ -28,6 +29,7 @@ export type {
   RewardNotice,
   StoryPlanChapter,
   StoryPlan,
+  TitleAward,
   WeeklyRhythmConfig,
   WorldState,
 } from "./schema";

@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  desc,
   eq,
   getTableColumns,
   gte,
@@ -19,6 +20,7 @@ import {
   learners,
   petState,
   rewardNotices,
+  titleAwards,
   worldState,
   weeklyRhythmConfigs,
   type Db,
@@ -299,6 +301,16 @@ export async function loadLearnerSnapshot(
         )
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
+      const titleAwardRows = await tx
+        .select()
+        .from(titleAwards)
+        .where(eq(titleAwards.learnerId, learnerId))
+        .orderBy(
+          desc(titleAwards.earnedAt),
+          sql`case when ${titleAwards.kind} = 'story' then 1 else 0 end desc`,
+          desc(titleAwards.createdAt),
+          desc(titleAwards.titleId),
+        );
 
       const latestCalendarFact = selectCurrentTermFact(
         calendarFacts,
@@ -580,6 +592,14 @@ export async function loadLearnerSnapshot(
                 streak: companion.streak,
                 achievements: progressionAchievements,
                 storyPlan: persistedStoryPlan,
+                ...(titleAwardRows.length > 0
+                  ? {
+                      earnedTitleIds: titleAwardRows.map(
+                        (award) => award.titleId,
+                      ),
+                      currentTitleId: titleAwardRows[0]!.titleId,
+                    }
+                  : {}),
                 earnedWeeks: weeks.flatMap((week) =>
                   week.achievements.some(
                     (achievement) =>

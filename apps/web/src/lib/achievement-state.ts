@@ -9,6 +9,10 @@ import {
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
 import { awardStoryCollectibleForPeriod } from "@/lib/story-plan";
+import {
+  awardLearnerTitle,
+  BEHAVIOR_TITLES,
+} from "@/lib/title-awards";
 
 export const ACHIEVEMENT_KEYS = {
   firstLogin: "first-pika-login",
@@ -996,6 +1000,8 @@ async function recomputeWeeklyRhythm(
         learnerId,
         periodKey,
         existing.id,
+        factId,
+        occurredAt,
       );
     }
     return status === "earned";
@@ -1022,6 +1028,8 @@ async function recomputeWeeklyRhythm(
       learnerId,
       periodKey,
       created.id,
+      factId,
+      occurredAt,
     );
   }
   return status === "earned";
@@ -1177,6 +1185,13 @@ export async function applyAchievementFact(
         occurredAt,
       });
       if (earned && outcome.created) {
+        await awardLearnerTitle(db, {
+          learnerId,
+          titleId: BEHAVIOR_TITLES.onTimePro.id,
+          kind: "behavior",
+          sourceFactId: fact.id,
+          earnedAt: occurredAt,
+        });
         await db
           .insert(rewardNotices)
           .values({

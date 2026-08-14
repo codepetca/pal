@@ -32,6 +32,7 @@ These exist as tables today:
 - **LearnerRewardGrant** — the append-only durable ownership ledger. A `story_chapter` grant references the exact learner-owned plan assignment; a `behavior_title` grant references a stable title ID. Every grant references the same learner's source fact, carries database-generated order, and remains owned after `seen_at` is set. Partial uniqueness makes retries exact-once without deriving ownership from notices or current economy state.
 - **WeeklyRhythmConfig** — the highest accepted Pika opportunity configuration for one learner and period, including whether delayed facts require reconciliation.
 - **AchievementInstance** — one durable achievement outcome within its lifetime, classroom, item, or weekly scope. Earned outcomes are historical and are not revoked by later source-system edits.
+- **TitleAward** — one durable identity-title award per learner and stable title ID. Its learner-owned source fact and authoritative event time let snapshots select the truly latest title even when events arrive late or out of order; a delayed earlier fact may correct the stored award time, and story titles win a same-action timestamp tie.
 - **RewardNotice** — an exactly-once learner-facing reward notification linked to its achievement instance. A nullable acknowledgement timestamp makes reads retryable and acknowledgement idempotent.
 
 Economy, PetState, and WorldState each use `learner_id` as their primary key, so

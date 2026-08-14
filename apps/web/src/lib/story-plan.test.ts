@@ -7,6 +7,7 @@ import {
   rewardNotices,
   storyPlanChapters,
   storyPlans,
+  titleAwards,
 } from "@pal/db";
 import { createPalStoryPlan } from "@codepet/pal-widget/progression";
 import {
@@ -375,6 +376,112 @@ test(
         (title) => title.id === "gentle-keeper",
       )?.status, "earned");
       assert.equal(laterSnapshot.progression?.currentTitle, "Gentle Keeper");
+      const awards = await getDb()
+        .select()
+        .from(titleAwards)
+        .where(eq(titleAwards.learnerId, learnerId));
+      assert.deepEqual(
+        new Set(awards.map((award) => award.titleId)),
+        new Set(["on-time-pro", "gentle-keeper"]),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "selects a behavior title earned after an earlier story title",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `later-behavior-title-${crypto.randomUUID()}`;
+    const weekOneKey = `later-title-week-1-${crypto.randomUUID()}`;
+    const weekTwoKey = `later-title-week-2-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(weekOneKey, 1, 6, 1),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: weekOneKey, activity_day: "2026-08-31" },
+          "2026-08-31T15:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(weekTwoKey, 2, 6, 1),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "learning_item.completed",
+          {
+            item_token: `later-title-item-${crypto.randomUUID()}`,
+            kind: "assignment",
+            period_key: weekTwoKey,
+            timing: "on_time",
+          },
+          "2026-09-07T15:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-07T16:00:00.000Z") },
+      );
+      assert.equal(snapshot.progression?.titles.find(
+        (title) => title.id === "gentle-keeper",
+      )?.status, "earned");
+      assert.equal(snapshot.progression?.titles.find(
+        (title) => title.id === "on-time-pro",
+      )?.status, "earned");
+      assert.equal(snapshot.progression?.currentTitle, "On-Time Pro");
+
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "learning_item.completed",
+          {
+            item_token: `delayed-earlier-title-${crypto.randomUUID()}`,
+            kind: "assignment",
+            period_key: weekOneKey,
+            timing: "on_time",
+          },
+          "2026-08-30T15:00:00.000Z",
+        ),
+        key(),
+      );
+      const correctedSnapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-07T16:00:00.000Z") },
+      );
+      assert.equal(correctedSnapshot.progression?.currentTitle, "Gentle Keeper");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
