@@ -5,6 +5,8 @@ import type { IncomingEvent, LearnerState, Mutation } from "./types";
 export const XP_CHANGED = "XP_CHANGED";
 export const LEVEL_UP = "LEVEL_UP";
 export const STREAK_MILESTONE = "STREAK_MILESTONE";
+export const WEEKLY_RHYTHM_EARNED = "WEEKLY_RHYTHM_EARNED";
+export const COLLECTION_SYNC = "COLLECTION_SYNC";
 
 export type ApplyResult = {
   state: LearnerState;
@@ -76,7 +78,7 @@ export function applyMutations(
           next.economy.streak_last_day = null;
           break;
         }
-        const today = utcDay(event.occurred_at);
+        const today = activityDay(event);
         // Same day: the streak already advanced, so a second check-in is a no-op —
         // this is what stops a learner banking a day's bonus twice. Earlier day:
         // the event is out of order (a retry or a backdated occurred_at), and
@@ -86,7 +88,8 @@ export function applyMutations(
           break;
         }
         next.economy.streak_current =
-          next.economy.streak_last_day === previousUtcDay(today)
+          next.economy.streak_last_day !== null &&
+          continuesSchoolDayRhythm(next.economy.streak_last_day, today)
             ? next.economy.streak_current + 1
             : 1;
         next.economy.streak_last_day = today;
@@ -128,8 +131,8 @@ export function applyMutations(
       }
 
       case "WORLD_UNLOCK": {
-        // Unlock rules use `gte` thresholds, so they re-fire on every later
-        // milestone. Unlocking is idempotent by design.
+        // The persisted caller emits only missing milestones, while this final
+        // guard keeps direct engine use idempotent as well.
         if (!next.world.unlocked_object_ids.includes(mutation.asset_ref_id)) {
           next.world.unlocked_object_ids.push(mutation.asset_ref_id);
         }
@@ -163,15 +166,32 @@ export function applyMutations(
   return { state: next, derived };
 }
 
-// A learner's streak day is UTC. A student checking in at 9pm local time west of
-// UTC lands on the next UTC day, which can cost them a streak — acceptable for M1,
-// revisit when integrations can declare a timezone.
+function activityDay(event: IncomingEvent): string {
+  const supplied = event.metadata.activity_day;
+  if (
+    typeof supplied === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(supplied) &&
+    new Date(`${supplied}T00:00:00.000Z`).toISOString().slice(0, 10) === supplied
+  ) {
+    return supplied;
+  }
+  return utcDay(event.occurred_at);
+}
+
 function utcDay(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
-function previousUtcDay(day: string): string {
+function previousCalendarDay(day: string): string {
   const date = new Date(`${day}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
+}
+
+function continuesSchoolDayRhythm(previous: string, today: string): boolean {
+  if (previous === previousCalendarDay(today)) return true;
+  const date = new Date(`${today}T00:00:00.000Z`);
+  if (date.getUTCDay() !== 1) return false;
+  date.setUTCDate(date.getUTCDate() - 3);
+  return previous === date.toISOString().slice(0, 10);
 }

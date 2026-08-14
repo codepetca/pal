@@ -19,6 +19,7 @@ Then mount the public surfaces under one provider:
 ```tsx
 import {
   PalAchievements,
+  PalCollection,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
@@ -33,6 +34,7 @@ import {
   motion="system"
 >
   <PalAchievements />
+  <PalCollection />
   <PalCompanion />
   <PalRewardCelebration
     modal
@@ -42,6 +44,8 @@ import {
 ```
 
 The host owns placement. Pal owns everything rendered inside each component.
+`PalCollection` renders the optional durable keepsakes in a v1 learner snapshot;
+older snapshots without `collection` remain valid.
 `PalCompanion` is the complete cat surface used by Pika and the sandbox. Hosts
 may set its `scale` prop and attach pointer handlers without reaching into or
 restyling Pal's internal artwork. The host owns any surrounding scenery or

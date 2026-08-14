@@ -30,7 +30,7 @@
 
   <rect x="180" y="198" width="200" height="44" rx="4" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
   <text class="th" x="280" y="218" text-anchor="middle" fill="#04342C">mutations</text>
-  <text class="ts" x="280" y="234" text-anchor="middle" fill="#085041">xp +150, xp +50, mood</text>
+  <text class="ts" x="280" y="234" text-anchor="middle" fill="#085041">xp +75, xp +25, mood</text>
 
   <line x1="280" y1="242" x2="280" y2="270" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
 

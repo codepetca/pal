@@ -1,3 +1,13 @@
+import {
+  COLLECTION_SYNC,
+  defaultRulePack,
+  processEvent,
+  PROGRESSION_POLICY,
+  WEEKLY_RHYTHM_EARNED,
+  type IncomingEvent,
+  type LearnerState,
+} from "@pal/engine";
+import { collectionItemsForUnlocks } from "./collection";
 import type {
   PalAchievement,
   PalFixtureAction,
@@ -104,6 +114,7 @@ export function createEmptyFixtureSnapshot(): PalWidgetSnapshot {
       message: "Complete positive learning actions to encourage Pip.",
       assetUrl: "/assets/pets/default.png",
     },
+    collection: { items: [] },
     rewards: [],
   };
 }
@@ -143,6 +154,13 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
       message: "Two daily-log days complete this week.",
       assetUrl: "/assets/pets/default.png",
     },
+    collection: {
+      items: collectionItemsForUnlocks(
+        PROGRESSION_POLICY.collectionMilestones
+          .filter((milestone) => milestone.weeklyRhythms < currentWeek)
+          .map((milestone) => milestone.assetRefId),
+      ),
+    },
     rewards: [],
   };
 }
@@ -161,6 +179,110 @@ export function createFixturePalClient(
   const viewedItemTokens = new Set<string>();
   let generatedDayIdentity = 0;
   let generatedItemIdentity = 0;
+  let earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+  let engineState = progressionStateForSnapshot(snapshot);
+
+  function progressionStateForSnapshot(value: PalWidgetSnapshot): LearnerState {
+    const xp = value.companion.xp ?? 0;
+    return {
+      economy: {
+        xp,
+        xp_lifetime:
+          (value.companion.level - 1) * PROGRESSION_POLICY.levelUpCostXp + xp,
+        level: value.companion.level,
+        streak_current: value.companion.streak,
+        streak_last_day: null,
+        last_event_at: null,
+      },
+      pet: {
+        mood: value.companion.mood,
+        mood_expires_at: null,
+      },
+      world: {
+        stage: 0,
+        unlocked_object_ids: value.collection?.items.map((item) => item.id) ?? [],
+      },
+    };
+  }
+
+  function countEarnedWeeklyRhythms(value: PalWidgetSnapshot): number {
+    return value.roadmap.weeks.reduce(
+      (total, week) =>
+        total +
+        week.achievements.filter(
+          (achievement) =>
+            achievement.title === "Weekly Rhythm" &&
+            achievement.status === "earned",
+        ).length,
+      0,
+    );
+  }
+
+  function syncProgression(): void {
+    const mood = ["neutral", "happy", "excited", "sleeping"].includes(
+      engineState.pet.mood,
+    )
+      ? (engineState.pet.mood as PalWidgetSnapshot["companion"]["mood"])
+      : "neutral";
+    snapshot.companion.level = engineState.economy.level;
+    snapshot.companion.streak = engineState.economy.streak_current;
+    snapshot.companion.xp = engineState.economy.xp;
+    snapshot.companion.xpToNextLevel = Math.max(
+      0,
+      PROGRESSION_POLICY.levelUpCostXp - engineState.economy.xp,
+    );
+    snapshot.companion.mood = mood;
+    snapshot.companion.moodLabel = mood[0].toUpperCase() + mood.slice(1);
+    snapshot.companion.message =
+      mood === "excited"
+        ? "Pip is excited!"
+        : mood === "happy"
+          ? "Pip is happy about your progress."
+          : "Complete positive learning actions to encourage Pip.";
+    snapshot.collection = {
+      items: collectionItemsForUnlocks(engineState.world.unlocked_object_ids),
+    };
+  }
+
+  function applyProgression(event: IncomingEvent): void {
+    engineState = processEvent(event, engineState, defaultRulePack).state;
+    syncProgression();
+  }
+
+  function itemOccurredAt(): string {
+    return new Date(Date.UTC(2026, 3, 13, 12, generatedItemIdentity))
+      .toISOString();
+  }
+
+  function rewardWeeklyRhythmIfNewlyEarned(
+    wasEarned: boolean,
+    rhythm: PalAchievement,
+    occurredAt: string,
+  ): void {
+    if (wasEarned || rhythm.status !== "earned") return;
+    earnedWeeklyRhythms += 1;
+    applyProgression({
+      event_type: WEEKLY_RHYTHM_EARNED,
+      occurred_at: occurredAt,
+      metadata: { weekly_rhythm_count: earnedWeeklyRhythms },
+    });
+    syncMissingCollection(occurredAt);
+  }
+
+  function syncMissingCollection(occurredAt: string): void {
+    const missingMilestones = PROGRESSION_POLICY.collectionMilestones.filter(
+      (milestone) =>
+        earnedWeeklyRhythms >= milestone.weeklyRhythms &&
+        !engineState.world.unlocked_object_ids.includes(milestone.assetRefId),
+    );
+    for (const milestone of missingMilestones) {
+      applyProgression({
+        event_type: COLLECTION_SYNC,
+        occurred_at: occurredAt,
+        metadata: { weekly_rhythm_count: milestone.weeklyRhythms },
+      });
+    }
+  }
 
   function currentWeek(): PalRoadmapWeek {
     const week = snapshot.roadmap.weeks.find(
@@ -208,11 +330,7 @@ export function createFixturePalClient(
     }
   }
 
-  function setHappyCompanion(): void {
-    snapshot.companion.mood = "happy";
-    snapshot.companion.moodLabel = "Happy";
-    snapshot.companion.message = "Pip is happy about your progress.";
-  }
+  syncMissingCollection("2026-04-13T12:00:00.000Z");
 
   return {
     async getSnapshot() {
@@ -229,6 +347,9 @@ export function createFixturePalClient(
         viewedItemTokens.clear();
         generatedDayIdentity = 0;
         generatedItemIdentity = 0;
+        earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+        engineState = progressionStateForSnapshot(snapshot);
+        syncMissingCollection("2026-04-13T12:00:00.000Z");
         return "Fixture learner reset";
       }
       if (action === "duplicate-replayed") {
@@ -260,6 +381,7 @@ export function createFixturePalClient(
       }
       if (action === "short-week-configured") {
         const rhythm = ensureCurrentRhythm(2);
+        const wasEarned = rhythm.status === "earned";
         if (rhythm.progress) {
           rhythm.progress.target = 2;
           rhythm.progress.current = Math.min(rhythm.progress.current, 2);
@@ -267,16 +389,25 @@ export function createFixturePalClient(
           rhythm.status = rhythm.progress.current >= 2 ? "earned" : "in-progress";
           rhythm.statusLabel = rhythm.status === "earned" ? "Earned" : rhythm.progress.label;
         }
+        rewardWeeklyRhythmIfNewlyEarned(
+          wasEarned,
+          rhythm,
+          itemOccurredAt(),
+        );
         return "Revised Weekly Rhythm to 3 eligible days";
       }
       if (action === "daily-log-completed") {
         const activityDay =
-          context?.activityDay ?? `fixture-day-${++generatedDayIdentity}`;
+          context?.activityDay ??
+          new Date(Date.UTC(2026, 3, 12 + ++generatedDayIdentity))
+            .toISOString()
+            .slice(0, 10);
         if (completedActivityDays.has(activityDay)) {
           return "daily_log.completed: semantic duplicate — no progress changed";
         }
         completedActivityDays.add(activityDay);
         const rhythm = currentRhythm();
+        const wasEarned = rhythm.status === "earned";
         if (rhythm.progress) {
           rhythm.progress.current = Math.min(
             rhythm.progress.target,
@@ -287,14 +418,15 @@ export function createFixturePalClient(
           rhythm.status =
             rhythm.progress.current >= rhythm.progress.target ? "earned" : "in-progress";
           rhythm.statusLabel =
-            rhythm.status === "earned" ? "Earned" : rhythm.progress.label;
+              rhythm.status === "earned" ? "Earned" : rhythm.progress.label;
         }
-        snapshot.companion.streak += 1;
-        snapshot.companion.xp = (snapshot.companion.xp ?? 0) + 10;
-        snapshot.companion.xpToNextLevel = Math.max(
-          0,
-          500 - (snapshot.companion.xp ?? 0),
-        );
+        const occurredAt = `${activityDay}T12:00:00.000Z`;
+        applyProgression({
+          event_type: "daily_log.completed",
+          occurred_at: occurredAt,
+          metadata: { activity_day: activityDay },
+        });
+        rewardWeeklyRhythmIfNewlyEarned(wasEarned, rhythm, occurredAt);
         return "daily_log.completed applied to fixture state";
       }
       if (action === "classroom-joined") {
@@ -351,12 +483,11 @@ export function createFixturePalClient(
           rewardLabel: "Fish snack",
         });
         queueFishReward(itemToken);
-        setHappyCompanion();
-        snapshot.companion.xp = (snapshot.companion.xp ?? 0) + 200;
-        snapshot.companion.xpToNextLevel = Math.max(
-          0,
-          500 - (snapshot.companion.xp ?? 0),
-        );
+        applyProgression({
+          event_type: "learning_item.completed",
+          occurred_at: itemOccurredAt(),
+          metadata: { timing: "on_time" },
+        });
         return "learning_item.completed (on_time) applied to fixture state";
       }
       if (action === "late-finish") {
@@ -377,12 +508,11 @@ export function createFixturePalClient(
             assetUrl: "/assets/badges/badge-on-time-finish.png",
           },
         });
-        setHappyCompanion();
-        snapshot.companion.xp = (snapshot.companion.xp ?? 0) + 150;
-        snapshot.companion.xpToNextLevel = Math.max(
-          0,
-          500 - (snapshot.companion.xp ?? 0),
-        );
+        applyProgression({
+          event_type: "learning_item.completed",
+          occurred_at: itemOccurredAt(),
+          metadata: { timing: "late" },
+        });
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {
@@ -413,6 +543,9 @@ export function createFixturePalClient(
       completedActivityDays.clear();
       completedItemTokens.clear();
       viewedItemTokens.clear();
+      earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+      engineState = progressionStateForSnapshot(snapshot);
+      syncMissingCollection(itemOccurredAt());
     },
   };
 }

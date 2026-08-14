@@ -74,10 +74,24 @@ export interface PalRewardNotice {
   assetUrl?: string;
 }
 
+export interface PalCollectionItem {
+  id: string;
+  label: string;
+  description: string;
+  icon?: string;
+  assetUrl?: string;
+}
+
+export interface PalCollectionState {
+  items: PalCollectionItem[];
+}
+
 export interface PalWidgetSnapshot {
   schemaVersion: 1;
   roadmap: PalRoadmapSnapshot;
   companion: PalCompanionState;
+  /** Durable world keepsakes. Optional for backward-compatible v1 snapshots. */
+  collection?: PalCollectionState;
   rewards: PalRewardNotice[];
 }
 

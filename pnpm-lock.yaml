@@ -160,6 +160,9 @@ importers:
 
   packages/widget:
     devDependencies:
+      '@pal/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.0

@@ -1,5 +1,6 @@
 export { PalAchievements } from "./achievements";
 export { PalCompanion } from "./companion";
+export { collectionItemsForUnlocks, PalCollection } from "./collection";
 export {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
@@ -26,6 +27,8 @@ export type {
   PalCompanionMood,
   PalCompanionProps,
   PalCompanionState,
+  PalCollectionItem,
+  PalCollectionState,
   PalDensity,
   PalFixtureAction,
   PalFixtureActionContext,

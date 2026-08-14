@@ -111,7 +111,35 @@ test("fixture deduplicates one activity day but keeps genuine items distinct", (
     2,
   );
   assert.equal(snapshot.rewards.length, 2);
-  assert.equal(snapshot.companion.xp, 410);
+  assert.equal(snapshot.companion.xp, 210);
   assert.equal(snapshot.companion.mood, "happy");
   assert.equal(snapshot.companion.message, "Pip is happy about your progress.");
+});
+
+test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  for (const activityDay of [
+    "2026-04-13",
+    "2026-04-14",
+    "2026-04-15",
+    "2026-04-16",
+  ]) {
+    client.dispatch("daily-log-completed", { activityDay });
+  }
+
+  const earned = client.peek();
+  assert.equal(earned.companion.xp, 115); // four logs + Weekly Rhythm
+  assert.equal(earned.companion.mood, "excited");
+  assert.deepEqual(
+    earned.collection?.items.map((item) => item.id),
+    ["world-bird-v1"],
+  );
+
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-17" });
+  client.dispatch("advance-week");
+  assert.equal(client.peek().companion.xp, 125);
+  assert.deepEqual(
+    client.peek().collection?.items.map((item) => item.id),
+    ["world-bird-v1"],
+  );
 });

@@ -20,7 +20,9 @@ These exist as tables today:
   - `xp` — the **balance** toward the next level. A level-up spends it (a negative `XP_GRANT`), so it goes down as well as up. This is what a progress bar renders.
   - `xp_lifetime` — every point ever earned, never spent. This is what lifetime achievements key on. Without it, levelling would erase the only record that the XP existed.
 
-  Streak continuity is anchored on `streak_last_day` (the UTC calendar day the streak last advanced), not on `last_event_at` — otherwise any event, like an assignment, would stand in for a daily check-in.
+  School-day rhythm continuity is anchored on `streak_last_day` (the validated
+  source `activity_day`), not on `occurred_at` or `last_event_at` — otherwise a
+  timezone offset or unrelated assignment could stand in for a daily log.
 
 - **PetState** — mood, mood expiry, and animation per learner.
 - **WorldState** — stage and unlocked objects per learner.
@@ -36,7 +38,10 @@ one row per learner is structurally guaranteed rather than merely intended.
 Planned, not yet built:
 
 - **LearnerGroup** — a pseudonymous classroom or cohort.
-- **UnlockLedger** — a generalized append-only record for world objects beyond the current achievement and reward tables.
+- **UnlockLedger** — a future generalized append-only record for world objects and
+  consumables. Current Weekly Rhythm keepsakes persist idempotently in
+  `world_state.unlocked_object_ids`; the on-time fish remains a dismissible reward
+  notice rather than durable inventory.
 - **AuditLog** — record of every rule engine evaluation and its mutations.
 
 ## Asset registry entities

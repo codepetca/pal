@@ -351,7 +351,7 @@ function PalCompanion(
     }
     onPointerDown?.(event);
   };
-  const label = `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} day rhythm.`;
+  const label = `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} school-day rhythm.`;
 
   return (
     <aside

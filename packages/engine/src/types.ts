@@ -15,8 +15,8 @@ export type LearnerState = {
     xp_lifetime: number;
     level: number;
     streak_current: number;
-    // UTC calendar day (YYYY-MM-DD) the streak last advanced. Anchors day-over-day
-    // continuity so a non-streak event (e.g. an assignment) can't stand in for a check-in.
+    // Source activity day (YYYY-MM-DD) the rhythm last advanced. Anchors school-day
+    // continuity so timezone offsets and weekends do not erase legitimate progress.
     streak_last_day: string | null;
     last_event_at: string | null;
   };
