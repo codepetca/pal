@@ -132,7 +132,7 @@ test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () =>
   assert.equal(earned.companion.mood, "excited");
   assert.deepEqual(
     earned.collection?.items.map((item) => item.id),
-    ["world-bird-v1"],
+    ["world-study-bird-v1"],
   );
 
   client.dispatch("daily-log-completed", { activityDay: "2026-04-17" });
@@ -140,6 +140,6 @@ test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () =>
   assert.equal(client.peek().companion.xp, 125);
   assert.deepEqual(
     client.peek().collection?.items.map((item) => item.id),
-    ["world-bird-v1"],
+    ["world-study-bird-v1"],
   );
 });

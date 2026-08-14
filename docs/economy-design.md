@@ -45,6 +45,8 @@ full pilot term rather than optimizing for XP issuance itself.
 The companion counter is a school-day rhythm:
 
 - it advances once for a validated source `activity_day`, not the UTC delivery day;
+- ingest bounds that day to UTC−12 through UTC+14 at the event instant and, once
+  configured, requires it to match the term timezone;
 - Friday continues into Monday, so a normal weekend does not reset it;
 - same-day and backdated activity is inert;
 - a missed school day resets the counter to one on the next valid activity day.
@@ -76,6 +78,11 @@ therefore catch up their collection on their next event without receiving retroa
 XP, and an already-stored unlock is absent from both state changes and the returned
 mutation stream. Delivery retries and configuration revisions cannot repay the weekly
 reward or duplicate a keepsake.
+
+The first milestone uses `world-study-bird-v1`, not the legacy
+`world-bird-v1` ID that the original policy awarded for a seven-day streak.
+Historical world IDs remain stored for backward compatibility, but the collection
+catalog does not misrepresent that older reward as Weekly Rhythm evidence.
 
 The on-time fish is intentionally different: it remains a one-time celebration
 notice, not a durable collection item or consumable inventory. A generalized

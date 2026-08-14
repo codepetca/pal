@@ -83,7 +83,8 @@ function factIdentity(
 export type WeeklyConfigurationError =
   | "closed_period_revision"
   | "contradictory_period_configuration"
-  | "conflicting_period_calendar";
+  | "conflicting_period_calendar"
+  | "inconsistent_activity_day";
 
 type TermCalendarMetadata = {
   term_token: string;
@@ -298,6 +299,46 @@ export async function weeklyConfigurationRejection(
   return null;
 }
 
+function calendarDayInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+export async function dailyLogActivityDayRejection(
+  db: Db,
+  learnerId: string,
+  event: IncomingEvent,
+): Promise<WeeklyConfigurationError | null> {
+  if (event.event_type !== "daily_log.completed") return null;
+  const periodKey = metadataString(event, "period_key");
+  const [calendar] = await db
+    .select({ metadata: learnerFacts.metadata })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, "daily_log_week.configured"),
+        eq(learnerFacts.periodKey, periodKey),
+        sql`${learnerFacts.metadata} ? 'term_timezone'`,
+      ),
+    )
+    .limit(1);
+  const timeZone = (calendar?.metadata as Record<string, unknown> | undefined)
+    ?.term_timezone;
+  if (typeof timeZone !== "string") return null;
+  return metadataString(event, "activity_day") ===
+    calendarDayInTimeZone(new Date(event.occurred_at), timeZone)
+    ? null
+    : "inconsistent_activity_day";
+}
+
 function authoritativePeriodAnchor(event: IncomingEvent): Date {
   if (event.event_type === "daily_log.completed") {
     return new Date(`${metadataString(event, "activity_day")}T00:00:00.000Z`);
@@ -507,13 +548,17 @@ async function recomputeWeeklyRhythm(
   const displayTarget = reconciliationRequired
     ? Math.max(targetDays, current + 1)
     : targetDays;
+  // The fact ledger preserves every distinct completion, including a fifth log
+  // in a 5-eligible-day week. Snapshot progress represents target completion,
+  // however, and the public schema correctly rejects current > target.
+  const displayCurrent = earned ? targetDays : current;
 
   if (existing) {
     await db
       .update(achievementInstances)
       .set({
         status,
-        progressCurrent: current,
+        progressCurrent: displayCurrent,
         progressTarget: displayTarget,
         earnedAt:
           existing.earnedAt ?? (status === "earned" ? occurredAt : null),
@@ -530,7 +575,7 @@ async function recomputeWeeklyRhythm(
     scopeKey: periodKey,
     periodKey,
     status,
-    progressCurrent: current,
+    progressCurrent: displayCurrent,
     progressTarget: displayTarget,
     earnedAt: status === "earned" ? occurredAt : null,
     sourceFactId: factId,

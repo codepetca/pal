@@ -7,7 +7,7 @@ export const PROGRESSION_POLICY = {
   collectionMilestones: [
     {
       weeklyRhythms: 1,
-      assetRefId: "world-bird-v1",
+      assetRefId: "world-study-bird-v1",
       label: "Study Bird",
       description: "Earned by completing your first Weekly Rhythm.",
       icon: "🐦",
