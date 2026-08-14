@@ -741,6 +741,83 @@ test(
 );
 
 test(
+  "excludes a backfilled prior-term calendar period from the current term",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `cross-term-backfill-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `spring-backfill-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "spring-2026",
+            term_start_day: "2026-01-05",
+            term_end_day: "2026-04-24",
+            week_index: 16,
+          },
+          // The backfill is delivered during the later term. Its anchor must
+          // not make this calendar-bearing period look like a legacy fall week.
+          "2026-09-07T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `fall-week-2-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            week_index: 2,
+          },
+          "2026-09-07T13:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.equal(snapshot.roadmap.currentWeek, 2);
+      assert.equal(
+        snapshot.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.title === "Weekly Rhythm").length,
+        1,
+      );
+      assert.ok(
+        snapshot.roadmap.weeks[1].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "selects a new authoritative term after sixteen historical periods",
   { skip: !process.env.DATABASE_URL },
   async () => {

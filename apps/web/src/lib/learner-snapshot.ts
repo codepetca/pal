@@ -1,4 +1,14 @@
-import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -241,6 +251,13 @@ export async function loadLearnerSnapshot(
         }
       }
       const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
+      const allCalendarPeriodKeys = [
+        ...new Set(
+          calendarFacts.flatMap((fact) =>
+            fact.periodKey ? [fact.periodKey] : [],
+          ),
+        ),
+      ];
       const authoritativePeriods = authoritativePeriodKeys.length
         ? await tx
             .select()
@@ -262,6 +279,14 @@ export async function loadLearnerSnapshot(
               ? [
                   gte(achievementPeriods.anchorAt, termStart),
                   lt(achievementPeriods.anchorAt, termEndExclusive),
+                ]
+              : []),
+            ...(allCalendarPeriodKeys.length > 0
+              ? [
+                  notInArray(
+                    achievementPeriods.periodKey,
+                    allCalendarPeriodKeys,
+                  ),
                 ]
               : []),
           ),
