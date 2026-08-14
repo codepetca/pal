@@ -266,7 +266,7 @@ Do not introduce one-off `learning_item.available`, `learning_item.deadline_pass
 | The same delivery is retried | Pika reuses the idempotency key; Pal processes it once. |
 | The learner completes logs in several classrooms on one date | The adapter emits at most one `daily_log.completed`; Pal also counts the activity date once. |
 | A week is shortened or the learner joins/withdraws midweek | Pika sends a higher weekly configuration version; Pal recomputes the unawarded target. Already-emitted completion dates remain qualified, and `eligible_days` cannot fall below their count. |
-| An event arrives late or out of order | Pal counts it in the named period and orders periods by their earliest authoritative `activity_day`/`occurred_at`, never by delivery or row-creation order. |
+| An event arrives late or out of order | Calendar-bearing periods use their authoritative `week_index`, even when configuration is sent before the term or backfilled after it. Legacy periods use their earliest authoritative `activity_day`/`occurred_at`, never delivery or row-creation order. |
 | An assignment deadline changes | Pika uses its current authoritative deadline when it classifies a later view or completion; Pal stores no deadline to synchronize. |
 | An assignment is deleted after a qualifying behavior | The historical behavior and any earned award remain. If no behavior occurred, Pal knew nothing about the assignment. |
 | A class is archived | Pika stops new behavior facts for that class and revises or closes affected weekly context; Pal retains earned history. |

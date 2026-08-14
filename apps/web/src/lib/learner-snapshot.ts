@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -225,7 +225,34 @@ export async function loadLearnerSnapshot(
         typeof termEndDay === "string"
           ? new Date(Date.parse(`${termEndDay}T00:00:00.000Z`) + 86_400_000)
           : null;
-      const periods = await tx
+      const authoritativeWeekNumbers = new Map<string, number>();
+      for (const fact of calendarFacts) {
+        const metadata = fact.metadata as Record<string, unknown>;
+        const weekIndex = metadata.week_index;
+        if (
+          fact.periodKey &&
+          typeof currentTermToken === "string" &&
+          metadata.term_token === currentTermToken &&
+          Number.isInteger(weekIndex) &&
+          (weekIndex as number) >= 1 &&
+          (weekIndex as number) <= SEMESTER_WEEKS
+        ) {
+          authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
+        }
+      }
+      const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
+      const authoritativePeriods = authoritativePeriodKeys.length
+        ? await tx
+            .select()
+            .from(achievementPeriods)
+            .where(
+              and(
+                eq(achievementPeriods.learnerId, learnerId),
+                inArray(achievementPeriods.periodKey, authoritativePeriodKeys),
+              ),
+            )
+        : [];
+      const legacyPeriods = await tx
         .select()
         .from(achievementPeriods)
         .where(
@@ -244,26 +271,19 @@ export async function loadLearnerSnapshot(
           asc(achievementPeriods.createdAt),
         )
         .limit(SEMESTER_WEEKS);
+      const periods = [
+        ...new Map(
+          [...authoritativePeriods, ...legacyPeriods].map((period) => [
+            period.periodKey,
+            period,
+          ]),
+        ).values(),
+      ];
       const instances = await tx
         .select()
         .from(achievementInstances)
         .where(eq(achievementInstances.learnerId, learnerId))
         .orderBy(asc(achievementInstances.createdAt));
-      const authoritativeWeekNumbers = new Map<string, number>();
-      for (const fact of calendarFacts) {
-        const metadata = fact.metadata as Record<string, unknown>;
-        const weekIndex = metadata.week_index;
-        if (
-          fact.periodKey &&
-          typeof currentTermToken === "string" &&
-          metadata.term_token === currentTermToken &&
-          Number.isInteger(weekIndex) &&
-          (weekIndex as number) >= 1 &&
-          (weekIndex as number) <= SEMESTER_WEEKS
-        ) {
-          authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
-        }
-      }
       const periodNumbers = new Map<string, number>();
       for (const period of periods) {
         const authoritativeWeek = authoritativeWeekNumbers.get(period.periodKey);

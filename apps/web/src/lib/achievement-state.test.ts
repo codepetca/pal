@@ -675,6 +675,72 @@ test(
 );
 
 test(
+  "keeps authoritative periods placed when configuration anchors fall outside the term",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const cases = [
+      {
+        label: "pre-start",
+        occurredAt: "2026-08-30T23:00:00.000Z",
+        weekIndex: 1,
+      },
+      {
+        label: "post-end-backfill",
+        occurredAt: "2026-12-20T12:00:00.000Z",
+        weekIndex: 16,
+      },
+    ];
+
+    for (const scenario of cases) {
+      const externalLearnerId = `${scenario.label}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${scenario.label}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: "fall-2026",
+              term_start_day: "2026-08-31",
+              term_end_day: "2026-12-18",
+              week_index: scenario.weekIndex,
+            },
+            scenario.occurredAt,
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+        assert.equal(snapshot.roadmap.currentWeek, scenario.weekIndex);
+        assert.ok(
+          snapshot.roadmap.weeks[scenario.weekIndex - 1].achievements.some(
+            (achievement) => achievement.title === "Weekly Rhythm",
+          ),
+          scenario.label,
+        );
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
   "selects a new authoritative term after sixteen historical periods",
   { skip: !process.env.DATABASE_URL },
   async () => {
