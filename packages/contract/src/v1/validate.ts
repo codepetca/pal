@@ -74,6 +74,16 @@ function isCalendarDay(value: unknown): value is string {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function isIanaTimeZone(value: unknown): value is string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 type MetadataCheck = (metadata: Record<string, unknown>) => string | null;
 
 type MetadataRule = {
@@ -99,7 +109,13 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
 
   "daily_log_week.configured": {
     requiredKeys: ["period_key", "config_version", "period_status", "eligible_days"],
-    optionalKeys: ["term_token", "term_start_day", "term_end_day", "week_index"],
+    optionalKeys: [
+      "term_token",
+      "term_start_day",
+      "term_end_day",
+      "term_timezone",
+      "week_index",
+    ],
     check: (m) => {
       if (!isToken(m.period_key, 64)) return "period_key must be 1-64 URL-safe characters";
       if (!isInteger(m.config_version) || m.config_version < 1)
@@ -110,10 +126,16 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
       if (!isInteger(m.eligible_days) || m.eligible_days < 0 || m.eligible_days > 5)
         return "eligible_days must be an integer 0-5";
 
-      const calendarKeys = ["term_token", "term_start_day", "term_end_day", "week_index"];
+      const calendarKeys = [
+        "term_token",
+        "term_start_day",
+        "term_end_day",
+        "term_timezone",
+        "week_index",
+      ];
       const presentCalendarKeys = calendarKeys.filter((key) => m[key] !== undefined);
       if (presentCalendarKeys.length !== 0 && presentCalendarKeys.length !== calendarKeys.length) {
-        return "term_token, term_start_day, term_end_day, and week_index must be provided together";
+        return "term_token, term_start_day, term_end_day, term_timezone, and week_index must be provided together";
       }
       if (presentCalendarKeys.length === calendarKeys.length) {
         if (!isToken(m.term_token, 128))
@@ -124,6 +146,8 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
           return "term_end_day must be a real YYYY-MM-DD date";
         if ((m.term_start_day as string) > (m.term_end_day as string))
           return "term_start_day must be on or before term_end_day";
+        if (!isIanaTimeZone(m.term_timezone))
+          return "term_timezone must be a valid IANA time zone";
         if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > 16)
           return "week_index must be an integer 1-16";
       }

@@ -12,6 +12,7 @@
     "term_token": "term-2026-fall",
     "term_start_day": "2026-08-31",
     "term_end_day": "2026-12-18",
+    "term_timezone": "America/Toronto",
     "week_index": 3
   }
 }

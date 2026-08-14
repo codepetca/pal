@@ -69,7 +69,7 @@ type CalendarFact = {
 
 function selectCurrentTermFact(
   calendarFacts: CalendarFact[],
-  asOfDay: string,
+  asOf: Date,
 ): CalendarFact | undefined {
   const terms = new Map<string, CalendarFact>();
   for (const fact of calendarFacts) {
@@ -77,7 +77,8 @@ function selectCurrentTermFact(
     if (
       typeof metadata.term_token === "string" &&
       typeof metadata.term_start_day === "string" &&
-      typeof metadata.term_end_day === "string"
+      typeof metadata.term_end_day === "string" &&
+      typeof metadata.term_timezone === "string"
     ) {
       terms.set(metadata.term_token, fact);
     }
@@ -88,24 +89,75 @@ function selectCurrentTermFact(
     return {
       start: String(metadata.term_start_day),
       end: String(metadata.term_end_day),
+      asOfDay: calendarDayInTimeZone(asOf, String(metadata.term_timezone)),
     };
   };
   const active = candidates
     .filter((fact) => {
       const { start, end } = dates(fact);
+      const { asOfDay } = dates(fact);
       return start <= asOfDay && asOfDay <= end;
     })
     .toSorted((left, right) => dates(right).start.localeCompare(dates(left).start));
   if (active[0]) return active[0];
 
   const completed = candidates
-    .filter((fact) => dates(fact).end < asOfDay)
+    .filter((fact) => {
+      const { end, asOfDay } = dates(fact);
+      return end < asOfDay;
+    })
     .toSorted((left, right) => dates(right).end.localeCompare(dates(left).end));
   if (completed[0]) return completed[0];
 
   return candidates
-    .filter((fact) => dates(fact).start > asOfDay)
+    .filter((fact) => {
+      const { start, asOfDay } = dates(fact);
+      return start > asOfDay;
+    })
     .toSorted((left, right) => dates(left).start.localeCompare(dates(right).start))[0];
+}
+
+function calendarDayInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function startOfCalendarDayInTimeZone(day: string, timeZone: string): Date {
+  const utcMidnight = Date.parse(`${day}T00:00:00.000Z`);
+  let candidate = utcMidnight;
+  // Offset at UTC midnight can differ from offset at the target local midnight
+  // on a DST transition. Re-evaluating converges on the intended instant.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const zoneName = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "longOffset",
+    })
+      .formatToParts(new Date(candidate))
+      .find((part) => part.type === "timeZoneName")?.value;
+    const match = zoneName?.match(/^GMT(?:([+-])(\d{2}):(\d{2}))?$/);
+    if (!match?.[1]) {
+      candidate = utcMidnight;
+      continue;
+    }
+    const direction = match[1] === "+" ? 1 : -1;
+    const offsetMinutes =
+      direction * (Number(match[2]) * 60 + Number(match[3]));
+    candidate = utcMidnight - offsetMinutes * 60_000;
+  }
+  return new Date(candidate);
+}
+
+function nextCalendarDay(day: string): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 function achievementFromRow(
@@ -262,7 +314,7 @@ export async function loadLearnerSnapshot(
 
       const latestCalendarFact = selectCurrentTermFact(
         calendarFacts,
-        (options.asOf ?? new Date()).toISOString().slice(0, 10),
+        options.asOf ?? new Date(),
       );
       const currentTermMetadata = latestCalendarFact?.metadata as
         | Record<string, unknown>
@@ -270,13 +322,17 @@ export async function loadLearnerSnapshot(
       const currentTermToken = currentTermMetadata?.term_token;
       const termStartDay = currentTermMetadata?.term_start_day;
       const termEndDay = currentTermMetadata?.term_end_day;
+      const termTimezone = currentTermMetadata?.term_timezone;
       const termStart =
-        typeof termStartDay === "string"
-          ? new Date(`${termStartDay}T00:00:00.000Z`)
+        typeof termStartDay === "string" && typeof termTimezone === "string"
+          ? startOfCalendarDayInTimeZone(termStartDay, termTimezone)
           : null;
       const termEndExclusive =
-        typeof termEndDay === "string"
-          ? new Date(Date.parse(`${termEndDay}T00:00:00.000Z`) + 86_400_000)
+        typeof termEndDay === "string" && typeof termTimezone === "string"
+          ? startOfCalendarDayInTimeZone(
+              nextCalendarDay(termEndDay),
+              termTimezone,
+            )
           : null;
       const authoritativeWeekNumbers = new Map<string, number>();
       for (const fact of calendarFacts) {

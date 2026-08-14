@@ -600,6 +600,7 @@ test(
             term_token: "fall-2026",
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",
@@ -644,6 +645,7 @@ test(
       term_token: "fall-2026",
       term_start_day: "2026-08-31",
       term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
       week_index: 7,
     };
     try {
@@ -718,6 +720,7 @@ test(
               term_token: "fall-2026",
               term_start_day: "2026-08-31",
               term_end_day: "2026-12-18",
+              term_timezone: "America/Toronto",
               week_index: scenario.weekIndex,
             },
             scenario.occurredAt,
@@ -775,6 +778,7 @@ test(
             term_token: "spring-2026",
             term_start_day: "2026-01-05",
             term_end_day: "2026-04-24",
+            term_timezone: "America/Toronto",
             week_index: 16,
           },
           // The backfill is delivered during the later term. Its anchor must
@@ -796,6 +800,7 @@ test(
             term_token: "fall-2026",
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
             week_index: 2,
           },
           "2026-09-07T13:00:00.000Z",
@@ -857,6 +862,7 @@ test(
             term_token: "fall-2026",
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
             week_index: 10,
           },
           "2026-11-02T12:00:00.000Z",
@@ -876,6 +882,7 @@ test(
             term_token: "spring-2027",
             term_start_day: "2027-01-04",
             term_end_day: "2027-04-23",
+            term_timezone: "America/Toronto",
             week_index: 1,
           },
           "2026-11-03T12:00:00.000Z",
@@ -908,6 +915,119 @@ test(
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "changes terms at the authoritative Toronto start and end midnights",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const boundaries = [
+      {
+        label: "summer-to-fall",
+        previous: {
+          token: "summer-2026",
+          start: "2026-05-11",
+          end: "2026-08-30",
+        },
+        next: {
+          token: "fall-2026",
+          start: "2026-08-31",
+          end: "2026-12-18",
+        },
+        before: "2026-08-31T03:59:59.000Z",
+        at: "2026-08-31T04:00:00.000Z",
+      },
+      {
+        label: "fall-to-winter",
+        previous: {
+          token: "fall-2026",
+          start: "2026-08-31",
+          end: "2026-12-18",
+        },
+        next: {
+          token: "winter-2026",
+          start: "2026-12-19",
+          end: "2027-04-09",
+        },
+        before: "2026-12-19T04:59:59.000Z",
+        at: "2026-12-19T05:00:00.000Z",
+      },
+    ];
+
+    for (const boundary of boundaries) {
+      const externalLearnerId = `${boundary.label}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${boundary.previous.token}-week-16-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: boundary.previous.token,
+              term_start_day: boundary.previous.start,
+              term_end_day: boundary.previous.end,
+              term_timezone: "America/Toronto",
+              week_index: 16,
+            },
+            boundary.before,
+          ),
+          key(),
+        );
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${boundary.next.token}-week-1-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: boundary.next.token,
+              term_start_day: boundary.next.start,
+              term_end_day: boundary.next.end,
+              term_timezone: "America/Toronto",
+              week_index: 1,
+            },
+            boundary.before,
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const before = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(boundary.before) },
+        );
+        const at = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(boundary.at) },
+        );
+        assert.equal(before.roadmap.currentWeek, 16, boundary.label);
+        assert.equal(at.roadmap.currentWeek, 1, boundary.label);
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
     }
   },
 );
@@ -954,6 +1074,7 @@ test(
             term_token: "fall-2026",
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",
@@ -1032,6 +1153,7 @@ test(
             term_token: "fall-2026",
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",

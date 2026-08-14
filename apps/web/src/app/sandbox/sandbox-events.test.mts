@@ -4,6 +4,7 @@ import { v1 } from "@pal/contract";
 import {
   FICTIONAL_SEMESTER_END_DAY,
   FICTIONAL_SEMESTER_START_ISO,
+  FICTIONAL_TERM_TIME_ZONE,
   addDays,
   eventForAction,
   eventsForAction,
@@ -60,6 +61,7 @@ test("builds all six contract-valid pilot facts", () => {
       term_token: "sandbox-term-2026",
       term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
       term_end_day: FICTIONAL_SEMESTER_END_DAY,
+      term_timezone: FICTIONAL_TERM_TIME_ZONE,
       week_index: 1,
     },
   );

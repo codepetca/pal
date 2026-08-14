@@ -37,6 +37,7 @@ type LegacyTermCalendar = {
   term_token?: never;
   term_start_day?: never;
   term_end_day?: never;
+  term_timezone?: never;
   week_index?: never;
 };
 
@@ -44,6 +45,7 @@ type AuthoritativeTermCalendar = {
   term_token: OpaqueToken;
   term_start_day: string;
   term_end_day: string;
+  term_timezone: string;
   week_index: number;
 };
 

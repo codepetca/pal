@@ -89,6 +89,7 @@ const TERM_CALENDAR_KEYS = [
   "term_token",
   "term_start_day",
   "term_end_day",
+  "term_timezone",
   "week_index",
 ] as const;
 
@@ -101,6 +102,7 @@ function termCalendarMetadata(
     term_token: metadataString(event, "term_token"),
     term_start_day: metadataString(event, "term_start_day"),
     term_end_day: metadataString(event, "term_end_day"),
+    term_timezone: metadataString(event, "term_timezone"),
     week_index: metadataInteger(event, "week_index"),
   };
 }
@@ -208,7 +210,9 @@ export async function weeklyConfigurationRejection(
       ((sameTermCalendar.metadata as Record<string, unknown>).term_start_day !==
         calendar.term_start_day ||
         (sameTermCalendar.metadata as Record<string, unknown>).term_end_day !==
-          calendar.term_end_day)
+          calendar.term_end_day ||
+        (sameTermCalendar.metadata as Record<string, unknown>).term_timezone !==
+          calendar.term_timezone)
     ) {
       return "conflicting_period_calendar";
     }

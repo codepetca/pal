@@ -98,7 +98,7 @@ integration's allow-list, not by the schema version.
 
 An optional field group may still be all-or-none. The version 1 term calendar group is
 optional for backward compatibility, but once a producer sends any of `term_token`,
-`term_start_day`, `term_end_day`, or `week_index`, it must send all four so consumers
+`term_start_day`, `term_end_day`, `term_timezone`, or `week_index`, it must send all five so consumers
 never persist a partial academic-calendar assertion.
 
 The rollout order never changes: **Pal ships support for a version first, and a producer

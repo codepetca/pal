@@ -37,6 +37,10 @@
       "error": "invalid_metadata",
       "why": "Only 'assignment' is defined in version 1. Widening the enum is a contract change, not a payload choice."
     },
+    "invalid-term-timezone.json": {
+      "error": "invalid_metadata",
+      "why": "Term boundaries require a valid IANA timezone so Pal changes terms at the classroom's authoritative local midnight."
+    },
     "legacy-event-type.json": {
       "error": "unknown_event_type",
       "why": "The prototype's assignment.completed is not part of the v1 vocabulary; it reaches ingest on the legacy path instead."
