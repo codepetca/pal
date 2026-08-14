@@ -712,6 +712,129 @@ test(
 );
 
 test(
+  "quarantines a timezone-inconsistent completion received before configuration",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `pending-timezone-day-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `pending-timezone-week-${crypto.randomUUID()}`;
+    const correctedKey = key();
+    try {
+      const pending = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-15" },
+          "2026-09-15T01:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(pending.status, "processed");
+      assert.deepEqual(
+        pending.status === "processed" ? pending.result.mutations : [],
+        [],
+      );
+
+      const configured = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+            term_token: "term-pending-timezone-day",
+            term_start_day: "2026-09-14",
+            term_end_day: "2026-12-31",
+            term_timezone: "America/Toronto",
+            week_index: 1,
+          },
+          "2026-09-15T02:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(configured.status, "processed");
+      assert.deepEqual(
+        configured.status === "processed" ? configured.result.mutations : [],
+        [],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const quarantined = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T03:00:00.000Z") },
+      );
+      assert.equal(quarantined.companion.xp, 0);
+      assert.equal(quarantined.companion.streak, 0);
+      assert.deepEqual(quarantined.collection?.items, []);
+      assert.deepEqual(
+        quarantined.roadmap.weeks[0]?.achievements.find(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        )?.progress,
+        { current: 0, target: 1, label: "0 of 1 eligible days" },
+      );
+
+      // The quarantined source fact remains immutable, while a corrected local
+      // day is a distinct semantic fact and settles the daily and weekly rewards.
+      const corrected = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-14" },
+          "2026-09-15T01:00:00.000Z",
+        ),
+        correctedKey,
+      );
+      assert.equal(corrected.status, "processed");
+      const settled = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T03:00:00.000Z") },
+      );
+      assert.equal(settled.companion.xp, 85);
+      assert.equal(settled.companion.streak, 1);
+      assert.deepEqual(
+        settled.collection?.items.map((item) => item.id),
+        ["world-study-bird-v1"],
+      );
+      assert.equal(
+        (
+          await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            event(
+              "daily_log.completed",
+              { period_key: periodKey, activity_day: "2026-09-14" },
+              "2026-09-15T01:00:00.000Z",
+            ),
+            correctedKey,
+          )
+        ).status,
+        "duplicate",
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "rejects contradictory closure and permits only a valid closed correction",
   { skip: !process.env.DATABASE_URL },
   async () => {
