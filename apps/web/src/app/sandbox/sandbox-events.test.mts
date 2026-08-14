@@ -8,6 +8,7 @@ import {
   eventForAction,
   eventsForAction,
   isTodayOrEarlier,
+  isInsideFictionalSemester,
   periodKeyForDate,
   semesterWeekForDate,
 } from "./sandbox-events";
@@ -123,4 +124,9 @@ test("date controls cannot advance beyond the ingestable UTC day", () => {
     isTodayOrEarlier(new Date("2026-07-31T23:59:59Z"), today),
     true,
   );
+});
+
+test("date controls cannot advance beyond the fictional term", () => {
+  assert.equal(isInsideFictionalSemester(new Date("2026-08-02T23:59:59Z")), true);
+  assert.equal(isInsideFictionalSemester(new Date("2026-08-03T00:00:00Z")), false);
 });

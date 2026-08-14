@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -169,20 +169,6 @@ export async function loadLearnerSnapshot(
         .from(petState)
         .where(eq(petState.learnerId, learnerId))
         .limit(1);
-      const periods = await tx
-        .select()
-        .from(achievementPeriods)
-        .where(eq(achievementPeriods.learnerId, learnerId))
-        .orderBy(
-          asc(achievementPeriods.anchorAt),
-          asc(achievementPeriods.createdAt),
-        )
-        .limit(SEMESTER_WEEKS);
-      const instances = await tx
-        .select()
-        .from(achievementInstances)
-        .where(eq(achievementInstances.learnerId, learnerId))
-        .orderBy(asc(achievementInstances.createdAt));
       const configurations = await tx
         .select()
         .from(weeklyRhythmConfigs)
@@ -198,6 +184,7 @@ export async function loadLearnerSnapshot(
           and(
             eq(learnerFacts.learnerId, learnerId),
             eq(learnerFacts.eventType, "daily_log_week.configured"),
+            sql`${learnerFacts.metadata} ? 'term_token'`,
           ),
         )
         .orderBy(asc(learnerFacts.occurredAt));
@@ -213,10 +200,55 @@ export async function loadLearnerSnapshot(
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
 
-      const latestCalendarFact = calendarFacts.at(-1);
-      const currentTermToken = latestCalendarFact
-        ? (latestCalendarFact.metadata as Record<string, unknown>).term_token
-        : undefined;
+      const latestCalendarFact = calendarFacts.reduce<
+        (typeof calendarFacts)[number] | undefined
+      >((latest, fact) => {
+        const metadata = fact.metadata as Record<string, unknown>;
+        if (typeof metadata.term_token !== "string") return latest;
+        if (!latest) return fact;
+        const latestMetadata = latest.metadata as Record<string, unknown>;
+        return String(metadata.term_start_day) > String(latestMetadata.term_start_day)
+          ? fact
+          : latest;
+      }, undefined);
+      const currentTermMetadata = latestCalendarFact?.metadata as
+        | Record<string, unknown>
+        | undefined;
+      const currentTermToken = currentTermMetadata?.term_token;
+      const termStartDay = currentTermMetadata?.term_start_day;
+      const termEndDay = currentTermMetadata?.term_end_day;
+      const termStart =
+        typeof termStartDay === "string"
+          ? new Date(`${termStartDay}T00:00:00.000Z`)
+          : null;
+      const termEndExclusive =
+        typeof termEndDay === "string"
+          ? new Date(Date.parse(`${termEndDay}T00:00:00.000Z`) + 86_400_000)
+          : null;
+      const periods = await tx
+        .select()
+        .from(achievementPeriods)
+        .where(
+          and(
+            eq(achievementPeriods.learnerId, learnerId),
+            ...(termStart && termEndExclusive
+              ? [
+                  gte(achievementPeriods.anchorAt, termStart),
+                  lt(achievementPeriods.anchorAt, termEndExclusive),
+                ]
+              : []),
+          ),
+        )
+        .orderBy(
+          asc(achievementPeriods.anchorAt),
+          asc(achievementPeriods.createdAt),
+        )
+        .limit(SEMESTER_WEEKS);
+      const instances = await tx
+        .select()
+        .from(achievementInstances)
+        .where(eq(achievementInstances.learnerId, learnerId))
+        .orderBy(asc(achievementInstances.createdAt));
       const authoritativeWeekNumbers = new Map<string, number>();
       for (const fact of calendarFacts) {
         const metadata = fact.metadata as Record<string, unknown>;
@@ -233,23 +265,24 @@ export async function loadLearnerSnapshot(
         }
       }
       const periodNumbers = new Map<string, number>();
-      const claimedWeeks = new Set(authoritativeWeekNumbers.values());
-      let fallbackWeek = 1;
       for (const period of periods) {
         const authoritativeWeek = authoritativeWeekNumbers.get(period.periodKey);
         if (authoritativeWeek) {
           periodNumbers.set(period.periodKey, authoritativeWeek);
           continue;
         }
-        // Once the producer supplies an authoritative term calendar, roadmap
-        // placement is scoped to that term. Legacy and earlier-term periods do
-        // not leak into empty slots in the current 16-week roadmap.
-        if (typeof currentTermToken === "string") continue;
-        while (claimedWeeks.has(fallbackWeek)) fallbackWeek += 1;
-        if (fallbackWeek > SEMESTER_WEEKS) break;
-        periodNumbers.set(period.periodKey, fallbackWeek);
-        claimedWeeks.add(fallbackWeek);
-        fallbackWeek += 1;
+        if (termStart) {
+          const derivedWeek =
+            Math.floor(
+              (period.anchorAt.getTime() - termStart.getTime()) /
+                (7 * 86_400_000),
+            ) + 1;
+          if (derivedWeek >= 1 && derivedWeek <= SEMESTER_WEEKS) {
+            periodNumbers.set(period.periodKey, derivedWeek);
+          }
+          continue;
+        }
+        periodNumbers.set(period.periodKey, periodNumbers.size + 1);
       }
       const reconciliation = new Map(
         configurations.map((configuration) => [

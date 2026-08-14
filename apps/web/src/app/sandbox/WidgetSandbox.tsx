@@ -52,6 +52,7 @@ import {
   eventsForAction,
   FICTIONAL_SEMESTER_START_ISO,
   isTodayOrEarlier,
+  isInsideFictionalSemester,
   semesterWeekForDate,
   type SandboxAction,
   type SandboxEventRequest,
@@ -592,8 +593,12 @@ function SandboxExperience({
     () => new Date(FICTIONAL_SEMESTER_START_ISO),
   );
   const [sandboxError, setSandboxError] = useState<string | null>(null);
-  const canAddDay = isTodayOrEarlier(addDays(simulatedDate, 1));
-  const canAddWeek = isTodayOrEarlier(addDays(simulatedDate, 7));
+  const canAddDay =
+    isTodayOrEarlier(addDays(simulatedDate, 1)) &&
+    isInsideFictionalSemester(addDays(simulatedDate, 1));
+  const canAddWeek =
+    isTodayOrEarlier(addDays(simulatedDate, 7)) &&
+    isInsideFictionalSemester(addDays(simulatedDate, 7));
 
   const currentSemesterWeek = useMemo(
     () => semesterWeekForDate(simulatedDate),

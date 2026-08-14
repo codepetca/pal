@@ -164,3 +164,11 @@ export function addDays(date: Date, days: number): Date {
 export function isTodayOrEarlier(date: Date, today = new Date()): boolean {
   return date.toISOString().slice(0, 10) <= today.toISOString().slice(0, 10);
 }
+
+export function isInsideFictionalSemester(date: Date): boolean {
+  const day = date.toISOString().slice(0, 10);
+  return (
+    day >= FICTIONAL_SEMESTER_START_ISO.slice(0, 10) &&
+    day <= FICTIONAL_SEMESTER_END_DAY
+  );
+}
