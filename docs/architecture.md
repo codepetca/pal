@@ -178,6 +178,11 @@ Domains don't apply their own mutations ad hoc — they **register handlers** wi
 
 One owner for the transaction means partial application is impossible: either every mutation from an evaluation lands, or none do. Handlers may return **derived events** (see [rule-engine.md](rule-engine.md)), which the applier feeds back through the engine within the same transaction.
 
+The same transaction may also emit persistence-authorized internal events after a
+durable transition succeeds. `DAILY_LOG_REWARD_SETTLED` follows the first insert of
+a daily settlement marker, and `WEEKLY_RHYTHM_EARNED` follows the first earned
+achievement transition. Neither is accepted from an integration.
+
 ---
 
 ## Schedules

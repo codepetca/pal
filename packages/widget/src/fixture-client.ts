@@ -1,5 +1,6 @@
 import {
   COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   defaultRulePack,
   processEvent,
   PROGRESSION_POLICY,
@@ -425,6 +426,11 @@ export function createFixturePalClient(
           event_type: "daily_log.completed",
           occurred_at: occurredAt,
           metadata: { activity_day: activityDay },
+        });
+        applyProgression({
+          event_type: DAILY_LOG_REWARD_SETTLED,
+          occurred_at: occurredAt,
+          metadata: {},
         });
         rewardWeeklyRhythmIfNewlyEarned(wasEarned, rhythm, occurredAt);
         return "daily_log.completed applied to fixture state";

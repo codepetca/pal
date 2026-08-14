@@ -4,6 +4,7 @@ import { evaluate } from "./evaluate";
 import { defaultRulePack } from "./default-rules";
 import {
   COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   LEVEL_UP,
   STREAK_MILESTONE,
   WEEKLY_RHYTHM_EARNED,
@@ -127,9 +128,8 @@ describe("evaluate", () => {
 
   // --- Daily log completed ---
   //
-  // The daily-log event only advances the streak. Both the base XP and the streak
-  // bonus are paid on the derived STREAK_MILESTONE, which fires once per day — so a
-  // second same-day daily log advances nothing and earns nothing.
+  // The daily-log event only advances the streak. The exact-once persistence
+  // settlement emits a separate internal event for flat daily XP.
 
   it("only continues the streak on a daily log, granting no XP directly", () => {
     const mutations = evaluate(
@@ -145,9 +145,8 @@ describe("evaluate", () => {
   });
 
   it("does not pay any XP on the daily-log event itself", () => {
-    // Both base and bonus belong to STREAK_MILESTONE, derived after the streak
-    // advances. Paying here would read yesterday's streak and let repeated same-day
-    // daily-log events farm XP, since the streak's same-day guard wouldn't gate the XP.
+    // Paying here would let repeated source deliveries farm XP before persistence
+    // can enforce semantic identity and durable settlement.
     const mutations = evaluate(
       { event_type: "daily_log.completed", occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 9 }),
@@ -156,21 +155,21 @@ describe("evaluate", () => {
     assert.equal(totalXp(mutations), 0);
   });
 
-  // --- Daily-log XP on the derived milestone ---
+  // --- Daily-log XP on durable reward settlement ---
 
-  it("pays only the base XP on day 1", () => {
+  it("does not pay XP merely because the streak advanced", () => {
     const mutations = evaluate(
       { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
       withEconomy({ streak_current: 1 }),
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 10); // base 10, no streak bonus yet
+    assert.equal(totalXp(mutations), 0);
   });
 
   for (const streak of [2, 4, 7, 10, 40]) {
-    it(`keeps the daily reward flat at 10 XP on rhythm day ${streak}`, () => {
+    it(`keeps a settled daily reward flat at 10 XP on rhythm day ${streak}`, () => {
       const mutations = evaluate(
-        { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
+        { event_type: DAILY_LOG_REWARD_SETTLED, occurred_at: AT, metadata: {} },
         withEconomy({ streak_current: streak }),
         defaultRulePack
       );

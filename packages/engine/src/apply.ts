@@ -5,6 +5,7 @@ import type { IncomingEvent, LearnerState, Mutation } from "./types";
 export const XP_CHANGED = "XP_CHANGED";
 export const LEVEL_UP = "LEVEL_UP";
 export const STREAK_MILESTONE = "STREAK_MILESTONE";
+export const DAILY_LOG_REWARD_SETTLED = "DAILY_LOG_REWARD_SETTLED";
 export const WEEKLY_RHYTHM_EARNED = "WEEKLY_RHYTHM_EARNED";
 export const COLLECTION_SYNC = "COLLECTION_SYNC";
 
