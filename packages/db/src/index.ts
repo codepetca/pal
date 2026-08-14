@@ -9,6 +9,7 @@ export {
   learners,
   petState,
   rewardNotices,
+  storyPlans,
   weeklyRhythmConfigs,
   worldState,
 } from "./schema";
@@ -22,6 +23,7 @@ export type {
   Learner,
   PetState,
   RewardNotice,
+  StoryPlan,
   WeeklyRhythmConfig,
   WorldState,
 } from "./schema";

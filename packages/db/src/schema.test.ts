@@ -9,6 +9,7 @@ import {
   learnerFacts,
   learners,
   rewardNotices,
+  storyPlans,
   weeklyRhythmConfigs,
 } from "./schema";
 import { getDb, getPool } from "./client";
@@ -21,6 +22,15 @@ function foreignKeyViolation(error: unknown): boolean {
   return (
     candidate.code === "23503" ||
     (candidate.cause !== undefined && foreignKeyViolation(candidate.cause))
+  );
+}
+
+function postgresViolation(error: unknown, code: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; cause?: unknown };
+  return (
+    candidate.code === code ||
+    (candidate.cause !== undefined && postgresViolation(candidate.cause, code))
   );
 }
 
@@ -63,6 +73,32 @@ test(
           },
         ])
         .returning({ id: learners.id });
+
+      await assert.rejects(
+        db.insert(storyPlans).values({
+          learnerId: learnerA.id,
+          termKey: `term-invalid-${suffix}`,
+          storyId: "pips-first-recipe",
+          storyVersion: 1,
+          totalPeriods: 6,
+          chapterIds: ["one", "two", "three", "four", "five"],
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+
+      const plan = {
+        learnerId: learnerA.id,
+        termKey: `term-${suffix}`,
+        storyId: "pips-first-recipe",
+        storyVersion: 1,
+        totalPeriods: 6,
+        chapterIds: ["one", "two", "three", "four", "five", "six"],
+      };
+      await db.insert(storyPlans).values(plan);
+      await assert.rejects(
+        db.insert(storyPlans).values(plan),
+        (error) => postgresViolation(error, "23505"),
+      );
 
       await assert.rejects(
         db.insert(events).values({

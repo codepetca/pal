@@ -161,6 +161,37 @@ export const achievementPeriods = pgTable(
   ],
 );
 
+// One immutable story schedule per learner and opaque academic term. The
+// chapter IDs are content references only; no student work or PII is stored.
+export const storyPlans = pgTable(
+  "story_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id")
+      .notNull()
+      .references(() => learners.id, { onDelete: "cascade" }),
+    termKey: text("term_key").notNull(),
+    storyId: text("story_id").notNull(),
+    storyVersion: integer("story_version").notNull(),
+    totalPeriods: integer("total_periods").notNull(),
+    chapterIds: text("chapter_ids").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_plans_learner_term_uq").on(t.learnerId, t.termKey),
+    check("story_plans_version_positive", sql`${t.storyVersion} >= 1`),
+    check(
+      "story_plans_period_count_range",
+      sql`${t.totalPeriods} >= 6 AND ${t.totalPeriods} <= 24`,
+    ),
+    check(
+      "story_plans_chapter_count_matches",
+      sql`cardinality(${t.chapterIds}) = ${t.totalPeriods}`,
+    ),
+  ],
+);
+
 export const weeklyRhythmConfigs = pgTable(
   "weekly_rhythm_configs",
   {
@@ -362,6 +393,7 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   events: many(events),
   facts: many(learnerFacts),
   periods: many(achievementPeriods),
+  storyPlans: many(storyPlans),
   weeklyRhythmConfigs: many(weeklyRhythmConfigs),
   achievementInstances: many(achievementInstances),
   rewardNotices: many(rewardNotices),
@@ -402,6 +434,13 @@ export const achievementPeriodsRelations = relations(
     }),
   }),
 );
+
+export const storyPlansRelations = relations(storyPlans, ({ one }) => ({
+  learner: one(learners, {
+    fields: [storyPlans.learnerId],
+    references: [learners.id],
+  }),
+}));
 
 export const weeklyRhythmConfigsRelations = relations(
   weeklyRhythmConfigs,
@@ -459,6 +498,7 @@ export type PetState = typeof petState.$inferSelect;
 export type WorldState = typeof worldState.$inferSelect;
 export type LearnerFact = typeof learnerFacts.$inferSelect;
 export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
+export type StoryPlan = typeof storyPlans.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;
