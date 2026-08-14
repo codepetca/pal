@@ -76,6 +76,7 @@ try {
 
     assert.equal(typeof widget.PalProvider, "function");
     assert.equal(typeof widget.PalAchievements, "function");
+    assert.equal(typeof widget.PalCollection, "function");
     assert.equal(theme.PAL_THEME_CONTRACT_VERSION, 1);
     assert.match(stylesheetUrl, /\\/dist\\/styles\\.css$/);
     assert.match(readFileSync(new URL(entryUrl), "utf8"), /^"use client";/);

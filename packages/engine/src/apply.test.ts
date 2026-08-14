@@ -20,7 +20,7 @@ function log(day: string): IncomingEvent {
   return {
     event_type: "daily_log.completed",
     occurred_at: `${day}T12:00:00.000Z`,
-    metadata: {},
+    metadata: { activity_day: day },
   };
 }
 
@@ -168,13 +168,55 @@ describe("applyMutations", () => {
     assert.deepEqual(derived, []);
   });
 
-  it("advances the streak across a month boundary", () => {
+  it("advances the rhythm across a month boundary", () => {
     const { state } = applyMutations(
-      withEconomy({ streak_current: 2, streak_last_day: "2026-02-28" }),
+      withEconomy({ streak_current: 2, streak_last_day: "2026-03-30" }),
       [{ type: "STREAK", continue_streak: true }],
-      log("2026-03-01")
+      log("2026-03-31")
     );
     assert.equal(state.economy.streak_current, 3);
+  });
+
+  it("continues a school-day rhythm from Friday to Monday", () => {
+    const { state } = applyMutations(
+      withEconomy({ streak_current: 5, streak_last_day: "2026-03-06" }),
+      [{ type: "STREAK", continue_streak: true }],
+      log("2026-03-09"),
+    );
+    assert.equal(state.economy.streak_current, 6);
+  });
+
+  it("also preserves consecutive weekend check-ins", () => {
+    let state = applyMutations(
+      withEconomy({ streak_current: 5, streak_last_day: "2026-03-06" }),
+      [{ type: "STREAK", continue_streak: true }],
+      log("2026-03-07"),
+    ).state;
+    state = applyMutations(
+      state,
+      [{ type: "STREAK", continue_streak: true }],
+      log("2026-03-08"),
+    ).state;
+    state = applyMutations(
+      state,
+      [{ type: "STREAK", continue_streak: true }],
+      log("2026-03-09"),
+    ).state;
+    assert.equal(state.economy.streak_current, 8);
+  });
+
+  it("uses the source activity day instead of the UTC occurred-at day", () => {
+    const { state } = applyMutations(
+      withEconomy({ streak_current: 2, streak_last_day: "2026-03-09" }),
+      [{ type: "STREAK", continue_streak: true }],
+      {
+        event_type: "daily_log.completed",
+        occurred_at: "2026-03-11T01:00:00.000Z",
+        metadata: { activity_day: "2026-03-10" },
+      },
+    );
+    assert.equal(state.economy.streak_current, 3);
+    assert.equal(state.economy.streak_last_day, "2026-03-10");
   });
 
   // --- Pet and world ---

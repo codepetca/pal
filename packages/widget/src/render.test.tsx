@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { PalAchievements } from "./achievements";
 import { PalCompanion } from "./companion";
+import { PalCollection } from "./collection";
 import { createFixturePalClient } from "./fixture-client";
 import { PalProvider } from "./provider";
 import { PalRewardCelebration } from "./reward-celebration";
@@ -24,17 +25,20 @@ test("public surfaces render meaningful status without relying on color", () => 
       viewport="narrow"
     >
       <PalAchievements />
+      <PalCollection />
       <PalCompanion />
       <PalRewardCelebration />
     </PalProvider>,
   );
 
   assert.match(html, />Achievements</);
+  assert.match(html, />Collection</);
+  assert.match(html, />Study Bird</);
   assert.match(html, /aria-current="step"/);
   assert.match(html, /2 of 4 eligible days/);
   assert.match(html, /Earned/);
   assert.match(html, /Pip, your Pal companion/);
-  assert.match(html, /Level 2; 3 day rhythm/);
+  assert.match(html, /Level 2; 3 school-day rhythm/);
   assert.match(html, /A treat for Pip!/);
   assert.match(html, />Continue</);
   assert.match(html, /data-pal-theme="dark"/);

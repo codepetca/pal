@@ -7,7 +7,7 @@ import { processEventInDb } from "@/lib/db-learner";
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
 // Small on purpose: it only absorbs clock drift between an integration and us
 // (minutes at worst), not timezones — occurred_at is an absolute instant. The
-// rejection itself is UTC-day-granular to match the streak engine; see below.
+// rejection itself is UTC-day-granular so small cross-system drift is tolerated.
 const CLOCK_SKEW_MS = 60 * 60 * 1000;
 
 // POST /api/v1/events
@@ -32,21 +32,42 @@ export async function POST(req: NextRequest) {
 
   const occurredAtMs = Date.parse(event.occurred_at);
 
-  // Reject events dated on a future UTC day. The engine's streak guard is forward-only
-  // and deliberately never self-heals, so a future-dated check-in that got in would pin
-  // `streak_last_day` ahead of every real day and freeze the learner's streak — and
-  // their check-in XP — until that date. The engine is pure and has no clock; keeping
-  // poisoned days out is ingest's job.
+  // Reject events dated on a future UTC day. The engine is pure and has no clock;
+  // keeping poisoned chronology out is ingest's job.
   //
-  // The comparison is UTC-day-granular to match the engine (an instant-level "not more
-  // than N hours ahead" check would still admit a whole future UTC day). The skew term
-  // means: the event's day may not be ahead of the day the server will be in within an
-  // hour — so a slightly-fast integration clock just before UTC midnight still passes,
-  // while anything a full day out is rejected.
+  // The comparison is UTC-day-granular (an instant-level "not more than N hours
+  // ahead" check would still admit a whole future UTC day). The skew term means:
+  // the event's day may not be ahead of the day the server will be in within an
+  // hour — so a slightly-fast integration clock just before UTC midnight still
+  // passes, while anything a full day out is rejected.
   const eventUtcDay = new Date(occurredAtMs).toISOString().slice(0, 10);
-  const latestAllowedUtcDay = new Date(Date.now() + CLOCK_SKEW_MS).toISOString().slice(0, 10);
+  const latestAllowedUtcDay = new Date(Date.now() + CLOCK_SKEW_MS)
+    .toISOString()
+    .slice(0, 10);
   if (eventUtcDay > latestAllowedUtcDay) {
     return NextResponse.json({ error: "future_occurred_at" }, { status: 422 });
+  }
+  if (event.event_type === "daily_log.completed") {
+    // Runtime validation above guarantees this field for daily-log events. The
+    // contract's generic envelope does not preserve that metadata narrowing in
+    // TypeScript, so retain a defensive property check here as well.
+    const activityDay =
+      "activity_day" in event.metadata
+        ? String(event.metadata.activity_day)
+        : eventUtcDay;
+    const latestLocalDay = new Date(
+      Date.parse(`${latestAllowedUtcDay}T00:00:00.000Z`) + 86_400_000,
+    )
+      .toISOString()
+      .slice(0, 10);
+    // A local activity day can be one date ahead of UTC near midnight. Anything
+    // later would pin the forward-only rhythm counter and is not a real check-in.
+    if (activityDay > latestLocalDay) {
+      return NextResponse.json(
+        { error: "future_activity_day" },
+        { status: 422 },
+      );
+    }
   }
 
   const engineEvent: IncomingEvent = {

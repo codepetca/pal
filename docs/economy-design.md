@@ -1,59 +1,115 @@
-# Economy Design
+# Economy and Progression Design
 
-Students will earn EXP when they complete assignments, daily logs, or practice tests.
+Pal rewards verified learning progress and sustained reflection. XP is immediate
+feedback; it is not the product success metric. The primary behaviors are earning
+the configured Weekly Rhythm and completing learning items, with on-time work as a
+smaller secondary signal.
 
-A streak counter will track how consistently a student completes their daily logs.
+## Reward policy
 
-Once a student accumulates enough EXP, they will level up, and the required EXP will be deducted.
+| Behavior | XP | Why |
+|---|---:|---|
+| Learning item completed | 75 | Completion remains meaningful without dominating the term |
+| On-time learning item bonus | 25 | Encourages planning while keeping late completion worthwhile |
+| Distinct daily log activity day | 10 | Immediate feedback for reflection; semantic dedup pays once |
+| Weekly Rhythm earned | 75 | Rewards meeting the producer-configured weekly target, including short weeks |
+| Level-up cost | 500 | Keeps the existing progress-bar cadence |
 
-Each level-up should trigger visual or progression changes in the virtual world or for their pet.
+The single source of truth is `packages/engine/src/progression-policy.ts`. The
+default rule pack, persisted pipeline, and public fixture all consume it.
 
----
+There is deliberately no XP multiplier or collection unlock tied to a long daily
+streak. Calendar-day streak multipliers over-reward volume, punish weekends and
+holidays, and make a fragile counter more valuable than the configured weekly goal.
 
-## Numbers (Subject to Change)
+## Term pacing
 
-- **Assignments / practice quizzes:** 150 xp
-- **Assignments / practice quizzes (on time bonus):** 50 xp
-- **Daily logs:** 10 xp
-- **Daily logs (streak bonus):** +3 xp every 2 days (max +15 xp)
-- **Level-up cost:** 500 exp
+A representative 16-week term with 15 on-time learning items and four completed
+daily-log days per week produces:
 
-The streak bonus tiers land on days 2, 4, 6, 8, and 10, and they stack: a 10-day streak earns the full +15 on top of the 10 xp base, and holds there. All of these numbers live in one place — the constants at the top of `packages/engine/src/default-rules.ts`.
+- learning items: 15 × 100 = 1,500 XP
+- daily logs: 64 × 10 = 640 XP
+- Weekly Rhythms: 16 × 75 = 1,200 XP
+- total: 3,340 XP, or six level-ups and 340 XP toward the next level
+- ending level: Level 7, because learners start at Level 1
 
----
+Completing five logs every week raises the term total to 3,500 XP and Level 8. This
+keeps assignment/practice progress near 45% of representative XP and consistent
+reflection near 55%; neither activity can swamp the other.
 
-## Calculations
+These are design assumptions, not outcome targets. Recalibrate after observing a
+full pilot term rather than optimizing for XP issuance itself.
 
-- **Approximate total EXP possible:** 200 xp × 15 assignments + ~20 xp × 150 daily logs = 6,000 xp
-  - The 20 xp per daily log is an _average_, not a rate from the table above: a log is worth 10 xp with no streak and 25 xp on a maxed streak, so this assumes students hold a long streak most of the time.
-- **Level-ups that buys:** 6,000 / 500 = 12
-- **Maximum level achievable:** **Level 13** — students start at level 1, so 12 level-ups lands them on 13. (Worth settling before anyone builds the progress bar: if "max level 12" is what we want, students should start at level 0.)
+## Rhythm counter
 
----
+The companion counter is a school-day rhythm:
 
-## Visuals
+- it advances once for a validated source `activity_day`, not the UTC delivery day;
+- Friday continues into Monday, so a normal weekend does not reset it;
+- same-day and backdated activity is inert;
+- a missed school day resets the counter to one on the next valid activity day.
 
-- A progress bar should display the student's current level and the EXP required to reach the next level.
-  - Render `economy.xp` (the balance toward the next level), not `economy.xp_lifetime`. Levelling spends `xp`, so the bar empties on level-up; lifetime xp only ever climbs, and is what achievements will key on.
-- The daily log streak should be visually integrated into the progress bar.
-- Ideally, custom animations will play when gaining EXP and leveling up.
+The counter is motivational display state only. Daily XP stays flat and collection
+progress depends on earned Weekly Rhythms, so a holiday-calendar limitation cannot
+change a learner's material rewards. Pika's configured Weekly Rhythm remains the
+authoritative schedule-aware measure.
 
----
+## Durable collection
 
-## How it behaves today
+Collection keepsakes are idempotent world unlocks persisted in the existing
+`world_state.unlocked_object_ids` array:
 
-- **Streaks are derived, never reported.** A check-in on the day after the last one advances the streak; a gap resets it to 1; a second check-in on the same day (or a backdated one for an earlier day) does not advance it. No "streak broken" event is needed, and an integration cannot invent a streak for a student.
-- **Check-in XP is paid once per day, on the streak advance.** The base 10 xp and the streak bonus both hang off the derived `STREAK_MILESTONE`, not the raw `daily_checkin.created` event. Because the milestone only fires when the streak actually advances, repeated check-ins on the same day earn the day's reward exactly once — they cannot farm the 10 xp base.
-- **Levelling runs in the engine's derived-event cascade:** xp is granted → `XP_CHANGED` → the `level-up` rule spends 500 xp and grants a level → the pet celebrates. Banking several levels' worth of xp in one event levels up to three times; any surplus stays banked and levels on the next event.
+| Earned Weekly Rhythms | Keepsake |
+|---:|---|
+| 1 | Study Bird |
+| 4 | Study Lamp |
+| 8 | Reading Nook |
+| 12 | Star Projector |
+| 16 | Semester Banner |
 
----
+An earned Weekly Rhythm emits one internal `WEEKLY_RHYTHM_EARNED` progression event
+inside the same learner transaction. It grants XP only for the first durable earned
+transition. On every accepted learner event, the persisted pipeline compares the
+durable earned-week count with the stored world IDs and emits one exact
+`COLLECTION_SYNC` event for each genuinely missing milestone. Existing learners
+therefore catch up their collection on their next event without receiving retroactive
+XP, and an already-stored unlock is absent from both state changes and the returned
+mutation stream. Delivery retries and configuration revisions cannot repay the weekly
+reward or duplicate a keepsake.
 
-## Concerns & Potential Improvements
+The on-time fish is intentionally different: it remains a one-time celebration
+notice, not a durable collection item or consumable inventory. A generalized
+append-only UnlockLedger and consumable inventory still require separate database
+migrations.
 
-- Consider introducing achievement milestones.
-- Consider implementing expendable resources, such as food to feed pets or coins to purchase cosmetic items.
-- How can we verify that students have actually completed their assignments? Since the Pika system is not integrated with CodeHS or GitHub, students could currently submit completions without actually finishing the lessons.
-- How do we detect when a student has completed writing their daily log? The EXP reward should not trigger prematurely (e.g., as soon as they type a single character).
-- A student's streak day is currently UTC, so a student checking in late in the evening west of UTC can be credited to the next day and lose a streak they earned. Revisit when integrations can declare a timezone.
-- A check-in that arrives out of order — its `occurred_at` on or before the day the streak last advanced — earns **nothing**: no streak movement and no XP, since all check-in XP hangs off the streak advance. This is deliberate (it is what stops backdated events from farming XP or corrupting streaks), but it means a genuinely delayed delivery of a real check-in is silently unrewarded. If integrations turn out to deliver days late in practice, this needs a smarter reconciliation than "first day wins".
-- A broken streak is only noticed on the student's _next_ check-in, so a stale `streak_current` can display for days. If the streak needs to visibly reset the moment it breaks, that requires a per-learner scheduled event.
+## Level and UI behavior
+
+- `economy.xp` is the spendable balance toward the next level.
+- `economy.xp_lifetime` only increases and is not reduced by level-up spending.
+- Every 500 XP grants one level and spends 500 XP.
+- Level-up and Weekly Rhythm completion set an excited companion mood.
+- The v1 snapshot exposes an optional bounded `collection.items` array so older
+  hosts remain compatible. `PalCollection` renders the durable keepsakes.
+
+## Measurement plan
+
+Primary pilot KPIs:
+
+1. Weekly Rhythm completion rate: earned Weekly Rhythm instances divided by eligible
+   configured weeks.
+2. Verified learning-item completion rate, segmented by on-time versus late.
+
+Drivers:
+
+- share of eligible learners recording at least one log in a week;
+- median eligible days completed before a Weekly Rhythm is earned.
+
+Guardrails:
+
+- semantic duplicate/rejected-event rate, to detect integration or farming issues;
+- reward concentration by behavior, checked against the representative 45/55 item
+  versus reflection mix;
+- no material reward differences caused only by UTC offset or a normal weekend.
+
+Do not treat XP earned, level reached, or collection size as learning outcomes. They
+are diagnostic outputs of the policy and can rise without improved learning quality.

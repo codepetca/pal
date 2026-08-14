@@ -28,7 +28,7 @@ Rules are JSON config — operators can tune gameplay without code changes.
       "trigger": { "event_type": "assignment.completed" },
       "conditions": [],
       "effects": [
-        { "type": "XP_GRANT", "amount": 150 },
+        { "type": "XP_GRANT", "amount": 75 },
         { "type": "PET_MOOD", "mood": "happy", "duration_minutes": 30 }
       ]
     },
@@ -36,12 +36,12 @@ Rules are JSON config — operators can tune gameplay without code changes.
       "id": "on-time-bonus",
       "trigger": { "event_type": "assignment.completed" },
       "conditions": [{ "field": "metadata.on_time", "op": "eq", "value": true }],
-      "effects": [{ "type": "XP_GRANT", "amount": 50 }]
+      "effects": [{ "type": "XP_GRANT", "amount": 25 }]
     },
     {
-      "id": "streak-7-world",
-      "trigger": { "event_type": "STREAK_MILESTONE" },
-      "conditions": [{ "field": "economy.streak_current", "op": "gte", "value": 7 }],
+      "id": "weekly-rhythm-1-collection-unlock",
+      "trigger": { "event_type": "COLLECTION_SYNC" },
+      "conditions": [{ "field": "metadata.weekly_rhythm_count", "op": "eq", "value": 1 }],
       "effects": [{ "type": "WORLD_UNLOCK", "asset_ref_id": "world-bird-v1" }]
     }
   ]
@@ -61,7 +61,10 @@ Rules are JSON config — operators can tune gameplay without code changes.
 | `ACHIEVEMENT` | Award a badge |
 | `NUDGE` | Trigger a nudge message referencing a copy pack entry (`copy_id`) |
 
-Effects are **literal** mutations — the engine does no arithmetic. A rule cannot say "+3 XP per 2 days of streak, capped at 15"; it says "+3 XP", and the formula is expanded into one rule per tier. Keep it that way: the moment an effect carries a formula, the applier has to evaluate it, and gameplay logic starts leaking out of the rule pack.
+Effects are **literal** mutations — the engine does no arithmetic. Milestone formulas
+are expanded into literal rules from the typed progression policy. Keep it that way:
+the moment an effect carries a formula, the applier has to evaluate it, and gameplay
+logic starts leaking out of the rule pack.
 
 ### Mood strength
 
@@ -121,9 +124,11 @@ This diagram is a snapshot, not a source of truth — if the cascade shape chang
 |---|---|
 | `XP_CHANGED` | An `XP_GRANT` actually changed the learner's XP balance |
 | `LEVEL_UP` | A `LEVEL_GRANT` raised the learner's level |
-| `STREAK_MILESTONE` | A `STREAK` mutation advanced the streak to a new day |
+| `STREAK_MILESTONE` | A `STREAK` mutation advanced to a new source activity day |
+| `WEEKLY_RHYTHM_EARNED` | The achievement pipeline first persisted an earned Weekly Rhythm; metadata includes the durable earned count |
+| `COLLECTION_SYNC` | Reconciles one genuinely missing world unlock at its exact durable Weekly Rhythm milestone without granting XP |
 
-**A rule that depends on post-mutation state must trigger on the derived event, not on the original one.** Conditions are evaluated against the state as it was *before* the event was applied, so `level-up` reads `economy.xp` on `XP_CHANGED` (after the grant landed), and the streak bonuses read `economy.streak_current` on `STREAK_MILESTONE` (after the streak advanced). Hanging either off the integration event instead reads yesterday's state and pays out a day late — silently, because a condition on a field that isn't there yet simply doesn't match.
+**A rule that depends on post-mutation state must trigger on the derived event, not on the original one.** Conditions are evaluated against the state as it was *before* the event was applied, so `level-up` reads `economy.xp` on `XP_CHANGED` after the grant landed. `WEEKLY_RHYTHM_EARNED` is an internal progression event produced only after the durable achievement transition, so its XP and collection rules cannot fire from an unverified integration claim.
 
 Rules of the cascade:
 

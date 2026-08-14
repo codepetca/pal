@@ -70,6 +70,24 @@ test("rejects an envelope without the declared schema version", async () => {
   assert.equal((await response.json()).error, "unsupported_schema_version");
 });
 
+test("rejects a far-future activity day before opening the database", async () => {
+  const payload = learningItemEvent(`sandbox-${crypto.randomUUID()}`);
+  const response = await POST(
+    request({
+      ...payload,
+      event_type: "daily_log.completed",
+      metadata: {
+        period_key: "future-week",
+        activity_day: "2099-01-01",
+      },
+    }),
+  );
+
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).error, "future_activity_day");
+  assert.equal(openedDatabase, false);
+});
+
 test(
   "persists valid events atomically, deduplicates retries, and serializes concurrent writes",
   { skip: !process.env.DATABASE_URL },
@@ -96,9 +114,9 @@ test(
       const integration = await resolveSandboxIntegration();
       const state = await loadLearnerFromDb(integration.id, learnerId);
       assert.ok(state);
-      assert.equal(state.economy.xp, 100);
-      assert.equal(state.economy.xp_lifetime, 600);
-      assert.equal(state.economy.level, 2);
+      assert.equal(state.economy.xp, 300);
+      assert.equal(state.economy.xp_lifetime, 300);
+      assert.equal(state.economy.level, 1);
     } finally {
       const integration = await resolveSandboxIntegration();
       await resetLearnerInDb(integration.id, learnerId);

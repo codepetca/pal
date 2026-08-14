@@ -10,14 +10,18 @@ import {
 import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
+  earnedWeeklyRhythmCount,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
 import {
+  COLLECTION_SYNC,
   defaultRulePack,
   processEvent,
+  PROGRESSION_POLICY,
+  WEEKLY_RHYTHM_EARNED,
   type IncomingEvent,
   type LearnerState,
   type ProcessResult,
@@ -239,7 +243,61 @@ export async function processEventInDb(
     const state = toLearnerState(eco, pet, world);
 
     // 8. Run the engine
-    const result = processEvent(event, state, defaultRulePack);
+    let result = processEvent(event, state, defaultRulePack);
+
+    // Achievement transitions and economy progression share this transaction.
+    // Only the first transition to an earned Weekly Rhythm emits the internal
+    // progression event, so retries and configuration revisions cannot re-pay it.
+    const achievementResult = await applyAchievementFact(
+      tx,
+      learnerId,
+      fact,
+      event,
+    );
+    if (achievementResult.weeklyRhythmEarnedCount !== undefined) {
+      const progression = processEvent(
+        {
+          event_type: WEEKLY_RHYTHM_EARNED,
+          occurred_at: event.occurred_at,
+          metadata: {
+            weekly_rhythm_count: achievementResult.weeklyRhythmEarnedCount,
+          },
+        },
+        result.state,
+        defaultRulePack,
+      );
+      result = {
+        state: progression.state,
+        mutations: [...result.mutations, ...progression.mutations],
+        trace: [...result.trace, ...progression.trace],
+        truncated: [...result.truncated, ...progression.truncated],
+      };
+    }
+    const earnedCount = await earnedWeeklyRhythmCount(tx, learnerId);
+    const missingMilestones = PROGRESSION_POLICY.collectionMilestones.filter(
+      (milestone) =>
+        earnedCount >= milestone.weeklyRhythms &&
+        !result.state.world.unlocked_object_ids.includes(milestone.assetRefId),
+    );
+    for (const milestone of missingMilestones) {
+      const collectionProgress = processEvent(
+        {
+          event_type: COLLECTION_SYNC,
+          occurred_at: event.occurred_at,
+          metadata: {
+            weekly_rhythm_count: milestone.weeklyRhythms,
+          },
+        },
+        result.state,
+        defaultRulePack,
+      );
+      result = {
+        state: collectionProgress.state,
+        mutations: [...result.mutations, ...collectionProgress.mutations],
+        trace: [...result.trace, ...collectionProgress.trace],
+        truncated: [...result.truncated, ...collectionProgress.truncated],
+      };
+    }
 
     // 9. Upsert economy
     await tx
@@ -307,9 +365,6 @@ export async function processEventInDb(
           updatedAt: new Date(),
         },
       });
-
-    // 11. Persist fact-derived progress, awards, and one-time reward notices.
-    await applyAchievementFact(tx, learnerId, fact, event);
 
     return { status: "processed" as const, result };
   });

@@ -2,7 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { evaluate } from "./evaluate";
 import { defaultRulePack } from "./default-rules";
-import { LEVEL_UP, STREAK_MILESTONE, XP_CHANGED } from "./apply";
+import {
+  COLLECTION_SYNC,
+  LEVEL_UP,
+  STREAK_MILESTONE,
+  WEEKLY_RHYTHM_EARNED,
+  XP_CHANGED,
+} from "./apply";
 import type { LearnerState, Mutation, RulePack } from "./types";
 
 const baseState: LearnerState = {
@@ -40,7 +46,7 @@ describe("evaluate", () => {
       baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 150);
+    assert.equal(totalXp(mutations), 75);
   });
 
   it("grants bonus XP when learning item is completed on time", () => {
@@ -53,7 +59,7 @@ describe("evaluate", () => {
       baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 200); // 150 base + 50 on-time bonus
+    assert.equal(totalXp(mutations), 100); // 75 base + 25 on-time bonus
   });
 
   it("does not grant on-time bonus when learning item is late", () => {
@@ -66,7 +72,7 @@ describe("evaluate", () => {
       baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 150);
+    assert.equal(totalXp(mutations), 75);
   });
 
   it("does not grant on-time bonus when the timing field is absent", () => {
@@ -75,7 +81,7 @@ describe("evaluate", () => {
       baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 150);
+    assert.equal(totalXp(mutations), 75);
   });
 
   it("sets pet mood to happy after learning item completion", () => {
@@ -150,7 +156,7 @@ describe("evaluate", () => {
     assert.equal(totalXp(mutations), 0);
   });
 
-  // --- Daily-log XP on the derived milestone (base + tiered bonus, streak includes today) ---
+  // --- Daily-log XP on the derived milestone ---
 
   it("pays only the base XP on day 1", () => {
     const mutations = evaluate(
@@ -161,34 +167,28 @@ describe("evaluate", () => {
     assert.equal(totalXp(mutations), 10); // base 10, no streak bonus yet
   });
 
-  for (const [streak, bonus] of [
-    [2, 3],
-    [3, 3],
-    [4, 6],
-    [5, 6],
-    [6, 9],
-    [7, 9],
-    [8, 12],
-    [9, 12],
-    [10, 15],
-  ] as const) {
-    it(`pays 10 base + ${bonus} streak bonus on day ${streak}`, () => {
+  for (const streak of [2, 4, 7, 10, 40]) {
+    it(`keeps the daily reward flat at 10 XP on rhythm day ${streak}`, () => {
       const mutations = evaluate(
         { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
         withEconomy({ streak_current: streak }),
         defaultRulePack
       );
-      assert.equal(totalXp(mutations), 10 + bonus);
+      assert.equal(totalXp(mutations), 10);
     });
   }
 
-  it("caps the streak bonus at +15 (25 total) beyond day 10", () => {
+  it("rewards an earned Weekly Rhythm with 75 XP", () => {
     const mutations = evaluate(
-      { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
-      withEconomy({ streak_current: 40 }),
+      {
+        event_type: WEEKLY_RHYTHM_EARNED,
+        occurred_at: AT,
+        metadata: { weekly_rhythm_count: 1 },
+      },
+      baseState,
       defaultRulePack
     );
-    assert.equal(totalXp(mutations), 25); // base 10 + capped bonus 15
+    assert.equal(totalXp(mutations), 75);
   });
 
   // --- Level up (on the derived XP_CHANGED, so XP is post-grant) ---
@@ -232,10 +232,14 @@ describe("evaluate", () => {
 
   // --- World progression ---
 
-  it("unlocks a world asset at the streak 7 milestone", () => {
+  it("unlocks the first collection item on the first Weekly Rhythm", () => {
     const mutations = evaluate(
-      { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
-      withEconomy({ streak_current: 7 }),
+      {
+        event_type: COLLECTION_SYNC,
+        occurred_at: AT,
+        metadata: { weekly_rhythm_count: 1 },
+      },
+      baseState,
       defaultRulePack
     );
     assert.deepEqual(
@@ -244,15 +248,39 @@ describe("evaluate", () => {
     );
   });
 
-  it("does NOT unlock the world asset below streak 7", () => {
+  it("does not unlock the fourth-rhythm item before its milestone", () => {
     const mutations = evaluate(
-      { event_type: STREAK_MILESTONE, occurred_at: AT, metadata: {} },
-      withEconomy({ streak_current: 6 }),
+      {
+        event_type: COLLECTION_SYNC,
+        occurred_at: AT,
+        metadata: { weekly_rhythm_count: 3 },
+      },
+      baseState,
       defaultRulePack
     );
     assert.equal(
-      mutations.find((m) => m.type === "WORLD_UNLOCK"),
+      mutations.find(
+        (m) =>
+          m.type === "WORLD_UNLOCK" &&
+          m.asset_ref_id === "world-study-lamp-v1",
+      ),
       undefined
+    );
+  });
+
+  it("emits only the exact collection milestone being reconciled", () => {
+    const mutations = evaluate(
+      {
+        event_type: COLLECTION_SYNC,
+        occurred_at: AT,
+        metadata: { weekly_rhythm_count: 4 },
+      },
+      baseState,
+      defaultRulePack,
+    );
+    assert.deepEqual(
+      mutations.filter((mutation) => mutation.type === "WORLD_UNLOCK"),
+      [{ type: "WORLD_UNLOCK", asset_ref_id: "world-study-lamp-v1" }],
     );
   });
 });

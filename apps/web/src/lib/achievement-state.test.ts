@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { asc, eq } from "drizzle-orm";
-import { achievementPeriods, getDb, getPool } from "@pal/db";
+import { achievementPeriods, getDb, getPool, worldState } from "@pal/db";
 import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
@@ -77,11 +77,13 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
     ).length,
     rewards: snapshot.rewards.length,
     companion: {
+      level: snapshot.companion.level,
       mood: snapshot.companion.mood,
       message: snapshot.companion.message,
       xp: snapshot.companion.xp,
       streak: snapshot.companion.streak,
     },
+    collection: snapshot.collection?.items.map((item) => item.id) ?? [],
   };
 }
 
@@ -351,7 +353,11 @@ test(
           ?.progress?.target,
         2,
       );
-      assert.equal(snapshot.companion.xp, 223);
+      assert.equal(snapshot.companion.xp, 195);
+      assert.deepEqual(
+        snapshot.collection?.items.map((item) => item.id),
+        ["world-bird-v1"],
+      );
       assert.equal(snapshot.rewards.length, 1);
 
       await acknowledgeLearnerReward(
@@ -368,6 +374,130 @@ test(
         (await loadLearnerSnapshot(integration.id, internalLearnerId)).rewards
           .length,
         0,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "persists Weekly Rhythm XP and collection milestones exactly once",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `progression-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      for (let index = 0; index < 4; index += 1) {
+        const periodKey = `progression-week-${index + 1}-${crypto.randomUUID()}`;
+        const activityDay = `2026-03-${String(2 + index * 7).padStart(2, "0")}`;
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: periodKey,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            `${activityDay}T12:00:00.000Z`,
+          ),
+          key(),
+        );
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            { period_key: periodKey, activity_day: activityDay },
+            `${activityDay}T17:00:00.000Z`,
+          ),
+          key(),
+        );
+
+        const revision = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: periodKey,
+              config_version: 2,
+              period_status: "closed",
+              eligible_days: 1,
+            },
+            `${activityDay}T18:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(revision.status, "processed");
+      }
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.equal(snapshot.companion.xp, 340); // 4 × (10 daily + 75 weekly)
+      assert.equal(snapshot.companion.level, 1);
+      assert.deepEqual(
+        snapshot.collection?.items.map((item) => item.id),
+        ["world-bird-v1", "world-study-lamp-v1"],
+      );
+
+      // Simulate rollout from a release that already persisted the achievements
+      // but had no collection rules. The next unrelated accepted event reconciles
+      // keepsakes without back-paying Weekly Rhythm XP.
+      await getDb()
+        .update(worldState)
+        .set({ unlockedObjectIds: [] })
+        .where(eq(worldState.learnerId, learnerId));
+      const rolloutSync = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("platform.session.started", {}),
+        key(),
+      );
+      assert.equal(rolloutSync.status, "processed");
+      assert.deepEqual(
+        rolloutSync.status === "processed"
+          ? rolloutSync.result.mutations
+              .filter((mutation) => mutation.type === "WORLD_UNLOCK")
+              .map((mutation) => mutation.asset_ref_id)
+          : [],
+        ["world-bird-v1", "world-study-lamp-v1"],
+      );
+      const reconciled = await loadLearnerSnapshot(integration.id, learnerId);
+      assert.equal(reconciled.companion.xp, 340);
+      assert.deepEqual(
+        reconciled.collection?.items.map((item) => item.id),
+        ["world-bird-v1", "world-study-lamp-v1"],
+      );
+
+      const alreadySynced = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("classroom.joined", {
+          classroom_token: `classroom-${crypto.randomUUID()}`,
+        }),
+        key(),
+      );
+      assert.equal(alreadySynced.status, "processed");
+      assert.deepEqual(
+        alreadySynced.status === "processed"
+          ? alreadySynced.result.mutations.filter(
+              (mutation) => mutation.type === "WORLD_UNLOCK",
+            )
+          : [],
+        [],
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);

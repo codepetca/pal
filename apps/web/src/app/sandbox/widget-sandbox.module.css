@@ -326,6 +326,10 @@
   max-width: 100%;
 }
 
+.content > :global(.pal-collection) {
+  margin: 0.75rem;
+}
+
 .todayContent {
   display: grid;
   gap: 0.8rem;
@@ -1021,6 +1025,10 @@
 
   .content > :global(.pal-achievements) {
     padding-inline: 0.75rem;
+  }
+
+  .content > :global(.pal-collection) {
+    margin: 0.5rem 0.75rem;
   }
 }
 

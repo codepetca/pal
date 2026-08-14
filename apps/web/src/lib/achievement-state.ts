@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -446,7 +446,7 @@ async function recomputeWeeklyRhythm(
   periodKey: string,
   factId: string,
   occurredAt: Date,
-): Promise<void> {
+): Promise<boolean> {
   const [configuration] = await db
     .select()
     .from(weeklyRhythmConfigs)
@@ -457,7 +457,7 @@ async function recomputeWeeklyRhythm(
       ),
     )
     .limit(1);
-  if (!configuration) return;
+  if (!configuration) return false;
 
   const current = await completionCount(db, learnerId, periodKey);
   const targetDays = weeklyTarget(configuration.eligibleDays);
@@ -487,12 +487,12 @@ async function recomputeWeeklyRhythm(
         .delete(achievementInstances)
         .where(eq(achievementInstances.id, existing.id));
     }
-    return;
+    return false;
   }
 
   // An award is historical. Open-period revisions may recompute only an
   // unawarded target; they never revoke or visually weaken an earned instance.
-  if (existing?.status === "earned") return;
+  if (existing?.status === "earned") return false;
 
   const earned =
     !reconciliationRequired && current >= targetDays;
@@ -521,7 +521,7 @@ async function recomputeWeeklyRhythm(
         updatedAt: new Date(),
       })
       .where(eq(achievementInstances.id, existing.id));
-    return;
+    return status === "earned";
   }
 
   await db.insert(achievementInstances).values({
@@ -535,6 +535,7 @@ async function recomputeWeeklyRhythm(
     earnedAt: status === "earned" ? occurredAt : null,
     sourceFactId: factId,
   });
+  return status === "earned";
 }
 
 async function applyWeeklyConfiguration(
@@ -542,7 +543,7 @@ async function applyWeeklyConfiguration(
   learnerId: string,
   fact: RecordedFact,
   event: IncomingEvent,
-): Promise<void> {
+): Promise<boolean> {
   const periodKey = metadataString(event, "period_key");
   const version = metadataInteger(event, "config_version");
   const eligibleDays = metadataInteger(event, "eligible_days");
@@ -580,7 +581,7 @@ async function applyWeeklyConfiguration(
       .where(eq(weeklyRhythmConfigs.id, existing.id));
   }
 
-  await recomputeWeeklyRhythm(
+  return recomputeWeeklyRhythm(
     db,
     learnerId,
     periodKey,
@@ -589,12 +590,33 @@ async function applyWeeklyConfiguration(
   );
 }
 
+export async function earnedWeeklyRhythmCount(
+  db: Db,
+  learnerId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(achievementInstances)
+    .where(
+      and(
+        eq(achievementInstances.learnerId, learnerId),
+        eq(achievementInstances.achievementKey, ACHIEVEMENT_KEYS.weeklyRhythm),
+        eq(achievementInstances.status, "earned"),
+      ),
+    );
+  return row?.value ?? 0;
+}
+
+export type AchievementFactResult = {
+  weeklyRhythmEarnedCount?: number;
+};
+
 export async function applyAchievementFact(
   db: Db,
   learnerId: string,
   fact: RecordedFact,
   event: IncomingEvent,
-): Promise<void> {
+): Promise<AchievementFactResult> {
   const occurredAt = new Date(event.occurred_at);
   switch (event.event_type) {
     case "platform.session.started":
@@ -607,7 +629,7 @@ export async function applyAchievementFact(
         factId: fact.id,
         occurredAt,
       });
-      return;
+      return {};
     case "classroom.joined":
       await createScopedOutcome(db, {
         learnerId,
@@ -618,19 +640,28 @@ export async function applyAchievementFact(
         factId: fact.id,
         occurredAt,
       });
-      return;
+      return {};
     case "daily_log_week.configured":
-      await applyWeeklyConfiguration(db, learnerId, fact, event);
-      return;
-    case "daily_log.completed":
-      await recomputeWeeklyRhythm(
+      if (await applyWeeklyConfiguration(db, learnerId, fact, event)) {
+        return {
+          weeklyRhythmEarnedCount: await earnedWeeklyRhythmCount(db, learnerId),
+        };
+      }
+      return {};
+    case "daily_log.completed": {
+      const earned = await recomputeWeeklyRhythm(
         db,
         learnerId,
         metadataString(event, "period_key"),
         fact.id,
         occurredAt,
       );
-      return;
+      return earned
+        ? {
+            weeklyRhythmEarnedCount: await earnedWeeklyRhythmCount(db, learnerId),
+          }
+        : {};
+    }
     case "learning_item.viewed":
       await createScopedOutcome(db, {
         learnerId,
@@ -644,7 +675,7 @@ export async function applyAchievementFact(
         factId: fact.id,
         occurredAt,
       });
-      return;
+      return {};
     case "learning_item.completed": {
       const earned = metadataString(event, "timing") === "on_time";
       const outcome = await createScopedOutcome(db, {
@@ -669,7 +700,8 @@ export async function applyAchievementFact(
           })
           .onConflictDoNothing();
       }
-      return;
+      return {};
     }
   }
+  return {};
 }
