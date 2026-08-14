@@ -283,3 +283,61 @@ test(
     }
   },
 );
+
+test(
+  "persists a story title with its short-term merged chapter reveal",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `story-title-${crypto.randomUUID()}`;
+    const periodKey = `title-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(periodKey, 1, 6, 1),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-08-31" },
+          "2026-08-31T15:00:00.000Z",
+        ),
+        key(),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-08-31T16:00:00.000Z") },
+      );
+
+      assert.equal(snapshot.rewards[0]?.kind, "story");
+      assert.equal(snapshot.rewards[0]?.title, "Keep the light on");
+      assert.equal(snapshot.rewards[0]?.collectibleTitle, "Mystery Egg");
+      assert.equal(snapshot.rewards[0]?.titleAward, "Gentle Keeper");
+      assert.equal(
+        snapshot.rewards[0]?.titleRevealCopy,
+        "Pip remembers who kept the light on.",
+      );
+      assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
+      assert.equal(snapshot.progression?.titles.find(
+        (title) => title.id === "gentle-keeper",
+      )?.status, "earned");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
