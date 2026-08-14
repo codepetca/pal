@@ -30,8 +30,13 @@ import type {
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 import { collectionItemsForUnlocks } from "@codepet/pal-widget";
+import { createPalProgressionState } from "@codepet/pal-widget/progression";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
+import {
+  loadPersistedStoryPlan,
+  storyRewardDetails,
+} from "@/lib/story-plan";
 
 const LEGACY_SEMESTER_WEEKS = 16;
 
@@ -312,6 +317,9 @@ export async function loadLearnerSnapshot(
         (currentTermMetadata?.term_week_count as number) <= 24
           ? (currentTermMetadata?.term_week_count as number)
           : LEGACY_SEMESTER_WEEKS;
+      const persistedStoryPlan = typeof currentTermToken === "string"
+        ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
+        : undefined;
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -502,6 +510,7 @@ export async function loadLearnerSnapshot(
         },
       );
 
+      const progressionAchievements: PalAchievement[] = [];
       for (const instance of instances) {
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
@@ -513,7 +522,10 @@ export async function loadLearnerSnapshot(
             ? (reconciliation.get(instance.periodKey) ?? false)
             : false,
         );
-        if (achievement) weeks[weekNumber - 1].achievements.push(achievement);
+        if (achievement) {
+          progressionAchievements.push(achievement);
+          weeks[weekNumber - 1].achievements.push(achievement);
+        }
       }
       for (const week of weeks) {
         week.achievements = week.achievements.slice(0, 100);
@@ -525,6 +537,20 @@ export async function loadLearnerSnapshot(
         pet?.mood ?? "neutral",
         pet?.moodExpiresAt ?? null,
       );
+      const companion = {
+        name: "Pip",
+        mood,
+        moodLabel: mood[0].toUpperCase() + mood.slice(1),
+        level: eco?.level ?? 1,
+        streak: eco?.streakCurrent ?? 0,
+        xp: eco?.xp ?? 0,
+        xpToNextLevel: Math.max(
+          0,
+          PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
+        ),
+        message: moodMessage(mood),
+        assetUrl: "/assets/pets/default.png",
+      };
       return {
         schemaVersion: 1,
         roadmap: {
@@ -532,20 +558,7 @@ export async function loadLearnerSnapshot(
           currentWeek,
           weeks,
         },
-        companion: {
-          name: "Pip",
-          mood,
-          moodLabel: mood[0].toUpperCase() + mood.slice(1),
-          level: eco?.level ?? 1,
-          streak: eco?.streakCurrent ?? 0,
-          xp: eco?.xp ?? 0,
-          xpToNextLevel: Math.max(
-            0,
-            PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
-          ),
-          message: moodMessage(mood),
-          assetUrl: "/assets/pets/default.png",
-        },
+        companion,
         collection: {
           items: collectionItemsForUnlocks(
             worldRows[0]?.unlockedObjectIds ?? [],
@@ -556,7 +569,29 @@ export async function loadLearnerSnapshot(
           title: reward.title,
           description: reward.description,
           ...(reward.icon ? { icon: reward.icon } : {}),
+          ...storyRewardDetails(reward.rewardKey),
         })),
+        ...(persistedStoryPlan
+          ? {
+              progression: createPalProgressionState({
+                currentWeek,
+                totalWeeks: weeks.length,
+                level: companion.level,
+                streak: companion.streak,
+                achievements: progressionAchievements,
+                storyPlan: persistedStoryPlan,
+                earnedWeeks: weeks.flatMap((week) =>
+                  week.achievements.some(
+                    (achievement) =>
+                      achievement.title === "Weekly Rhythm" &&
+                      achievement.status === "earned",
+                  )
+                    ? [week.number]
+                    : [],
+                ),
+              }),
+            }
+          : {}),
       };
     },
     {

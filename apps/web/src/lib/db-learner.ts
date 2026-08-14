@@ -33,6 +33,7 @@ import {
   type LearnerState,
   type ProcessResult,
 } from "@pal/engine";
+import { ensureStoryPlanForEvent } from "@/lib/story-plan";
 
 // ---------------------------------------------------------------------------
 // Learner lookup / creation  (by integration's external learner ID)
@@ -293,6 +294,10 @@ export async function processEventInDb(
         event,
       });
     }
+
+    // Calendar-bearing weekly facts create and bind the learner's immutable
+    // term story schedule before an achievement can earn its collectible.
+    await ensureStoryPlanForEvent(tx, learnerId, event);
 
     // 7. Read current state
     const [eco] = await tx

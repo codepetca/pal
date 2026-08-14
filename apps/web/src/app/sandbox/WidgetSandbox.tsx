@@ -924,7 +924,7 @@ function SandboxExperience({
                     onTermWeeksChange={(weeks) => {
                       setTermWeeks(weeks);
                       setSimulatedDate((current) => {
-                        const currentWeek = semesterWeekForDate(current);
+                        const currentWeek = semesterWeekForDate(current, 24);
                         return currentWeek <= weeks
                           ? current
                           : addDays(

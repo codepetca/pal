@@ -105,9 +105,16 @@ older widget/API pair.
 - A deterministic story plan selects one chapter for each supported 6–24 week
   instructional term. Eight core chapters preserve the emotional arc while
   optional chapters let longer terms breathe.
+- The first calendar-bearing weekly configuration persists the complete plan
+  under the learner row lock. Each later configuration binds its opaque period
+  to that plan's matching ordinal; snapshots read this stored order rather than
+  silently generating a new schedule. The original five-field calendar form
+  remains supported as a 16-week plan.
 - A period's collectible is earned only when that period's durable Weekly
-  Rhythm achievement is earned. Level, streak, and assignment milestones may
-  award titles or ordinary rewards, but never unlock story props.
+  Rhythm achievement is earned. That transition queues one story reveal linked
+  to the weekly achievement, so retries and later activity cannot create a
+  second collectible. Level, streak, and assignment milestones may award titles
+  or ordinary rewards, but never unlock story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready

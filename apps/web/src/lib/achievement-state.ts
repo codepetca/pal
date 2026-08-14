@@ -8,6 +8,7 @@ import {
   type Db,
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
+import { awardStoryCollectibleForPeriod } from "@/lib/story-plan";
 
 export const ACHIEVEMENT_KEYS = {
   firstLogin: "first-pika-login",
@@ -989,20 +990,40 @@ async function recomputeWeeklyRhythm(
         updatedAt: new Date(),
       })
       .where(eq(achievementInstances.id, existing.id));
+    if (status === "earned") {
+      await awardStoryCollectibleForPeriod(
+        db,
+        learnerId,
+        periodKey,
+        existing.id,
+      );
+    }
     return status === "earned";
   }
 
-  await db.insert(achievementInstances).values({
-    learnerId,
-    achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
-    scopeKey: periodKey,
-    periodKey,
-    status,
-    progressCurrent: displayCurrent,
-    progressTarget: displayTarget,
-    earnedAt: status === "earned" ? occurredAt : null,
-    sourceFactId: factId,
-  });
+  const [created] = await db
+    .insert(achievementInstances)
+    .values({
+      learnerId,
+      achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
+      scopeKey: periodKey,
+      periodKey,
+      status,
+      progressCurrent: displayCurrent,
+      progressTarget: displayTarget,
+      earnedAt: status === "earned" ? occurredAt : null,
+      sourceFactId: factId,
+    })
+    .returning({ id: achievementInstances.id });
+  if (!created) throw new Error("Failed to create Weekly Rhythm achievement");
+  if (status === "earned") {
+    await awardStoryCollectibleForPeriod(
+      db,
+      learnerId,
+      periodKey,
+      created.id,
+    );
+  }
   return status === "earned";
 }
 
