@@ -181,6 +181,7 @@ export const storyPlans = pgTable(
   },
   (t) => [
     unique("story_plans_learner_term_uq").on(t.learnerId, t.termKey),
+    unique("story_plans_id_learner_uq").on(t.id, t.learnerId),
     check("story_plans_version_positive", sql`${t.storyVersion} >= 1`),
     check(
       "story_plans_period_count_range",
@@ -196,9 +197,8 @@ export const storyPlanChapters = pgTable(
   "story_plan_chapters",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    storyPlanId: uuid("story_plan_id")
-      .notNull()
-      .references(() => storyPlans.id, { onDelete: "cascade" }),
+    storyPlanId: uuid("story_plan_id").notNull(),
+    learnerId: uuid("learner_id").notNull(),
     periodNumber: integer("period_number").notNull(),
     periodKey: text("period_key"),
     chapterId: text("chapter_id").notNull(),
@@ -218,6 +218,20 @@ export const storyPlanChapters = pgTable(
       t.storyPlanId,
       t.chapterId,
     ),
+    unique("story_plan_chapters_learner_period_uq").on(
+      t.learnerId,
+      t.periodKey,
+    ),
+    foreignKey({
+      columns: [t.storyPlanId, t.learnerId],
+      foreignColumns: [storyPlans.id, storyPlans.learnerId],
+      name: "story_plan_chapters_plan_owner_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.learnerId, t.periodKey],
+      foreignColumns: [achievementPeriods.learnerId, achievementPeriods.periodKey],
+      name: "story_plan_chapters_period_owner_fk",
+    }).onDelete("cascade"),
     check(
       "story_plan_chapters_period_number_range",
       sql`${t.periodNumber} >= 1 AND ${t.periodNumber} <= 24`,
@@ -484,8 +498,12 @@ export const storyPlanChaptersRelations = relations(
   storyPlanChapters,
   ({ one }) => ({
     storyPlan: one(storyPlans, {
-      fields: [storyPlanChapters.storyPlanId],
-      references: [storyPlans.id],
+      fields: [storyPlanChapters.storyPlanId, storyPlanChapters.learnerId],
+      references: [storyPlans.id, storyPlans.learnerId],
+    }),
+    period: one(achievementPeriods, {
+      fields: [storyPlanChapters.learnerId, storyPlanChapters.periodKey],
+      references: [achievementPeriods.learnerId, achievementPeriods.periodKey],
     }),
   }),
 );
