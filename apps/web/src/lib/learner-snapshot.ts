@@ -30,7 +30,7 @@ import type {
 } from "@codepet/pal-widget";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
 
-const SEMESTER_WEEKS = 16;
+const LEGACY_SEMESTER_WEEKS = 16;
 const LEVEL_UP_COST_XP = 500;
 
 export class LearnerScopeError extends Error {
@@ -299,19 +299,29 @@ export async function loadLearnerSnapshot(
       const termStartDay = currentTermMetadata?.term_start_day;
       const termEndDay = currentTermMetadata?.term_end_day;
       const termTimezone = currentTermMetadata?.term_timezone;
+      const termWeekCount =
+        Number.isInteger(currentTermMetadata?.term_week_count) &&
+        (currentTermMetadata?.term_week_count as number) >= 6 &&
+        (currentTermMetadata?.term_week_count as number) <= 24
+          ? (currentTermMetadata?.term_week_count as number)
+          : LEGACY_SEMESTER_WEEKS;
       const authoritativeWeekNumbers = new Map<string, number>();
+      const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
         const metadata = fact.metadata as Record<string, unknown>;
         const weekIndex = metadata.week_index;
+        const weekStartDay = metadata.week_start_day;
         if (
           fact.periodKey &&
           typeof currentTermToken === "string" &&
           metadata.term_token === currentTermToken &&
           Number.isInteger(weekIndex) &&
           (weekIndex as number) >= 1 &&
-          (weekIndex as number) <= SEMESTER_WEEKS
+          (weekIndex as number) <= termWeekCount &&
+          typeof weekStartDay === "string"
         ) {
           authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
+          authoritativeWeekStarts.set(fact.periodKey, weekStartDay);
         }
       }
       const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
@@ -378,7 +388,7 @@ export async function loadLearnerSnapshot(
             : asc(achievementPeriods.anchorAt),
           asc(achievementPeriods.createdAt),
         )
-        .limit(SEMESTER_WEEKS);
+        .limit(termWeekCount);
       const legacyPlacementDays = new Map(
         legacyPeriods.map((period) => [period.periodKey, period.placementDay]),
       );
@@ -410,7 +420,7 @@ export async function loadLearnerSnapshot(
                 Date.parse(`${termStartDay}T00:00:00.000Z`)) /
                 (7 * 86_400_000),
             ) + 1;
-          if (derivedWeek >= 1 && derivedWeek <= SEMESTER_WEEKS) {
+          if (derivedWeek >= 1 && derivedWeek <= termWeekCount) {
             periodNumbers.set(period.periodKey, derivedWeek);
           }
           continue;
@@ -423,9 +433,31 @@ export async function loadLearnerSnapshot(
           configuration.reconciliationRequired,
         ]),
       );
-      const currentWeek = Math.max(1, ...periodNumbers.values());
+      const asOf = options.asOf ?? new Date();
+      const asOfDay =
+        typeof termTimezone === "string"
+          ? calendarDayInTimeZone(asOf, termTimezone)
+          : null;
+      const startedWeekNumbers = [...periodNumbers.entries()].flatMap(
+        ([periodKey, weekNumber]) => {
+          const authoritativeStart = authoritativeWeekStarts.get(periodKey);
+          if (authoritativeStart) {
+            return asOfDay !== null && authoritativeStart <= asOfDay
+              ? [weekNumber]
+              : [];
+          }
+          const legacyStart = legacyPlacementDays.get(periodKey);
+          return asOfDay === null || (legacyStart && legacyStart <= asOfDay)
+            ? [weekNumber]
+            : [];
+        },
+      );
+      const currentWeek = Math.min(
+        termWeekCount,
+        Math.max(1, ...startedWeekNumbers),
+      );
       const weeks: PalRoadmapWeek[] = Array.from(
-        { length: SEMESTER_WEEKS },
+        { length: termWeekCount },
         (_, index) => {
           const number = index + 1;
           const status =
@@ -455,7 +487,7 @@ export async function loadLearnerSnapshot(
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
           : 1;
-        if (!weekNumber || weekNumber > SEMESTER_WEEKS) continue;
+        if (!weekNumber || weekNumber > termWeekCount) continue;
         const achievement = achievementFromRow(
           instance,
           instance.periodKey

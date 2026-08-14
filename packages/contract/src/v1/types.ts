@@ -38,6 +38,8 @@ type LegacyTermCalendar = {
   term_start_day?: never;
   term_end_day?: never;
   term_timezone?: never;
+  term_week_count?: never;
+  week_start_day?: never;
   week_index?: never;
 };
 
@@ -46,6 +48,8 @@ type AuthoritativeTermCalendar = {
   term_start_day: string;
   term_end_day: string;
   term_timezone: string;
+  term_week_count: number;
+  week_start_day: string;
   week_index: number;
 };
 

@@ -601,6 +601,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",
@@ -613,7 +615,12 @@ test(
         integration.id,
         externalLearnerId,
       );
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 7);
       assert.equal(snapshot.roadmap.weeks[0].achievements.length, 0);
       assert.ok(
@@ -623,6 +630,143 @@ test(
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps a preconfigured later week future until its authoritative local start",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `future-week-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const calendar = {
+      config_version: 1,
+      period_status: "open" as const,
+      eligible_days: 5,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+      term_week_count: 12,
+    };
+    try {
+      for (const week of [
+        // The two-week gap proves currentness does not assume consecutive
+        // seven-day periods or use configuration delivery time. Sending Week
+        // 2 first also proves delivery order is irrelevant.
+        { index: 2, start: "2026-09-14" },
+        { index: 1, start: "2026-08-31" },
+      ]) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              ...calendar,
+              period_key: `future-week-${week.index}-${crypto.randomUUID()}`,
+              week_start_day: week.start,
+              week_index: week.index,
+            },
+            "2026-08-30T12:00:00.000Z",
+          ),
+          key(),
+        );
+      }
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const before = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-14T03:59:59.000Z") },
+      );
+      const at = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-14T04:00:00.000Z") },
+      );
+
+      assert.equal(before.roadmap.currentWeek, 1);
+      assert.equal(before.roadmap.weeks.length, 12);
+      assert.equal(before.roadmap.weeks[1]?.status, "future");
+      assert.ok(
+        before.roadmap.weeks[1]?.achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+      assert.equal(at.roadmap.currentWeek, 2);
+      assert.equal(at.roadmap.weeks[1]?.status, "current");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "sizes the roadmap to the producer's authoritative term week count",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+
+    for (const termWeekCount of [6, 12, 24]) {
+      const externalLearnerId = `term-length-${termWeekCount}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `week-${termWeekCount}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: `term-${termWeekCount}`,
+              term_start_day: "2026-01-01",
+              term_end_day: "2026-12-31",
+              term_timezone: "America/Toronto",
+              term_week_count: termWeekCount,
+              week_start_day: "2026-06-01",
+              week_index: termWeekCount,
+            },
+            "2026-06-01T12:00:00.000Z",
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date("2026-06-01T12:00:00.000Z") },
+        );
+        assert.equal(snapshot.roadmap.weeks.length, termWeekCount);
+        assert.equal(snapshot.roadmap.currentWeek, termWeekCount);
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
     }
   },
 );
@@ -688,6 +832,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
             week_index: 3,
           },
           "2026-09-14T12:00:00.000Z",
@@ -741,6 +887,8 @@ test(
       term_start_day: "2026-08-31",
       term_end_day: "2026-12-18",
       term_timezone: "America/Toronto",
+      term_week_count: 16,
+      week_start_day: "2026-10-12",
       week_index: 7,
     };
     try {
@@ -770,6 +918,26 @@ test(
         status: "rejected",
         error: "conflicting_period_calendar",
       });
+
+      const changedLength = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            ...calendar,
+            period_key: `period-c-${crypto.randomUUID()}`,
+            term_week_count: 12,
+            week_index: 8,
+          },
+          "2026-10-12T14:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.deepEqual(changedLength, {
+        status: "rejected",
+        error: "conflicting_period_calendar",
+      });
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -790,11 +958,13 @@ test(
       {
         label: "pre-start",
         occurredAt: "2026-08-30T23:00:00.000Z",
+        weekStartDay: "2026-08-31",
         weekIndex: 1,
       },
       {
         label: "post-end-backfill",
         occurredAt: "2026-12-20T12:00:00.000Z",
+        weekStartDay: "2026-12-14",
         weekIndex: 16,
       },
     ];
@@ -816,6 +986,8 @@ test(
               term_start_day: "2026-08-31",
               term_end_day: "2026-12-18",
               term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: scenario.weekStartDay,
               week_index: scenario.weekIndex,
             },
             scenario.occurredAt,
@@ -834,7 +1006,7 @@ test(
           getDb(),
           { asOf: new Date("2026-10-15T12:00:00.000Z") },
         );
-        assert.equal(snapshot.roadmap.currentWeek, scenario.weekIndex);
+        assert.equal(snapshot.roadmap.currentWeek, 1);
         assert.ok(
           snapshot.roadmap.weeks[scenario.weekIndex - 1].achievements.some(
             (achievement) => achievement.title === "Weekly Rhythm",
@@ -874,6 +1046,8 @@ test(
             term_start_day: "2026-01-05",
             term_end_day: "2026-04-24",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-04-20",
             week_index: 16,
           },
           // The backfill is delivered during the later term. Its anchor must
@@ -896,6 +1070,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-07",
             week_index: 2,
           },
           "2026-09-07T13:00:00.000Z",
@@ -958,6 +1134,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-11-02",
             week_index: 10,
           },
           "2026-11-02T12:00:00.000Z",
@@ -978,6 +1156,8 @@ test(
             term_start_day: "2027-01-04",
             term_end_day: "2027-04-23",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2027-01-04",
             week_index: 1,
           },
           "2026-11-03T12:00:00.000Z",
@@ -1074,6 +1254,8 @@ test(
               term_start_day: boundary.previous.start,
               term_end_day: boundary.previous.end,
               term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: boundary.previous.end,
               week_index: 16,
             },
             boundary.before,
@@ -1094,6 +1276,8 @@ test(
               term_start_day: boundary.next.start,
               term_end_day: boundary.next.end,
               term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: boundary.next.start,
               week_index: 1,
             },
             boundary.before,
@@ -1170,6 +1354,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",
@@ -1249,6 +1435,8 @@ test(
             term_start_day: "2026-08-31",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
             week_index: 7,
           },
           "2026-10-12T12:00:00.000Z",

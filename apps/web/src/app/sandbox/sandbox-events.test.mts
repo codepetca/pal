@@ -62,6 +62,8 @@ test("builds all six contract-valid pilot facts", () => {
       term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
       term_end_day: FICTIONAL_SEMESTER_END_DAY,
       term_timezone: FICTIONAL_TERM_TIME_ZONE,
+      term_week_count: 16,
+      week_start_day: "2026-04-13",
       week_index: 1,
     },
   );

@@ -114,6 +114,8 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
       "term_start_day",
       "term_end_day",
       "term_timezone",
+      "term_week_count",
+      "week_start_day",
       "week_index",
     ],
     check: (m) => {
@@ -131,11 +133,13 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
         "term_start_day",
         "term_end_day",
         "term_timezone",
+        "term_week_count",
+        "week_start_day",
         "week_index",
       ];
       const presentCalendarKeys = calendarKeys.filter((key) => m[key] !== undefined);
       if (presentCalendarKeys.length !== 0 && presentCalendarKeys.length !== calendarKeys.length) {
-        return "term_token, term_start_day, term_end_day, term_timezone, and week_index must be provided together";
+        return "term_token, term_start_day, term_end_day, term_timezone, term_week_count, week_start_day, and week_index must be provided together";
       }
       if (presentCalendarKeys.length === calendarKeys.length) {
         if (!isToken(m.term_token, 128))
@@ -148,8 +152,14 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
           return "term_start_day must be on or before term_end_day";
         if (!isIanaTimeZone(m.term_timezone))
           return "term_timezone must be a valid IANA time zone";
-        if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > 16)
-          return "week_index must be an integer 1-16";
+        if (!isInteger(m.term_week_count) || m.term_week_count < 6 || m.term_week_count > 24)
+          return "term_week_count must be an integer 6-24";
+        if (!isCalendarDay(m.week_start_day))
+          return "week_start_day must be a real YYYY-MM-DD date";
+        if (m.week_start_day < m.term_start_day || m.week_start_day > m.term_end_day)
+          return "week_start_day must fall within the term date range";
+        if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > m.term_week_count)
+          return "week_index must be an integer within term_week_count";
       }
       return null;
     },

@@ -13,6 +13,8 @@
     "term_start_day": "2026-08-31",
     "term_end_day": "2026-12-18",
     "term_timezone": "Toronto local time",
+    "term_week_count": 16,
+    "week_start_day": "2026-09-14",
     "week_index": 3
   }
 }

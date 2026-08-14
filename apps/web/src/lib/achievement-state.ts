@@ -90,6 +90,8 @@ const TERM_CALENDAR_KEYS = [
   "term_start_day",
   "term_end_day",
   "term_timezone",
+  "term_week_count",
+  "week_start_day",
   "week_index",
 ] as const;
 
@@ -103,6 +105,8 @@ function termCalendarMetadata(
     term_start_day: metadataString(event, "term_start_day"),
     term_end_day: metadataString(event, "term_end_day"),
     term_timezone: metadataString(event, "term_timezone"),
+    term_week_count: metadataInteger(event, "term_week_count"),
+    week_start_day: metadataString(event, "week_start_day"),
     week_index: metadataInteger(event, "week_index"),
   };
 }
@@ -212,7 +216,9 @@ export async function weeklyConfigurationRejection(
         (sameTermCalendar.metadata as Record<string, unknown>).term_end_day !==
           calendar.term_end_day ||
         (sameTermCalendar.metadata as Record<string, unknown>).term_timezone !==
-          calendar.term_timezone)
+          calendar.term_timezone ||
+        (sameTermCalendar.metadata as Record<string, unknown>).term_week_count !==
+          calendar.term_week_count)
     ) {
       return "conflicting_period_calendar";
     }
@@ -231,6 +237,26 @@ export async function weeklyConfigurationRejection(
       )
       .limit(1);
     if (occupiedWeek) return "conflicting_period_calendar";
+
+    const [outOfOrderWeek] = await db
+      .select({ id: learnerFacts.id })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+          sql`(
+            ((${learnerFacts.metadata}->>'week_index')::int < ${calendar.week_index}
+              and ${learnerFacts.metadata}->>'week_start_day' >= ${calendar.week_start_day})
+            or
+            ((${learnerFacts.metadata}->>'week_index')::int > ${calendar.week_index}
+              and ${learnerFacts.metadata}->>'week_start_day' <= ${calendar.week_start_day})
+          )`,
+        ),
+      )
+      .limit(1);
+    if (outOfOrderWeek) return "conflicting_period_calendar";
   }
   return null;
 }

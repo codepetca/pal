@@ -77,9 +77,21 @@
       "error": "invalid_metadata",
       "why": "'excused' is an academic state Pika owns; it is not a completion timing Pal can interpret."
     },
+    "term-week-count-out-of-range.json": {
+      "error": "invalid_metadata",
+      "why": "Pip's adaptive story supports terms from 6 through 24 instructional weeks."
+    },
     "unsupported-schema-version.json": {
       "error": "unsupported_schema_version",
       "why": "Pal must ship support for a version before a producer emits it. This failure is not retryable."
+    },
+    "week-index-exceeds-term.json": {
+      "error": "invalid_metadata",
+      "why": "A period's authoritative week position must fall inside its declared term length."
+    },
+    "week-start-outside-term.json": {
+      "error": "invalid_metadata",
+      "why": "An authoritative instructional week must start inside its declared term range."
     }
   }
 }

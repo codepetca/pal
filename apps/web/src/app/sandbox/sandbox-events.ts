@@ -37,6 +37,13 @@ export function periodKeyForDate(date: Date): string {
   return `sandbox-week-${String(semesterWeekForDate(date)).padStart(2, "0")}`;
 }
 
+function weekStartDayForDate(date: Date): string {
+  const weekIndex = semesterWeekForDate(date);
+  return new Date(SEMESTER_START.getTime() + (weekIndex - 1) * 7 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 /** Maps sandbox controls to fully valid v1 events at the simulated instant. */
 export function eventForAction(
   action: SandboxAction,
@@ -84,6 +91,8 @@ export function eventForAction(
           term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
           term_end_day: FICTIONAL_SEMESTER_END_DAY,
           term_timezone: FICTIONAL_TERM_TIME_ZONE,
+          term_week_count: 16,
+          week_start_day: weekStartDayForDate(simulatedDate),
           week_index: semesterWeekForDate(simulatedDate),
         },
       };

@@ -55,7 +55,7 @@ The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
 versioned independently from event ingestion and includes:
 
-- the 16-week roadmap and stored achievement state;
+- the authoritative 6–24-week term roadmap and stored achievement state (16 weeks for legacy producers);
 - current companion state; and
 - unseen reward notices.
 
