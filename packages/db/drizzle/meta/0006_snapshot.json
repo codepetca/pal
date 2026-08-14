@@ -1,5 +1,5 @@
 {
-  "id": "fe39da44-8985-4160-a3bd-ed6ceb9d8567",
+  "id": "215b00da-20f5-476e-918b-71d6353d4dc2",
   "prevId": "718ff238-34f8-46b6-ae93-2f0df88e25b2",
   "version": "7",
   "dialect": "postgresql",
@@ -977,6 +977,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "period_number": {
           "name": "period_number",
           "type": "integer",
@@ -1012,15 +1018,32 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "story_plan_chapters_story_plan_id_story_plans_id_fk": {
-          "name": "story_plan_chapters_story_plan_id_story_plans_id_fk",
+        "story_plan_chapters_plan_owner_fk": {
+          "name": "story_plan_chapters_plan_owner_fk",
           "tableFrom": "story_plan_chapters",
           "tableTo": "story_plans",
           "columnsFrom": [
-            "story_plan_id"
+            "story_plan_id",
+            "learner_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "story_plan_chapters_period_owner_fk": {
+          "name": "story_plan_chapters_period_owner_fk",
+          "tableFrom": "story_plan_chapters",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1050,6 +1073,14 @@
           "columns": [
             "story_plan_id",
             "chapter_id"
+          ]
+        },
+        "story_plan_chapters_learner_period_uq": {
+          "name": "story_plan_chapters_learner_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "period_key"
           ]
         }
       },
@@ -1146,6 +1177,14 @@
           "columns": [
             "learner_id",
             "term_key"
+          ]
+        },
+        "story_plans_id_learner_uq": {
+          "name": "story_plans_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
           ]
         }
       },

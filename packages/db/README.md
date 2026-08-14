@@ -47,7 +47,9 @@ Two constraints carry more weight than the rest:
 - `UNIQUE (story_plan_id, period_number)`, `UNIQUE (story_plan_id, period_key)`,
   and `UNIQUE (story_plan_id, chapter_id)` on `story_plan_chapters` — one plan
   cannot schedule two rewards in one position, bind one period twice, or repeat
-  a collectible chapter.
+  a collectible chapter. Composite foreign keys ensure every non-null period
+  belongs to the plan's learner, and a deferred commit-time constraint requires
+  exactly the contiguous ordinals `1..total_periods`.
 - `UNIQUE (achievement_instance_id)` on `reward_notices` — retrying an award
   cannot queue a second celebration.
 
