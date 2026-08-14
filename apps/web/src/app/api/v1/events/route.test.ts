@@ -9,7 +9,8 @@ import {
   resolveIntegration,
   resolveSandboxIntegration,
 } from "@/lib/integration-auth";
-import { isPlausibleActivityDay, POST } from "./route";
+import { isPlausibleActivityDay } from "@/lib/activity-day";
+import { POST } from "./route";
 
 const secret = "route-test-sandbox-secret-at-least-32-characters";
 const pikaSecret = "route-test-pika-secret-at-least-32-characters";

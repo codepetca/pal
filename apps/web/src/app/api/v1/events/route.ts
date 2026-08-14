@@ -3,27 +3,13 @@ import { v1 } from "@pal/contract";
 import type { IncomingEvent } from "@pal/engine";
 import { identifyIntegration, resolveIntegration } from "@/lib/integration-auth";
 import { processEventInDb } from "@/lib/db-learner";
+import { isPlausibleActivityDay } from "@/lib/activity-day";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
 // Small on purpose: it only absorbs clock drift between an integration and us
 // (minutes at worst), not timezones — occurred_at is an absolute instant. The
 // rejection is instant-granular so same-day future hours are not admitted.
 const CLOCK_SKEW_MS = 60 * 60 * 1000;
-const MINIMUM_IANA_OFFSET_MS = -12 * 60 * 60 * 1000;
-const MAXIMUM_IANA_OFFSET_MS = 14 * 60 * 60 * 1000;
-
-export function isPlausibleActivityDay(
-  activityDay: string,
-  occurredAtMs: number,
-): boolean {
-  const earliest = new Date(occurredAtMs + MINIMUM_IANA_OFFSET_MS)
-    .toISOString()
-    .slice(0, 10);
-  const latest = new Date(occurredAtMs + MAXIMUM_IANA_OFFSET_MS)
-    .toISOString()
-    .slice(0, 10);
-  return earliest <= activityDay && activityDay <= latest;
-}
 
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
