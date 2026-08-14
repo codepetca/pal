@@ -1,4 +1,4 @@
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -19,6 +19,7 @@ export const ACHIEVEMENT_KEYS = {
 
 const FIRST_WEEKLY_CONFIGURATION_FACT =
   "internal.daily_log_week.first_configuration";
+const DAILY_LOG_PENDING_FACT = "internal.daily_log.reward_pending";
 const DAILY_LOG_SETTLEMENT_FACT = "internal.daily_log.reward_settlement";
 
 type AchievementStatus = "earned" | "in-progress" | "incomplete";
@@ -539,6 +540,32 @@ export async function recordImmediateDailyLogSettlement(
   });
 }
 
+export async function recordPendingDailyLogReward(
+  db: Db,
+  input: {
+    integrationId: string;
+    learnerId: string;
+    sourceEventId: string;
+    factId: string;
+    event: IncomingEvent;
+  },
+): Promise<void> {
+  if (input.event.event_type !== "daily_log.completed") return;
+  await db
+    .insert(learnerFacts)
+    .values({
+      integrationId: input.integrationId,
+      learnerId: input.learnerId,
+      sourceEventId: input.sourceEventId,
+      eventType: DAILY_LOG_PENDING_FACT,
+      semanticKey: input.factId,
+      periodKey: metadataString(input.event, "period_key"),
+      occurredAt: new Date(input.event.occurred_at),
+      metadata: { status: "pending" },
+    })
+    .onConflictDoNothing();
+}
+
 export async function settlePendingDailyLogEvents(
   db: Db,
   learnerId: string,
@@ -585,6 +612,24 @@ export async function settlePendingDailyLogEvents(
     // only the configured number (at most five) is settled.
     .limit(settlementLimit + 1);
   const settledFacts = facts.slice(0, settlementLimit);
+  const pendingMarkers = settledFacts.length
+    ? await db
+        .select({ completionFactId: learnerFacts.semanticKey })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.eventType, DAILY_LOG_PENDING_FACT),
+            inArray(
+              learnerFacts.semanticKey,
+              settledFacts.map((fact) => fact.id),
+            ),
+          ),
+        )
+    : [];
+  const rewardPendingIds = new Set(
+    pendingMarkers.map((marker) => marker.completionFactId),
+  );
   for (const fact of settledFacts) {
     await recordDailyLogSettlement(db, {
       integrationId: fact.integrationId,
@@ -595,7 +640,9 @@ export async function settlePendingDailyLogEvents(
       occurredAt: fact.occurredAt,
     });
   }
-  return settledFacts.map(({ occurredAt, metadata }) => ({
+  return settledFacts
+    .filter(({ id }) => rewardPendingIds.has(id))
+    .map(({ occurredAt, metadata }) => ({
       event_type: "daily_log.completed" as const,
       occurred_at: occurredAt.toISOString(),
       metadata: metadata as IncomingEvent["metadata"],
