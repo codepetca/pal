@@ -1,7 +1,7 @@
 # Data Model
 
 > Living document. Update as the schema evolves.
-> Last updated: 2026-08-01
+> Last updated: 2026-08-14
 
 The authoritative schema is `packages/db/src/schema.ts` — column-level detail,
 indexes, and foreign keys live there, not here. This document covers what the
@@ -28,6 +28,7 @@ These exist as tables today:
 - **WorldState** — stage and unlocked objects per learner.
 - **LearnerFact** — a privacy-safe, semantically unique fact derived from an accepted event. It prevents the same learner behavior from counting twice even if a producer changes the transport idempotency key.
 - **AchievementPeriod** — roadmap placement for an opaque academic period. Its anchor is the earliest authoritative behavior/configuration time seen for that period, so delivery order cannot reorder weeks.
+- **StoryPlan** — one versioned story identity and supported period count for a learner's opaque academic term. Its normalized chapter assignments keep a unique ordinal and may bind to an opaque period key; event processing serializes plan creation and term-length revisions under the learner row lock, preserving every earned assignment while regenerating only future unearned chapters. Chapter IDs are catalog references, never student-authored content.
 - **WeeklyRhythmConfig** — the highest accepted Pika opportunity configuration for one learner and period, including whether delayed facts require reconciliation.
 - **AchievementInstance** — one durable achievement outcome within its lifetime, classroom, item, or weekly scope. Earned outcomes are historical and are not revoked by later source-system edits.
 - **RewardNotice** — an exactly-once learner-facing reward notification linked to its achievement instance. A nullable acknowledgement timestamp makes reads retryable and acknowledgement idempotent.
