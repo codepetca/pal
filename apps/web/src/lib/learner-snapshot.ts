@@ -2,6 +2,7 @@ import {
   and,
   asc,
   eq,
+  getTableColumns,
   gte,
   inArray,
   isNull,
@@ -127,31 +128,6 @@ function calendarDayInTimeZone(date: Date, timeZone: string): string {
   const value = (type: "year" | "month" | "day") =>
     parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}`;
-}
-
-function startOfCalendarDayInTimeZone(day: string, timeZone: string): Date {
-  const utcMidnight = Date.parse(`${day}T00:00:00.000Z`);
-  let candidate = utcMidnight;
-  // Offset at UTC midnight can differ from offset at the target local midnight
-  // on a DST transition. Re-evaluating converges on the intended instant.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const zoneName = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      timeZoneName: "longOffset",
-    })
-      .formatToParts(new Date(candidate))
-      .find((part) => part.type === "timeZoneName")?.value;
-    const match = zoneName?.match(/^GMT(?:([+-])(\d{2}):(\d{2}))?$/);
-    if (!match?.[1]) {
-      candidate = utcMidnight;
-      continue;
-    }
-    const direction = match[1] === "+" ? 1 : -1;
-    const offsetMinutes =
-      direction * (Number(match[2]) * 60 + Number(match[3]));
-    candidate = utcMidnight - offsetMinutes * 60_000;
-  }
-  return new Date(candidate);
 }
 
 function nextCalendarDay(day: string): string {
@@ -323,17 +299,6 @@ export async function loadLearnerSnapshot(
       const termStartDay = currentTermMetadata?.term_start_day;
       const termEndDay = currentTermMetadata?.term_end_day;
       const termTimezone = currentTermMetadata?.term_timezone;
-      const termStart =
-        typeof termStartDay === "string" && typeof termTimezone === "string"
-          ? startOfCalendarDayInTimeZone(termStartDay, termTimezone)
-          : null;
-      const termEndExclusive =
-        typeof termEndDay === "string" && typeof termTimezone === "string"
-          ? startOfCalendarDayInTimeZone(
-              nextCalendarDay(termEndDay),
-              termTimezone,
-            )
-          : null;
       const authoritativeWeekNumbers = new Map<string, number>();
       for (const fact of calendarFacts) {
         const metadata = fact.metadata as Record<string, unknown>;
@@ -368,16 +333,33 @@ export async function loadLearnerSnapshot(
               ),
             )
         : [];
+      const legacyPlacementDay = sql<string>`coalesce(
+        (
+          select min("legacy_activity_facts"."metadata"->>'activity_day')
+          from "learner_facts" as "legacy_activity_facts"
+          where "legacy_activity_facts"."learner_id" = "achievement_periods"."learner_id"
+            and "legacy_activity_facts"."period_key" = "achievement_periods"."period_key"
+            and "legacy_activity_facts"."event_type" = 'daily_log.completed'
+        ),
+        to_char(
+          "achievement_periods"."anchor_at" at time zone ${typeof termTimezone === "string" ? termTimezone : "UTC"},
+          'YYYY-MM-DD'
+        )
+      )`;
       const legacyPeriods = await tx
-        .select()
+        .select({
+          ...getTableColumns(achievementPeriods),
+          placementDay: legacyPlacementDay,
+        })
         .from(achievementPeriods)
         .where(
           and(
             eq(achievementPeriods.learnerId, learnerId),
-            ...(termStart && termEndExclusive
+            ...(typeof termStartDay === "string" &&
+            typeof termEndDay === "string"
               ? [
-                  gte(achievementPeriods.anchorAt, termStart),
-                  lt(achievementPeriods.anchorAt, termEndExclusive),
+                  gte(legacyPlacementDay, termStartDay),
+                  lt(legacyPlacementDay, nextCalendarDay(termEndDay)),
                 ]
               : []),
             ...(allCalendarPeriodKeys.length > 0
@@ -391,10 +373,15 @@ export async function loadLearnerSnapshot(
           ),
         )
         .orderBy(
-          asc(achievementPeriods.anchorAt),
+          typeof termStartDay === "string"
+            ? asc(legacyPlacementDay)
+            : asc(achievementPeriods.anchorAt),
           asc(achievementPeriods.createdAt),
         )
         .limit(SEMESTER_WEEKS);
+      const legacyPlacementDays = new Map(
+        legacyPeriods.map((period) => [period.periodKey, period.placementDay]),
+      );
       const periods = [
         ...new Map(
           [...authoritativePeriods, ...legacyPeriods].map((period) => [
@@ -415,10 +402,12 @@ export async function loadLearnerSnapshot(
           periodNumbers.set(period.periodKey, authoritativeWeek);
           continue;
         }
-        if (termStart) {
+        const placementDay = legacyPlacementDays.get(period.periodKey);
+        if (typeof termStartDay === "string" && placementDay) {
           const derivedWeek =
             Math.floor(
-              (period.anchorAt.getTime() - termStart.getTime()) /
+              (Date.parse(`${placementDay}T00:00:00.000Z`) -
+                Date.parse(`${termStartDay}T00:00:00.000Z`)) /
                 (7 * 86_400_000),
             ) + 1;
           if (derivedWeek >= 1 && derivedWeek <= SEMESTER_WEEKS) {

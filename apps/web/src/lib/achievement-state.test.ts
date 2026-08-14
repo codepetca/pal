@@ -628,6 +628,101 @@ test(
 );
 
 test(
+  "places legacy daily-log periods by local activity day during calendar rollout",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `local-legacy-periods-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const legacyWeeks = [
+      { day: "2026-08-31", periodKey: `legacy-week-1-${crypto.randomUUID()}` },
+      { day: "2026-09-07", periodKey: `legacy-week-2-${crypto.randomUUID()}` },
+    ];
+    try {
+      for (const legacyWeek of legacyWeeks) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: legacyWeek.periodKey,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            `${legacyWeek.day}T12:00:00.000Z`,
+          ),
+          key(),
+        );
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            {
+              period_key: legacyWeek.periodKey,
+              activity_day: legacyWeek.day,
+            },
+            `${legacyWeek.day}T17:00:00.000Z`,
+          ),
+          key(),
+        );
+      }
+
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `authoritative-week-3-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            week_index: 3,
+          },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 3);
+      for (const weekIndex of [0, 1]) {
+        assert.ok(
+          snapshot.roadmap.weeks[weekIndex].achievements.some(
+            (achievement) =>
+              achievement.title === "Weekly Rhythm" &&
+              achievement.status === "earned",
+          ),
+        );
+      }
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "rejects a second period that claims an occupied term week",
   { skip: !process.env.DATABASE_URL },
   async () => {
