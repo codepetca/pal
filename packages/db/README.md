@@ -15,6 +15,7 @@ routes live elsewhere and import from here.
 | `events` | immutable record of every received signal | event |
 | `learner_facts` | semantically unique normalized behavior derived from events | learner + fact type + semantic identity |
 | `achievement_periods` | stable roadmap order for opaque academic periods | learner + period |
+| `story_plans` | stable chapter sequence for an opaque academic term | learner + term |
 | `weekly_rhythm_configs` | latest accepted weekly opportunity configuration | learner + period |
 | `achievement_instances` | progress or an outcome for a scoped achievement | learner + achievement + scope |
 | `reward_notices` | one-time presentation notice attached to an award | awarded achievement |
@@ -39,6 +40,8 @@ Two constraints carry more weight than the rest:
 - `UNIQUE (learner_id, achievement_key, scope_key)` on
   `achievement_instances` — lifetime, per-classroom, per-item, and recurring
   weekly awards share the same exactly-once rule.
+- `UNIQUE (learner_id, term_key)` on `story_plans` — one term cannot silently
+  acquire a second story order after learners have earned chapters.
 - `UNIQUE (achievement_instance_id)` on `reward_notices` — retrying an award
   cannot queue a second celebration.
 
