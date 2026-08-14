@@ -80,7 +80,7 @@ it("banks XP for an on-time learning item without levelling", () => {
       baseState,
       defaultRulePack,
     ).state;
-    assert.deepEqual(state.world.unlocked_object_ids, ["world-bird-v1"]);
+    assert.deepEqual(state.world.unlocked_object_ids, ["world-study-bird-v1"]);
   });
 
 it("gives nothing at all for a second daily log on the same day", () => {

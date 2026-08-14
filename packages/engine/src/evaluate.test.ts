@@ -244,7 +244,7 @@ describe("evaluate", () => {
     );
     assert.deepEqual(
       mutations.find((m) => m.type === "WORLD_UNLOCK"),
-      { type: "WORLD_UNLOCK", asset_ref_id: "world-bird-v1" }
+      { type: "WORLD_UNLOCK", asset_ref_id: "world-study-bird-v1" }
     );
   });
 

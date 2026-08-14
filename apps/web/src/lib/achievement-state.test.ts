@@ -5,6 +5,7 @@ import { achievementPeriods, getDb, getPool, worldState } from "@pal/db";
 import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
+  parsePalWidgetSnapshot,
   type PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 import {
@@ -356,7 +357,7 @@ test(
       assert.equal(snapshot.companion.xp, 195);
       assert.deepEqual(
         snapshot.collection?.items.map((item) => item.id),
-        ["world-bird-v1"],
+        ["world-study-bird-v1"],
       );
       assert.equal(snapshot.rewards.length, 1);
 
@@ -450,7 +451,7 @@ test(
       assert.equal(snapshot.companion.level, 1);
       assert.deepEqual(
         snapshot.collection?.items.map((item) => item.id),
-        ["world-bird-v1", "world-study-lamp-v1"],
+        ["world-study-bird-v1", "world-study-lamp-v1"],
       );
 
       // Simulate rollout from a release that already persisted the achievements
@@ -473,13 +474,13 @@ test(
               .filter((mutation) => mutation.type === "WORLD_UNLOCK")
               .map((mutation) => mutation.asset_ref_id)
           : [],
-        ["world-bird-v1", "world-study-lamp-v1"],
+        ["world-study-bird-v1", "world-study-lamp-v1"],
       );
       const reconciled = await loadLearnerSnapshot(integration.id, learnerId);
       assert.equal(reconciled.companion.xp, 340);
       assert.deepEqual(
         reconciled.collection?.items.map((item) => item.id),
-        ["world-bird-v1", "world-study-lamp-v1"],
+        ["world-study-bird-v1", "world-study-lamp-v1"],
       );
 
       const alreadySynced = await processEventInDb(
@@ -499,6 +500,211 @@ test(
           : [],
         [],
       );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "caps delayed Weekly Rhythm display progress and rewards it exactly once",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `delayed-rhythm-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `delayed-week-${crypto.randomUUID()}`;
+    const configurationKey = key();
+    try {
+      for (const activityDay of [
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+        "2026-09-18",
+      ]) {
+        const result = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            { period_key: periodKey, activity_day: activityDay },
+            `${activityDay}T16:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(result.status, "processed");
+      }
+
+      const configuration = event(
+        "daily_log_week.configured",
+        {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 5,
+          term_token: "term-delayed-rhythm",
+          term_start_day: "2026-09-14",
+          term_end_day: "2026-12-31",
+          term_timezone: "America/Toronto",
+          week_index: 1,
+        },
+        "2026-09-18T18:00:00.000Z",
+      );
+      const earned = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuration,
+        configurationKey,
+      );
+      assert.equal(earned.status, "processed");
+      assert.deepEqual(
+        earned.status === "processed"
+          ? earned.result.mutations.filter(
+              (mutation) => mutation.type === "WORLD_UNLOCK",
+            )
+          : [],
+        [{ type: "WORLD_UNLOCK", asset_ref_id: "world-study-bird-v1" }],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), {
+        asOf: new Date("2026-09-18T20:00:00.000Z"),
+      });
+      const rhythm = snapshot.roadmap.weeks[0]?.achievements.find(
+        (achievement) => achievement.title === "Weekly Rhythm",
+      );
+      assert.deepEqual(rhythm?.progress, {
+        current: 4,
+        target: 4,
+        label: "4 of 4 eligible days",
+      });
+      assert.equal(snapshot.companion.xp, 125); // five daily logs + one weekly award
+      assert.deepEqual(
+        snapshot.collection?.items.map((item) => item.id),
+        ["world-study-bird-v1"],
+      );
+      assert.deepEqual(parsePalWidgetSnapshot(snapshot), snapshot);
+
+      assert.equal(
+        (
+          await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            configuration,
+            configurationKey,
+          )
+        ).status,
+        "duplicate",
+      );
+      assert.equal(
+        (
+          await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            event(
+              "daily_log_week.configured",
+              {
+                ...configuration.metadata,
+                config_version: 2,
+                period_status: "closed",
+              },
+              "2026-09-18T19:00:00.000Z",
+            ),
+            key(),
+          )
+        ).status,
+        "processed",
+      );
+      const afterRevision = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-18T20:00:00.000Z") },
+      );
+      assert.equal(afterRevision.companion.xp, 125);
+      assert.deepEqual(
+        afterRevision.roadmap.weeks[0]?.achievements.find(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        )?.progress,
+        rhythm?.progress,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "rejects an activity day outside the configured period timezone",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `timezone-day-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `timezone-week-${crypto.randomUUID()}`;
+    const deliveryKey = key();
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "term-timezone-day",
+            term_start_day: "2026-09-14",
+            term_end_day: "2026-12-31",
+            term_timezone: "America/Toronto",
+            week_index: 1,
+          },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+      const rejected = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-15" },
+          "2026-09-15T01:00:00.000Z",
+        ),
+        deliveryKey,
+      );
+      assert.deepEqual(rejected, {
+        status: "rejected",
+        error: "inconsistent_activity_day",
+      });
+
+      // Rejection happens before the event ledger, so the corrected payload can
+      // safely reuse the producer's transport key.
+      const corrected = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-14" },
+          "2026-09-15T01:00:00.000Z",
+        ),
+        deliveryKey,
+      );
+      assert.equal(corrected.status, "processed");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }

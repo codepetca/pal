@@ -10,6 +10,7 @@ import {
 import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
+  dailyLogActivityDayRejection,
   earnedWeeklyRhythmCount,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
@@ -170,6 +171,15 @@ export async function processEventInDb(
       })
     ) {
       return { status: "semantic_duplicate" as const };
+    }
+
+    const activityDayError = await dailyLogActivityDayRejection(
+      tx,
+      learnerId,
+      event,
+    );
+    if (activityDayError) {
+      return { status: "rejected" as const, error: activityDayError };
     }
 
     // 4. Reject contradictory/invalid closed-period configuration before the

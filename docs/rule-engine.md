@@ -42,7 +42,7 @@ Rules are JSON config — operators can tune gameplay without code changes.
       "id": "weekly-rhythm-1-collection-unlock",
       "trigger": { "event_type": "COLLECTION_SYNC" },
       "conditions": [{ "field": "metadata.weekly_rhythm_count", "op": "eq", "value": 1 }],
-      "effects": [{ "type": "WORLD_UNLOCK", "asset_ref_id": "world-bird-v1" }]
+      "effects": [{ "type": "WORLD_UNLOCK", "asset_ref_id": "world-study-bird-v1" }]
     }
   ]
 }

@@ -9,7 +9,7 @@ import {
   resolveIntegration,
   resolveSandboxIntegration,
 } from "@/lib/integration-auth";
-import { POST } from "./route";
+import { isPlausibleActivityDay, POST } from "./route";
 
 const secret = "route-test-sandbox-secret-at-least-32-characters";
 const pikaSecret = "route-test-pika-secret-at-least-32-characters";
@@ -70,7 +70,7 @@ test("rejects an envelope without the declared schema version", async () => {
   assert.equal((await response.json()).error, "unsupported_schema_version");
 });
 
-test("rejects a far-future activity day before opening the database", async () => {
+test("rejects an implausible activity day before opening the database", async () => {
   const payload = learningItemEvent(`sandbox-${crypto.randomUUID()}`);
   const response = await POST(
     request({
@@ -84,8 +84,85 @@ test("rejects a far-future activity day before opening the database", async () =
   );
 
   assert.equal(response.status, 422);
-  assert.equal((await response.json()).error, "future_activity_day");
+  assert.equal((await response.json()).error, "implausible_activity_day");
   assert.equal(openedDatabase, false);
+});
+
+test("rejects a future instant even when clock skew crosses UTC midnight", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-08-14T23:00:00.000Z");
+  try {
+    const payload = learningItemEvent(`sandbox-${crypto.randomUUID()}`);
+    const response = await POST(
+      request({
+        ...payload,
+        occurred_at: "2026-08-15T00:00:01.000Z",
+      }),
+    );
+    assert.equal(response.status, 422);
+    assert.equal((await response.json()).error, "future_occurred_at");
+    assert.equal(openedDatabase, false);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("rejects the day after tomorrow near UTC midnight", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-08-14T23:00:00.000Z");
+  try {
+    const payload = learningItemEvent(`sandbox-${crypto.randomUUID()}`);
+    const response = await POST(
+      request({
+        ...payload,
+        event_type: "daily_log.completed",
+        occurred_at: "2026-08-14T23:30:00.000Z",
+        metadata: {
+          period_key: "future-week",
+          activity_day: "2026-08-16",
+        },
+      }),
+    );
+    assert.equal(response.status, 422);
+    assert.equal((await response.json()).error, "implausible_activity_day");
+    assert.equal(openedDatabase, false);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("rejects an activity day inconsistent with its occurred-at instant", async () => {
+  const payload = learningItemEvent(`sandbox-${crypto.randomUUID()}`);
+  const response = await POST(
+    request({
+      ...payload,
+      event_type: "daily_log.completed",
+      metadata: {
+        period_key: "historical-week",
+        activity_day: "2020-01-01",
+      },
+    }),
+  );
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).error, "implausible_activity_day");
+  assert.equal(openedDatabase, false);
+});
+
+test("permits legitimate UTC-12 and UTC+14 local-date boundaries", () => {
+  assert.equal(
+    isPlausibleActivityDay(
+      "2026-08-13",
+      Date.parse("2026-08-14T00:30:00.000Z"),
+    ),
+    true,
+  );
+  assert.equal(
+    isPlausibleActivityDay(
+      "2026-08-15",
+      Date.parse("2026-08-14T23:30:00.000Z"),
+    ),
+    true,
+  );
 });
 
 test(
