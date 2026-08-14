@@ -12,9 +12,11 @@ import {
   applyAchievementFact,
   dailyLogCalendarStatus,
   earnedWeeklyRhythmCount,
+  recordFirstWeeklyConfigurationMarker,
+  recordImmediateDailyLogSettlement,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
-  validPendingDailyLogEvents,
+  settlePendingDailyLogEvents,
   weeklyConfigurationExists,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
@@ -24,6 +26,7 @@ import {
   defaultRulePack,
   processEvent,
   PROGRESSION_POLICY,
+  STREAK_MILESTONE,
   WEEKLY_RHYTHM_EARNED,
   type IncomingEvent,
   type LearnerState,
@@ -238,6 +241,23 @@ export async function processEventInDb(
     if (!fact) {
       return { status: "semantic_duplicate" as const };
     }
+    if (isFirstWeeklyConfiguration) {
+      await recordFirstWeeklyConfigurationMarker(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        event,
+      });
+    }
+    if (activityDayStatus === "valid") {
+      await recordImmediateDailyLogSettlement(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        factId: fact.id,
+        event,
+      });
+    }
 
     // 7. Read current state
     const [eco] = await tx
@@ -269,12 +289,13 @@ export async function processEventInDb(
         ? { state, mutations: [], trace: [], truncated: [] }
         : processEvent(event, state, defaultRulePack);
     if (isFirstWeeklyConfiguration) {
-      const pendingEvents = await validPendingDailyLogEvents(
+      const pendingEvents = await settlePendingDailyLogEvents(
         tx,
         learnerId,
         event,
       );
       for (const pendingEvent of pendingEvents) {
+        const lifetimeXpBefore = result.state.economy.xp_lifetime;
         const settlement = processEvent(
           pendingEvent,
           result.state,
@@ -286,6 +307,26 @@ export async function processEventInDb(
           trace: [...result.trace, ...settlement.trace],
           truncated: [...result.truncated, ...settlement.truncated],
         };
+        // A delayed valid fact still earns its flat daily reward exactly once
+        // even when a newer day already anchors the forward-only rhythm. The
+        // historical source event remains unable to move the streak backward.
+        if (result.state.economy.xp_lifetime === lifetimeXpBefore) {
+          const dailyReward = processEvent(
+            {
+              event_type: STREAK_MILESTONE,
+              occurred_at: pendingEvent.occurred_at,
+              metadata: {},
+            },
+            result.state,
+            defaultRulePack,
+          );
+          result = {
+            state: dailyReward.state,
+            mutations: [...result.mutations, ...dailyReward.mutations],
+            trace: [...result.trace, ...dailyReward.trace],
+            truncated: [...result.truncated, ...dailyReward.truncated],
+          };
+        }
       }
     }
 
