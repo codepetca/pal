@@ -9,6 +9,7 @@ import {
   learnerFacts,
   learners,
   rewardNotices,
+  storyPlanChapters,
   storyPlans,
   weeklyRhythmConfigs,
 } from "./schema";
@@ -74,31 +75,79 @@ test(
         ])
         .returning({ id: learners.id });
 
-      await assert.rejects(
-        db.insert(storyPlans).values({
-          learnerId: learnerA.id,
-          termKey: `term-invalid-${suffix}`,
-          storyId: "pips-first-recipe",
-          storyVersion: 1,
-          totalPeriods: 6,
-          chapterIds: ["one", "two", "three", "four", "five"],
-        }),
-        (error) => postgresViolation(error, "23514"),
-      );
-
-      const plan = {
+      const planInput = {
         learnerId: learnerA.id,
         termKey: `term-${suffix}`,
         storyId: "pips-first-recipe",
         storyVersion: 1,
         totalPeriods: 6,
-        chapterIds: ["one", "two", "three", "four", "five", "six"],
       };
-      await db.insert(storyPlans).values(plan);
+      for (const invalid of [
+        { ...planInput, termKey: `term-short-${suffix}`, totalPeriods: 5 },
+        { ...planInput, termKey: `term-long-${suffix}`, totalPeriods: 25 },
+        { ...planInput, termKey: `term-version-${suffix}`, storyVersion: 0 },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlans).values(invalid),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      const [plan] = await db
+        .insert(storyPlans)
+        .values(planInput)
+        .returning({ id: storyPlans.id });
       await assert.rejects(
-        db.insert(storyPlans).values(plan),
+        db.insert(storyPlans).values(planInput),
         (error) => postgresViolation(error, "23505"),
       );
+
+      await db.insert(storyPlanChapters).values({
+        storyPlanId: plan.id,
+        periodNumber: 1,
+        periodKey: `period-one-${suffix}`,
+        chapterId: "egg-arrives",
+      });
+      for (const invalid of [
+        {
+          storyPlanId: plan.id,
+          periodNumber: 0,
+          chapterId: "invalid-period",
+        },
+        {
+          storyPlanId: plan.id,
+          periodNumber: 2,
+          chapterId: "",
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlanChapters).values(invalid),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+      for (const duplicate of [
+        {
+          storyPlanId: plan.id,
+          periodNumber: 1,
+          chapterId: "different-chapter",
+        },
+        {
+          storyPlanId: plan.id,
+          periodNumber: 2,
+          chapterId: "egg-arrives",
+        },
+        {
+          storyPlanId: plan.id,
+          periodNumber: 2,
+          periodKey: `period-one-${suffix}`,
+          chapterId: "different-chapter",
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlanChapters).values(duplicate),
+          (error) => postgresViolation(error, "23505"),
+        );
+      }
 
       await assert.rejects(
         db.insert(events).values({

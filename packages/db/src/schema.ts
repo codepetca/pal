@@ -161,8 +161,10 @@ export const achievementPeriods = pgTable(
   ],
 );
 
-// One immutable story schedule per learner and opaque academic term. The
-// chapter IDs are content references only; no student work or PII is stored.
+// One stable story identity per learner and opaque academic term. Future,
+// unearned assignments may be revised when the producer corrects the term
+// length; earned assignments remain bound to their opaque period in the
+// transaction-layer story service. No student work or PII is stored.
 export const storyPlans = pgTable(
   "story_plans",
   {
@@ -174,7 +176,6 @@ export const storyPlans = pgTable(
     storyId: text("story_id").notNull(),
     storyVersion: integer("story_version").notNull(),
     totalPeriods: integer("total_periods").notNull(),
-    chapterIds: text("chapter_ids").array().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -185,9 +186,45 @@ export const storyPlans = pgTable(
       "story_plans_period_count_range",
       sql`${t.totalPeriods} >= 6 AND ${t.totalPeriods} <= 24`,
     ),
+  ],
+);
+
+// A normalized chapter assignment avoids nullable/multidimensional array
+// states and lets an earned chapter retain its exact opaque period identity
+// while later, unearned assignments are regenerated around it.
+export const storyPlanChapters = pgTable(
+  "story_plan_chapters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyPlanId: uuid("story_plan_id")
+      .notNull()
+      .references(() => storyPlans.id, { onDelete: "cascade" }),
+    periodNumber: integer("period_number").notNull(),
+    periodKey: text("period_key"),
+    chapterId: text("chapter_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_plan_chapters_plan_period_number_uq").on(
+      t.storyPlanId,
+      t.periodNumber,
+    ),
+    unique("story_plan_chapters_plan_period_key_uq").on(
+      t.storyPlanId,
+      t.periodKey,
+    ),
+    unique("story_plan_chapters_plan_chapter_uq").on(
+      t.storyPlanId,
+      t.chapterId,
+    ),
     check(
-      "story_plans_chapter_count_matches",
-      sql`cardinality(${t.chapterIds}) = ${t.totalPeriods}`,
+      "story_plan_chapters_period_number_range",
+      sql`${t.periodNumber} >= 1 AND ${t.periodNumber} <= 24`,
+    ),
+    check(
+      "story_plan_chapters_chapter_id_nonempty",
+      sql`length(${t.chapterId}) > 0`,
     ),
   ],
 );
@@ -435,12 +472,23 @@ export const achievementPeriodsRelations = relations(
   }),
 );
 
-export const storyPlansRelations = relations(storyPlans, ({ one }) => ({
+export const storyPlansRelations = relations(storyPlans, ({ one, many }) => ({
   learner: one(learners, {
     fields: [storyPlans.learnerId],
     references: [learners.id],
   }),
+  chapters: many(storyPlanChapters),
 }));
+
+export const storyPlanChaptersRelations = relations(
+  storyPlanChapters,
+  ({ one }) => ({
+    storyPlan: one(storyPlans, {
+      fields: [storyPlanChapters.storyPlanId],
+      references: [storyPlans.id],
+    }),
+  }),
+);
 
 export const weeklyRhythmConfigsRelations = relations(
   weeklyRhythmConfigs,
@@ -499,6 +547,7 @@ export type WorldState = typeof worldState.$inferSelect;
 export type LearnerFact = typeof learnerFacts.$inferSelect;
 export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
 export type StoryPlan = typeof storyPlans.$inferSelect;
+export type StoryPlanChapter = typeof storyPlanChapters.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;

@@ -1,5 +1,5 @@
 {
-  "id": "b342f117-a514-4374-af87-2abb946fb851",
+  "id": "fe39da44-8985-4160-a3bd-ed6ceb9d8567",
   "prevId": "718ff238-34f8-46b6-ae93-2f0df88e25b2",
   "version": "7",
   "dialect": "postgresql",
@@ -960,6 +960,112 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.story_plan_chapters": {
+      "name": "story_plan_chapters",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "story_plan_id": {
+          "name": "story_plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_number": {
+          "name": "period_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chapter_id": {
+          "name": "chapter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "story_plan_chapters_story_plan_id_story_plans_id_fk": {
+          "name": "story_plan_chapters_story_plan_id_story_plans_id_fk",
+          "tableFrom": "story_plan_chapters",
+          "tableTo": "story_plans",
+          "columnsFrom": [
+            "story_plan_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "story_plan_chapters_plan_period_number_uq": {
+          "name": "story_plan_chapters_plan_period_number_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "period_number"
+          ]
+        },
+        "story_plan_chapters_plan_period_key_uq": {
+          "name": "story_plan_chapters_plan_period_key_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "period_key"
+          ]
+        },
+        "story_plan_chapters_plan_chapter_uq": {
+          "name": "story_plan_chapters_plan_chapter_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "chapter_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "story_plan_chapters_period_number_range": {
+          "name": "story_plan_chapters_period_number_range",
+          "value": "\"story_plan_chapters\".\"period_number\" >= 1 AND \"story_plan_chapters\".\"period_number\" <= 24"
+        },
+        "story_plan_chapters_chapter_id_nonempty": {
+          "name": "story_plan_chapters_chapter_id_nonempty",
+          "value": "length(\"story_plan_chapters\".\"chapter_id\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.story_plans": {
       "name": "story_plans",
       "schema": "",
@@ -998,12 +1104,6 @@
         "total_periods": {
           "name": "total_periods",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chapter_ids": {
-          "name": "chapter_ids",
-          "type": "text[]",
           "primaryKey": false,
           "notNull": true
         },
@@ -1058,10 +1158,6 @@
         "story_plans_period_count_range": {
           "name": "story_plans_period_count_range",
           "value": "\"story_plans\".\"total_periods\" >= 6 AND \"story_plans\".\"total_periods\" <= 24"
-        },
-        "story_plans_chapter_count_matches": {
-          "name": "story_plans_chapter_count_matches",
-          "value": "cardinality(\"story_plans\".\"chapter_ids\") = \"story_plans\".\"total_periods\""
         }
       },
       "isRLSEnabled": false
