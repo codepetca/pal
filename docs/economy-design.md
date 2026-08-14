@@ -49,8 +49,10 @@ The companion counter is a school-day rhythm:
   configured, requires it to match the term timezone;
 - a log received before its first weekly configuration is stored without rewards;
   the first configuration settles at most its declared eligible-day count (never
-  more than five) in source-day order. Durable internal settlement facts make each
-  flat daily reward exact-once even when a newer day already anchors the rhythm;
+  more than five) in source-day order. Durable internal pending and settlement
+  facts make each flat daily reward exact-once even when a newer day already
+  anchors the rhythm. Unmarked facts from before this policy are treated as
+  already paid, so rollout cannot double-pay them;
   excess or timezone-inconsistent facts remain pending and cannot count toward the
   Weekly Rhythm. A corrected source day can settle normally without mutating the
   original fact;

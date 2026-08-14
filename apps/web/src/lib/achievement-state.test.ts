@@ -4,6 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import {
   achievementPeriods,
   economy,
+  events,
   getDb,
   getPool,
   learnerFacts,
@@ -1077,6 +1078,148 @@ test(
         )?.progress,
         { current: 4, target: 4, label: "4 of 4 eligible days" },
       );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "does not repay an unmarked pre-rollout daily fact at first configuration",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `legacy-unmarked-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `legacy-unmarked-week-${crypto.randomUUID()}`;
+    const configurationKey = key();
+    try {
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const occurredAt = new Date("2026-09-14T16:00:00.000Z");
+      const metadata = {
+        period_key: periodKey,
+        activity_day: "2026-09-14",
+      };
+      const [sourceEvent] = await getDb()
+        .insert(events)
+        .values({
+          integrationId: integration.id,
+          learnerId,
+          idempotencyKey: key(),
+          eventType: "daily_log.completed",
+          occurredAt,
+          metadata,
+        })
+        .returning({ id: events.id });
+      await getDb().insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId,
+        sourceEventId: sourceEvent.id,
+        eventType: "daily_log.completed",
+        semanticKey: "2026-09-14",
+        periodKey,
+        occurredAt,
+        metadata,
+      });
+      // This is the state produced by the pre-remediation ingest path: the fact
+      // has already paid daily XP, but has neither pending nor settlement marker.
+      await getDb().insert(economy).values({
+        learnerId,
+        xp: 10,
+        xpLifetime: 10,
+        streakCurrent: 1,
+        streakLastDay: "2026-09-14",
+        lastEventAt: occurredAt,
+      });
+
+      const configuration = event(
+        "daily_log_week.configured",
+        {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 1,
+          term_token: "term-legacy-unmarked",
+          term_start_day: "2026-09-14",
+          term_end_day: "2026-12-31",
+          term_timezone: "America/Toronto",
+          week_index: 1,
+        },
+        "2026-09-15T12:00:00.000Z",
+      );
+      const configured = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuration,
+        configurationKey,
+      );
+      assert.equal(configured.status, "processed");
+      assert.deepEqual(
+        configured.status === "processed"
+          ? configured.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [75],
+      );
+      assert.deepEqual(
+        configured.status === "processed"
+          ? configured.result.mutations.filter(
+              (mutation) => mutation.type === "WORLD_UNLOCK",
+            )
+          : [],
+        [{ type: "WORLD_UNLOCK", asset_ref_id: "world-study-bird-v1" }],
+      );
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T13:00:00.000Z") },
+      );
+      assert.equal(snapshot.companion.xp, 85);
+      assert.equal(snapshot.companion.streak, 1);
+      assert.deepEqual(
+        snapshot.collection?.items.map((item) => item.id),
+        ["world-study-bird-v1"],
+      );
+
+      assert.equal(
+        (
+          await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            configuration,
+            configurationKey,
+          )
+        ).status,
+        "duplicate",
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...configuration.metadata, config_version: 2 },
+          "2026-09-15T13:00:00.000Z",
+        ),
+        key(),
+      );
+      const afterRevision = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T14:00:00.000Z") },
+      );
+      assert.equal(afterRevision.companion.xp, 85);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }

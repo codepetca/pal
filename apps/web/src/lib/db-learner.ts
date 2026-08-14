@@ -14,6 +14,7 @@ import {
   earnedWeeklyRhythmCount,
   recordFirstWeeklyConfigurationMarker,
   recordImmediateDailyLogSettlement,
+  recordPendingDailyLogReward,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
   settlePendingDailyLogEvents,
@@ -251,6 +252,14 @@ export async function processEventInDb(
     }
     if (activityDayStatus === "valid") {
       await recordImmediateDailyLogSettlement(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        factId: fact.id,
+        event,
+      });
+    } else if (activityDayStatus === "pending") {
+      await recordPendingDailyLogReward(tx, {
         integrationId,
         learnerId,
         sourceEventId: inserted.id,
