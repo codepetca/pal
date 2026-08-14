@@ -424,9 +424,10 @@ export const achievementInstances = pgTable(
   ],
 );
 
-// Durable learner title awards. Delayed delivery may correct an award to an
-// earlier source fact; snapshot reads select the latest chronological award,
-// with story titles winning same-action ties.
+// Durable learner title awards. earned_at preserves source-event history while
+// created_at records when serialized event processing actually granted the
+// title. Snapshot reads use grant order, with story titles winning same-action
+// ties.
 export const titleAwards = pgTable(
   "title_awards",
   {
@@ -449,7 +450,7 @@ export const titleAwards = pgTable(
       foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
       name: "title_awards_source_owner_fk",
     }).onDelete("cascade"),
-    index("title_awards_current_idx").on(t.learnerId, t.earnedAt.desc()),
+    index("title_awards_current_idx").on(t.learnerId, t.createdAt.desc()),
   ],
 );
 

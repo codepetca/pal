@@ -9,14 +9,21 @@ import {
 import type { IncomingEvent } from "@pal/engine";
 import {
   createPalStoryPlan,
+  DEFAULT_PAL_STORY,
+  getPalStoryCatalog,
   getPalStoryChapterDefinition,
   PIP_STORY_ID,
   PIP_STORY_VERSION,
   type PalStoryPlan,
+  type PalStoryReference,
 } from "@codepet/pal-widget/progression";
 import { awardLearnerTitle } from "@/lib/title-awards";
 
 const STORY_REWARD_PREFIX = "story:";
+const LEGACY_STORY_REWARD_REFERENCE: PalStoryReference = {
+  storyId: PIP_STORY_ID,
+  version: PIP_STORY_VERSION,
+};
 const LEGACY_TERM_PERIODS = 16;
 
 type TermPeriod = {
@@ -25,6 +32,53 @@ type TermPeriod = {
   periodKey: string;
   periodNumber: number;
 };
+
+function storyReference(
+  storyId: string,
+  storyVersion: number,
+): PalStoryReference {
+  return { storyId, version: storyVersion };
+}
+
+function storyRewardKey(
+  reference: PalStoryReference,
+  chapterId: string,
+): string {
+  return `${STORY_REWARD_PREFIX}${reference.storyId}@${reference.version}:${chapterId}`;
+}
+
+function parseStoryRewardKey(rewardKey: string): {
+  reference: PalStoryReference;
+  chapterId: string;
+} | undefined {
+  if (!rewardKey.startsWith(STORY_REWARD_PREFIX)) return undefined;
+  const payload = rewardKey.slice(STORY_REWARD_PREFIX.length);
+  const separator = payload.indexOf(":");
+  if (separator === -1) {
+    // Compatibility for notices created before story references were encoded.
+    // This must remain pinned to Pip v1 even when the default story advances.
+    return { reference: LEGACY_STORY_REWARD_REFERENCE, chapterId: payload };
+  }
+  const catalogKey = payload.slice(0, separator);
+  const chapterId = payload.slice(separator + 1);
+  const versionSeparator = catalogKey.lastIndexOf("@");
+  const version = Number(catalogKey.slice(versionSeparator + 1));
+  if (
+    versionSeparator <= 0 ||
+    !Number.isInteger(version) ||
+    version < 1 ||
+    chapterId.length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    reference: {
+      storyId: catalogKey.slice(0, versionSeparator),
+      version,
+    },
+    chapterId,
+  };
+}
 
 function termPeriodFromMetadata(
   metadata: Record<string, unknown>,
@@ -105,13 +159,14 @@ export async function ensureStoryPlanForEvent(
   db: Db,
   learnerId: string,
   event: IncomingEvent,
+  defaultStory: PalStoryReference = DEFAULT_PAL_STORY,
 ): Promise<void> {
   const termPeriod = await termPeriodForEvent(db, learnerId, event);
   if (!termPeriod) return;
 
   let plan = await resolveStoryPlanRow(db, learnerId, termPeriod.termKey);
   if (!plan) {
-    const generated = createPalStoryPlan(termPeriod.totalPeriods);
+    const generated = createPalStoryPlan(termPeriod.totalPeriods, defaultStory);
     const [created] = await db
       .insert(storyPlans)
       .values({
@@ -137,11 +192,10 @@ export async function ensureStoryPlanForEvent(
     }
   }
 
-  if (
-    plan.storyId !== PIP_STORY_ID ||
-    plan.storyVersion !== PIP_STORY_VERSION ||
-    plan.totalPeriods !== termPeriod.totalPeriods
-  ) {
+  const catalog = getPalStoryCatalog(
+    storyReference(plan.storyId, plan.storyVersion),
+  );
+  if (!catalog || plan.totalPeriods !== termPeriod.totalPeriods) {
     throw new Error("Configured term does not match its persisted story plan");
   }
 
@@ -175,10 +229,9 @@ export async function loadPersistedStoryPlan(
 ): Promise<PalStoryPlan | undefined> {
   const plan = await resolveStoryPlanRow(db, learnerId, termKey);
   if (!plan) return undefined;
-  if (
-    plan.storyId !== PIP_STORY_ID ||
-    plan.storyVersion !== PIP_STORY_VERSION
-  ) {
+  const reference = storyReference(plan.storyId, plan.storyVersion);
+  const catalog = getPalStoryCatalog(reference);
+  if (!catalog) {
     throw new Error("Unsupported persisted story plan version");
   }
   const rows = await db
@@ -196,11 +249,13 @@ export async function loadPersistedStoryPlan(
   }
 
   return {
-    storyId: PIP_STORY_ID,
-    version: PIP_STORY_VERSION,
+    storyId: plan.storyId,
+    version: plan.storyVersion,
+    companionCollectibleId: catalog.companionCollectibleId,
+    mysteryCollectibleId: catalog.mysteryCollectibleId,
     totalPeriods: plan.totalPeriods,
     chapters: rows.map((row) => {
-      const chapter = getPalStoryChapterDefinition(row.chapterId);
+      const chapter = getPalStoryChapterDefinition(reference, row.chapterId);
       if (!chapter) throw new Error(`Unknown persisted story chapter: ${row.chapterId}`);
       return {
         ...chapter,
@@ -221,8 +276,19 @@ export async function awardStoryCollectibleForPeriod(
   earnedAt: Date,
 ): Promise<void> {
   const [assignment] = await db
-    .select({ chapterId: storyPlanChapters.chapterId })
+    .select({
+      chapterId: storyPlanChapters.chapterId,
+      storyId: storyPlans.storyId,
+      storyVersion: storyPlans.storyVersion,
+    })
     .from(storyPlanChapters)
+    .innerJoin(
+      storyPlans,
+      and(
+        eq(storyPlans.id, storyPlanChapters.storyPlanId),
+        eq(storyPlans.learnerId, storyPlanChapters.learnerId),
+      ),
+    )
     .where(
       and(
         eq(storyPlanChapters.learnerId, learnerId),
@@ -231,7 +297,11 @@ export async function awardStoryCollectibleForPeriod(
     )
     .limit(1);
   if (!assignment) return;
-  const chapter = getPalStoryChapterDefinition(assignment.chapterId);
+  const reference = storyReference(
+    assignment.storyId,
+    assignment.storyVersion,
+  );
+  const chapter = getPalStoryChapterDefinition(reference, assignment.chapterId);
   if (!chapter) throw new Error(`Unknown story reward chapter: ${assignment.chapterId}`);
 
   if (chapter.title) {
@@ -249,7 +319,7 @@ export async function awardStoryCollectibleForPeriod(
     .values({
       learnerId,
       achievementInstanceId,
-      rewardKey: `${STORY_REWARD_PREFIX}${assignment.chapterId}`,
+      rewardKey: storyRewardKey(reference, assignment.chapterId),
       title: chapter.revealHeadline,
       description: chapter.storyCopy,
     })
@@ -257,9 +327,11 @@ export async function awardStoryCollectibleForPeriod(
 }
 
 export function storyRewardDetails(rewardKey: string) {
-  if (!rewardKey.startsWith(STORY_REWARD_PREFIX)) return undefined;
+  const parsed = parseStoryRewardKey(rewardKey);
+  if (!parsed) return undefined;
   const chapter = getPalStoryChapterDefinition(
-    rewardKey.slice(STORY_REWARD_PREFIX.length),
+    parsed.reference,
+    parsed.chapterId,
   );
   if (!chapter) return undefined;
   return {

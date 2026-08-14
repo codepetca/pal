@@ -306,9 +306,20 @@ export async function loadLearnerSnapshot(
         .from(titleAwards)
         .where(eq(titleAwards.learnerId, learnerId))
         .orderBy(
-          desc(titleAwards.earnedAt),
-          sql`case when ${titleAwards.kind} = 'story' then 1 else 0 end desc`,
           desc(titleAwards.createdAt),
+          sql`case
+            when ${titleAwards.kind} = 'story' then 100 + case ${titleAwards.titleId}
+              when 'true-friend' then 40
+              when 'try-again-chef' then 30
+              when 'brave-beginner' then 20
+              when 'gentle-keeper' then 10
+              else 0
+            end
+            when ${titleAwards.titleId} = 'level-leader' then 30
+            when ${titleAwards.titleId} = 'on-time-pro' then 20
+            when ${titleAwards.titleId} = 'rhythm-builder' then 10
+            else 0
+          end desc`,
           desc(titleAwards.titleId),
         );
 

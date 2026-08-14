@@ -20,6 +20,7 @@ import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
 } from "@/lib/learner-snapshot";
+import { storyRewardDetails } from "@/lib/story-plan";
 
 const secret = "achievement-state-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
@@ -246,7 +247,10 @@ test(
         .where(eq(rewardNotices.learnerId, learnerId));
       assert.equal(notices.length, 1);
       assert.equal(notices[0]?.achievementInstanceId, weeklyAchievement?.id);
-      assert.equal(notices[0]?.rewardKey, "story:egg-arrives");
+      assert.equal(
+        notices[0]?.rewardKey,
+        "story:pips-first-recipe@1:egg-arrives",
+      );
 
       const snapshot = await loadLearnerSnapshot(
         integration.id,
@@ -284,6 +288,19 @@ test(
     }
   },
 );
+
+test("resolves versioned and legacy story reward notice keys", () => {
+  const versioned = storyRewardDetails(
+    "story:pips-first-recipe@1:egg-arrives",
+  );
+  const legacy = storyRewardDetails("story:egg-arrives");
+  assert.equal(versioned?.collectibleTitle, "Mystery Egg");
+  assert.deepEqual(legacy, versioned);
+  assert.equal(
+    storyRewardDetails("story:pips-first-recipe@999:egg-arrives"),
+    undefined,
+  );
+});
 
 test(
   "persists a story title across a later-week snapshot",
@@ -475,13 +492,13 @@ test(
         ),
         key(),
       );
-      const correctedSnapshot = await loadLearnerSnapshot(
+      const delayedSnapshot = await loadLearnerSnapshot(
         integration.id,
         learnerId,
         getDb(),
         { asOf: new Date("2026-09-07T16:00:00.000Z") },
       );
-      assert.equal(correctedSnapshot.progression?.currentTitle, "Gentle Keeper");
+      assert.equal(delayedSnapshot.progression?.currentTitle, "On-Time Pro");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }

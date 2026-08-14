@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
+    "verify:title-upgrade": "node scripts/verify-title-awards-upgrade.mjs",
     "check": "drizzle-kit check",
     "test": "node --import tsx --test 'src/**/*.test.ts'",
     "lint": "eslint . --max-warnings 0",

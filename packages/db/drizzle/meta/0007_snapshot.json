@@ -1261,7 +1261,7 @@
               "nulls": "last"
             },
             {
-              "expression": "earned_at",
+              "expression": "created_at",
               "isExpression": false,
               "asc": false,
               "nulls": "last"

@@ -110,6 +110,10 @@ older widget/API pair.
   to that plan's matching ordinal; snapshots read this stored order rather than
   silently generating a new schedule. The original five-field calendar form
   remains supported as a 16-week plan.
+- Story content is registered by immutable story ID and version. The default
+  reference is used only for new plans; persisted plans and reward notices
+  continue resolving through their assigned version, so a new story or Pip v2
+  does not require a database or learning-event contract change.
 - A period's collectible is earned only when that period's durable Weekly
   Rhythm achievement is earned. That transition queues one story reveal linked
   to the weekly achievement, so retries and later activity cannot create a
@@ -122,9 +126,10 @@ older widget/API pair.
   never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
 - Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
   Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
-  Each award is stored with its authoritative event time so the display keeps
-  the most recently earned title across later snapshots and delayed delivery;
-  a story title wins when one action awards multiple titles at the same time.
+  Each award stores both source occurrence and PAL grant order. The display
+  keeps the most recently granted title across later snapshots without delayed
+  delivery rewriting the learner's visible history; a story title wins when
+  one action awards multiple titles at the same time.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once earned, that week's slot reveals its collectible (at
