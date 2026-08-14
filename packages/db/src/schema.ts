@@ -127,6 +127,14 @@ export const learnerFacts = pgTable(
       name: "learner_facts_source_owner_fk",
     }).onDelete("cascade"),
     index("learner_facts_period_idx").on(t.learnerId, t.periodKey),
+    // Settlement and achievement reads filter one learner, event type, and
+    // academic period before applying small limits. Keeping all three columns
+    // in the access path prevents unrelated period facts from being scanned.
+    index("learner_facts_event_period_idx").on(
+      t.learnerId,
+      t.eventType,
+      t.periodKey,
+    ),
   ],
 );
 

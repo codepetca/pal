@@ -206,6 +206,99 @@ test(
   },
 );
 
+test(
+  "uses the event-period index for bounded daily-log reads",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const db = getDb();
+    const suffix = crypto.randomUUID();
+    const [integration] = await db
+      .insert(integrations)
+      .values({
+        slug: `index-plan-${suffix}`,
+        name: "Index Plan",
+        secretHash: `index-plan-secret-${suffix}`,
+        allowedEventTypes: [],
+      })
+      .returning({ id: integrations.id });
+    try {
+      const [learner] = await db
+        .insert(learners)
+        .values({
+          integrationId: integration.id,
+          externalLearnerId: `index-plan-learner-${suffix}`,
+        })
+        .returning({ id: learners.id });
+      const factCount = 505;
+      const sourceEvents = await db
+        .insert(events)
+        .values(
+          Array.from({ length: factCount }, (_, index) => ({
+            integrationId: integration.id,
+            learnerId: learner.id,
+            idempotencyKey: `index-plan-event-${index}-${suffix}`,
+            eventType:
+              index < 500 ? "learning_item.completed" : "daily_log.completed",
+            occurredAt: new Date(Date.UTC(2026, 0, 1, 12, index)),
+            metadata: {},
+          })),
+        )
+        .returning({ id: events.id, eventType: events.eventType });
+      await db.insert(learnerFacts).values(
+        sourceEvents.map((sourceEvent, index) => ({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          sourceEventId: sourceEvent.id,
+          eventType: sourceEvent.eventType,
+          semanticKey: `index-plan-fact-${index}-${suffix}`,
+          periodKey: `index-plan-period-${suffix}`,
+          occurredAt: new Date(Date.UTC(2026, 0, 1, 12, index)),
+          metadata: {},
+        })),
+      );
+
+      const explained = await getPool().query(
+        `EXPLAIN (ANALYZE, FORMAT JSON)
+         SELECT id
+         FROM learner_facts
+         WHERE learner_id = $1
+           AND event_type = 'daily_log.completed'
+           AND period_key = $2
+         LIMIT 6`,
+        [learner.id, `index-plan-period-${suffix}`],
+      );
+      const root = explained.rows[0]?.["QUERY PLAN"]?.[0]?.Plan as
+        | Record<string, unknown>
+        | undefined;
+      assert.ok(root);
+      const nodes: Record<string, unknown>[] = [];
+      const visit = (node: Record<string, unknown>) => {
+        nodes.push(node);
+        const children = node.Plans;
+        if (Array.isArray(children)) {
+          for (const child of children) {
+            if (child && typeof child === "object") {
+              visit(child as Record<string, unknown>);
+            }
+          }
+        }
+      };
+      visit(root);
+      assert.ok(
+        nodes.some(
+          (node) =>
+            node["Index Name"] === "learner_facts_event_period_idx" &&
+            Number(node["Actual Rows"]) <= 5,
+        ),
+      );
+      assert.equal(nodes.some((node) => node["Node Type"] === "Sort"), false);
+    } finally {
+      await db.delete(integrations).where(eq(integrations.id, integration.id));
+    }
+  },
+);
+
 after(async () => {
   if (openedDatabase) await getPool().end();
 });

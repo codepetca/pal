@@ -1,0 +1,1 @@
+CREATE INDEX "learner_facts_event_period_idx" ON "learner_facts" USING btree ("learner_id","event_type","period_key");
