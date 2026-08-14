@@ -849,6 +849,130 @@ test(
 );
 
 test(
+  "keeps corrected reward capacity separate from quarantined source facts",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `quarantine-capacity-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `quarantine-capacity-week-${crypto.randomUUID()}`;
+    try {
+      for (const activityDay of [
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17",
+      ]) {
+        const pending = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            { period_key: periodKey, activity_day: activityDay },
+            `${activityDay}T16:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(pending.status, "processed");
+      }
+      const quarantined = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-19" },
+          "2026-09-19T03:30:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(quarantined.status, "processed");
+
+      const configured = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "term-quarantine-capacity",
+            term_start_day: "2026-09-14",
+            term_end_day: "2026-12-31",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
+            week_index: 1,
+          },
+          "2026-09-19T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(configured.status, "processed");
+      assert.deepEqual(
+        configured.status === "processed"
+          ? configured.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [10, 10, 10, 10, 75],
+      );
+
+      const corrected = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-18" },
+          "2026-09-19T03:30:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(corrected.status, "processed");
+      assert.deepEqual(
+        corrected.status === "processed"
+          ? corrected.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [10],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const [state] = await getDb()
+        .select()
+        .from(economy)
+        .where(eq(economy.learnerId, learnerId));
+      assert.equal(state.xpLifetime, 125);
+      const [counts] = await getDb()
+        .select({
+          completions: sql<number>`count(*) filter (where ${learnerFacts.eventType} = 'daily_log.completed')::int`,
+          settlements: sql<number>`count(*) filter (where ${learnerFacts.eventType} = 'internal.daily_log.reward_settlement')::int`,
+        })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.periodKey, periodKey),
+          ),
+        );
+      assert.deepEqual(counts, { completions: 6, settlements: 5 });
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "settles older pending daily XP without moving a newer rhythm backward",
   { skip: !process.env.DATABASE_URL },
   async () => {
@@ -1202,6 +1326,125 @@ test(
       } finally {
         await resetLearnerInDb(integration.id, externalLearnerId);
       }
+    }
+  },
+);
+
+test(
+  "validates closure against every stored calendar-valid completion",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `closure-valid-facts-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `closure-valid-facts-week-${crypto.randomUUID()}`;
+    try {
+      for (const activityDay of [
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+      ]) {
+        const pending = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            { period_key: periodKey, activity_day: activityDay },
+            `${activityDay}T16:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(pending.status, "processed");
+      }
+
+      const initial = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 1,
+        }),
+        key(),
+      );
+      assert.equal(initial.status, "processed");
+      assert.deepEqual(
+        initial.status === "processed"
+          ? initial.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [10, 75],
+      );
+
+      const contradictory = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 2,
+          period_status: "closed",
+          eligible_days: 1,
+        }),
+        key(),
+      );
+      assert.deepEqual(contradictory, {
+        status: "rejected",
+        error: "contradictory_period_configuration",
+      });
+
+      const closed = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 2,
+          period_status: "closed",
+          eligible_days: 3,
+        }),
+        key(),
+      );
+      assert.equal(closed.status, "processed");
+      assert.deepEqual(
+        closed.status === "processed"
+          ? closed.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [10, 10],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const [state] = await getDb()
+        .select()
+        .from(economy)
+        .where(eq(economy.learnerId, learnerId));
+      assert.equal(state.xpLifetime, 105);
+      const [settlementCount] = await getDb()
+        .select({ value: sql<number>`count(*)::int` })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.periodKey, periodKey),
+            eq(
+              learnerFacts.eventType,
+              "internal.daily_log.reward_settlement",
+            ),
+          ),
+        );
+      assert.equal(settlementCount.value, 3);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },
 );

@@ -55,10 +55,12 @@ The companion counter is a school-day rhythm:
   anchors the rhythm. Unmarked facts from before this policy are treated as already
   paid, so rollout cannot double-pay them;
 - facts beyond the current eligible-day allowance remain pending until a higher
-  accepted configuration releases them. A sixth distinct day in one version 1
-  period is rejected before persistence, and timezone-inconsistent facts cannot
-  count toward Weekly Rhythm. A corrected source day can settle normally without
-  mutating the original fact;
+  accepted configuration releases them. A period has five qualifying reward
+  slots. Before configuration, a sixth unclassified source day is rejected;
+  after configuration, immutable timezone-quarantined facts use a separate
+  bounded correction reserve, so a corrected source day can settle without
+  mutating the original. No more than ten source facts (five qualifying plus
+  five quarantined) can be retained for one version 1 period;
 - Friday continues into Monday, so a normal weekend does not reset it;
 - same-day and backdated activity cannot move the rhythm, although a distinct
   newly settled older source day still earns its flat daily XP;
