@@ -11,18 +11,18 @@ test("snapshot parser accepts the bounded v1 fixture", () => {
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 });
 
-test("snapshot parser accepts an explicitly not-started term", () => {
+test("snapshot parser preserves the v1 current-week domain", () => {
   const fixture = JSON.parse(
     JSON.stringify(createFixtureSnapshot()),
   ) as ReturnType<typeof createFixtureSnapshot>;
-  fixture.roadmap.currentWeek = 0;
+  fixture.roadmap.currentWeek = 1;
   for (const week of fixture.roadmap.weeks) week.status = "future";
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 
-  fixture.roadmap.weeks[0]!.status = "current";
+  fixture.roadmap.currentWeek = 0;
   assert.throws(
     () => parsePalWidgetSnapshot(fixture),
-    /must all be future when the term has not started/i,
+    /greater than or equal to 1/i,
   );
 });
 

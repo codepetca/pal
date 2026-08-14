@@ -771,7 +771,7 @@ test(
           getDb(),
           { asOf: new Date(asOf) },
         );
-        assert.equal(snapshot.roadmap.currentWeek, 0);
+        assert.equal(snapshot.roadmap.currentWeek, 1);
         assert.ok(
           snapshot.roadmap.weeks.every((week) => week.status === "future"),
         );

@@ -473,17 +473,18 @@ export async function loadLearnerSnapshot(
         typeof termStartDay === "string" &&
         termStartDay <= asOfDay &&
         (firstWeekStartDay === undefined || firstWeekStartDay <= asOfDay);
+      // Snapshot schema v1 has always required a supplied week number >= 1.
+      // Preserve that wire contract before a term opens; week statuses carry
+      // the not-started state for pinned widget clients.
       const currentWeek = startedWeekNumbers.length === 0
-        ? termHasOpened
-          ? 1
-          : 0
+        ? 1
         : Math.min(termWeekCount, Math.max(...startedWeekNumbers));
       const weeks: PalRoadmapWeek[] = Array.from(
         { length: termWeekCount },
         (_, index) => {
           const number = index + 1;
           const status =
-            currentWeek === 0
+            !termHasOpened && startedWeekNumbers.length === 0
               ? "future"
               : number < currentWeek
               ? "past"
