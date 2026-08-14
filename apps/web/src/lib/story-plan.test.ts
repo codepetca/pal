@@ -285,7 +285,7 @@ test(
 );
 
 test(
-  "persists a story title with its short-term merged chapter reveal",
+  "persists a story title across a later-week snapshot",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const integration = await resolveIntegration({
@@ -300,6 +300,21 @@ test(
         integration.id,
         externalLearnerId,
         configuredWeek(periodKey, 1, 6, 1),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "learning_item.completed",
+          {
+            item_token: `title-item-${crypto.randomUUID()}`,
+            kind: "assignment",
+            period_key: periodKey,
+            timing: "on_time",
+          },
+          "2026-08-31T14:00:00.000Z",
+        ),
         key(),
       );
       await processEventInDb(
@@ -324,18 +339,42 @@ test(
         { asOf: new Date("2026-08-31T16:00:00.000Z") },
       );
 
-      assert.equal(snapshot.rewards[0]?.kind, "story");
-      assert.equal(snapshot.rewards[0]?.title, "Keep the light on");
-      assert.equal(snapshot.rewards[0]?.collectibleTitle, "Mystery Egg");
-      assert.equal(snapshot.rewards[0]?.titleAward, "Gentle Keeper");
+      const storyReward = snapshot.rewards.find(
+        (reward) => reward.kind === "story",
+      );
+      assert.equal(storyReward?.title, "Keep the light on");
+      assert.equal(storyReward?.collectibleTitle, "Mystery Egg");
+      assert.equal(storyReward?.titleAward, "Gentle Keeper");
       assert.equal(
-        snapshot.rewards[0]?.titleRevealCopy,
+        storyReward?.titleRevealCopy,
         "Pip remembers who kept the light on.",
       );
       assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
       assert.equal(snapshot.progression?.titles.find(
         (title) => title.id === "gentle-keeper",
       )?.status, "earned");
+
+      const weekTwoKey = `title-week-2-${crypto.randomUUID()}`;
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(weekTwoKey, 2, 6, 1),
+        key(),
+      );
+      const laterSnapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-07T16:00:00.000Z") },
+      );
+      assert.equal(laterSnapshot.roadmap.currentWeek, 2);
+      assert.equal(laterSnapshot.progression?.titles.find(
+        (title) => title.id === "on-time-pro",
+      )?.status, "earned");
+      assert.equal(laterSnapshot.progression?.titles.find(
+        (title) => title.id === "gentle-keeper",
+      )?.status, "earned");
+      assert.equal(laterSnapshot.progression?.currentTitle, "Gentle Keeper");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
