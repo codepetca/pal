@@ -47,6 +47,7 @@ export interface PalRoadmapWeek {
 
 export interface PalRoadmapSnapshot {
   semesterLabel: string;
+  /** Zero means the selected term exists but its first week has not opened. */
   currentWeek: number;
   weeks: PalRoadmapWeek[];
 }

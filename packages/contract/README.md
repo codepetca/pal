@@ -96,10 +96,12 @@ Adding an event type breaks nobody: no existing producer emits it and no existin
 consumer expects it. Which event types a given integration may send is enforced by that
 integration's allow-list, not by the schema version.
 
-An optional field group may still be all-or-none. The version 1 term calendar group is
-optional for backward compatibility, but once a producer sends any of `term_token`,
-`term_start_day`, `term_end_day`, `term_timezone`, `term_week_count`, `week_start_day`, or `week_index`, it must send all seven so consumers
-never persist a partial academic-calendar assertion.
+An optional field group may still be all-or-none. The original version 1 term
+calendar remains the five-field group `term_token`, `term_start_day`,
+`term_end_day`, `term_timezone`, and `week_index`; it implies a 16-week roadmap
+and remains valid. Adaptive producers add both `term_week_count` and
+`week_start_day`, yielding a seven-field group. A producer must send exactly
+none, all five, or all seven so consumers never persist a partial assertion.
 
 The rollout order never changes: **Pal ships support for a version first, and a producer
 starts emitting it second.** Reversing that fills the producer's outbox with

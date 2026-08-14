@@ -372,10 +372,22 @@ export function parsePalWidgetSnapshot(
   const currentWeek = integer(
     roadmap.currentWeek,
     "snapshot.roadmap.currentWeek",
-    1,
+    0,
   );
-  if (!weeks.some((week) => week.number === currentWeek)) {
+  if (
+    currentWeek > 0 &&
+    !weeks.some((week) => week.number === currentWeek)
+  ) {
     fail("snapshot.roadmap.currentWeek", "must identify a supplied roadmap week");
+  }
+  if (
+    currentWeek === 0 &&
+    weeks.some((week) => week.status !== "future")
+  ) {
+    fail(
+      "snapshot.roadmap.weeks",
+      "must all be future when the term has not started",
+    );
   }
 
   const rewardIds = new Set<string>();

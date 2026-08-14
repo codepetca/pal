@@ -317,11 +317,12 @@ export async function loadLearnerSnapshot(
           metadata.term_token === currentTermToken &&
           Number.isInteger(weekIndex) &&
           (weekIndex as number) >= 1 &&
-          (weekIndex as number) <= termWeekCount &&
-          typeof weekStartDay === "string"
+          (weekIndex as number) <= termWeekCount
         ) {
           authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
-          authoritativeWeekStarts.set(fact.periodKey, weekStartDay);
+          if (typeof weekStartDay === "string") {
+            authoritativeWeekStarts.set(fact.periodKey, weekStartDay);
+          }
         }
       }
       const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
@@ -446,22 +447,45 @@ export async function loadLearnerSnapshot(
               ? [weekNumber]
               : [];
           }
+          if (authoritativeWeekNumbers.has(periodKey)) {
+            return (
+              asOfDay === null ||
+              typeof termStartDay !== "string" ||
+              termStartDay <= asOfDay
+            )
+              ? [weekNumber]
+              : [];
+          }
           const legacyStart = legacyPlacementDays.get(periodKey);
           return asOfDay === null || (legacyStart && legacyStart <= asOfDay)
             ? [weekNumber]
             : [];
         },
       );
-      const currentWeek = Math.min(
-        termWeekCount,
-        Math.max(1, ...startedWeekNumbers),
-      );
+      const firstWeekStart = [...authoritativeWeekNumbers.entries()]
+        .find(([, weekNumber]) => weekNumber === 1)
+        ?.[0];
+      const firstWeekStartDay = firstWeekStart
+        ? authoritativeWeekStarts.get(firstWeekStart)
+        : undefined;
+      const termHasOpened =
+        asOfDay !== null &&
+        typeof termStartDay === "string" &&
+        termStartDay <= asOfDay &&
+        (firstWeekStartDay === undefined || firstWeekStartDay <= asOfDay);
+      const currentWeek = startedWeekNumbers.length === 0
+        ? termHasOpened
+          ? 1
+          : 0
+        : Math.min(termWeekCount, Math.max(...startedWeekNumbers));
       const weeks: PalRoadmapWeek[] = Array.from(
         { length: termWeekCount },
         (_, index) => {
           const number = index + 1;
           const status =
-            number < currentWeek
+            currentWeek === 0
+              ? "future"
+              : number < currentWeek
               ? "past"
               : number === currentWeek
                 ? "current"

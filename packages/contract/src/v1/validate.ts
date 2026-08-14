@@ -128,20 +128,32 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
       if (!isInteger(m.eligible_days) || m.eligible_days < 0 || m.eligible_days > 5)
         return "eligible_days must be an integer 0-5";
 
-      const calendarKeys = [
+      const v1CalendarKeys = [
         "term_token",
         "term_start_day",
         "term_end_day",
         "term_timezone",
-        "term_week_count",
-        "week_start_day",
         "week_index",
       ];
+      const adaptiveCalendarKeys = [
+        "term_week_count",
+        "week_start_day",
+      ];
+      const calendarKeys = [...v1CalendarKeys, ...adaptiveCalendarKeys];
       const presentCalendarKeys = calendarKeys.filter((key) => m[key] !== undefined);
-      if (presentCalendarKeys.length !== 0 && presentCalendarKeys.length !== calendarKeys.length) {
-        return "term_token, term_start_day, term_end_day, term_timezone, term_week_count, week_start_day, and week_index must be provided together";
+      const hasV1Calendar = v1CalendarKeys.every((key) => m[key] !== undefined);
+      const hasAdaptiveCalendar = adaptiveCalendarKeys.every(
+        (key) => m[key] !== undefined,
+      );
+      if (
+        presentCalendarKeys.length !== 0 &&
+        !(hasV1Calendar &&
+          (presentCalendarKeys.length === v1CalendarKeys.length ||
+            (hasAdaptiveCalendar && presentCalendarKeys.length === calendarKeys.length)))
+      ) {
+        return "send either the complete five-field v1 term calendar or all seven adaptive calendar fields";
       }
-      if (presentCalendarKeys.length === calendarKeys.length) {
+      if (hasV1Calendar) {
         if (!isToken(m.term_token, 128))
           return "term_token must be 1-128 URL-safe characters";
         if (!isCalendarDay(m.term_start_day))
@@ -152,6 +164,11 @@ const METADATA_RULES: Record<V1EventType, MetadataRule> = {
           return "term_start_day must be on or before term_end_day";
         if (!isIanaTimeZone(m.term_timezone))
           return "term_timezone must be a valid IANA time zone";
+        if (!hasAdaptiveCalendar) {
+          if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > 16)
+            return "week_index must be an integer 1-16 for a v1 term calendar";
+          return null;
+        }
         if (!isInteger(m.term_week_count) || m.term_week_count < 6 || m.term_week_count > 24)
           return "term_week_count must be an integer 6-24";
         if (!isCalendarDay(m.week_start_day))

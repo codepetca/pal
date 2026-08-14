@@ -635,6 +635,163 @@ test(
 );
 
 test(
+  "keeps v1 calendar periods visible while upgrading a term in place",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `v1-calendar-upgrade-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `v1-week-3-${crypto.randomUUID()}`;
+    const baseCalendar = {
+      period_key: periodKey,
+      period_status: "open" as const,
+      eligible_days: 1,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+      week_index: 3,
+    };
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...baseCalendar, config_version: 1 },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-14" },
+          "2026-09-14T17:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const upgraded = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            ...baseCalendar,
+            config_version: 2,
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
+          },
+          "2026-09-15T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(upgraded.status, "processed");
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.weeks.length, 16);
+      assert.equal(snapshot.roadmap.currentWeek, 3);
+      assert.ok(
+        snapshot.roadmap.weeks[2]?.achievements.some(
+          (achievement) =>
+            achievement.title === "Weekly Rhythm" &&
+            achievement.status === "earned",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps an active or upcoming term unopened until its first local week start",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `before-first-week-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `delayed-week-one-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 12,
+            week_start_day: "2026-09-07",
+            week_index: 1,
+          },
+          "2026-08-30T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      for (const asOf of [
+        "2026-08-01T12:00:00.000Z",
+        "2026-09-01T12:00:00.000Z",
+      ]) {
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(asOf) },
+        );
+        assert.equal(snapshot.roadmap.currentWeek, 0);
+        assert.ok(
+          snapshot.roadmap.weeks.every((week) => week.status === "future"),
+        );
+      }
+
+      const opened = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-07T04:00:00.000Z") },
+      );
+      assert.equal(opened.roadmap.currentWeek, 1);
+      assert.equal(opened.roadmap.weeks[0]?.status, "current");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "keeps a preconfigured later week future until its authoritative local start",
   { skip: !process.env.DATABASE_URL },
   async () => {

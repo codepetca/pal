@@ -67,6 +67,25 @@ test("roadmap hides future weeks and renders visible weeks newest first", () => 
   assert.ok(html.indexOf("Week 2") < html.indexOf("Week 1"));
 });
 
+test("roadmap keeps every week concealed before the term starts", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.roadmap.currentWeek = 0;
+  for (const week of snapshot.roadmap.weeks) week.status = "future";
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /Your story begins when Week 1 opens/);
+  assert.doesNotMatch(html, /<h3>Week 1<\/h3>/);
+});
+
 test("companion owns the complete portable cat surface", () => {
   const client = createFixturePalClient();
   const snapshot = client.peek();
