@@ -835,7 +835,7 @@ test(
         event(
           "daily_log.completed",
           { period_key: weekThreeKey, activity_day: "2026-09-14" },
-          "2026-09-15T13:00:00.000Z",
+          "2026-09-14T13:00:00.000Z",
         ),
         key(),
       );
