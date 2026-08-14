@@ -553,7 +553,12 @@ test(
         periodKeys,
       );
 
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 16);
       assert.equal(
         snapshot.roadmap.weeks.filter((week) =>
@@ -725,7 +730,12 @@ test(
           integration.id,
           externalLearnerId,
         );
-        const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date("2026-10-15T12:00:00.000Z") },
+        );
         assert.equal(snapshot.roadmap.currentWeek, scenario.weekIndex);
         assert.ok(
           snapshot.roadmap.weeks[scenario.weekIndex - 1].achievements.some(
@@ -798,7 +808,12 @@ test(
         integration.id,
         externalLearnerId,
       );
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-10T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 2);
       assert.equal(
         snapshot.roadmap.weeks
@@ -808,6 +823,86 @@ test(
       );
       assert.ok(
         snapshot.roadmap.weeks[1].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps the active term selected when a future term is preconfigured",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `future-term-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `fall-week-10-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            week_index: 10,
+          },
+          "2026-11-02T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `spring-week-1-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "spring-2027",
+            term_start_day: "2027-01-04",
+            term_end_day: "2027-04-23",
+            week_index: 1,
+          },
+          "2026-11-03T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-11-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 10);
+      assert.equal(
+        snapshot.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.title === "Weekly Rhythm").length,
+        1,
+      );
+      assert.ok(
+        snapshot.roadmap.weeks[9].achievements.some(
           (achievement) => achievement.title === "Weekly Rhythm",
         ),
       );
@@ -871,7 +966,12 @@ test(
         integration.id,
         externalLearnerId,
       );
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 7);
       assert.ok(
         snapshot.roadmap.weeks[6].achievements.some(
@@ -960,7 +1060,12 @@ test(
         integration.id,
         externalLearnerId,
       );
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-20T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 8);
       for (let week = 1; week <= 8; week += 1) {
         assert.ok(
@@ -1088,9 +1193,11 @@ test(
         integration.id,
         learnerId,
         getDb(),
-        async () => {
-          markScopeVerified();
-          await continueRead;
+        {
+          afterScopeVerified: async () => {
+            markScopeVerified();
+            await continueRead;
+          },
         },
       );
 

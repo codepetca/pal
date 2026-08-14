@@ -61,6 +61,53 @@ function moodMessage(mood: PalCompanionMood): string {
 
 type AchievementRow = typeof achievementInstances.$inferSelect;
 
+type CalendarFact = {
+  periodKey: string | null;
+  occurredAt: Date;
+  metadata: unknown;
+};
+
+function selectCurrentTermFact(
+  calendarFacts: CalendarFact[],
+  asOfDay: string,
+): CalendarFact | undefined {
+  const terms = new Map<string, CalendarFact>();
+  for (const fact of calendarFacts) {
+    const metadata = fact.metadata as Record<string, unknown>;
+    if (
+      typeof metadata.term_token === "string" &&
+      typeof metadata.term_start_day === "string" &&
+      typeof metadata.term_end_day === "string"
+    ) {
+      terms.set(metadata.term_token, fact);
+    }
+  }
+  const candidates = [...terms.values()];
+  const dates = (fact: CalendarFact) => {
+    const metadata = fact.metadata as Record<string, unknown>;
+    return {
+      start: String(metadata.term_start_day),
+      end: String(metadata.term_end_day),
+    };
+  };
+  const active = candidates
+    .filter((fact) => {
+      const { start, end } = dates(fact);
+      return start <= asOfDay && asOfDay <= end;
+    })
+    .toSorted((left, right) => dates(right).start.localeCompare(dates(left).start));
+  if (active[0]) return active[0];
+
+  const completed = candidates
+    .filter((fact) => dates(fact).end < asOfDay)
+    .toSorted((left, right) => dates(right).end.localeCompare(dates(left).end));
+  if (completed[0]) return completed[0];
+
+  return candidates
+    .filter((fact) => dates(fact).start > asOfDay)
+    .toSorted((left, right) => dates(left).start.localeCompare(dates(right).start))[0];
+}
+
 function achievementFromRow(
   row: AchievementRow,
   reconciliationRequired: boolean,
@@ -150,9 +197,12 @@ export async function loadLearnerSnapshot(
   integrationId: string,
   learnerId: string,
   db: Db = getDb(),
-  // Internal coordination seam used to prove transaction isolation under a
-  // deterministic concurrent write. Production callers leave this unset.
-  afterScopeVerified?: () => Promise<void>,
+  options: {
+    // Internal coordination seam used to prove transaction isolation under a
+    // deterministic concurrent write. Production callers leave this unset.
+    afterScopeVerified?: () => Promise<void>;
+    asOf?: Date;
+  } = {},
 ): Promise<PalWidgetSnapshot> {
   return db.transaction(
     async (tx) => {
@@ -167,7 +217,7 @@ export async function loadLearnerSnapshot(
         )
         .limit(1);
       if (!learner) throw new LearnerScopeError();
-      await afterScopeVerified?.();
+      await options.afterScopeVerified?.();
 
       const economyRows = await tx
         .select()
@@ -210,17 +260,10 @@ export async function loadLearnerSnapshot(
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
 
-      const latestCalendarFact = calendarFacts.reduce<
-        (typeof calendarFacts)[number] | undefined
-      >((latest, fact) => {
-        const metadata = fact.metadata as Record<string, unknown>;
-        if (typeof metadata.term_token !== "string") return latest;
-        if (!latest) return fact;
-        const latestMetadata = latest.metadata as Record<string, unknown>;
-        return String(metadata.term_start_day) > String(latestMetadata.term_start_day)
-          ? fact
-          : latest;
-      }, undefined);
+      const latestCalendarFact = selectCurrentTermFact(
+        calendarFacts,
+        (options.asOf ?? new Date()).toISOString().slice(0, 10),
+      );
       const currentTermMetadata = latestCalendarFact?.metadata as
         | Record<string, unknown>
         | undefined;

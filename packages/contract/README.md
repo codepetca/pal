@@ -52,6 +52,14 @@ without either side running the other's server.
 The fixtures are plain JSON with no TypeScript around them, so a repo that cannot yet
 install this package can vendor the directory and still test against the same cases.
 
+`@pal/contract` remains a private workspace package during the pilot; its `0.1.0`
+workspace version is not a published release identifier. Until publication is enabled,
+Pika vendors the contract source and `fixtures/v1/` from an exact Pal commit and records
+that commit in its adapter dependency update. Pal lands support first; Pika updates that
+pin and runs the vendored fixture suite before emitting the new optional fields. The first
+published package release containing this additive calendar group must receive a minor
+version bump.
+
 ## What it deliberately does not do
 
 - **No clock.** `validateV1Event` accepts a future-dated `occurred_at`. Rejecting those
