@@ -62,8 +62,9 @@ Two constraints carry more weight than the rest:
   cannot queue a second celebration.
 - `UNIQUE (learner_id, title_id)` on `title_awards` — each identity title is
   earned once. The source-fact ownership foreign key prevents cross-learner
-  attribution, while the stored event time preserves ordering under delayed
-  delivery.
+  attribution when audit provenance is available; pre-ledger backfills keep
+  both source fact and event time null when it is not. `created_at` preserves
+  PAL's serialized grant order under delayed delivery.
 
 ## Privacy
 

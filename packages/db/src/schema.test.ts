@@ -580,6 +580,30 @@ test(
           (error) => postgresViolation(error, "23514"),
         );
       }
+      for (const partial of [
+        {
+          titleId: "source-without-time",
+          sourceFactId: factA.id,
+        },
+        {
+          titleId: "time-without-source",
+          earnedAt: new Date(),
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(titleAwards).values({
+            learnerId: learnerA.id,
+            kind: "behavior",
+            ...partial,
+          }),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+      await db.insert(titleAwards).values({
+        learnerId: learnerA.id,
+        titleId: "migrated-title-with-unknown-provenance",
+        kind: "behavior",
+      });
       await db.insert(titleAwards).values({
         learnerId: learnerA.id,
         titleId: "valid-title",

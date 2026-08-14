@@ -8,7 +8,8 @@ CREATE TABLE "title_awards" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "title_awards_learner_title_uq" UNIQUE("learner_id","title_id"),
 	CONSTRAINT "title_awards_title_nonempty" CHECK (length(btrim("title_awards"."title_id")) > 0),
-	CONSTRAINT "title_awards_kind_valid" CHECK ("title_awards"."kind" IN ('behavior', 'story'))
+	CONSTRAINT "title_awards_kind_valid" CHECK ("title_awards"."kind" IN ('behavior', 'story')),
+	CONSTRAINT "title_awards_provenance_pair" CHECK (("title_awards"."source_fact_id" IS NULL) = ("title_awards"."earned_at" IS NULL))
 );
 --> statement-breakpoint
 ALTER TABLE "title_awards" ADD CONSTRAINT "title_awards_learner_id_learners_id_fk" FOREIGN KEY ("learner_id") REFERENCES "public"."learners"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

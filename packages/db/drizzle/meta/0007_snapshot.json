@@ -1323,6 +1323,10 @@
         "title_awards_kind_valid": {
           "name": "title_awards_kind_valid",
           "value": "\"title_awards\".\"kind\" IN ('behavior', 'story')"
+        },
+        "title_awards_provenance_pair": {
+          "name": "title_awards_provenance_pair",
+          "value": "(\"title_awards\".\"source_fact_id\" IS NULL) = (\"title_awards\".\"earned_at\" IS NULL)"
         }
       },
       "isRLSEnabled": false

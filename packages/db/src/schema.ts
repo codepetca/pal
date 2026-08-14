@@ -446,6 +446,10 @@ export const titleAwards = pgTable(
     unique("title_awards_learner_title_uq").on(t.learnerId, t.titleId),
     check("title_awards_title_nonempty", sql`length(btrim(${t.titleId})) > 0`),
     check("title_awards_kind_valid", sql`${t.kind} IN ('behavior', 'story')`),
+    check(
+      "title_awards_provenance_pair",
+      sql`(${t.sourceFactId} IS NULL) = (${t.earnedAt} IS NULL)`,
+    ),
     foreignKey({
       columns: [t.sourceFactId, t.learnerId],
       foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
