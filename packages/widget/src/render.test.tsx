@@ -67,6 +67,24 @@ test("roadmap hides future weeks and renders visible weeks newest first", () => 
   assert.ok(html.indexOf("Week 2") < html.indexOf("Week 1"));
 });
 
+test("roadmap keeps a schema-v1 preterm snapshot renderable", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.roadmap.currentWeek = 1;
+  for (const week of snapshot.roadmap.weeks) week.status = "future";
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="fixture-learner"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /<h3>Week 1<\/h3>/);
+});
+
 test("companion owns the complete portable cat surface", () => {
   const client = createFixturePalClient();
   const snapshot = client.peek();

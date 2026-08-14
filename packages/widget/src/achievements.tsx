@@ -89,6 +89,10 @@ export function PalAchievements() {
         <h2 id="pal-roadmap-title">Achievements</h2>
       </header>
 
+      {visibleWeeks.length === 0 ? (
+        <p className="pal-roadmap-empty">Your story begins when Week 1 opens.</p>
+      ) : null}
+
       <ol className="pal-roadmap-list">
         {visibleWeeks.map((week) => {
           const isCurrent = week.number === snapshot.roadmap.currentWeek;

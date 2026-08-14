@@ -33,6 +33,36 @@ export type PeriodKey = string;
 // private mapping — never a raw Pika user, classroom, or assignment id.
 export type OpaqueToken = string;
 
+type LegacyTermCalendar = {
+  term_token?: never;
+  term_start_day?: never;
+  term_end_day?: never;
+  term_timezone?: never;
+  term_week_count?: never;
+  week_start_day?: never;
+  week_index?: never;
+};
+
+type V1TermCalendar = {
+  term_token: OpaqueToken;
+  term_start_day: string;
+  term_end_day: string;
+  term_timezone: string;
+  term_week_count?: never;
+  week_start_day?: never;
+  week_index: number;
+};
+
+type AdaptiveTermCalendar = {
+  term_token: OpaqueToken;
+  term_start_day: string;
+  term_end_day: string;
+  term_timezone: string;
+  term_week_count: number;
+  week_start_day: string;
+  week_index: number;
+};
+
 export type V1Metadata = {
   // A genuine authenticated learner session. Pal derives "first login"; the
   // producer does not claim it.
@@ -51,7 +81,7 @@ export type V1Metadata = {
     config_version: number;
     period_status: "open" | "closed";
     eligible_days: number;
-  };
+  } & (LegacyTermCalendar | V1TermCalendar | AdaptiveTermCalendar);
 
   // At least one qualifying log on that date. One fact per learner/date, even
   // when the learner logged in several classrooms.

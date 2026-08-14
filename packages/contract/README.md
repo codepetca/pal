@@ -52,6 +52,14 @@ without either side running the other's server.
 The fixtures are plain JSON with no TypeScript around them, so a repo that cannot yet
 install this package can vendor the directory and still test against the same cases.
 
+`@pal/contract` remains a private workspace package during the pilot; its `0.1.0`
+workspace version is not a published release identifier. Until publication is enabled,
+Pika vendors the contract source and `fixtures/v1/` from an exact Pal commit and records
+that commit in its adapter dependency update. Pal lands support first; Pika updates that
+pin and runs the vendored fixture suite before emitting the new optional fields. The first
+published package release containing this additive calendar group must receive a minor
+version bump.
+
 ## What it deliberately does not do
 
 - **No clock.** `validateV1Event` accepts a future-dated `occurred_at`. Rejecting those
@@ -87,6 +95,13 @@ Package version bumps:
 Adding an event type breaks nobody: no existing producer emits it and no existing
 consumer expects it. Which event types a given integration may send is enforced by that
 integration's allow-list, not by the schema version.
+
+An optional field group may still be all-or-none. The original version 1 term
+calendar remains the five-field group `term_token`, `term_start_day`,
+`term_end_day`, `term_timezone`, and `week_index`; it implies a 16-week roadmap
+and remains valid. Adaptive producers add both `term_week_count` and
+`week_start_day`, yielding a seven-field group. A producer must send exactly
+none, all five, or all seven so consumers never persist a partial assertion.
 
 The rollout order never changes: **Pal ships support for a version first, and a producer
 starts emitting it second.** Reversing that fills the producer's outbox with

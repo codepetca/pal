@@ -11,6 +11,21 @@ test("snapshot parser accepts the bounded v1 fixture", () => {
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 });
 
+test("snapshot parser preserves the v1 current-week domain", () => {
+  const fixture = JSON.parse(
+    JSON.stringify(createFixtureSnapshot()),
+  ) as ReturnType<typeof createFixtureSnapshot>;
+  fixture.roadmap.currentWeek = 1;
+  for (const week of fixture.roadmap.weeks) week.status = "future";
+  assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
+
+  fixture.roadmap.currentWeek = 0;
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /greater than or equal to 1/i,
+  );
+});
+
 test("snapshot parser keeps XP fields backward-compatible in schema version 1", () => {
   const fixture = createFixtureSnapshot();
   delete fixture.companion.xp;

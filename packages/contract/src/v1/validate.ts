@@ -74,25 +74,50 @@ function isCalendarDay(value: unknown): value is string {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function isIanaTimeZone(value: unknown): value is string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 type MetadataCheck = (metadata: Record<string, unknown>) => string | null;
+
+type MetadataRule = {
+  requiredKeys: string[];
+  optionalKeys?: string[];
+  check: MetadataCheck;
+};
 
 // Exactly the keys listed for each event type, and nothing else. Rejecting
 // unknown keys is what keeps a well-meaning producer from quietly widening the
 // privacy surface by attaching an assignment title "just for debugging".
-const METADATA_RULES: Record<V1EventType, { keys: string[]; check: MetadataCheck }> = {
+const METADATA_RULES: Record<V1EventType, MetadataRule> = {
   "platform.session.started": {
-    keys: [],
+    requiredKeys: [],
     check: () => null,
   },
 
   "classroom.joined": {
-    keys: ["classroom_token"],
+    requiredKeys: ["classroom_token"],
     check: (m) =>
       isToken(m.classroom_token, 128) ? null : "classroom_token must be 1-128 URL-safe characters",
   },
 
   "daily_log_week.configured": {
-    keys: ["period_key", "config_version", "period_status", "eligible_days"],
+    requiredKeys: ["period_key", "config_version", "period_status", "eligible_days"],
+    optionalKeys: [
+      "term_token",
+      "term_start_day",
+      "term_end_day",
+      "term_timezone",
+      "term_week_count",
+      "week_start_day",
+      "week_index",
+    ],
     check: (m) => {
       if (!isToken(m.period_key, 64)) return "period_key must be 1-64 URL-safe characters";
       if (!isInteger(m.config_version) || m.config_version < 1)
@@ -102,12 +127,63 @@ const METADATA_RULES: Record<V1EventType, { keys: string[]; check: MetadataCheck
       // Version 1 models a Monday-Friday daily-log week.
       if (!isInteger(m.eligible_days) || m.eligible_days < 0 || m.eligible_days > 5)
         return "eligible_days must be an integer 0-5";
+
+      const v1CalendarKeys = [
+        "term_token",
+        "term_start_day",
+        "term_end_day",
+        "term_timezone",
+        "week_index",
+      ];
+      const adaptiveCalendarKeys = [
+        "term_week_count",
+        "week_start_day",
+      ];
+      const calendarKeys = [...v1CalendarKeys, ...adaptiveCalendarKeys];
+      const presentCalendarKeys = calendarKeys.filter((key) => m[key] !== undefined);
+      const hasV1Calendar = v1CalendarKeys.every((key) => m[key] !== undefined);
+      const hasAdaptiveCalendar = adaptiveCalendarKeys.every(
+        (key) => m[key] !== undefined,
+      );
+      if (
+        presentCalendarKeys.length !== 0 &&
+        !(hasV1Calendar &&
+          (presentCalendarKeys.length === v1CalendarKeys.length ||
+            (hasAdaptiveCalendar && presentCalendarKeys.length === calendarKeys.length)))
+      ) {
+        return "send either the complete five-field v1 term calendar or all seven adaptive calendar fields";
+      }
+      if (hasV1Calendar) {
+        if (!isToken(m.term_token, 128))
+          return "term_token must be 1-128 URL-safe characters";
+        if (!isCalendarDay(m.term_start_day))
+          return "term_start_day must be a real YYYY-MM-DD date";
+        if (!isCalendarDay(m.term_end_day))
+          return "term_end_day must be a real YYYY-MM-DD date";
+        if ((m.term_start_day as string) > (m.term_end_day as string))
+          return "term_start_day must be on or before term_end_day";
+        if (!isIanaTimeZone(m.term_timezone))
+          return "term_timezone must be a valid IANA time zone";
+        if (!hasAdaptiveCalendar) {
+          if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > 16)
+            return "week_index must be an integer 1-16 for a v1 term calendar";
+          return null;
+        }
+        if (!isInteger(m.term_week_count) || m.term_week_count < 6 || m.term_week_count > 24)
+          return "term_week_count must be an integer 6-24";
+        if (!isCalendarDay(m.week_start_day))
+          return "week_start_day must be a real YYYY-MM-DD date";
+        if (m.week_start_day < m.term_start_day || m.week_start_day > m.term_end_day)
+          return "week_start_day must fall within the term date range";
+        if (!isInteger(m.week_index) || m.week_index < 1 || m.week_index > m.term_week_count)
+          return "week_index must be an integer within term_week_count";
+      }
       return null;
     },
   },
 
   "daily_log.completed": {
-    keys: ["period_key", "activity_day"],
+    requiredKeys: ["period_key", "activity_day"],
     check: (m) => {
       if (!isToken(m.period_key, 64)) return "period_key must be 1-64 URL-safe characters";
       if (!isCalendarDay(m.activity_day)) return "activity_day must be a real YYYY-MM-DD date";
@@ -116,7 +192,7 @@ const METADATA_RULES: Record<V1EventType, { keys: string[]; check: MetadataCheck
   },
 
   "learning_item.viewed": {
-    keys: ["item_token", "kind", "period_key", "timing"],
+    requiredKeys: ["item_token", "kind", "period_key", "timing"],
     check: (m) => {
       if (!isToken(m.item_token, 128)) return "item_token must be 1-128 URL-safe characters";
       if (m.kind !== "assignment") return "kind must be 'assignment' in version 1";
@@ -128,7 +204,7 @@ const METADATA_RULES: Record<V1EventType, { keys: string[]; check: MetadataCheck
   },
 
   "learning_item.completed": {
-    keys: ["item_token", "kind", "period_key", "timing"],
+    requiredKeys: ["item_token", "kind", "period_key", "timing"],
     check: (m) => {
       if (!isToken(m.item_token, 128)) return "item_token must be 1-128 URL-safe characters";
       if (m.kind !== "assignment") return "kind must be 'assignment' in version 1";
@@ -211,8 +287,9 @@ export function validateV1Event(payload: unknown): V1ValidationResult {
 
   const rule = METADATA_RULES[eventType];
   const present = Object.keys(payload.metadata);
+  const allowed = [...rule.requiredKeys, ...(rule.optionalKeys ?? [])];
 
-  const unexpected = present.filter((k) => !rule.keys.includes(k));
+  const unexpected = present.filter((k) => !allowed.includes(k));
   if (unexpected.length > 0) {
     return fail(
       "invalid_metadata",
@@ -220,7 +297,7 @@ export function validateV1Event(payload: unknown): V1ValidationResult {
     );
   }
 
-  const missing = rule.keys.filter((k) => !present.includes(k));
+  const missing = rule.requiredKeys.filter((k) => !present.includes(k));
   if (missing.length > 0) {
     return fail("invalid_metadata", `${eventType} requires metadata keys: ${missing.join(", ")}`);
   }

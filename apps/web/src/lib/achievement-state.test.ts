@@ -553,7 +553,12 @@ test(
         periodKeys,
       );
 
-      const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
       assert.equal(snapshot.roadmap.currentWeek, 16);
       assert.equal(
         snapshot.roadmap.weeks.filter((week) =>
@@ -563,6 +568,1193 @@ test(
         ).length,
         16,
       );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "places a late-joining learner at the producer's authoritative term week",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `late-join-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `late-join-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
+            week_index: 7,
+          },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 7);
+      assert.equal(snapshot.roadmap.weeks[0].achievements.length, 0);
+      assert.ok(
+        snapshot.roadmap.weeks[6].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps v1 calendar periods visible while upgrading a term in place",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `v1-calendar-upgrade-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `v1-week-3-${crypto.randomUUID()}`;
+    const baseCalendar = {
+      period_key: periodKey,
+      period_status: "open" as const,
+      eligible_days: 1,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+      week_index: 3,
+    };
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...baseCalendar, config_version: 1 },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-09-14" },
+          "2026-09-14T17:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const upgraded = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            ...baseCalendar,
+            config_version: 2,
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
+          },
+          "2026-09-15T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(upgraded.status, "processed");
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.weeks.length, 16);
+      assert.equal(snapshot.roadmap.currentWeek, 3);
+      assert.ok(
+        snapshot.roadmap.weeks[2]?.achievements.some(
+          (achievement) =>
+            achievement.title === "Weekly Rhythm" &&
+            achievement.status === "earned",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps the schema-v1 Week 1 placeholder before its first local start",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `before-first-week-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `delayed-week-one-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 12,
+            week_start_day: "2026-09-07",
+            week_index: 1,
+          },
+          "2026-08-30T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      for (const asOf of [
+        "2026-08-01T12:00:00.000Z",
+        "2026-09-01T12:00:00.000Z",
+      ]) {
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(asOf) },
+        );
+        assert.equal(snapshot.roadmap.currentWeek, 1);
+        assert.equal(snapshot.roadmap.weeks[0]?.status, "current");
+        assert.ok(snapshot.roadmap.weeks.slice(1).every(
+          (week) => week.status === "future",
+        ));
+      }
+
+      const opened = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-07T04:00:00.000Z") },
+      );
+      assert.equal(opened.roadmap.currentWeek, 1);
+      assert.equal(opened.roadmap.weeks[0]?.status, "current");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "accepts delayed v1 calendar facts after an adaptive 16-week fact",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `delayed-v1-calendar-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const weekThreeKey = `adaptive-week-3-${crypto.randomUUID()}`;
+    const sharedTerm = {
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+    };
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: weekThreeKey,
+            config_version: 2,
+            period_status: "open",
+            eligible_days: 1,
+            ...sharedTerm,
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
+            week_index: 3,
+          },
+          "2026-09-15T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: weekThreeKey, activity_day: "2026-09-14" },
+          "2026-09-14T13:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const delayedSamePeriod = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: weekThreeKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+            ...sharedTerm,
+            week_index: 3,
+          },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(delayedSamePeriod.status, "processed");
+
+      const delayedDistinctPeriod = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `v1-week-4-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            ...sharedTerm,
+            week_index: 4,
+          },
+          "2026-09-21T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(delayedDistinctPeriod.status, "processed");
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-22T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.weeks.length, 16);
+      assert.equal(snapshot.roadmap.currentWeek, 4);
+      assert.ok(
+        snapshot.roadmap.weeks[2]?.achievements.some(
+          (achievement) =>
+            achievement.title === "Weekly Rhythm" &&
+            achievement.status === "earned",
+        ),
+      );
+      assert.ok(
+        snapshot.roadmap.weeks[3]?.achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps a preconfigured later week future until its authoritative local start",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `future-week-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const calendar = {
+      config_version: 1,
+      period_status: "open" as const,
+      eligible_days: 5,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+      term_week_count: 12,
+    };
+    try {
+      for (const week of [
+        // The two-week gap proves currentness does not assume consecutive
+        // seven-day periods or use configuration delivery time. Sending Week
+        // 2 first also proves delivery order is irrelevant.
+        { index: 2, start: "2026-09-14" },
+        { index: 1, start: "2026-08-31" },
+      ]) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              ...calendar,
+              period_key: `future-week-${week.index}-${crypto.randomUUID()}`,
+              week_start_day: week.start,
+              week_index: week.index,
+            },
+            "2026-08-30T12:00:00.000Z",
+          ),
+          key(),
+        );
+      }
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const before = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-14T03:59:59.000Z") },
+      );
+      const at = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-14T04:00:00.000Z") },
+      );
+
+      assert.equal(before.roadmap.currentWeek, 1);
+      assert.equal(before.roadmap.weeks.length, 12);
+      assert.equal(before.roadmap.weeks[1]?.status, "future");
+      assert.ok(
+        before.roadmap.weeks[1]?.achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+      assert.equal(at.roadmap.currentWeek, 2);
+      assert.equal(at.roadmap.weeks[1]?.status, "current");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "sizes the roadmap to the producer's authoritative term week count",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+
+    for (const termWeekCount of [6, 12, 24]) {
+      const externalLearnerId = `term-length-${termWeekCount}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `week-${termWeekCount}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: `term-${termWeekCount}`,
+              term_start_day: "2026-01-01",
+              term_end_day: "2026-12-31",
+              term_timezone: "America/Toronto",
+              term_week_count: termWeekCount,
+              week_start_day: "2026-06-01",
+              week_index: termWeekCount,
+            },
+            "2026-06-01T12:00:00.000Z",
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date("2026-06-01T12:00:00.000Z") },
+        );
+        assert.equal(snapshot.roadmap.weeks.length, termWeekCount);
+        assert.equal(snapshot.roadmap.currentWeek, termWeekCount);
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
+  "places legacy daily-log periods by local activity day during calendar rollout",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `local-legacy-periods-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const legacyWeeks = [
+      { day: "2026-08-31", periodKey: `legacy-week-1-${crypto.randomUUID()}` },
+      { day: "2026-09-07", periodKey: `legacy-week-2-${crypto.randomUUID()}` },
+    ];
+    try {
+      for (const legacyWeek of legacyWeeks) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: legacyWeek.periodKey,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            `${legacyWeek.day}T12:00:00.000Z`,
+          ),
+          key(),
+        );
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log.completed",
+            {
+              period_key: legacyWeek.periodKey,
+              activity_day: legacyWeek.day,
+            },
+            `${legacyWeek.day}T17:00:00.000Z`,
+          ),
+          key(),
+        );
+      }
+
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `authoritative-week-3-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
+            week_index: 3,
+          },
+          "2026-09-14T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 3);
+      for (const weekIndex of [0, 1]) {
+        assert.ok(
+          snapshot.roadmap.weeks[weekIndex].achievements.some(
+            (achievement) =>
+              achievement.title === "Weekly Rhythm" &&
+              achievement.status === "earned",
+          ),
+        );
+      }
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "rejects a second period that claims an occupied term week",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `calendar-conflict-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const calendar = {
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "fall-2026",
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-12-18",
+      term_timezone: "America/Toronto",
+      term_week_count: 16,
+      week_start_day: "2026-10-12",
+      week_index: 7,
+    };
+    try {
+      const first = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...calendar, period_key: `period-a-${crypto.randomUUID()}` },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.equal(first.status, "processed");
+
+      const second = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          { ...calendar, period_key: `period-b-${crypto.randomUUID()}` },
+          "2026-10-12T13:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.deepEqual(second, {
+        status: "rejected",
+        error: "conflicting_period_calendar",
+      });
+
+      const changedLength = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            ...calendar,
+            period_key: `period-c-${crypto.randomUUID()}`,
+            term_week_count: 12,
+            week_index: 8,
+          },
+          "2026-10-12T14:00:00.000Z",
+        ),
+        key(),
+      );
+      assert.deepEqual(changedLength, {
+        status: "rejected",
+        error: "conflicting_period_calendar",
+      });
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps authoritative periods placed when configuration anchors fall outside the term",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const cases = [
+      {
+        label: "pre-start",
+        occurredAt: "2026-08-30T23:00:00.000Z",
+        weekStartDay: "2026-08-31",
+        weekIndex: 1,
+      },
+      {
+        label: "post-end-backfill",
+        occurredAt: "2026-12-20T12:00:00.000Z",
+        weekStartDay: "2026-12-14",
+        weekIndex: 16,
+      },
+    ];
+
+    for (const scenario of cases) {
+      const externalLearnerId = `${scenario.label}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${scenario.label}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: "fall-2026",
+              term_start_day: "2026-08-31",
+              term_end_day: "2026-12-18",
+              term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: scenario.weekStartDay,
+              week_index: scenario.weekIndex,
+            },
+            scenario.occurredAt,
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const snapshot = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date("2026-10-15T12:00:00.000Z") },
+        );
+        assert.equal(snapshot.roadmap.currentWeek, 1);
+        assert.ok(
+          snapshot.roadmap.weeks[scenario.weekIndex - 1].achievements.some(
+            (achievement) => achievement.title === "Weekly Rhythm",
+          ),
+          scenario.label,
+        );
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
+  "excludes a backfilled prior-term calendar period from the current term",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `cross-term-backfill-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `spring-backfill-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "spring-2026",
+            term_start_day: "2026-01-05",
+            term_end_day: "2026-04-24",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-04-20",
+            week_index: 16,
+          },
+          // The backfill is delivered during the later term. Its anchor must
+          // not make this calendar-bearing period look like a legacy fall week.
+          "2026-09-07T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `fall-week-2-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-07",
+            week_index: 2,
+          },
+          "2026-09-07T13:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-10T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 2);
+      assert.equal(
+        snapshot.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.title === "Weekly Rhythm").length,
+        1,
+      );
+      assert.ok(
+        snapshot.roadmap.weeks[1].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps the active term selected when a future term is preconfigured",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `future-term-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `fall-week-10-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-11-02",
+            week_index: 10,
+          },
+          "2026-11-02T12:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `spring-week-1-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "spring-2027",
+            term_start_day: "2027-01-04",
+            term_end_day: "2027-04-23",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2027-01-04",
+            week_index: 1,
+          },
+          "2026-11-03T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-11-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 10);
+      assert.equal(
+        snapshot.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.title === "Weekly Rhythm").length,
+        1,
+      );
+      assert.ok(
+        snapshot.roadmap.weeks[9].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "changes terms at the authoritative Toronto start and end midnights",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const boundaries = [
+      {
+        label: "summer-to-fall",
+        previous: {
+          token: "summer-2026",
+          start: "2026-05-11",
+          end: "2026-08-30",
+        },
+        next: {
+          token: "fall-2026",
+          start: "2026-08-31",
+          end: "2026-12-18",
+        },
+        before: "2026-08-31T03:59:59.000Z",
+        at: "2026-08-31T04:00:00.000Z",
+      },
+      {
+        label: "fall-to-winter",
+        previous: {
+          token: "fall-2026",
+          start: "2026-08-31",
+          end: "2026-12-18",
+        },
+        next: {
+          token: "winter-2026",
+          start: "2026-12-19",
+          end: "2027-04-09",
+        },
+        before: "2026-12-19T04:59:59.000Z",
+        at: "2026-12-19T05:00:00.000Z",
+      },
+    ];
+
+    for (const boundary of boundaries) {
+      const externalLearnerId = `${boundary.label}-${crypto.randomUUID()}`;
+      try {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${boundary.previous.token}-week-16-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: boundary.previous.token,
+              term_start_day: boundary.previous.start,
+              term_end_day: boundary.previous.end,
+              term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: boundary.previous.end,
+              week_index: 16,
+            },
+            boundary.before,
+          ),
+          key(),
+        );
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `${boundary.next.token}-week-1-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: boundary.next.token,
+              term_start_day: boundary.next.start,
+              term_end_day: boundary.next.end,
+              term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: boundary.next.start,
+              week_index: 1,
+            },
+            boundary.before,
+          ),
+          key(),
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const before = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(boundary.before) },
+        );
+        const at = await loadLearnerSnapshot(
+          integration.id,
+          learnerId,
+          getDb(),
+          { asOf: new Date(boundary.at) },
+        );
+        assert.equal(before.roadmap.currentWeek, 16, boundary.label);
+        assert.equal(at.roadmap.currentWeek, 1, boundary.label);
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
+  "selects a new authoritative term after sixteen historical periods",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `returning-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      for (let index = 0; index < 16; index += 1) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `spring-${index}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            new Date(Date.UTC(2026, 0, 5 + index * 7, 12)).toISOString(),
+          ),
+          key(),
+        );
+      }
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `fall-week-7-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
+            week_index: 7,
+          },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-15T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 7);
+      assert.ok(
+        snapshot.roadmap.weeks[6].achievements.some(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ),
+      );
+      assert.equal(
+        snapshot.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.title === "Weekly Rhythm").length,
+        1,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps legacy periods in their term when calendar fields roll out midterm",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `mixed-rollout-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      for (let week = 1; week <= 6; week += 1) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `mixed-week-${week}-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+            },
+            new Date(Date.UTC(2026, 7, 31 + (week - 1) * 7, 12)).toISOString(),
+          ),
+          key(),
+        );
+      }
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `mixed-week-7-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: "fall-2026",
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-10-12",
+            week_index: 7,
+          },
+          "2026-10-12T12:00:00.000Z",
+        ),
+        key(),
+      );
+      // A later legacy fact must not unset the latest complete calendar group.
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: `mixed-week-8-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+          },
+          "2026-10-19T12:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-10-20T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.currentWeek, 8);
+      for (let week = 1; week <= 8; week += 1) {
+        assert.ok(
+          snapshot.roadmap.weeks[week - 1].achievements.some(
+            (achievement) => achievement.title === "Weekly Rhythm",
+          ),
+        );
+      }
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -682,9 +1874,11 @@ test(
         integration.id,
         learnerId,
         getDb(),
-        async () => {
-          markScopeVerified();
-          await continueRead;
+        {
+          afterScopeVerified: async () => {
+            markScopeVerified();
+            await continueRead;
+          },
         },
       );
 

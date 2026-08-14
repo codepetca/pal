@@ -37,6 +37,10 @@
       "error": "invalid_metadata",
       "why": "Only 'assignment' is defined in version 1. Widening the enum is a contract change, not a payload choice."
     },
+    "invalid-term-timezone.json": {
+      "error": "invalid_metadata",
+      "why": "Term boundaries require a valid IANA timezone so Pal changes terms at the classroom's authoritative local midnight."
+    },
     "legacy-event-type.json": {
       "error": "unknown_event_type",
       "why": "The prototype's assignment.completed is not part of the v1 vocabulary; it reaches ingest on the legacy path instead."
@@ -53,9 +57,17 @@
       "error": "invalid_occurred_at",
       "why": "occurred_at is an absolute instant. Offsets are rejected so no consumer has to guess a timezone."
     },
+    "partial-term-calendar.json": {
+      "error": "invalid_metadata",
+      "why": "Term identity, range, and week position form one authoritative calendar assertion and cannot be sent partially."
+    },
     "raw-learner-email.json": {
       "error": "invalid_learner_id",
       "why": "learner_id must be a pseudonymous token. An email is both non-URL-safe and a privacy violation."
+    },
+    "reversed-term-range.json": {
+      "error": "invalid_metadata",
+      "why": "An academic term cannot end before it starts."
     },
     "session-started-with-metadata.json": {
       "error": "invalid_metadata",
@@ -65,9 +77,21 @@
       "error": "invalid_metadata",
       "why": "'excused' is an academic state Pika owns; it is not a completion timing Pal can interpret."
     },
+    "term-week-count-out-of-range.json": {
+      "error": "invalid_metadata",
+      "why": "Pip's adaptive story supports terms from 6 through 24 instructional weeks."
+    },
     "unsupported-schema-version.json": {
       "error": "unsupported_schema_version",
       "why": "Pal must ship support for a version before a producer emits it. This failure is not retryable."
+    },
+    "week-index-exceeds-term.json": {
+      "error": "invalid_metadata",
+      "why": "A period's authoritative week position must fall inside its declared term length."
+    },
+    "week-start-outside-term.json": {
+      "error": "invalid_metadata",
+      "why": "An authoritative instructional week must start inside its declared term range."
     }
   }
 }

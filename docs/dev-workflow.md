@@ -79,6 +79,9 @@ collapsible semester controls. Configure a week, complete daily logs, or finish 
 time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
 Advancing by one week automatically emits that new week's normal configuration fact,
 matching Pika's planned adapter behavior.
+The fictional configuration includes the same privacy-safe term range and authoritative
+IANA timezone and week index that Pika will send, so a persisted learner can jump directly to any simulated
+week without Pal renumbering it from the learner's first observed event.
 
 In fixture mode, every visible surface reads an in-memory snapshot through the public
 provider and reward acknowledgement mutates only that browser's client. In persisted

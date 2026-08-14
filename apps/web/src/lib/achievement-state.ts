@@ -82,7 +82,75 @@ function factIdentity(
 
 export type WeeklyConfigurationError =
   | "closed_period_revision"
-  | "contradictory_period_configuration";
+  | "contradictory_period_configuration"
+  | "conflicting_period_calendar";
+
+type TermCalendarMetadata = {
+  term_token: string;
+  term_start_day: string;
+  term_end_day: string;
+  term_timezone: string;
+  term_week_count?: number;
+  week_start_day?: string;
+  week_index: number;
+};
+
+function termCalendarMetadata(
+  event: IncomingEvent,
+): TermCalendarMetadata | null {
+  if (event.event_type !== "daily_log_week.configured") return null;
+  if (event.metadata.week_index === undefined) return null;
+  return {
+    term_token: metadataString(event, "term_token"),
+    term_start_day: metadataString(event, "term_start_day"),
+    term_end_day: metadataString(event, "term_end_day"),
+    term_timezone: metadataString(event, "term_timezone"),
+    ...(event.metadata.term_week_count === undefined
+      ? {}
+      : {
+          term_week_count: metadataInteger(event, "term_week_count"),
+          week_start_day: metadataString(event, "week_start_day"),
+        }),
+    week_index: metadataInteger(event, "week_index"),
+  };
+}
+
+function isCompatibleCalendarRevision(
+  left: Record<string, unknown>,
+  right: TermCalendarMetadata,
+): boolean {
+  const v1Keys = [
+    "term_token",
+    "term_start_day",
+    "term_end_day",
+    "term_timezone",
+    "week_index",
+  ] as const;
+  if (v1Keys.some((key) => left[key] !== right[key])) return false;
+
+  const leftAdaptive = left.term_week_count !== undefined;
+  const rightAdaptive = right.term_week_count !== undefined;
+  const leftWeekCount = leftAdaptive ? left.term_week_count : 16;
+  const rightWeekCount = rightAdaptive ? right.term_week_count : 16;
+  if (leftWeekCount !== rightWeekCount) return false;
+  return !leftAdaptive || !rightAdaptive || left.week_start_day === right.week_start_day;
+}
+
+function isCompatibleTermRevision(
+  left: Record<string, unknown>,
+  right: TermCalendarMetadata,
+): boolean {
+  if (
+    left.term_start_day !== right.term_start_day ||
+    left.term_end_day !== right.term_end_day ||
+    left.term_timezone !== right.term_timezone
+  ) {
+    return false;
+  }
+  const leftWeekCount = left.term_week_count ?? 16;
+  const rightWeekCount = right.term_week_count ?? 16;
+  return leftWeekCount === rightWeekCount;
+}
 
 async function completionCount(
   db: Db,
@@ -112,6 +180,7 @@ export async function weeklyConfigurationRejection(
   const version = metadataInteger(event, "config_version");
   const eligibleDays = metadataInteger(event, "eligible_days");
   const periodStatus = metadataString(event, "period_status");
+  const calendar = termCalendarMetadata(event);
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,
@@ -138,6 +207,93 @@ export async function weeklyConfigurationRejection(
     (!existing.reconciliationRequired || periodStatus !== "closed")
   ) {
     return "closed_period_revision";
+  }
+  if (calendar) {
+    const [samePeriodCalendar] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          eq(learnerFacts.periodKey, periodKey),
+          sql`${learnerFacts.metadata} ? 'week_index'`,
+        ),
+      )
+      .orderBy(
+        sql`(${learnerFacts.metadata} ? 'term_week_count') desc`,
+        sql`(${learnerFacts.metadata}->>'config_version')::int desc`,
+      )
+      .limit(1);
+    if (
+      samePeriodCalendar &&
+      (samePeriodCalendar.metadata as Record<string, unknown>).week_index !== undefined &&
+      !isCompatibleCalendarRevision(
+        samePeriodCalendar.metadata as Record<string, unknown>,
+        calendar,
+      )
+    ) {
+      return "conflicting_period_calendar";
+    }
+
+    const [sameTermCalendar] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+        ),
+      )
+      .orderBy(sql`(${learnerFacts.metadata} ? 'term_week_count') desc`)
+      .limit(1);
+    if (
+      sameTermCalendar &&
+      !isCompatibleTermRevision(
+        sameTermCalendar.metadata as Record<string, unknown>,
+        calendar,
+      )
+    ) {
+      return "conflicting_period_calendar";
+    }
+
+    const [occupiedWeek] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+          sql`${learnerFacts.metadata}->>'week_index' = ${String(calendar.week_index)}`,
+          sql`${learnerFacts.periodKey} <> ${periodKey}`,
+        ),
+      )
+      .limit(1);
+    if (occupiedWeek) return "conflicting_period_calendar";
+
+    if (calendar.week_start_day !== undefined) {
+      const [outOfOrderWeek] = await db
+        .select({ id: learnerFacts.id })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.eventType, "daily_log_week.configured"),
+            sql`${learnerFacts.metadata}->>'term_token' = ${calendar.term_token}`,
+            sql`(
+              ((${learnerFacts.metadata}->>'week_index')::int < ${calendar.week_index}
+                and ${learnerFacts.metadata}->>'week_start_day' >= ${calendar.week_start_day})
+              or
+              ((${learnerFacts.metadata}->>'week_index')::int > ${calendar.week_index}
+                and ${learnerFacts.metadata}->>'week_start_day' <= ${calendar.week_start_day})
+            )`,
+          ),
+        )
+        .limit(1);
+      if (outOfOrderWeek) return "conflicting_period_calendar";
+    }
   }
   return null;
 }

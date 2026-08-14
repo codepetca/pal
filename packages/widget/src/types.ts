@@ -47,6 +47,7 @@ export interface PalRoadmapWeek {
 
 export interface PalRoadmapSnapshot {
   semesterLabel: string;
+  /** Supplied 1-based roadmap cursor consumed by published schema-v1 widgets. */
   currentWeek: number;
   weeks: PalRoadmapWeek[];
 }

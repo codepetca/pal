@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { V1_EVENT_TYPES, type V1Error } from "./types";
+import type { DailyLogWeekConfiguredEvent } from "./types";
 import { validateV1Event } from "./validate";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/v1");
@@ -121,4 +122,23 @@ test("a payload that is not an object is rejected without throwing", () => {
     const result = validateV1Event(payload);
     assert.equal(result.ok, false, `${JSON.stringify(payload) ?? "undefined"} should be rejected`);
   }
+});
+
+test("the producer type requires the complete term calendar group", () => {
+  const partial: DailyLogWeekConfiguredEvent = {
+    schema_version: 1,
+    idempotency_key: "partial-calendar",
+    learner_id: "opaque-learner",
+    event_type: "daily_log_week.configured",
+    occurred_at: "2026-09-14T11:00:00Z",
+    // @ts-expect-error A producer cannot construct a type-valid partial calendar.
+    metadata: {
+      period_key: "fall-week-03",
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 3,
+      term_token: "fall-2026",
+    },
+  };
+  assert.ok(partial);
 });

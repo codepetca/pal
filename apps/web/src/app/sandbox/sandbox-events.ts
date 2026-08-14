@@ -23,6 +23,8 @@ export type SandboxEventRequest = {
 // though the production receiver correctly rejects future-dated facts.
 export const FICTIONAL_SEMESTER_START_ISO = "2026-04-13T08:00:00.000Z";
 const SEMESTER_START = new Date(FICTIONAL_SEMESTER_START_ISO);
+export const FICTIONAL_SEMESTER_END_DAY = "2026-08-02";
+export const FICTIONAL_TERM_TIME_ZONE = "America/Toronto";
 
 export function semesterWeekForDate(date: Date): number {
   const diffDays = Math.floor(
@@ -33,6 +35,13 @@ export function semesterWeekForDate(date: Date): number {
 
 export function periodKeyForDate(date: Date): string {
   return `sandbox-week-${String(semesterWeekForDate(date)).padStart(2, "0")}`;
+}
+
+function weekStartDayForDate(date: Date): string {
+  const weekIndex = semesterWeekForDate(date);
+  return new Date(SEMESTER_START.getTime() + (weekIndex - 1) * 7 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 /** Maps sandbox controls to fully valid v1 events at the simulated instant. */
@@ -78,6 +87,13 @@ export function eventForAction(
           config_version: action === "week-configured" ? 1 : 2,
           period_status: "open",
           eligible_days: action === "week-configured" ? 5 : 3,
+          term_token: "sandbox-term-2026",
+          term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
+          term_end_day: FICTIONAL_SEMESTER_END_DAY,
+          term_timezone: FICTIONAL_TERM_TIME_ZONE,
+          term_week_count: 16,
+          week_start_day: weekStartDayForDate(simulatedDate),
+          week_index: semesterWeekForDate(simulatedDate),
         },
       };
     case "daily-log-completed":
@@ -158,4 +174,12 @@ export function addDays(date: Date, days: number): Date {
 
 export function isTodayOrEarlier(date: Date, today = new Date()): boolean {
   return date.toISOString().slice(0, 10) <= today.toISOString().slice(0, 10);
+}
+
+export function isInsideFictionalSemester(date: Date): boolean {
+  const day = date.toISOString().slice(0, 10);
+  return (
+    day >= FICTIONAL_SEMESTER_START_ISO.slice(0, 10) &&
+    day <= FICTIONAL_SEMESTER_END_DAY
+  );
 }

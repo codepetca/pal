@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { v1 } from "@pal/contract";
 import {
+  FICTIONAL_SEMESTER_END_DAY,
+  FICTIONAL_SEMESTER_START_ISO,
+  FICTIONAL_TERM_TIME_ZONE,
   addDays,
   eventForAction,
   eventsForAction,
   isTodayOrEarlier,
+  isInsideFictionalSemester,
   periodKeyForDate,
   semesterWeekForDate,
 } from "./sandbox-events";
@@ -45,6 +49,24 @@ test("builds all six contract-valid pilot facts", () => {
 
   const completion = events[5];
   assert.equal(completion?.occurred_at, now.toISOString());
+
+  const configuredWeek = events[2];
+  assert.deepEqual(
+    configuredWeek?.metadata,
+    {
+      period_key: "sandbox-week-01",
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "sandbox-term-2026",
+      term_start_day: FICTIONAL_SEMESTER_START_ISO.slice(0, 10),
+      term_end_day: FICTIONAL_SEMESTER_END_DAY,
+      term_timezone: FICTIONAL_TERM_TIME_ZONE,
+      term_week_count: 16,
+      week_start_day: "2026-04-13",
+      week_index: 1,
+    },
+  );
 });
 
 test("maps the fictional semester to stable, distinct week keys", () => {
@@ -106,4 +128,9 @@ test("date controls cannot advance beyond the ingestable UTC day", () => {
     isTodayOrEarlier(new Date("2026-07-31T23:59:59Z"), today),
     true,
   );
+});
+
+test("date controls cannot advance beyond the fictional term", () => {
+  assert.equal(isInsideFictionalSemester(new Date("2026-08-02T23:59:59Z")), true);
+  assert.equal(isInsideFictionalSemester(new Date("2026-08-03T00:00:00Z")), false);
 });

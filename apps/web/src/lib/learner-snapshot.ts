@@ -1,9 +1,21 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
   economy,
   getDb,
+  learnerFacts,
   learners,
   petState,
   rewardNotices,
@@ -18,7 +30,7 @@ import type {
 } from "@codepet/pal-widget";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
 
-const SEMESTER_WEEKS = 16;
+const LEGACY_SEMESTER_WEEKS = 16;
 const LEVEL_UP_COST_XP = 500;
 
 export class LearnerScopeError extends Error {
@@ -49,6 +61,80 @@ function moodMessage(mood: PalCompanionMood): string {
 }
 
 type AchievementRow = typeof achievementInstances.$inferSelect;
+
+type CalendarFact = {
+  periodKey: string | null;
+  occurredAt: Date;
+  metadata: unknown;
+};
+
+function selectCurrentTermFact(
+  calendarFacts: CalendarFact[],
+  asOf: Date,
+): CalendarFact | undefined {
+  const terms = new Map<string, CalendarFact>();
+  for (const fact of calendarFacts) {
+    const metadata = fact.metadata as Record<string, unknown>;
+    if (
+      typeof metadata.term_token === "string" &&
+      typeof metadata.term_start_day === "string" &&
+      typeof metadata.term_end_day === "string" &&
+      typeof metadata.term_timezone === "string"
+    ) {
+      terms.set(metadata.term_token, fact);
+    }
+  }
+  const candidates = [...terms.values()];
+  const dates = (fact: CalendarFact) => {
+    const metadata = fact.metadata as Record<string, unknown>;
+    return {
+      start: String(metadata.term_start_day),
+      end: String(metadata.term_end_day),
+      asOfDay: calendarDayInTimeZone(asOf, String(metadata.term_timezone)),
+    };
+  };
+  const active = candidates
+    .filter((fact) => {
+      const { start, end } = dates(fact);
+      const { asOfDay } = dates(fact);
+      return start <= asOfDay && asOfDay <= end;
+    })
+    .toSorted((left, right) => dates(right).start.localeCompare(dates(left).start));
+  if (active[0]) return active[0];
+
+  const completed = candidates
+    .filter((fact) => {
+      const { end, asOfDay } = dates(fact);
+      return end < asOfDay;
+    })
+    .toSorted((left, right) => dates(right).end.localeCompare(dates(left).end));
+  if (completed[0]) return completed[0];
+
+  return candidates
+    .filter((fact) => {
+      const { start, asOfDay } = dates(fact);
+      return start > asOfDay;
+    })
+    .toSorted((left, right) => dates(left).start.localeCompare(dates(right).start))[0];
+}
+
+function calendarDayInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function nextCalendarDay(day: string): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 function achievementFromRow(
   row: AchievementRow,
@@ -139,9 +225,12 @@ export async function loadLearnerSnapshot(
   integrationId: string,
   learnerId: string,
   db: Db = getDb(),
-  // Internal coordination seam used to prove transaction isolation under a
-  // deterministic concurrent write. Production callers leave this unset.
-  afterScopeVerified?: () => Promise<void>,
+  options: {
+    // Internal coordination seam used to prove transaction isolation under a
+    // deterministic concurrent write. Production callers leave this unset.
+    afterScopeVerified?: () => Promise<void>;
+    asOf?: Date;
+  } = {},
 ): Promise<PalWidgetSnapshot> {
   return db.transaction(
     async (tx) => {
@@ -156,7 +245,7 @@ export async function loadLearnerSnapshot(
         )
         .limit(1);
       if (!learner) throw new LearnerScopeError();
-      await afterScopeVerified?.();
+      await options.afterScopeVerified?.();
 
       const economyRows = await tx
         .select()
@@ -168,24 +257,25 @@ export async function loadLearnerSnapshot(
         .from(petState)
         .where(eq(petState.learnerId, learnerId))
         .limit(1);
-      const periods = await tx
-        .select()
-        .from(achievementPeriods)
-        .where(eq(achievementPeriods.learnerId, learnerId))
-        .orderBy(
-          asc(achievementPeriods.anchorAt),
-          asc(achievementPeriods.createdAt),
-        )
-        .limit(SEMESTER_WEEKS);
-      const instances = await tx
-        .select()
-        .from(achievementInstances)
-        .where(eq(achievementInstances.learnerId, learnerId))
-        .orderBy(asc(achievementInstances.createdAt));
       const configurations = await tx
         .select()
         .from(weeklyRhythmConfigs)
         .where(eq(weeklyRhythmConfigs.learnerId, learnerId));
+      const calendarFacts = await tx
+        .select({
+          periodKey: learnerFacts.periodKey,
+          occurredAt: learnerFacts.occurredAt,
+          metadata: learnerFacts.metadata,
+        })
+        .from(learnerFacts)
+        .where(
+          and(
+            eq(learnerFacts.learnerId, learnerId),
+            eq(learnerFacts.eventType, "daily_log_week.configured"),
+            sql`${learnerFacts.metadata} ? 'term_token'`,
+          ),
+        )
+        .orderBy(asc(learnerFacts.occurredAt));
       const rewards = await tx
         .select()
         .from(rewardNotices)
@@ -198,21 +288,188 @@ export async function loadLearnerSnapshot(
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
 
-      const periodNumbers = new Map(
-        periods.map((period, index) => [period.periodKey, index + 1]),
+      const latestCalendarFact = selectCurrentTermFact(
+        calendarFacts,
+        options.asOf ?? new Date(),
       );
+      const currentTermMetadata = latestCalendarFact?.metadata as
+        | Record<string, unknown>
+        | undefined;
+      const currentTermToken = currentTermMetadata?.term_token;
+      const termStartDay = currentTermMetadata?.term_start_day;
+      const termEndDay = currentTermMetadata?.term_end_day;
+      const termTimezone = currentTermMetadata?.term_timezone;
+      const termWeekCount =
+        Number.isInteger(currentTermMetadata?.term_week_count) &&
+        (currentTermMetadata?.term_week_count as number) >= 6 &&
+        (currentTermMetadata?.term_week_count as number) <= 24
+          ? (currentTermMetadata?.term_week_count as number)
+          : LEGACY_SEMESTER_WEEKS;
+      const authoritativeWeekNumbers = new Map<string, number>();
+      const authoritativeWeekStarts = new Map<string, string>();
+      for (const fact of calendarFacts) {
+        const metadata = fact.metadata as Record<string, unknown>;
+        const weekIndex = metadata.week_index;
+        const weekStartDay = metadata.week_start_day;
+        if (
+          fact.periodKey &&
+          typeof currentTermToken === "string" &&
+          metadata.term_token === currentTermToken &&
+          Number.isInteger(weekIndex) &&
+          (weekIndex as number) >= 1 &&
+          (weekIndex as number) <= termWeekCount
+        ) {
+          authoritativeWeekNumbers.set(fact.periodKey, weekIndex as number);
+          if (typeof weekStartDay === "string") {
+            authoritativeWeekStarts.set(fact.periodKey, weekStartDay);
+          }
+        }
+      }
+      const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
+      const allCalendarPeriodKeys = [
+        ...new Set(
+          calendarFacts.flatMap((fact) =>
+            fact.periodKey ? [fact.periodKey] : [],
+          ),
+        ),
+      ];
+      const authoritativePeriods = authoritativePeriodKeys.length
+        ? await tx
+            .select()
+            .from(achievementPeriods)
+            .where(
+              and(
+                eq(achievementPeriods.learnerId, learnerId),
+                inArray(achievementPeriods.periodKey, authoritativePeriodKeys),
+              ),
+            )
+        : [];
+      const legacyPlacementDay = sql<string>`coalesce(
+        (
+          select min("legacy_activity_facts"."metadata"->>'activity_day')
+          from "learner_facts" as "legacy_activity_facts"
+          where "legacy_activity_facts"."learner_id" = "achievement_periods"."learner_id"
+            and "legacy_activity_facts"."period_key" = "achievement_periods"."period_key"
+            and "legacy_activity_facts"."event_type" = 'daily_log.completed'
+        ),
+        to_char(
+          "achievement_periods"."anchor_at" at time zone ${typeof termTimezone === "string" ? termTimezone : "UTC"},
+          'YYYY-MM-DD'
+        )
+      )`;
+      const legacyPeriods = await tx
+        .select({
+          ...getTableColumns(achievementPeriods),
+          placementDay: legacyPlacementDay,
+        })
+        .from(achievementPeriods)
+        .where(
+          and(
+            eq(achievementPeriods.learnerId, learnerId),
+            ...(typeof termStartDay === "string" &&
+            typeof termEndDay === "string"
+              ? [
+                  gte(legacyPlacementDay, termStartDay),
+                  lt(legacyPlacementDay, nextCalendarDay(termEndDay)),
+                ]
+              : []),
+            ...(allCalendarPeriodKeys.length > 0
+              ? [
+                  notInArray(
+                    achievementPeriods.periodKey,
+                    allCalendarPeriodKeys,
+                  ),
+                ]
+              : []),
+          ),
+        )
+        .orderBy(
+          typeof termStartDay === "string"
+            ? asc(legacyPlacementDay)
+            : asc(achievementPeriods.anchorAt),
+          asc(achievementPeriods.createdAt),
+        )
+        .limit(termWeekCount);
+      const legacyPlacementDays = new Map(
+        legacyPeriods.map((period) => [period.periodKey, period.placementDay]),
+      );
+      const periods = [
+        ...new Map(
+          [...authoritativePeriods, ...legacyPeriods].map((period) => [
+            period.periodKey,
+            period,
+          ]),
+        ).values(),
+      ];
+      const instances = await tx
+        .select()
+        .from(achievementInstances)
+        .where(eq(achievementInstances.learnerId, learnerId))
+        .orderBy(asc(achievementInstances.createdAt));
+      const periodNumbers = new Map<string, number>();
+      for (const period of periods) {
+        const authoritativeWeek = authoritativeWeekNumbers.get(period.periodKey);
+        if (authoritativeWeek) {
+          periodNumbers.set(period.periodKey, authoritativeWeek);
+          continue;
+        }
+        const placementDay = legacyPlacementDays.get(period.periodKey);
+        if (typeof termStartDay === "string" && placementDay) {
+          const derivedWeek =
+            Math.floor(
+              (Date.parse(`${placementDay}T00:00:00.000Z`) -
+                Date.parse(`${termStartDay}T00:00:00.000Z`)) /
+                (7 * 86_400_000),
+            ) + 1;
+          if (derivedWeek >= 1 && derivedWeek <= termWeekCount) {
+            periodNumbers.set(period.periodKey, derivedWeek);
+          }
+          continue;
+        }
+        periodNumbers.set(period.periodKey, periodNumbers.size + 1);
+      }
       const reconciliation = new Map(
         configurations.map((configuration) => [
           configuration.periodKey,
           configuration.reconciliationRequired,
         ]),
       );
-      const currentWeek = Math.max(
-        1,
-        Math.min(SEMESTER_WEEKS, periods.length || 1),
+      const asOf = options.asOf ?? new Date();
+      const asOfDay =
+        typeof termTimezone === "string"
+          ? calendarDayInTimeZone(asOf, termTimezone)
+          : null;
+      const startedWeekNumbers = [...periodNumbers.entries()].flatMap(
+        ([periodKey, weekNumber]) => {
+          const authoritativeStart = authoritativeWeekStarts.get(periodKey);
+          if (authoritativeStart) {
+            return asOfDay !== null && authoritativeStart <= asOfDay
+              ? [weekNumber]
+              : [];
+          }
+          if (authoritativeWeekNumbers.has(periodKey)) {
+            return (
+              asOfDay === null ||
+              typeof termStartDay !== "string" ||
+              termStartDay <= asOfDay
+            )
+              ? [weekNumber]
+              : [];
+          }
+          const legacyStart = legacyPlacementDays.get(periodKey);
+          return asOfDay === null || (legacyStart && legacyStart <= asOfDay)
+            ? [weekNumber]
+            : [];
+        },
       );
+      // Snapshot schema v1 has always required a supplied week number >= 1.
+      // Preserve that wire contract before a term opens; week statuses carry
+      // the not-started state for pinned widget clients.
+      const currentWeek = startedWeekNumbers.length === 0
+        ? 1
+        : Math.min(termWeekCount, Math.max(...startedWeekNumbers));
       const weeks: PalRoadmapWeek[] = Array.from(
-        { length: SEMESTER_WEEKS },
+        { length: termWeekCount },
         (_, index) => {
           const number = index + 1;
           const status =
@@ -242,7 +499,7 @@ export async function loadLearnerSnapshot(
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
           : 1;
-        if (!weekNumber || weekNumber > SEMESTER_WEEKS) continue;
+        if (!weekNumber || weekNumber > termWeekCount) continue;
         const achievement = achievementFromRow(
           instance,
           instance.periodKey
