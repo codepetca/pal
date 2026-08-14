@@ -47,7 +47,7 @@ export interface PalRoadmapWeek {
 
 export interface PalRoadmapSnapshot {
   semesterLabel: string;
-  /** Zero means the selected term exists but its first week has not opened. */
+  /** Supplied 1-based roadmap cursor consumed by published schema-v1 widgets. */
   currentWeek: number;
   weeks: PalRoadmapWeek[];
 }

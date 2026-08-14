@@ -722,7 +722,7 @@ test(
 );
 
 test(
-  "keeps an active or upcoming term unopened until its first local week start",
+  "keeps the schema-v1 Week 1 placeholder before its first local start",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -772,9 +772,10 @@ test(
           { asOf: new Date(asOf) },
         );
         assert.equal(snapshot.roadmap.currentWeek, 1);
-        assert.ok(
-          snapshot.roadmap.weeks.every((week) => week.status === "future"),
-        );
+        assert.equal(snapshot.roadmap.weeks[0]?.status, "current");
+        assert.ok(snapshot.roadmap.weeks.slice(1).every(
+          (week) => week.status === "future",
+        ));
       }
 
       const opened = await loadLearnerSnapshot(

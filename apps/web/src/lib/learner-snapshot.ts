@@ -462,17 +462,6 @@ export async function loadLearnerSnapshot(
             : [];
         },
       );
-      const firstWeekStart = [...authoritativeWeekNumbers.entries()]
-        .find(([, weekNumber]) => weekNumber === 1)
-        ?.[0];
-      const firstWeekStartDay = firstWeekStart
-        ? authoritativeWeekStarts.get(firstWeekStart)
-        : undefined;
-      const termHasOpened =
-        asOfDay !== null &&
-        typeof termStartDay === "string" &&
-        termStartDay <= asOfDay &&
-        (firstWeekStartDay === undefined || firstWeekStartDay <= asOfDay);
       // Snapshot schema v1 has always required a supplied week number >= 1.
       // Preserve that wire contract before a term opens; week statuses carry
       // the not-started state for pinned widget clients.
@@ -484,9 +473,7 @@ export async function loadLearnerSnapshot(
         (_, index) => {
           const number = index + 1;
           const status =
-            !termHasOpened && startedWeekNumbers.length === 0
-              ? "future"
-              : number < currentWeek
+            number < currentWeek
               ? "past"
               : number === currentWeek
                 ? "current"
