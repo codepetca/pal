@@ -47,6 +47,10 @@ The companion counter is a school-day rhythm:
 - it advances once for a validated source `activity_day`, not the UTC delivery day;
 - ingest bounds that day to UTC−12 through UTC+14 at the event instant and, once
   configured, requires it to match the term timezone;
+- a log received before its first weekly configuration is stored without rewards;
+  the first configuration settles valid pending logs in source-day order and
+  permanently quarantines any that disagree with its timezone. A corrected source
+  day can then settle normally without mutating the original fact;
 - Friday continues into Monday, so a normal weekend does not reset it;
 - same-day and backdated activity is inert;
 - a missed school day resets the counter to one on the next valid activity day.

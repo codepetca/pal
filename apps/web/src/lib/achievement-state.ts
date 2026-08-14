@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -153,11 +153,38 @@ function isCompatibleTermRevision(
   return leftWeekCount === rightWeekCount;
 }
 
+async function firstConfigurationTimeZone(
+  db: Db,
+  learnerId: string,
+  periodKey: string,
+): Promise<string | null> {
+  const [configuration] = await db
+    .select({ metadata: learnerFacts.metadata })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, "daily_log_week.configured"),
+        eq(learnerFacts.periodKey, periodKey),
+      ),
+    )
+    .orderBy(asc(learnerFacts.createdAt), asc(learnerFacts.id))
+    .limit(1);
+  const timeZone = (
+    configuration?.metadata as Record<string, unknown> | undefined
+  )?.term_timezone;
+  return typeof timeZone === "string" ? timeZone : null;
+}
+
 async function completionCount(
   db: Db,
   learnerId: string,
   periodKey: string,
+  firstTimeZoneOverride?: string,
 ): Promise<number> {
+  const timeZone =
+    firstTimeZoneOverride ??
+    (await firstConfigurationTimeZone(db, learnerId, periodKey));
   const [result] = await db
     .select({ value: sql<number>`count(*)::int` })
     .from(learnerFacts)
@@ -166,6 +193,9 @@ async function completionCount(
         eq(learnerFacts.learnerId, learnerId),
         eq(learnerFacts.eventType, "daily_log.completed"),
         eq(learnerFacts.periodKey, periodKey),
+        timeZone
+          ? sql`to_char(${learnerFacts.occurredAt} AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') = ${learnerFacts.metadata}->>'activity_day'`
+          : undefined,
       ),
     );
   return result?.value ?? 0;
@@ -196,9 +226,20 @@ export async function weeklyConfigurationRejection(
       ),
     )
     .limit(1);
+  const firstConfigurationTimeZoneOverride = existing
+    ? undefined
+    : typeof calendar?.term_timezone === "string"
+      ? calendar.term_timezone
+      : undefined;
   if (
     periodStatus === "closed" &&
-    eligibleDays < (await completionCount(db, learnerId, periodKey))
+    eligibleDays <
+      (await completionCount(
+        db,
+        learnerId,
+        periodKey,
+        firstConfigurationTimeZoneOverride,
+      ))
   ) {
     return "contradictory_period_configuration";
   }
@@ -311,13 +352,31 @@ function calendarDayInTimeZone(date: Date, timeZone: string): string {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-export async function dailyLogActivityDayRejection(
+export type DailyLogCalendarStatus =
+  | "not-daily-log"
+  | "pending"
+  | "valid"
+  | "invalid";
+
+export async function dailyLogCalendarStatus(
   db: Db,
   learnerId: string,
   event: IncomingEvent,
-): Promise<WeeklyConfigurationError | null> {
-  if (event.event_type !== "daily_log.completed") return null;
+): Promise<DailyLogCalendarStatus> {
+  if (event.event_type !== "daily_log.completed") return "not-daily-log";
   const periodKey = metadataString(event, "period_key");
+  const [configuration] = await db
+    .select({ id: weeklyRhythmConfigs.id })
+    .from(weeklyRhythmConfigs)
+    .where(
+      and(
+        eq(weeklyRhythmConfigs.learnerId, learnerId),
+        eq(weeklyRhythmConfigs.periodKey, periodKey),
+      ),
+    )
+    .limit(1);
+  if (!configuration) return "pending";
+
   const [calendar] = await db
     .select({ metadata: learnerFacts.metadata })
     .from(learnerFacts)
@@ -332,11 +391,82 @@ export async function dailyLogActivityDayRejection(
     .limit(1);
   const timeZone = (calendar?.metadata as Record<string, unknown> | undefined)
     ?.term_timezone;
-  if (typeof timeZone !== "string") return null;
+  if (typeof timeZone !== "string") return "valid";
   return metadataString(event, "activity_day") ===
     calendarDayInTimeZone(new Date(event.occurred_at), timeZone)
-    ? null
-    : "inconsistent_activity_day";
+    ? "valid"
+    : "invalid";
+}
+
+export async function weeklyConfigurationExists(
+  db: Db,
+  learnerId: string,
+  event: IncomingEvent,
+): Promise<boolean> {
+  if (event.event_type !== "daily_log_week.configured") return false;
+  const [configuration] = await db
+    .select({ id: weeklyRhythmConfigs.id })
+    .from(weeklyRhythmConfigs)
+    .where(
+      and(
+        eq(weeklyRhythmConfigs.learnerId, learnerId),
+        eq(
+          weeklyRhythmConfigs.periodKey,
+          metadataString(event, "period_key"),
+        ),
+      ),
+    )
+    .limit(1);
+  return Boolean(configuration);
+}
+
+export async function validPendingDailyLogEvents(
+  db: Db,
+  learnerId: string,
+  event: IncomingEvent,
+): Promise<IncomingEvent[]> {
+  if (event.event_type !== "daily_log_week.configured") return [];
+  const periodKey = metadataString(event, "period_key");
+  const timeZoneValue = termCalendarMetadata(event)?.term_timezone;
+  const timeZone = typeof timeZoneValue === "string" ? timeZoneValue : null;
+  const facts = await db
+    .select({
+      occurredAt: learnerFacts.occurredAt,
+      metadata: learnerFacts.metadata,
+    })
+    .from(learnerFacts)
+    .where(
+      and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, "daily_log.completed"),
+        eq(learnerFacts.periodKey, periodKey),
+      ),
+    );
+  return facts
+    .filter(({ occurredAt, metadata }) => {
+      if (!timeZone) return true;
+      return (
+        (metadata as Record<string, unknown>).activity_day ===
+        calendarDayInTimeZone(occurredAt, timeZone)
+      );
+    })
+    .sort((left, right) => {
+      const leftDay = String(
+        (left.metadata as Record<string, unknown>).activity_day,
+      );
+      const rightDay = String(
+        (right.metadata as Record<string, unknown>).activity_day,
+      );
+      return (
+        leftDay.localeCompare(rightDay) ||
+        left.occurredAt.getTime() - right.occurredAt.getTime()
+      );
+    })
+    .map(({ occurredAt, metadata }) => ({
+      event_type: "daily_log.completed" as const,
+      occurred_at: occurredAt.toISOString(),
+      metadata: metadata as IncomingEvent["metadata"],
+    }));
 }
 
 function authoritativePeriodAnchor(event: IncomingEvent): Date {

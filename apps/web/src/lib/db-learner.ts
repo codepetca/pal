@@ -10,10 +10,12 @@ import {
 import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
-  dailyLogActivityDayRejection,
+  dailyLogCalendarStatus,
   earnedWeeklyRhythmCount,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
+  validPendingDailyLogEvents,
+  weeklyConfigurationExists,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
@@ -173,14 +175,20 @@ export async function processEventInDb(
       return { status: "semantic_duplicate" as const };
     }
 
-    const activityDayError = await dailyLogActivityDayRejection(
+    const activityDayStatus = await dailyLogCalendarStatus(
       tx,
       learnerId,
       event,
     );
-    if (activityDayError) {
-      return { status: "rejected" as const, error: activityDayError };
+    if (activityDayStatus === "invalid") {
+      return {
+        status: "rejected" as const,
+        error: "inconsistent_activity_day" as const,
+      };
     }
+    const isFirstWeeklyConfiguration =
+      event.event_type === "daily_log_week.configured" &&
+      !(await weeklyConfigurationExists(tx, learnerId, event));
 
     // 4. Reject contradictory/invalid closed-period configuration before the
     // event ledger. A closed period is immutable except for a narrowly scoped,
@@ -252,8 +260,34 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 8. Run the engine
-    let result = processEvent(event, state, defaultRulePack);
+    // 8. Run the engine. A daily log received before its first weekly
+    // configuration is durably recorded but remains reward-pending: the first
+    // configuration settles only facts that agree with its authoritative
+    // timezone (or all facts under the legacy calendar-less contract).
+    let result: ProcessResult =
+      activityDayStatus === "pending"
+        ? { state, mutations: [], trace: [], truncated: [] }
+        : processEvent(event, state, defaultRulePack);
+    if (isFirstWeeklyConfiguration) {
+      const pendingEvents = await validPendingDailyLogEvents(
+        tx,
+        learnerId,
+        event,
+      );
+      for (const pendingEvent of pendingEvents) {
+        const settlement = processEvent(
+          pendingEvent,
+          result.state,
+          defaultRulePack,
+        );
+        result = {
+          state: settlement.state,
+          mutations: [...result.mutations, ...settlement.mutations],
+          trace: [...result.trace, ...settlement.trace],
+          truncated: [...result.truncated, ...settlement.truncated],
+        };
+      }
+    }
 
     // Achievement transitions and economy progression share this transaction.
     // Only the first transition to an earned Weekly Rhythm emits the internal
