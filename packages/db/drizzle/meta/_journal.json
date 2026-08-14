@@ -36,6 +36,13 @@
       "when": 1785591670208,
       "tag": "0004_anchor_achievement_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786718916531,
+      "tag": "0005_sudden_black_cat",
+      "breakpoints": true
     }
   ]
 }
