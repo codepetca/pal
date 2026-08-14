@@ -424,10 +424,11 @@ export const achievementInstances = pgTable(
   ],
 );
 
-// Durable learner title awards. earned_at preserves source-event history while
-// created_at records when serialized event processing actually granted the
-// title. Snapshot reads use grant order, with story titles winning same-action
-// ties.
+// Durable learner title awards. Runtime awards preserve source-event history;
+// nullable provenance explicitly marks a pre-ledger migration whose original
+// earning fact cannot be reconstructed. created_at records when PAL recorded
+// the grant. Snapshot reads use grant order, with story titles winning
+// same-action ties.
 export const titleAwards = pgTable(
   "title_awards",
   {
@@ -437,8 +438,8 @@ export const titleAwards = pgTable(
       .references(() => learners.id, { onDelete: "cascade" }),
     titleId: text("title_id").notNull(),
     kind: text("kind").notNull(),
-    sourceFactId: uuid("source_fact_id").notNull(),
-    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
+    sourceFactId: uuid("source_fact_id"),
+    earnedAt: timestamp("earned_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

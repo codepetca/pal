@@ -3,8 +3,8 @@ CREATE TABLE "title_awards" (
 	"learner_id" uuid NOT NULL,
 	"title_id" text NOT NULL,
 	"kind" text NOT NULL,
-	"source_fact_id" uuid NOT NULL,
-	"earned_at" timestamp with time zone NOT NULL,
+	"source_fact_id" uuid,
+	"earned_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "title_awards_learner_title_uq" UNIQUE("learner_id","title_id"),
 	CONSTRAINT "title_awards_title_nonempty" CHECK (length(btrim("title_awards"."title_id")) > 0),
@@ -45,16 +45,9 @@ SELECT
 	"economy"."learner_id",
 	'level-leader',
 	'behavior',
-	"source_fact"."id",
-	"source_fact"."occurred_at"
+	NULL,
+	NULL
 FROM "economy"
-JOIN LATERAL (
-	SELECT "learner_facts"."id", "learner_facts"."occurred_at"
-	FROM "learner_facts"
-	WHERE "learner_facts"."learner_id" = "economy"."learner_id"
-	ORDER BY "learner_facts"."created_at" DESC
-	LIMIT 1
-) AS "source_fact" ON true
 WHERE "economy"."level" >= 5
 ON CONFLICT ("learner_id", "title_id") DO NOTHING;--> statement-breakpoint
 INSERT INTO "title_awards" (
@@ -68,16 +61,9 @@ SELECT
 	"economy"."learner_id",
 	'rhythm-builder',
 	'behavior',
-	"source_fact"."id",
-	"source_fact"."occurred_at"
+	NULL,
+	NULL
 FROM "economy"
-JOIN LATERAL (
-	SELECT "learner_facts"."id", "learner_facts"."occurred_at"
-	FROM "learner_facts"
-	WHERE "learner_facts"."learner_id" = "economy"."learner_id"
-	ORDER BY "learner_facts"."created_at" DESC
-	LIMIT 1
-) AS "source_fact" ON true
 WHERE "economy"."streak_current" >= 3
 ON CONFLICT ("learner_id", "title_id") DO NOTHING;--> statement-breakpoint
 INSERT INTO "title_awards" (

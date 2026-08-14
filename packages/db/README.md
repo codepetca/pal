@@ -20,7 +20,7 @@ routes live elsewhere and import from here.
 | `learner_reward_grants` | append-only durable story chapter and behavior title ownership | learner + earned reward |
 | `weekly_rhythm_configs` | latest accepted weekly opportunity configuration | learner + period |
 | `achievement_instances` | progress or an outcome for a scoped achievement | learner + achievement + scope |
-| `title_awards` | durable title award time and source fact | learner + title |
+| `title_awards` | durable grant order and optional pre-ledger provenance | learner + title |
 | `reward_notices` | one-time presentation notice attached to an award | awarded achievement |
 | `economy` | XP, level, streak | learner |
 | `pet_state` | mood, mood expiry, animation | learner |

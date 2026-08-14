@@ -82,6 +82,28 @@ try {
     RETURNING id
   `, [integration.rows[0].id, learnerId, event.rows[0].id]);
   const factId = fact.rows[0].id;
+  const laterConfigEvent = await testDatabase.query(`
+    INSERT INTO events (
+      integration_id,
+      learner_id,
+      idempotency_key,
+      event_type,
+      occurred_at
+    ) VALUES ($1, $2, 'title-upgrade-later-config', 'daily_log_week.configured', '2026-09-07T15:00:00Z')
+    RETURNING id
+  `, [integration.rows[0].id, learnerId]);
+  const laterConfigFact = await testDatabase.query(`
+    INSERT INTO learner_facts (
+      integration_id,
+      learner_id,
+      source_event_id,
+      event_type,
+      semantic_key,
+      period_key,
+      occurred_at
+    ) VALUES ($1, $2, $3, 'daily_log_week.configured', 'upgrade-config-v1', 'upgrade-week-2', '2026-09-07T15:00:00Z')
+    RETURNING id
+  `, [integration.rows[0].id, learnerId, laterConfigEvent.rows[0].id]);
   await testDatabase.query(`
     INSERT INTO achievement_periods (learner_id, period_key, anchor_at)
     VALUES ($1, 'upgrade-week-1', '2026-08-31T12:00:00Z')
@@ -155,7 +177,7 @@ try {
   );
 
   const awards = await testDatabase.query(`
-    SELECT title_id, kind
+    SELECT title_id, kind, source_fact_id, earned_at
     FROM title_awards
     WHERE learner_id = $1
   `, [learnerId]);
@@ -172,6 +194,12 @@ try {
     awards.rows.find((award) => award.title_id === "gentle-keeper")?.kind,
     "story",
   );
+  for (const titleId of ["level-leader", "rhythm-builder"]) {
+    const migrated = awards.rows.find((award) => award.title_id === titleId);
+    assert.equal(migrated?.source_fact_id, null);
+    assert.equal(migrated?.earned_at, null);
+    assert.notEqual(migrated?.source_fact_id, laterConfigFact.rows[0].id);
+  }
 
   const current = await testDatabase.query(`
     SELECT title_id
