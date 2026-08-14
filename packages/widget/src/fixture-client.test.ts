@@ -143,3 +143,19 @@ test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () =>
     ["world-study-bird-v1"],
   );
 });
+
+test("fixture pays distinct out-of-order days without moving the rhythm backward", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-14" });
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-13" });
+
+  const snapshot = client.peek();
+  assert.equal(snapshot.companion.xp, 20);
+  assert.equal(snapshot.companion.streak, 1);
+  assert.equal(
+    snapshot.roadmap.weeks[0]?.achievements.find(
+      (achievement) => achievement.title === "Weekly Rhythm",
+    )?.progress?.current,
+    2,
+  );
+});

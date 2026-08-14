@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { processEvent } from "./process";
 import { defaultRulePack } from "./default-rules";
-import { COLLECTION_SYNC } from "./apply";
+import { COLLECTION_SYNC, DAILY_LOG_REWARD_SETTLED } from "./apply";
 import type { IncomingEvent, LearnerState, RulePack } from "./types";
 
 const baseState: LearnerState = {
@@ -23,6 +23,14 @@ function log(day: string): IncomingEvent {
     event_type: "daily_log.completed",
     occurred_at: `${day}T12:00:00.000Z`,
     metadata: { activity_day: day },
+  };
+}
+
+function settledReward(day: string): IncomingEvent {
+  return {
+    event_type: DAILY_LOG_REWARD_SETTLED,
+    occurred_at: `${day}T12:00:00.000Z`,
+    metadata: {},
   };
 }
 
@@ -65,6 +73,7 @@ it("banks XP for an on-time learning item without levelling", () => {
     for (const { day, streak } of expected) {
       const before = state.economy.xp;
       state = processEvent(log(day), state, defaultRulePack).state;
+      state = processEvent(settledReward(day), state, defaultRulePack).state;
       assert.equal(state.economy.streak_current, streak, `streak on ${day}`);
       assert.equal(state.economy.xp - before, 10, `XP earned on ${day}`);
     }
@@ -83,23 +92,23 @@ it("banks XP for an on-time learning item without levelling", () => {
     assert.deepEqual(state.world.unlocked_object_ids, ["world-study-bird-v1"]);
   });
 
-it("gives nothing at all for a second daily log on the same day", () => {
+it("gives nothing for a repeated raw daily log when settlement is not re-emitted", () => {
     let state = processEvent(log("2026-03-01"), baseState, defaultRulePack).state;
+    state = processEvent(settledReward("2026-03-01"), state, defaultRulePack).state;
     const afterFirst = structuredClone(state);
 
     state = processEvent(log("2026-03-01"), state, defaultRulePack).state;
-    // Neither the streak nor any XP moves: the day's reward is paid exactly once,
-    // because both base and bonus hang off the streak advance, not the daily-log event.
+    // Persistence emits no second settlement event, so neither streak nor XP moves.
     assert.deepEqual(state.economy, afterFirst.economy);
   });
 
   it("does not let repeated same-day daily logs farm XP", () => {
-    // Regression: base daily-log XP used to fire on every check-in event, so N
-    // same-day logs paid 10*N. It now fires on the once-per-day streak advance.
+    // The raw events never grant XP; the persistence layer emits one settlement.
     let state = baseState;
     for (let i = 0; i < 50; i++) {
       state = processEvent(log("2026-03-01"), state, defaultRulePack).state;
     }
+    state = processEvent(settledReward("2026-03-01"), state, defaultRulePack).state;
     assert.equal(state.economy.xp, 10); // one day's base reward, not 500
     assert.equal(state.economy.streak_current, 1);
   });
@@ -108,14 +117,14 @@ it("gives nothing at all for a second daily log on the same day", () => {
     // The forward-only guard cannot tell "this event is backdated" from "the stored
     // day is poisoned" — the engine is pure and has no clock. So if a future-dated
     // check-in ever got in, every real check-in before that day would be swallowed:
-    // no streak, no milestone, no XP. This test pins that contract so the coupling
-    // is visible: the ingest route MUST reject future occurred_at (see the
+    // no streak or milestone. Flat daily XP is independently settlement-driven.
+    // This test pins the chronology contract so the ingest route MUST reject future occurred_at (see the
     // future_occurred_at 422 in apps/web/src/app/api/v1/events/route.ts).
     const poisoned = withEconomy({ streak_current: 1, streak_last_day: "2099-01-01" });
     const { state, mutations } = processEvent(log("2026-07-18"), poisoned, defaultRulePack);
     assert.equal(state.economy.streak_current, 1);
     assert.equal(state.economy.streak_last_day, "2099-01-01");
-    assert.equal(state.economy.xp, 0); // no STREAK_MILESTONE → no check-in XP
+    assert.equal(state.economy.xp, 0);
     assert.deepEqual(
       mutations.filter((m) => m.type === "XP_GRANT"),
       []
@@ -185,14 +194,18 @@ it("gives nothing at all for a second daily log on the same day", () => {
     assert.ok(first.truncated.includes("XP_CHANGED"));
 
     // ...and the very next event spends it.
-    const second = processEvent(log("2026-03-02"), first.state, defaultRulePack);
+    const second = processEvent(
+      settledReward("2026-03-02"),
+      first.state,
+      defaultRulePack,
+    );
     assert.equal(second.state.economy.level, 5);
     assert.equal(second.state.economy.xp, 110); // 600 + 10 daily-log − 500 spent
   });
 
   it("does not level up one XP short of the threshold", () => {
     const state = processEvent(
-      log("2026-03-01"),
+      settledReward("2026-03-01"),
       withEconomy({ xp: 489, xp_lifetime: 489 }),
       defaultRulePack
     ).state;

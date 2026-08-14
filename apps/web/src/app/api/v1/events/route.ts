@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
         "A period's term range and week position must remain stable and unique",
       inconsistent_activity_day:
         "The activity day does not match occurred_at in the configured term timezone",
+      daily_log_period_limit_exceeded:
+        "A version 1 academic period cannot contain more than five distinct daily-log days",
     }[result.error];
     return NextResponse.json(
       {

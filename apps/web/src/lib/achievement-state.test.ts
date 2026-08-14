@@ -559,6 +559,8 @@ test(
           term_start_day: "2026-09-14",
           term_end_day: "2026-12-31",
           term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_start_day: "2026-09-14",
           week_index: 1,
         },
         "2026-09-18T18:00:00.000Z",
@@ -679,6 +681,8 @@ test(
             term_start_day: "2026-09-14",
             term_end_day: "2026-12-31",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
             week_index: 1,
           },
           "2026-09-14T12:00:00.000Z",
@@ -763,6 +767,8 @@ test(
             term_start_day: "2026-09-14",
             term_end_day: "2026-12-31",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
             week_index: 1,
           },
           "2026-09-15T02:00:00.000Z",
@@ -889,6 +895,8 @@ test(
             term_start_day: "2026-09-14",
             term_end_day: "2026-12-31",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-21",
             week_index: 2,
           },
           "2026-09-21T12:00:00.000Z",
@@ -917,6 +925,8 @@ test(
           term_start_day: "2026-09-14",
           term_end_day: "2026-12-31",
           term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_start_day: "2026-09-14",
           week_index: 1,
         },
         "2026-09-22T12:00:00.000Z",
@@ -984,7 +994,220 @@ test(
 );
 
 test(
-  "bounds first-configuration settlement to five pending daily facts",
+  "pays a configured out-of-order daily log without moving the streak backward",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `configured-out-of-order-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `configured-out-of-order-week-${crypto.randomUUID()}`;
+    const mondayKey = key();
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 2,
+        }),
+        key(),
+      );
+      const tuesday = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log.completed", {
+          period_key: periodKey,
+          activity_day: "2026-07-14",
+        }),
+        key(),
+      );
+      assert.equal(tuesday.status, "processed");
+
+      const mondayEvent = event("daily_log.completed", {
+        period_key: periodKey,
+        activity_day: "2026-07-13",
+      });
+      const monday = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        mondayEvent,
+        mondayKey,
+      );
+      assert.equal(monday.status, "processed");
+      assert.deepEqual(
+        monday.status === "processed"
+          ? monday.result.mutations
+              .filter((mutation) => mutation.type === "XP_GRANT")
+              .map((mutation) => mutation.amount)
+          : [],
+        [10, 75],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const [state] = await getDb()
+        .select()
+        .from(economy)
+        .where(eq(economy.learnerId, learnerId));
+      assert.equal(state.xpLifetime, 95);
+      assert.equal(state.streakCurrent, 1);
+      assert.equal(state.streakLastDay, "2026-07-14");
+
+      assert.deepEqual(
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          mondayEvent,
+          mondayKey,
+        ),
+        { status: "duplicate" },
+      );
+      const [afterRetry] = await getDb()
+        .select()
+        .from(economy)
+        .where(eq(economy.learnerId, learnerId));
+      assert.equal(afterRetry.xpLifetime, 95);
+      assert.equal(afterRetry.streakLastDay, "2026-07-14");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "settles remaining pending rewards after each accepted higher configuration",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const scenarios = [
+      {
+        initialEligibleDays: 0,
+        revisedEligibleDays: 2,
+        activityDays: ["2026-07-13", "2026-07-14"],
+        expectedRevisionXp: [10, 10, 75],
+        expectedLifetimeXp: 95,
+      },
+      {
+        initialEligibleDays: 1,
+        revisedEligibleDays: 3,
+        activityDays: ["2026-07-20", "2026-07-21", "2026-07-22"],
+        expectedRevisionXp: [10, 10],
+        expectedLifetimeXp: 105,
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const externalLearnerId = `revision-settlement-${scenario.initialEligibleDays}-${crypto.randomUUID()}`;
+      const periodKey = `revision-settlement-week-${crypto.randomUUID()}`;
+      try {
+        for (const activityDay of scenario.activityDays) {
+          const pending = await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            event("daily_log.completed", { period_key: periodKey, activity_day: activityDay }),
+            key(),
+          );
+          assert.equal(pending.status, "processed");
+        }
+
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event("daily_log_week.configured", {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: scenario.initialEligibleDays,
+          }),
+          key(),
+        );
+
+        const revision = event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 3,
+          period_status: "open",
+          eligible_days: scenario.revisedEligibleDays,
+        });
+        const revisionKey = key();
+        const revised = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          revision,
+          revisionKey,
+        );
+        assert.equal(revised.status, "processed");
+        assert.deepEqual(
+          revised.status === "processed"
+            ? revised.result.mutations
+                .filter((mutation) => mutation.type === "XP_GRANT")
+                .map((mutation) => mutation.amount)
+            : [],
+          scenario.expectedRevisionXp,
+        );
+
+        assert.deepEqual(
+          await processEventInDb(
+            integration.id,
+            externalLearnerId,
+            revision,
+            revisionKey,
+          ),
+          { status: "duplicate" },
+        );
+        const stale = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event("daily_log_week.configured", {
+            period_key: periodKey,
+            config_version: 2,
+            period_status: "open",
+            eligible_days: scenario.revisedEligibleDays,
+          }),
+          key(),
+        );
+        assert.equal(stale.status, "processed");
+        assert.deepEqual(
+          stale.status === "processed"
+            ? stale.result.mutations.filter(
+                (mutation) => mutation.type === "XP_GRANT",
+              )
+            : [],
+          [],
+        );
+
+        const learnerId = await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const [state] = await getDb()
+          .select()
+          .from(economy)
+          .where(eq(economy.learnerId, learnerId));
+        assert.equal(state.xpLifetime, scenario.expectedLifetimeXp);
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
+  "rejects more than five period days and bounds pending settlement",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -996,7 +1219,7 @@ test(
     });
     const periodKey = `bounded-pending-week-${crypto.randomUUID()}`;
     try {
-      for (const activityDay of [
+      const activityDays = [
         "2026-09-14",
         "2026-09-15",
         "2026-09-16",
@@ -1004,8 +1227,9 @@ test(
         "2026-09-18",
         "2026-09-19",
         "2026-09-20",
-      ]) {
-        await processEventInDb(
+      ];
+      for (const [index, activityDay] of activityDays.entries()) {
+        const result = await processEventInDb(
           integration.id,
           externalLearnerId,
           event(
@@ -1015,6 +1239,14 @@ test(
           ),
           key(),
         );
+        if (index < 5) {
+          assert.equal(result.status, "processed");
+        } else {
+          assert.deepEqual(result, {
+            status: "rejected",
+            error: "daily_log_period_limit_exceeded",
+          });
+        }
       }
 
       const configured = await processEventInDb(
@@ -1031,6 +1263,8 @@ test(
             term_start_day: "2026-09-14",
             term_end_day: "2026-12-31",
             term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-09-14",
             week_index: 1,
           },
           "2026-09-21T12:00:00.000Z",
@@ -1151,6 +1385,8 @@ test(
           term_start_day: "2026-09-14",
           term_end_day: "2026-12-31",
           term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_start_day: "2026-09-14",
           week_index: 1,
         },
         "2026-09-15T12:00:00.000Z",

@@ -1,7 +1,7 @@
 import {
   COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   LEVEL_UP,
-  STREAK_MILESTONE,
   WEEKLY_RHYTHM_EARNED,
   XP_CHANGED,
 } from "./apply";
@@ -37,21 +37,21 @@ export const defaultRulePack: RulePack = {
 
     // ── Daily log completed ─────────────────────────────────────────────
     {
-      // The daily-log event only advances the streak; it grants no XP itself. The
-      // XP is paid on the derived STREAK_MILESTONE below, which fires once per source
-      // day — so a learner sending several daily-log events in one day earns the
-      // day's XP exactly once. Paying XP here instead would let repeated same-day
-      // events farm DAILY_LOG_XP without limit.
+      // The source event advances only the forward-only rhythm. Persistence emits
+      // DAILY_LOG_REWARD_SETTLED exactly once when it inserts the durable settlement
+      // marker, so a valid older day can still earn flat XP without moving the streak
+      // backward and retries cannot farm the reward.
       id: "daily-log-streak",
       trigger: { event_type: "daily_log.completed" },
       conditions: [],
       effects: [{ type: "STREAK", continue_streak: true }],
     },
     {
-      // The once-per-day base reward. STREAK_MILESTONE is derived only when the
-      // streak actually advanced, so this cannot double-pay within a day.
+      // The once-per-qualified-day base reward. This internal event is never accepted
+      // at the public API; the transactional persistence orchestrator emits it only
+      // after winning the exact-once settlement-marker insert.
       id: "daily-log-xp",
-      trigger: { event_type: STREAK_MILESTONE },
+      trigger: { event_type: DAILY_LOG_REWARD_SETTLED },
       conditions: [],
       effects: [{ type: "XP_GRANT", amount: PROGRESSION_POLICY.dailyLogXp }],
     },

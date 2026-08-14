@@ -110,7 +110,7 @@ that should be able to interrupt, give it a rank in `MOOD_STRENGTH` in
 
 ---
 
-## Derived events
+## Internal and derived events
 
 Applying a mutation can create a new fact that rules care about. The canonical example: a check-in advances the streak, the streak reaches 7, and the `streak-7-world` rule should now fire — but that rule triggers on `STREAK_MILESTONE`, an event no integration ever sends.
 
@@ -125,16 +125,17 @@ This diagram is a snapshot, not a source of truth — if the cascade shape chang
 | `XP_CHANGED` | An `XP_GRANT` actually changed the learner's XP balance |
 | `LEVEL_UP` | A `LEVEL_GRANT` raised the learner's level |
 | `STREAK_MILESTONE` | A `STREAK` mutation advanced to a new source activity day |
+| `DAILY_LOG_REWARD_SETTLED` | The persistence pipeline first inserted the exact-once settlement marker for a validated daily-log fact |
 | `WEEKLY_RHYTHM_EARNED` | The achievement pipeline first persisted an earned Weekly Rhythm; metadata includes the durable earned count |
 | `COLLECTION_SYNC` | Reconciles one genuinely missing world unlock at its exact durable Weekly Rhythm milestone without granting XP |
 
-**A rule that depends on post-mutation state must trigger on the derived event, not on the original one.** Conditions are evaluated against the state as it was *before* the event was applied, so `level-up` reads `economy.xp` on `XP_CHANGED` after the grant landed. `WEEKLY_RHYTHM_EARNED` is an internal progression event produced only after the durable achievement transition, so its XP and collection rules cannot fire from an unverified integration claim.
+**A rule that depends on post-mutation state must trigger on the derived event, not on the original one.** Conditions are evaluated against the state as it was *before* the event was applied, so `level-up` reads `economy.xp` on `XP_CHANGED` after the grant landed. `DAILY_LOG_REWARD_SETTLED` and `WEEKLY_RHYTHM_EARNED` are internal progression events produced only after their durable persistence transitions, so their XP rules cannot fire from an unverified integration claim.
 
 Rules of the cascade:
 
 - **The engine stays pure.** It never emits events and never knows about the cascade — only the applier (`processEvent`) orchestrates re-evaluation.
 - **Depth limit: 4.** The original event plus three rounds of derived events, then stop. A rule pack that cascades deeper is usually a config bug; the applier reports what it dropped (`ProcessResult.truncated`) for the AuditLog and stops, rather than looping forever. The limit is *also* what bounds the economy: levelling spends XP, which changes XP, which can level again — so one event can raise a learner at most three levels, and any surplus XP stays banked for their next event.
-- **Derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`assignment.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` could hand itself a level; the ingest allow-list rejects them.
+- **Internal and derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`assignment.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` or `DAILY_LOG_REWARD_SETTLED` could hand itself progression; the ingest allow-list rejects them.
 
 ---
 

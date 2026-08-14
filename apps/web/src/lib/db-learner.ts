@@ -18,16 +18,16 @@ import {
   recordSemanticFact,
   semanticFactAlreadyRecorded,
   settlePendingDailyLogEvents,
-  weeklyConfigurationExists,
+  weeklyConfigurationDisposition,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
 import {
   COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   defaultRulePack,
   processEvent,
   PROGRESSION_POLICY,
-  STREAK_MILESTONE,
   WEEKLY_RHYTHM_EARNED,
   type IncomingEvent,
   type LearnerState,
@@ -100,6 +100,19 @@ function toLearnerState(
       stage: world?.stage ?? 0,
       unlocked_object_ids: world?.unlockedObjectIds ?? [],
     },
+  };
+}
+
+function appendEngineEvent(
+  result: ProcessResult,
+  event: IncomingEvent,
+): ProcessResult {
+  const next = processEvent(event, result.state, defaultRulePack);
+  return {
+    state: next.state,
+    mutations: [...result.mutations, ...next.mutations],
+    trace: [...result.trace, ...next.trace],
+    truncated: [...result.truncated, ...next.truncated],
   };
 }
 
@@ -190,9 +203,21 @@ export async function processEventInDb(
         error: "inconsistent_activity_day" as const,
       };
     }
-    const isFirstWeeklyConfiguration =
-      event.event_type === "daily_log_week.configured" &&
-      !(await weeklyConfigurationExists(tx, learnerId, event));
+    if (activityDayStatus === "period-limit-exceeded") {
+      return {
+        status: "rejected" as const,
+        error: "daily_log_period_limit_exceeded" as const,
+      };
+    }
+    const configurationDisposition = await weeklyConfigurationDisposition(
+      tx,
+      learnerId,
+      event,
+    );
+    const isFirstWeeklyConfiguration = configurationDisposition === "first";
+    const configurationAdvances =
+      configurationDisposition === "first" ||
+      configurationDisposition === "higher";
 
     // 4. Reject contradictory/invalid closed-period configuration before the
     // event ledger. A closed period is immutable except for a narrowly scoped,
@@ -250,8 +275,9 @@ export async function processEventInDb(
         event,
       });
     }
+    let dailyRewardSettled = false;
     if (activityDayStatus === "valid") {
-      await recordImmediateDailyLogSettlement(tx, {
+      dailyRewardSettled = await recordImmediateDailyLogSettlement(tx, {
         integrationId,
         learnerId,
         sourceEventId: inserted.id,
@@ -289,53 +315,34 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 8. Run the engine. A daily log received before its first weekly
-    // configuration is durably recorded but remains reward-pending: the first
-    // configuration settles only facts that agree with its authoritative
-    // timezone (or all facts under the legacy calendar-less contract).
+    // 8. Run the engine. A daily log received before configuration is durably
+    // recorded but reward-pending. A durable settlement marker is the sole
+    // authority to emit DAILY_LOG_REWARD_SETTLED, keeping flat XP exact-once and
+    // independent from the forward-only streak chronology.
     let result: ProcessResult =
       activityDayStatus === "pending"
         ? { state, mutations: [], trace: [], truncated: [] }
         : processEvent(event, state, defaultRulePack);
-    if (isFirstWeeklyConfiguration) {
+    if (dailyRewardSettled) {
+      result = appendEngineEvent(result, {
+        event_type: DAILY_LOG_REWARD_SETTLED,
+        occurred_at: event.occurred_at,
+        metadata: {},
+      });
+    }
+    if (configurationAdvances) {
       const pendingEvents = await settlePendingDailyLogEvents(
         tx,
         learnerId,
         event,
       );
       for (const pendingEvent of pendingEvents) {
-        const lifetimeXpBefore = result.state.economy.xp_lifetime;
-        const settlement = processEvent(
-          pendingEvent,
-          result.state,
-          defaultRulePack,
-        );
-        result = {
-          state: settlement.state,
-          mutations: [...result.mutations, ...settlement.mutations],
-          trace: [...result.trace, ...settlement.trace],
-          truncated: [...result.truncated, ...settlement.truncated],
-        };
-        // A delayed valid fact still earns its flat daily reward exactly once
-        // even when a newer day already anchors the forward-only rhythm. The
-        // historical source event remains unable to move the streak backward.
-        if (result.state.economy.xp_lifetime === lifetimeXpBefore) {
-          const dailyReward = processEvent(
-            {
-              event_type: STREAK_MILESTONE,
-              occurred_at: pendingEvent.occurred_at,
-              metadata: {},
-            },
-            result.state,
-            defaultRulePack,
-          );
-          result = {
-            state: dailyReward.state,
-            mutations: [...result.mutations, ...dailyReward.mutations],
-            trace: [...result.trace, ...dailyReward.trace],
-            truncated: [...result.truncated, ...dailyReward.truncated],
-          };
-        }
+        result = appendEngineEvent(result, pendingEvent);
+        result = appendEngineEvent(result, {
+          event_type: DAILY_LOG_REWARD_SETTLED,
+          occurred_at: pendingEvent.occurred_at,
+          metadata: {},
+        });
       }
     }
 

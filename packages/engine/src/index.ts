@@ -2,6 +2,7 @@ export { evaluate } from "./evaluate";
 export {
   applyMutations,
   COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   LEVEL_UP,
   STREAK_MILESTONE,
   WEEKLY_RHYTHM_EARNED,
