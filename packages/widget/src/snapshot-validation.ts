@@ -2,15 +2,20 @@ import type {
   PalAchievement,
   PalAchievementStatus,
   PalBadge,
+  PalCollectibleKind,
+  PalCollectibleUnlock,
   PalCompanionMood,
   PalCompanionState,
   PalCollectionItem,
   PalCollectionState,
   PalProgress,
+  PalProgressionState,
   PalRewardNotice,
   PalRoadmapWeek,
   PalWeekStatus,
   PalWidgetSnapshot,
+  PalTitleUnlock,
+  PalUnlockStatus,
 } from "./types";
 
 const MAX_TEXT_LENGTH = 512;
@@ -19,6 +24,8 @@ const MAX_WEEKS = 64;
 const MAX_ACHIEVEMENTS_PER_WEEK = 100;
 const MAX_REWARDS = 100;
 const MAX_COLLECTION_ITEMS = 50;
+const MAX_COLLECTIBLES = 32;
+const MAX_TITLES = 32;
 
 export interface PalSnapshotValidationOptions {
   /**
@@ -154,6 +161,11 @@ function optionalInteger(
   return value === undefined ? undefined : integer(value, path, minimum);
 }
 
+function boolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") return fail(path, "expected a boolean");
+  return value;
+}
+
 function member<T extends string>(
   value: unknown,
   path: string,
@@ -190,6 +202,20 @@ function uniqueId(id: string, ids: Set<string>, path: string): string {
   }
   ids.add(id);
   return id;
+}
+
+function uniqueInteger(
+  value: unknown,
+  values: Set<number>,
+  path: string,
+  minimum: number,
+): number {
+  const parsed = integer(value, path, minimum);
+  if (values.has(parsed)) {
+    return fail(path, "expected a unique roadmap week");
+  }
+  values.add(parsed);
+  return parsed;
 }
 
 function parseProgress(value: unknown, path: string): PalProgress {
@@ -333,10 +359,26 @@ function parseReward(
     `${path}.assetUrl`,
     assetPolicy,
   );
+  const kind = source.kind === undefined
+    ? undefined
+    : member(source.kind, `${path}.kind`, ["standard", "story"] as const);
+  const collectibleTitle = optionalText(
+    source.collectibleTitle,
+    `${path}.collectibleTitle`,
+  );
+  const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
+  const titleRevealCopy = optionalText(
+    source.titleRevealCopy,
+    `${path}.titleRevealCopy`,
+  );
   return {
     id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
+    ...(kind === undefined ? {} : { kind }),
+    ...(collectibleTitle === undefined ? {} : { collectibleTitle }),
+    ...(titleAward === undefined ? {} : { titleAward }),
+    ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
     ...(icon === undefined ? {} : { icon }),
     ...(assetUrl === undefined ? {} : { assetUrl }),
   };
@@ -378,6 +420,145 @@ function parseCollection(
       MAX_COLLECTION_ITEMS,
     ).map((item, index) =>
       parseCollectionItem(item, `${path}.items[${index}]`, ids, assetPolicy),
+    ),
+  };
+}
+
+function parseCollectible(
+  value: unknown,
+  path: string,
+  ids: Set<string>,
+  roadmapWeeks: Set<number>,
+  assetPolicy: AssetPolicy,
+): PalCollectibleUnlock {
+  const source = record(value, path);
+  const assetUrl = optionalAssetUrl(
+    source.assetUrl,
+    `${path}.assetUrl`,
+    assetPolicy,
+  );
+  if (assetUrl === undefined) fail(`${path}.assetUrl`, "expected an asset URL");
+  const progress =
+    source.progress === undefined
+      ? undefined
+      : parseProgress(source.progress, `${path}.progress`);
+  const chapterId = optionalText(source.chapterId, `${path}.chapterId`);
+  const revealHeadline = optionalText(
+    source.revealHeadline,
+    `${path}.revealHeadline`,
+  );
+  const storyCopy = optionalText(source.storyCopy, `${path}.storyCopy`);
+  const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
+  const titleRevealCopy = optionalText(
+    source.titleRevealCopy,
+    `${path}.titleRevealCopy`,
+  );
+  return {
+    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    ...(chapterId === undefined ? {} : { chapterId }),
+    title: text(source.title, `${path}.title`),
+    description: text(source.description, `${path}.description`),
+    ...(revealHeadline === undefined ? {} : { revealHeadline }),
+    ...(storyCopy === undefined ? {} : { storyCopy }),
+    ...(titleAward === undefined ? {} : { titleAward }),
+    ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
+    roadmapWeek: uniqueInteger(
+      source.roadmapWeek,
+      roadmapWeeks,
+      `${path}.roadmapWeek`,
+      1,
+    ),
+    kind: member<PalCollectibleKind>(
+      source.kind,
+      `${path}.kind`,
+      ["companion", "room", "cosmetic"],
+    ),
+    status: member<PalUnlockStatus>(
+      source.status,
+      `${path}.status`,
+      ["earned", "next", "locked"],
+    ),
+    statusLabel: text(source.statusLabel, `${path}.statusLabel`),
+    assetUrl,
+    ...(progress === undefined ? {} : { progress }),
+  };
+}
+
+function parseTitle(
+  value: unknown,
+  path: string,
+  ids: Set<string>,
+): PalTitleUnlock {
+  const source = record(value, path);
+  return {
+    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    label: text(source.label, `${path}.label`),
+    description: text(source.description, `${path}.description`),
+    status: member<PalUnlockStatus>(
+      source.status,
+      `${path}.status`,
+      ["earned", "next", "locked"],
+    ),
+    statusLabel: text(source.statusLabel, `${path}.statusLabel`),
+  };
+}
+
+function parseProgression(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalProgressionState {
+  const source = record(value, path);
+  const collectibleIds = new Set<string>();
+  const collectibleRoadmapWeeks = new Set<number>();
+  const titleIds = new Set<string>();
+  const storyId = optionalText(source.storyId, `${path}.storyId`);
+  const storyVersion = optionalInteger(
+    source.storyVersion,
+    `${path}.storyVersion`,
+    1,
+  );
+  const storyTotalPeriods = optionalInteger(
+    source.storyTotalPeriods,
+    `${path}.storyTotalPeriods`,
+    1,
+  );
+  const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
+  return {
+    ...(storyId === undefined ? {} : { storyId }),
+    ...(storyVersion === undefined ? {} : { storyVersion }),
+    ...(storyTotalPeriods === undefined ? {} : { storyTotalPeriods }),
+    companionUnlocked: boolean(
+      source.companionUnlocked,
+      `${path}.companionUnlocked`,
+    ),
+    companionUnlockWeek: integer(
+      source.companionUnlockWeek,
+      `${path}.companionUnlockWeek`,
+      1,
+    ),
+    ...(currentTitle === undefined ? {} : { currentTitle }),
+    collectibles: boundedArray(
+      source.collectibles,
+      `${path}.collectibles`,
+      MAX_COLLECTIBLES,
+      1,
+    ).map((collectible, index) =>
+      parseCollectible(
+        collectible,
+        `${path}.collectibles[${index}]`,
+        collectibleIds,
+        collectibleRoadmapWeeks,
+        assetPolicy,
+      ),
+    ),
+    titles: boundedArray(
+      source.titles,
+      `${path}.titles`,
+      MAX_TITLES,
+      1,
+    ).map((title, index) =>
+      parseTitle(title, `${path}.titles[${index}]`, titleIds),
     ),
   };
 }
@@ -426,6 +607,14 @@ export function parsePalWidgetSnapshot(
     source.collection === undefined
       ? undefined
       : parseCollection(source.collection, "snapshot.collection", assetPolicy);
+  const progression =
+    source.progression === undefined
+      ? undefined
+      : parseProgression(
+          source.progression,
+          "snapshot.progression",
+           assetPolicy,
+         );
   return {
     schemaVersion: 1,
     roadmap: {
@@ -454,5 +643,6 @@ export function parsePalWidgetSnapshot(
         assetPolicy,
       ),
     ),
+    ...(progression === undefined ? {} : { progression }),
   };
 }

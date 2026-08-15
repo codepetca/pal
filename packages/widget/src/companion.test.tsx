@@ -9,6 +9,15 @@ import { PalProvider } from "./provider";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
+function unlockPip(snapshot: ReturnType<typeof createFixtureSnapshot>): void {
+  snapshot.progression!.companionUnlocked = true;
+  const pip = snapshot.progression!.collectibles.find(
+    (collectible) => collectible.id === "pip-companion-v1",
+  );
+  assert.ok(pip);
+  pip.status = "earned";
+}
+
 test("a missing mood frame falls back to the supplied rest image", async () => {
   const originalWindow = globalThis.window;
   let renderer: ReturnType<typeof create> | undefined;
@@ -25,6 +34,7 @@ test("a missing mood frame falls back to the supplied rest image", async () => {
 
   try {
     const snapshot = createFixtureSnapshot();
+    unlockPip(snapshot);
     snapshot.companion.mood = "happy";
     snapshot.companion.assetUrl = "/only/rest.png";
 
@@ -89,6 +99,7 @@ test("the companion mounts only frames used by the current mood", async () => {
 
   try {
     const snapshot = createFixtureSnapshot();
+    unlockPip(snapshot);
     snapshot.companion.mood = "happy";
     snapshot.companion.assetUrl = "/pets/rest.png";
 

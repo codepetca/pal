@@ -132,6 +132,7 @@ test("package metadata exposes only compiled public entry points", () => {
   assert.deepEqual(Object.keys(widgetPackage.exports ?? {}), [
     ".",
     "./theme-contract",
+    "./progression",
     "./styles.css",
     "./package.json",
   ]);

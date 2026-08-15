@@ -43,6 +43,14 @@ test("snapshot parser keeps collection backward-compatible in schema version 1",
   assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
 });
 
+test("snapshot parser keeps progression optional in schema version 1", () => {
+  const fixture = createFixtureSnapshot();
+  delete fixture.progression;
+  const legacySnapshot = JSON.parse(JSON.stringify(fixture)) as unknown;
+
+  assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
+});
+
 test("snapshot parser rejects unsupported schema versions", () => {
   const fixture: unknown = {
     ...createFixtureSnapshot(),
@@ -111,6 +119,17 @@ test("snapshot parser bounds and deduplicates durable collection items", () => {
   );
 });
 
+test("snapshot parser allows at most one collectible reward per roadmap week", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.progression!.collectibles[1]!.roadmapWeek =
+    fixture.progression!.collectibles[0]!.roadmapWeek;
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /unique roadmap week/i,
+  );
+});
+
 test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   const unsafe = createFixtureSnapshot();
   unsafe.companion.assetUrl = "javascript:alert(1)";
@@ -124,6 +143,14 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   assert.throws(
     () => parsePalWidgetSnapshot(unapproved),
     /not in the allowed Pal asset origin list/i,
+  );
+
+  const unsafeCollectible = createFixtureSnapshot();
+  unsafeCollectible.progression!.collectibles[0]!.assetUrl =
+    "javascript:alert(1)";
+  assert.throws(
+    () => parsePalWidgetSnapshot(unsafeCollectible),
+    /progression.*assetUrl.*HTTPS origin|root-relative/i,
   );
 });
 

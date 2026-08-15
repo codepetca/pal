@@ -74,6 +74,18 @@ test("achievement trail omits future weeks and orders visible weeks newest first
         ).length === 1,
       ),
     );
+    const currentRhythm = badgeControls.find(
+      (badge) => badge.props["aria-label"] ===
+        "Weekly Rhythm — 2 of 4 eligible days",
+    )!;
+    const progressValue = currentRhythm.find(
+      (node) => node.props.className === "pal-badge-progress-value",
+    );
+    const progressLabel = currentRhythm.find(
+      (node) => node.props.className === "pal-badge-progress-label",
+    );
+    assert.equal(progressValue.props.strokeDasharray, "50 50");
+    assert.deepEqual(progressLabel.children, ["2", "/", "4"]);
   } finally {
     await act(async () => renderer?.unmount());
   }

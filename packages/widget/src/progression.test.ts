@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createPalProgressionState } from "./progression";
+
+test("keeps Pip hidden while revealing only earned weekly chapters", () => {
+  const progression = createPalProgressionState({
+    currentWeek: 2,
+    totalWeeks: 16,
+    level: 10,
+    streak: 10,
+    achievements: [],
+    earnedWeeks: [1],
+  });
+
+  assert.equal(progression.companionUnlocked, false);
+  assert.equal(progression.collectibles[0]?.status, "earned");
+  assert.equal(progression.collectibles[1]?.title, "Cloud Blanket");
+  assert.equal(progression.collectibles[1]?.status, "next");
+  assert.equal(
+    progression.collectibles.find((item) => item.id === "pip-companion-v1")?.status,
+    "locked",
+  );
+  assert.equal(progression.companionUnlockWeek, 4);
+});
+
+test("unlocks collectibles and advances the learner title from durable state", () => {
+  const progression = createPalProgressionState({
+    currentWeek: 8,
+    totalWeeks: 16,
+    level: 5,
+    streak: 7,
+    achievements: [
+      {
+        id: "on-time-finish-week-2",
+        title: "On-Time Finish",
+        description: "Finished on time.",
+        status: "earned",
+        statusLabel: "Earned",
+        badge: { label: "On-Time Finish" },
+      },
+    ],
+    earnedWeeks: Array.from({ length: 8 }, (_, index) => index + 1),
+  });
+
+  assert.equal(progression.companionUnlocked, true);
+  assert.equal(progression.currentTitle, "Brave Beginner");
+  assert.equal(
+    progression.collectibles.find((item) => item.id === "measuring-spoons-v1")?.status,
+    "earned",
+  );
+  assert.equal(
+    progression.titles.find((title) => title.id === "on-time-pro")?.status,
+    "earned",
+  );
+});
+
+test("keeps the latest earned story title displayed after its reveal week", () => {
+  const progression = createPalProgressionState({
+    currentWeek: 9,
+    totalWeeks: 16,
+    level: 5,
+    streak: 7,
+    achievements: [],
+    earnedWeeks: Array.from({ length: 8 }, (_, index) => index + 1),
+  });
+
+  assert.equal(progression.currentTitle, "Brave Beginner");
+});
