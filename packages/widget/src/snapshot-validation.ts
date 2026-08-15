@@ -577,29 +577,18 @@ function parseProgression(
   value: unknown,
   path: string,
   validRoadmapWeeks: ReadonlySet<number>,
-  roadmapPeriodCount: number,
   assetPolicy: AssetPolicy,
 ): PalProgressionState {
   const source = record(value, path);
   const collectibleIds = new Set<string>();
   const collectibleRoadmapWeeks = new Set<number>();
   const titleIds = new Set<string>();
-  const storyId = optionalText(source.storyId, `${path}.storyId`);
-  const storyVersion = optionalInteger(
-    source.storyVersion,
-    `${path}.storyVersion`,
-    1,
-  );
-  const storyTotalPeriods = optionalInteger(
-    source.storyTotalPeriods,
-    `${path}.storyTotalPeriods`,
-    1,
-  );
   if (
-    storyTotalPeriods !== undefined &&
-    storyTotalPeriods !== roadmapPeriodCount
+    source.storyId !== undefined ||
+    source.storyVersion !== undefined ||
+    source.storyTotalPeriods !== undefined
   ) {
-    fail(`${path}.storyTotalPeriods`, "must match the roadmap period count");
+    fail(path, "expected no private story catalog metadata");
   }
   const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
   if (
@@ -629,9 +618,6 @@ function parseProgression(
     fail(`${path}.collectibles`, "expected exactly one decision for every roadmap week");
   }
   return {
-    ...(storyId === undefined ? {} : { storyId }),
-    ...(storyVersion === undefined ? {} : { storyVersion }),
-    ...(storyTotalPeriods === undefined ? {} : { storyTotalPeriods }),
     companionReveal: parseCompanionReveal(
       source.companionReveal,
       `${path}.companionReveal`,
@@ -711,7 +697,6 @@ export function parsePalWidgetSnapshot(
           source.progression,
           "snapshot.progression",
           weekNumbers,
-          weeks.length,
           assetPolicy,
         );
   return {

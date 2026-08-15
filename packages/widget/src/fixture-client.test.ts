@@ -27,6 +27,7 @@ test("fixture projection redacts unearned story content and companion art", () =
   assert.doesNotMatch(serialized, /Cloud Blanket/);
   assert.doesNotMatch(serialized, /reward-cloud-blanket-v1\.png/);
   assert.doesNotMatch(serialized, /Meet Pip/);
+  assert.doesNotMatch(serialized, /\bPip\b/);
   assert.doesNotMatch(serialized, /assets\/pets\/default\.png/);
   assert.doesNotMatch(serialized, /Brave Beginner/);
 });
@@ -149,7 +150,10 @@ test("fixture deduplicates one activity day but keeps genuine items distinct", (
   assert.equal(snapshot.rewards.length, 2);
   assert.equal(snapshot.companion.xp, 210);
   assert.equal(snapshot.companion.mood, "happy");
-  assert.equal(snapshot.companion.message, "Pip is happy about your progress.");
+  assert.equal(
+    snapshot.companion.message,
+    "Your companion is happy about your progress.",
+  );
 });
 
 test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () => {

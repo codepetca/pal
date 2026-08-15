@@ -164,11 +164,13 @@ test("snapshot parser keeps progression references inside the supplied roadmap",
     /collectibles\[0\]\.roadmapWeek.*supplied roadmap week/i,
   );
 
-  const mismatchedStoryLength = createFixtureSnapshot();
-  mismatchedStoryLength.progression!.storyTotalPeriods = 15;
+  const privateStoryMetadata = createFixtureSnapshot() as unknown as {
+    progression: Record<string, unknown>;
+  };
+  privateStoryMetadata.progression.storyId = "private-story-name";
   assert.throws(
-    () => parsePalWidgetSnapshot(mismatchedStoryLength),
-    /storyTotalPeriods.*match the roadmap period count/i,
+    () => parsePalWidgetSnapshot(privateStoryMetadata),
+    /no private story catalog metadata/i,
   );
 });
 

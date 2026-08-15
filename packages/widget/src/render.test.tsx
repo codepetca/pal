@@ -43,9 +43,13 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /class="pal-badge-progress-label" aria-hidden="true">4\/4</);
   assert.match(html, /Earned/);
   assert.match(html, /Mystery companion/);
-  assert.match(html, /A treat for Pip!/);
+  assert.match(html, /A treat for your companion!/);
   assert.match(html, /Reward earned/);
-  assert.ok(snapshot.rewards.some((reward) => reward.title === "A treat for Pip!"));
+  assert.ok(
+    snapshot.rewards.some(
+      (reward) => reward.title === "A treat for your companion!",
+    ),
+  );
   assert.match(html, />Continue</);
   assert.match(html, /data-pal-theme="dark"/);
   assert.match(html, /data-pal-density="compact"/);

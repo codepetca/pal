@@ -147,9 +147,6 @@ export type PalCompanionReveal =
     };
 
 export interface PalProgressionState {
-  storyId?: string;
-  storyVersion?: number;
-  storyTotalPeriods?: number;
   companionReveal: PalCompanionReveal;
   currentTitle?: string;
   collectibles: PalCollectibleUnlock[];

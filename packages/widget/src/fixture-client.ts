@@ -133,14 +133,14 @@ export function createEmptyFixtureSnapshot(totalWeeks = 16): PalWidgetSnapshot {
     emptyWeek(index + 1, currentWeek),
   );
   const companion = {
-    name: "Pip",
+    name: "Mystery companion",
     mood: "neutral" as const,
     moodLabel: "Neutral",
     level: 1,
     streak: 0,
     xp: 0,
     xpToNextLevel: 500,
-    message: "Complete positive learning actions to encourage Pip.",
+    message: "Complete positive learning actions to encourage your companion.",
   };
   return {
     schemaVersion: 1,
@@ -179,7 +179,7 @@ export function createFixtureSnapshot(
   });
 
   const companion = {
-    name: "Pip",
+    name: "Mystery companion",
     mood: "happy" as const,
     moodLabel: "Happy",
     level: 2,
@@ -312,10 +312,10 @@ export function createFixturePalClient(
     snapshot.companion.moodLabel = mood[0].toUpperCase() + mood.slice(1);
     snapshot.companion.message =
       mood === "excited"
-        ? "Pip is excited!"
+        ? "Your companion is excited!"
         : mood === "happy"
-          ? "Pip is happy about your progress."
-          : "Complete positive learning actions to encourage Pip.";
+          ? "Your companion is happy about your progress."
+          : "Complete positive learning actions to encourage your companion.";
     snapshot.collection = {
       items: collectionItemsForUnlocks(engineState.world.unlocked_object_ids),
     };
@@ -419,7 +419,7 @@ export function createFixturePalClient(
     if (!snapshot.rewards.some((reward) => reward.id === rewardId)) {
       snapshot.rewards.push({
         id: rewardId,
-        title: "A treat for Pip!",
+        title: "A treat for your companion!",
         description: "Your on-time work earned a fish snack.",
         icon: "🐟",
       });
