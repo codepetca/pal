@@ -67,6 +67,95 @@ function configuredWeek(
 }
 
 test(
+  "omits story progression until a learner has a persisted term plan",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `legacy-story-${crypto.randomUUID()}`;
+    try {
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+      );
+
+      assert.equal(snapshot.progression, undefined);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "does not turn historical weekly achievement state into a story award",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `historical-story-${crypto.randomUUID()}`;
+    const periodKey = `historical-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(periodKey, 1, 16),
+        key(),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      await getDb()
+        .update(achievementInstances)
+        .set({ status: "earned" })
+        .where(
+          and(
+            eq(achievementInstances.learnerId, learnerId),
+            eq(achievementInstances.achievementKey, "weekly-rhythm"),
+            eq(achievementInstances.periodKey, periodKey),
+          ),
+        );
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-01T12:00:00.000Z") },
+      );
+      const firstCollectible = snapshot.progression?.collectibles[0];
+
+      assert.equal(firstCollectible?.status, "next");
+      assert.equal(firstCollectible?.title, undefined);
+      assert.equal(firstCollectible?.assetUrl, undefined);
+      assert.equal(firstCollectible?.storyCopy, undefined);
+      assert.equal(snapshot.progression?.currentTitle, undefined);
+      assert.equal(
+        (await getDb()
+          .select()
+          .from(rewardNotices)
+          .where(eq(rewardNotices.learnerId, learnerId))).length,
+        0,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "persists one complete deterministic plan and binds configured periods",
   { skip: !process.env.DATABASE_URL },
   async () => {

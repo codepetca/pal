@@ -47,6 +47,17 @@ function storyRewardKey(
   return `${STORY_REWARD_PREFIX}${reference.storyId}@${reference.version}:${chapterId}`;
 }
 
+export function storyRewardKeysForChapter(
+  reference: PalStoryReference,
+  chapterId: string,
+): readonly string[] {
+  const versioned = storyRewardKey(reference, chapterId);
+  return reference.storyId === LEGACY_STORY_REWARD_REFERENCE.storyId &&
+      reference.version === LEGACY_STORY_REWARD_REFERENCE.version
+    ? [versioned, `${STORY_REWARD_PREFIX}${chapterId}`]
+    : [versioned];
+}
+
 function parseStoryRewardKey(rewardKey: string): {
   reference: PalStoryReference;
   chapterId: string;

@@ -38,6 +38,7 @@ import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
 import {
   loadPersistedStoryPlan,
   storyRewardDetails,
+  storyRewardKeysForChapter,
 } from "@/lib/story-plan";
 
 const LEGACY_SEMESTER_WEEKS = 16;
@@ -343,6 +344,42 @@ export async function loadLearnerSnapshot(
       const persistedStoryPlan = typeof currentTermToken === "string"
         ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
         : undefined;
+      const storyRewardChapterByKey = new Map<string, string>();
+      if (persistedStoryPlan) {
+        for (const chapter of persistedStoryPlan.chapters) {
+          for (const rewardKey of storyRewardKeysForChapter(
+            {
+              storyId: persistedStoryPlan.storyId,
+              version: persistedStoryPlan.version,
+            },
+            chapter.id,
+          )) {
+            storyRewardChapterByKey.set(rewardKey, chapter.id);
+          }
+        }
+      }
+      const earnedStoryRewardRows = storyRewardChapterByKey.size > 0
+        ? await tx
+            .select({ rewardKey: rewardNotices.rewardKey })
+            .from(rewardNotices)
+            .where(
+              and(
+                eq(rewardNotices.learnerId, learnerId),
+                inArray(
+                  rewardNotices.rewardKey,
+                  [...storyRewardChapterByKey.keys()],
+                ),
+              ),
+            )
+        : [];
+      const earnedChapterIds = [
+        ...new Set(
+          earnedStoryRewardRows.flatMap((reward) => {
+            const chapterId = storyRewardChapterByKey.get(reward.rewardKey);
+            return chapterId ? [chapterId] : [];
+          }),
+        ),
+      ];
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -572,7 +609,9 @@ export async function loadLearnerSnapshot(
           PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
         ),
         message: moodMessage(mood),
-        assetUrl: "/assets/pets/default.png",
+        ...(persistedStoryPlan
+          ? {}
+          : { assetUrl: "/assets/pets/default.png" }),
       };
       return {
         schemaVersion: 1,
@@ -602,24 +641,13 @@ export async function loadLearnerSnapshot(
                 level: companion.level,
                 streak: companion.streak,
                 achievements: progressionAchievements,
+                companionName: companion.name,
                 storyPlan: persistedStoryPlan,
-                ...(titleAwardRows.length > 0
-                  ? {
-                      earnedTitleIds: titleAwardRows.map(
-                        (award) => award.titleId,
-                      ),
-                      currentTitleId: titleAwardRows[0]!.titleId,
-                    }
+                earnedChapterIds,
+                earnedTitleIds: titleAwardRows.map((award) => award.titleId),
+                ...(titleAwardRows[0]
+                  ? { currentTitleId: titleAwardRows[0].titleId }
                   : {}),
-                earnedWeeks: weeks.flatMap((week) =>
-                  week.achievements.some(
-                    (achievement) =>
-                      achievement.title === "Weekly Rhythm" &&
-                      achievement.status === "earned",
-                  )
-                    ? [week.number]
-                    : [],
-                ),
               }),
             }
           : {}),

@@ -40,7 +40,8 @@ try {
     "0002_woozy_stark_industries.sql",
     "0003_enforce_achievement_ownership.sql",
     "0004_anchor_achievement_periods.sql",
-    "0005_add_story_plans.sql",
+    "0005_sudden_black_cat.sql",
+    "0006_add_story_plans.sql",
   ]) {
     await testDatabase.query(
       await readFile(join(migrationsDirectory, migration), "utf8"),
@@ -171,7 +172,7 @@ try {
 
   await testDatabase.query(
     await readFile(
-      join(migrationsDirectory, "0006_massive_screwball.sql"),
+      join(migrationsDirectory, "0007_title_awards.sql"),
       "utf8",
     ),
   );
