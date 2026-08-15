@@ -151,6 +151,14 @@ $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE FUNCTION "protect_story_plan_chapter_assignment"() RETURNS trigger AS $$
 BEGIN
+	IF TG_OP = 'DELETE' THEN
+		IF EXISTS (SELECT 1 FROM "learners" WHERE "id" = OLD."learner_id") THEN
+			RAISE EXCEPTION 'story plan chapter assignments are immutable'
+				USING ERRCODE = '23514', CONSTRAINT = 'story_plan_chapters_immutable';
+		END IF;
+		RETURN OLD;
+	END IF;
+
 	IF ROW(
 		NEW."story_plan_id",
 		NEW."learner_id",
@@ -218,8 +226,8 @@ CREATE TRIGGER "story_plans_immutable_before_update"
 BEFORE UPDATE OR DELETE ON "story_plans"
 FOR EACH ROW EXECUTE FUNCTION "protect_story_plan_identity"();
 --> statement-breakpoint
-CREATE TRIGGER "story_plan_chapters_immutable_before_update"
-BEFORE UPDATE ON "story_plan_chapters"
+CREATE TRIGGER "story_plan_chapters_immutable_before_write"
+BEFORE UPDATE OR DELETE ON "story_plan_chapters"
 FOR EACH ROW EXECUTE FUNCTION "protect_story_plan_chapter_assignment"();
 --> statement-breakpoint
 CREATE TRIGGER "learner_reward_grants_append_only_before_write"
