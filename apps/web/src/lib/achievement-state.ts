@@ -267,12 +267,12 @@ async function validCompletionFacts(
   );
 }
 
-async function settledCompletionCount(
+async function completionCounts(
   db: Db,
   learnerId: string,
   periodKey: string,
   firstTimeZoneOverride?: string,
-): Promise<number> {
+): Promise<{ settled: number; valid: number }> {
   const [firstConfigurationMarker] = await db
     .select({ id: learnerFacts.id })
     .from(learnerFacts)
@@ -290,7 +290,9 @@ async function settledCompletionCount(
     periodKey,
     firstTimeZoneOverride,
   );
-  if (!firstConfigurationMarker || facts.length === 0) return facts.length;
+  if (!firstConfigurationMarker || facts.length === 0) {
+    return { settled: facts.length, valid: facts.length };
+  }
   const settlementMarkers = await db
     .select({ completionFactId: learnerFacts.semanticKey })
     .from(learnerFacts)
@@ -305,7 +307,7 @@ async function settledCompletionCount(
       ),
     )
     .limit(MAX_DAILY_LOG_DAYS_PER_PERIOD + 1);
-  return settlementMarkers.length;
+  return { settled: settlementMarkers.length, valid: facts.length };
 }
 
 export async function weeklyConfigurationRejection(
@@ -475,7 +477,10 @@ export async function dailyLogCalendarStatus(
   const periodKey = metadataString(event, "period_key");
   const existingFacts = await boundedDailyLogFacts(db, learnerId, periodKey);
   const [configuration] = await db
-    .select({ id: weeklyRhythmConfigs.id })
+    .select({
+      id: weeklyRhythmConfigs.id,
+      eligibleDays: weeklyRhythmConfigs.eligibleDays,
+    })
     .from(weeklyRhythmConfigs)
     .where(
       and(
@@ -515,10 +520,18 @@ export async function dailyLogCalendarStatus(
     existingFacts,
     typeof timeZone === "string" ? timeZone : null,
   );
-  return qualifyingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD ||
+  if (
+    qualifyingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD ||
     existingFacts.length >= MAX_DAILY_LOG_FACTS_PER_PERIOD
-    ? "period-limit-exceeded"
-    : "valid";
+  ) {
+    return "period-limit-exceeded";
+  }
+
+  // A valid source fact beyond the producer's current allowance is durable but
+  // reward-pending. A later higher configuration may release it; paying it now
+  // would make eligible_days advisory and could strand a closed correction.
+  const counts = await completionCounts(db, learnerId, periodKey);
+  return counts.settled >= configuration.eligibleDays ? "pending" : "valid";
 }
 
 export type WeeklyConfigurationDisposition =
@@ -909,9 +922,10 @@ async function recomputeWeeklyRhythm(
     .limit(1);
   if (!configuration) return false;
 
-  const current = await settledCompletionCount(db, learnerId, periodKey);
+  const completion = await completionCounts(db, learnerId, periodKey);
+  const current = completion.settled;
   const targetDays = weeklyTarget(configuration.eligibleDays);
-  const reconciliationRequired = current > configuration.eligibleDays;
+  const reconciliationRequired = completion.valid > configuration.eligibleDays;
   if (configuration.reconciliationRequired !== reconciliationRequired) {
     await db
       .update(weeklyRhythmConfigs)
