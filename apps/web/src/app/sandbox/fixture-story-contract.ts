@@ -49,21 +49,30 @@ function boundedText(value: unknown): string | undefined {
     : undefined;
 }
 
+function calendarDay(value: unknown): string | undefined {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return undefined;
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+    ? value
+    : undefined;
+}
+
 function context(value: unknown): PalFixtureActionContext | undefined | false {
   if (value === undefined) return undefined;
   const source = record(value);
   if (!source) return false;
   const activityDay = source.activityDay;
   const itemToken = source.itemToken;
-  if (
-    activityDay !== undefined &&
-    (typeof activityDay !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(activityDay))
-  ) {
-    return false;
-  }
+  const parsedActivityDay = activityDay === undefined
+    ? undefined
+    : calendarDay(activityDay);
+  if (activityDay !== undefined && parsedActivityDay === undefined) return false;
   if (itemToken !== undefined && boundedText(itemToken) === undefined) return false;
   return {
-    ...(typeof activityDay === "string" ? { activityDay } : {}),
+    ...(parsedActivityDay ? { activityDay: parsedActivityDay } : {}),
     ...(typeof itemToken === "string" ? { itemToken } : {}),
   };
 }

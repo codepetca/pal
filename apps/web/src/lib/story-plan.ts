@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { learnerFacts, storyPlanChapters, storyPlans, type Db } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
 import {
@@ -31,6 +31,9 @@ export interface PersistedStoryPlan extends StoryReference {
   mysteryCollectibleId: string;
   chapters: readonly PersistedStoryChapter[];
 }
+
+type StoryPlanRow = typeof storyPlans.$inferSelect;
+type StoryPlanChapterRow = typeof storyPlanChapters.$inferSelect;
 
 function termPeriodFromMetadata(metadata: Record<string, unknown>): TermPeriod | null {
   if (
@@ -90,6 +93,42 @@ async function resolveStoryPlanRow(db: Db, learnerId: string, termKey: string) {
     .where(and(eq(storyPlans.learnerId, learnerId), eq(storyPlans.termKey, termKey)))
     .limit(1);
   return plan;
+}
+
+function materializePersistedStoryPlan(
+  plan: StoryPlanRow,
+  rows: readonly StoryPlanChapterRow[],
+): PersistedStoryPlan {
+  const reference = { storyId: plan.storyId, version: plan.storyVersion };
+  const catalog = STORY_REGISTRY.requireCatalog(reference);
+  if (
+    rows.length !== plan.totalPeriods ||
+    rows.some((row, index) => row.periodNumber !== index + 1)
+  ) {
+    throw new Error("Persisted story plan is incomplete");
+  }
+  return {
+    id: plan.id,
+    learnerId: plan.learnerId,
+    termKey: plan.termKey,
+    termStartDay: plan.termStartDay,
+    storyId: plan.storyId,
+    version: plan.storyVersion,
+    totalPeriods: plan.totalPeriods,
+    companionCollectibleId: catalog.companionCollectibleId,
+    mysteryCollectibleId: catalog.mysteryCollectibleId,
+    chapters: rows.map((row) => {
+      const chapter = catalog.resolveChapter(row.chapterId);
+      if (!chapter) throw new Error(`Unknown persisted story chapter: ${row.chapterId}`);
+      return {
+        ...chapter,
+        assignmentId: row.id,
+        periodKey: row.periodKey,
+        roadmapWeek: row.periodNumber,
+        sourceChapterIds: [row.chapterId],
+      };
+    }),
+  };
 }
 
 /** The caller owns the learner row lock and surrounding transaction. */
@@ -166,8 +205,6 @@ export async function loadPersistedStoryPlan(
 ): Promise<PersistedStoryPlan | undefined> {
   const plan = await resolveStoryPlanRow(db, learnerId, termKey);
   if (!plan) return undefined;
-  const reference = { storyId: plan.storyId, version: plan.storyVersion };
-  const catalog = STORY_REGISTRY.requireCatalog(reference);
   const rows = await db
     .select()
     .from(storyPlanChapters)
@@ -178,32 +215,47 @@ export async function loadPersistedStoryPlan(
       ),
     )
     .orderBy(asc(storyPlanChapters.periodNumber));
-  if (
-    rows.length !== plan.totalPeriods ||
-    rows.some((row, index) => row.periodNumber !== index + 1)
-  ) {
-    throw new Error("Persisted story plan is incomplete");
-  }
-  return {
-    id: plan.id,
-    learnerId,
-    termKey: plan.termKey,
-    termStartDay: plan.termStartDay,
-    storyId: plan.storyId,
-    version: plan.storyVersion,
-    totalPeriods: plan.totalPeriods,
-    companionCollectibleId: catalog.companionCollectibleId,
-    mysteryCollectibleId: catalog.mysteryCollectibleId,
-    chapters: rows.map((row) => {
-      const chapter = catalog.resolveChapter(row.chapterId);
-      if (!chapter) throw new Error(`Unknown persisted story chapter: ${row.chapterId}`);
-      return {
-        ...chapter,
-        assignmentId: row.id,
-        periodKey: row.periodKey,
-        roadmapWeek: row.periodNumber,
-        sourceChapterIds: [row.chapterId],
-      };
-    }),
-  };
+  return materializePersistedStoryPlan(plan, rows);
+}
+
+/** Resolves durable story grants through their exact learner-owned pinned plans. */
+export async function loadPersistedStoryPlansByIds(
+  db: Db,
+  learnerId: string,
+  planIds: readonly string[],
+): Promise<ReadonlyMap<string, PersistedStoryPlan>> {
+  const uniqueIds = [...new Set(planIds)];
+  if (uniqueIds.length === 0) return new Map();
+  const plans = await db
+    .select()
+    .from(storyPlans)
+    .where(
+      and(
+        eq(storyPlans.learnerId, learnerId),
+        inArray(storyPlans.id, uniqueIds),
+      ),
+    );
+  if (plans.length === 0) return new Map();
+  const rows = await db
+    .select()
+    .from(storyPlanChapters)
+    .where(
+      and(
+        eq(storyPlanChapters.learnerId, learnerId),
+        inArray(storyPlanChapters.storyPlanId, plans.map((plan) => plan.id)),
+      ),
+    )
+    .orderBy(
+      asc(storyPlanChapters.storyPlanId),
+      asc(storyPlanChapters.periodNumber),
+    );
+  return new Map(
+    plans.map((plan) => [
+      plan.id,
+      materializePersistedStoryPlan(
+        plan,
+        rows.filter((row) => row.storyPlanId === plan.id),
+      ),
+    ]),
+  );
 }

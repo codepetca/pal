@@ -22,6 +22,7 @@ import {
 } from "@/lib/story-fixture";
 import {
   projectStoryProgression,
+  projectUnseenGrantRewards,
   type ProjectableRewardGrant,
 } from "@/lib/story-projector";
 import { loadPersistedStoryPlan, type PersistedStoryPlan } from "@/lib/story-plan";
@@ -151,16 +152,32 @@ test("all supported plans are deterministic, complete, and deeply immutable", ()
   }, TypeError);
 });
 
-test("projector redacts every unearned story field and ignores prior-term grants", () => {
+test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
   const plan = persistedPlan();
+  const priorPlan: PersistedStoryPlan = {
+    ...plan,
+    id: "plan-prior",
+    termKey: "term-prior",
+    chapters: plan.chapters.map((chapter) => ({
+      ...chapter,
+      assignmentId: `prior-${chapter.assignmentId}`,
+    })),
+  };
   const priorTermGrant = grant(1, {
     kind: "story_chapter",
-    storyPlanId: "plan-prior",
-    storyPlanChapterId: plan.chapters[0]?.assignmentId,
+    storyPlanId: priorPlan.id,
+    storyPlanChapterId: priorPlan.chapters[0]?.assignmentId,
     behaviorTitleId: null,
   });
-  const projection = projectStoryProgression(plan, [priorTermGrant]);
+  const plans = new Map([
+    [plan.id, plan],
+    [priorPlan.id, priorPlan],
+  ]);
+  const projection = projectStoryProgression(plan, [priorTermGrant], plans);
   assert.equal(projection.collectibles[0]?.status, "next");
+  assert.equal(projection.currentTitle, "Gentle Keeper");
+  assert.equal(projection.titles.some((title) => title.id === "gentle-keeper"), true);
+  assert.equal(projectUnseenGrantRewards(plan, [priorTermGrant], plans).length, 1);
   const raw = JSON.stringify(projection);
   assert.equal(raw.includes(plan.storyId), false);
   for (const chapter of plan.chapters) {
@@ -465,6 +482,63 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
     assert.equal(afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"), true);
     assert.equal(afterBreak.progression?.currentTitle, "Gentle Keeper");
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a prior-term story title and unseen reveal remain durable in a later term", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `cross-term-story-title-${crypto.randomUUID()}`;
+  const priorPeriodKey = `prior-period-${crypto.randomUUID()}`;
+  const currentPeriodKey = `current-period-${crypto.randomUUID()}`;
+  try {
+    await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(priorPeriodKey, `prior-term-${crypto.randomUUID()}`),
+      crypto.randomUUID(),
+    );
+    await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLog(priorPeriodKey),
+      crypto.randomUUID(),
+    );
+
+    const currentTerm = configuredWeek(
+      currentPeriodKey,
+      `current-term-${crypto.randomUUID()}`,
+    );
+    currentTerm.occurred_at = "2026-10-19T12:00:00.000Z";
+    currentTerm.metadata.term_start_day = "2026-10-19";
+    currentTerm.metadata.term_end_day = "2026-11-30";
+    currentTerm.metadata.week_start_day = "2026-10-19";
+    await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      currentTerm,
+      crypto.randomUUID(),
+    );
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const snapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2026-10-20T12:00:00.000Z") },
+    );
+    assert.equal(snapshot.progression?.collectibles[0]?.status, "next");
+    assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
+    assert.equal(
+      snapshot.progression?.titles.some((title) => title.id === "gentle-keeper"),
+      true,
+    );
+    assert.equal(snapshot.rewards.some((reward) => reward.kind === "story"), true);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

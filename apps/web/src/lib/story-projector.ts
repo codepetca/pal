@@ -33,7 +33,7 @@ type EarnedTitle = {
 
 function titleForGrant(
   grant: ProjectableRewardGrant,
-  plan: PersistedStoryPlan,
+  plansById: ReadonlyMap<string, PersistedStoryPlan>,
 ): EarnedTitle | undefined {
   if (grant.kind === "behavior_title" && grant.behaviorTitleId) {
     const title = resolveBehaviorTitle(grant.behaviorTitleId);
@@ -41,7 +41,9 @@ function titleForGrant(
       ? { ...title, kind: "behavior", sourceFactId: grant.sourceFactId, grantOrder: grant.grantOrder }
       : undefined;
   }
-  if (grant.kind !== "story_chapter" || grant.storyPlanId !== plan.id) return undefined;
+  if (grant.kind !== "story_chapter" || !grant.storyPlanId) return undefined;
+  const plan = plansById.get(grant.storyPlanId);
+  if (!plan || plan.learnerId !== grant.learnerId) return undefined;
   const chapter = plan.chapters.find((candidate) => candidate.assignmentId === grant.storyPlanChapterId);
   return chapter?.title
     ? { ...chapter.title, kind: "story", sourceFactId: grant.sourceFactId, grantOrder: grant.grantOrder }
@@ -69,6 +71,7 @@ function currentTitle(titles: readonly EarnedTitle[]): EarnedTitle | undefined {
 export function projectStoryProgression(
   plan: PersistedStoryPlan,
   grants: readonly ProjectableRewardGrant[],
+  plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map([[plan.id, plan]]),
 ): PalProgressionState {
   const storyGrants = new Map(
     grants.flatMap((grant) =>
@@ -111,7 +114,7 @@ export function projectStoryProgression(
   });
 
   const earnedTitles = grants.flatMap((grant) => {
-    const title = titleForGrant(grant, plan);
+    const title = titleForGrant(grant, plansById);
     return title ? [title] : [];
   });
   const selected = currentTitle(earnedTitles);
@@ -143,6 +146,7 @@ export function projectStoryProgression(
 export function projectUnseenGrantRewards(
   plan: PersistedStoryPlan,
   grants: readonly ProjectableRewardGrant[],
+  plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map([[plan.id, plan]]),
 ): PalRewardNotice[] {
   return grants
     .filter((grant) => grant.seenAt === null)
@@ -166,8 +170,12 @@ export function projectUnseenGrantRewards(
             }]
           : [];
       }
-      if (grant.kind !== "story_chapter" || grant.storyPlanId !== plan.id) return [];
-      const chapter = plan.chapters.find((candidate) => candidate.assignmentId === grant.storyPlanChapterId);
+      if (grant.kind !== "story_chapter" || !grant.storyPlanId) return [];
+      const grantPlan = plansById.get(grant.storyPlanId);
+      if (!grantPlan || grantPlan.learnerId !== grant.learnerId) return [];
+      const chapter = grantPlan.chapters.find(
+        (candidate) => candidate.assignmentId === grant.storyPlanChapterId,
+      );
       return chapter
         ? [{
             id: grant.id,

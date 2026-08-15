@@ -33,7 +33,10 @@ import type {
 } from "@codepet/pal-widget";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
-import { loadPersistedStoryPlan } from "@/lib/story-plan";
+import {
+  loadPersistedStoryPlan,
+  loadPersistedStoryPlansByIds,
+} from "@/lib/story-plan";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
@@ -348,8 +351,23 @@ export async function loadLearnerSnapshot(
       const persistedStoryPlan = typeof currentTermToken === "string"
         ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
         : undefined;
+      const historicalStoryPlans = await loadPersistedStoryPlansByIds(
+        tx,
+        learnerId,
+        grantRows.flatMap((grant) =>
+          grant.kind === "story_chapter" &&
+          grant.storyPlanId &&
+          grant.storyPlanId !== persistedStoryPlan?.id
+            ? [grant.storyPlanId]
+            : [],
+        ),
+      );
+      const storyPlansById = new Map(historicalStoryPlans);
+      if (persistedStoryPlan) {
+        storyPlansById.set(persistedStoryPlan.id, persistedStoryPlan);
+      }
       const progression = persistedStoryPlan
-        ? projectStoryProgression(persistedStoryPlan, grantRows)
+        ? projectStoryProgression(persistedStoryPlan, grantRows, storyPlansById)
         : undefined;
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
@@ -608,7 +626,11 @@ export async function loadLearnerSnapshot(
             ...(reward.icon ? { icon: reward.icon } : {}),
           })),
           ...(persistedStoryPlan
-            ? projectUnseenGrantRewards(persistedStoryPlan, grantRows)
+            ? projectUnseenGrantRewards(
+                persistedStoryPlan,
+                grantRows,
+                storyPlansById,
+              )
             : []),
         ].slice(0, 100),
         ...(progression ? { progression } : {}),
