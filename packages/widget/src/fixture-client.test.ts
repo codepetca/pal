@@ -32,6 +32,7 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   );
 
   assert.equal(rhythm?.progress?.current, 3);
+  assert.equal(afterCompletion.companion.streak, 4);
 
   const beforeDuplicate = client.peek();
   const result = client.dispatch("duplicate-replayed");
@@ -136,6 +137,11 @@ test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () =>
   );
 
   client.dispatch("daily-log-completed", { activityDay: "2026-04-17" });
+  const overLimit = client.dispatch("daily-log-completed", {
+    activityDay: "2026-04-18",
+  });
+  assert.match(overLimit, /period limit exceeded/i);
+  assert.equal(client.peek().companion.xp, 125);
   client.dispatch("advance-week");
   assert.equal(client.peek().companion.xp, 125);
   assert.deepEqual(

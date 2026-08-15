@@ -20,6 +20,7 @@ import type {
 
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 const DEFAULT_WEEKLY_TARGET = 4;
+const FIRST_GENERATED_ACTIVITY_DAY = "2026-04-13";
 
 function weeklyRhythm(
   week: number,
@@ -176,6 +177,7 @@ export function createFixturePalClient(
   const original = cloneSnapshot(initialSnapshot);
   let snapshot = cloneSnapshot(initialSnapshot);
   const completedActivityDays = new Set<string>();
+  const acceptedDailyLogCounts = new Map<number, number>();
   const completedItemTokens = new Set<string>();
   const viewedItemTokens = new Set<string>();
   let generatedDayIdentity = 0;
@@ -192,7 +194,11 @@ export function createFixturePalClient(
           (value.companion.level - 1) * PROGRESSION_POLICY.levelUpCostXp + xp,
         level: value.companion.level,
         streak_current: value.companion.streak,
-        streak_last_day: null,
+        // The fixture's first generated source day is Monday 2026-04-13. Seed
+        // an existing visible rhythm on the preceding day so the next action
+        // advances it instead of resetting an otherwise unexplained counter.
+        streak_last_day:
+          value.companion.streak > 0 ? "2026-04-12" : null,
         last_event_at: null,
       },
       pet: {
@@ -217,6 +223,22 @@ export function createFixturePalClient(
         ).length,
       0,
     );
+  }
+
+  function seedAcceptedDailyLogCounts(value: PalWidgetSnapshot): void {
+    acceptedDailyLogCounts.clear();
+    for (const week of value.roadmap.weeks) {
+      const rhythm = week.achievements.find(
+        (achievement) => achievement.title === "Weekly Rhythm",
+      );
+      acceptedDailyLogCounts.set(week.number, rhythm?.progress?.current ?? 0);
+    }
+  }
+
+  function eligibleDaysForFixtureRhythm(rhythm: PalAchievement): number {
+    // Fixture configurations model the normal five-day week (target four) and
+    // the three-day short week (target two), matching weeklyTarget in persistence.
+    return Math.min(5, (rhythm.progress?.target ?? DEFAULT_WEEKLY_TARGET) + 1);
   }
 
   function syncProgression(): void {
@@ -331,7 +353,8 @@ export function createFixturePalClient(
     }
   }
 
-  syncMissingCollection("2026-04-13T12:00:00.000Z");
+  seedAcceptedDailyLogCounts(snapshot);
+  syncMissingCollection(`${FIRST_GENERATED_ACTIVITY_DAY}T12:00:00.000Z`);
 
   return {
     async getSnapshot() {
@@ -344,6 +367,7 @@ export function createFixturePalClient(
       if (action === "reset") {
         snapshot = cloneSnapshot(original);
         completedActivityDays.clear();
+        seedAcceptedDailyLogCounts(snapshot);
         completedItemTokens.clear();
         viewedItemTokens.clear();
         generatedDayIdentity = 0;
@@ -406,8 +430,15 @@ export function createFixturePalClient(
         if (completedActivityDays.has(activityDay)) {
           return "daily_log.completed: semantic duplicate — no progress changed";
         }
-        completedActivityDays.add(activityDay);
         const rhythm = currentRhythm();
+        const weekNumber = currentWeek().number;
+        const acceptedCount =
+          acceptedDailyLogCounts.get(weekNumber) ?? rhythm.progress?.current ?? 0;
+        if (acceptedCount >= eligibleDaysForFixtureRhythm(rhythm)) {
+          return "daily_log.completed: period limit exceeded — no progress changed";
+        }
+        completedActivityDays.add(activityDay);
+        acceptedDailyLogCounts.set(weekNumber, acceptedCount + 1);
         const wasEarned = rhythm.status === "earned";
         if (rhythm.progress) {
           rhythm.progress.current = Math.min(
@@ -547,6 +578,7 @@ export function createFixturePalClient(
       const clamped = Math.max(1, Math.min(16, week));
       snapshot = createFixtureSnapshot(clamped);
       completedActivityDays.clear();
+      seedAcceptedDailyLogCounts(snapshot);
       completedItemTokens.clear();
       viewedItemTokens.clear();
       earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
