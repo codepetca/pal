@@ -15,8 +15,9 @@ routes live elsewhere and import from here.
 | `events` | immutable record of every received signal | event |
 | `learner_facts` | semantically unique normalized behavior derived from events | learner + fact type + semantic identity |
 | `achievement_periods` | stable roadmap order for opaque academic periods | learner + period |
-| `story_plans` | versioned story identity and length for an opaque academic term | learner + term |
+| `story_plans` | immutable term start, versioned story identity, and length for an opaque academic term | learner + term |
 | `story_plan_chapters` | ordered chapter assignment, optionally bound to an opaque period | story plan + period number |
+| `learner_reward_grants` | append-only durable story chapter and behavior title ownership | learner + earned reward |
 | `weekly_rhythm_configs` | latest accepted weekly opportunity configuration | learner + period |
 | `achievement_instances` | progress or an outcome for a scoped achievement | learner + achievement + scope |
 | `reward_notices` | one-time presentation notice attached to an award | awarded achievement |
@@ -43,14 +44,19 @@ Two constraints carry more weight than the rest:
   weekly awards share the same exactly-once rule.
 - `UNIQUE (learner_id, term_key)` on `story_plans` — concurrent creation cannot
   give one learner two story plans for the same term. The first story release
-  assigns one supported length and rejects later calendar-length changes;
-  maintenance that rewrites a complete plan must run under the learner lock.
+  pins the authoritative term start, story version, and supported length; a
+  trigger rejects later identity or calendar-length changes.
 - `UNIQUE (story_plan_id, period_number)`, `UNIQUE (story_plan_id, period_key)`,
   and `UNIQUE (story_plan_id, chapter_id)` on `story_plan_chapters` — one plan
   cannot schedule two rewards in one position, bind one period twice, or repeat
   a collectible chapter. Composite foreign keys ensure every non-null period
   belongs to the plan's learner, and a deferred commit-time constraint requires
   exactly the contiguous ordinals `1..total_periods`.
+- Partial unique indexes on `learner_reward_grants` enforce one story grant per
+  plan slot and source fact plus one lifetime grant per learner/behavior title.
+  Composite foreign keys bind every grant to the same learner's source fact and,
+  for story grants, the exact plan assignment. A generated bigint orders grants
+  durably; only `seen_at` may change after insert.
 - `UNIQUE (achievement_instance_id)` on `reward_notices` — retrying an award
   cannot queue a second celebration.
 
