@@ -26,11 +26,11 @@ import {
 } from "@pal/db";
 import type {
   PalAchievement,
+  PalCollectionItem,
   PalCompanionMood,
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
-import { collectionItemsForUnlocks } from "@codepet/pal-widget";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
 import { loadPersistedStoryPlan } from "@/lib/story-plan";
@@ -40,6 +40,25 @@ import {
 } from "@/lib/story-projector";
 
 const LEGACY_SEMESTER_WEEKS = 16;
+
+const COLLECTION_ITEMS = new Map<string, PalCollectionItem>(
+  PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
+    milestone.assetRefId,
+    {
+      id: milestone.assetRefId,
+      label: milestone.label,
+      description: milestone.description,
+      icon: milestone.icon,
+    },
+  ]),
+);
+
+function collectionItemsForUnlocks(unlockedObjectIds: readonly string[]) {
+  return unlockedObjectIds.flatMap((id) => {
+    const item = COLLECTION_ITEMS.get(id);
+    return item ? [{ ...item }] : [];
+  });
+}
 
 export class LearnerScopeError extends Error {
   constructor() {
