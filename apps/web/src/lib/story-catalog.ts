@@ -273,8 +273,13 @@ const pipCatalog: StoryCatalog = {
   companionCollectibleId: "pip-companion-v1",
   mysteryCollectibleId: "mystery-egg-v1",
   chapters,
-  resolveChapter: resolvePipChapter,
-  createPlan: createPipPlan,
+  resolveChapter(chapterId: string) {
+    const chapter = resolvePipChapter(chapterId);
+    return chapter ? deepFreeze(chapter) : undefined;
+  },
+  createPlan(totalPeriods: number) {
+    return deepFreeze(createPipPlan(totalPeriods));
+  },
 };
 
 export const STORY_REGISTRY = createStoryRegistry([pipCatalog]);

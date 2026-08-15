@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 import { and, asc, eq } from "drizzle-orm";
+import type { PalRewardNotice } from "@codepet/pal-widget";
 import {
   achievementInstances,
+  economy,
   getDb,
   learnerRewardGrants,
   storyPlanChapters,
@@ -17,7 +21,7 @@ import {
   projectStoryProgression,
   type ProjectableRewardGrant,
 } from "@/lib/story-projector";
-import type { PersistedStoryPlan } from "@/lib/story-plan";
+import { loadPersistedStoryPlan, type PersistedStoryPlan } from "@/lib/story-plan";
 import {
   getOrCreateLearnerIdentity,
   processEventInDb,
@@ -31,6 +35,62 @@ import {
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
+
+test("client dependency graphs cannot reach server story authority", () => {
+  const sourceRoot = path.resolve(process.cwd(), "src");
+  const forbidden = new Set([
+    "lib/story-catalog.ts",
+    "lib/story-fixture.ts",
+    "lib/story-plan.ts",
+    "lib/story-projector.ts",
+    "lib/reward-grants.ts",
+  ].map((file) => path.join(sourceRoot, file)));
+  const sourceFiles: string[] = [];
+  const visitDirectory = (directory: string) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) visitDirectory(candidate);
+      else if (/\.(?:ts|tsx|mts)$/.test(entry.name)) sourceFiles.push(candidate);
+    }
+  };
+  visitDirectory(sourceRoot);
+  const resolveImport = (from: string, specifier: string): string | undefined => {
+    const stem = specifier.startsWith("@/")
+      ? path.join(sourceRoot, specifier.slice(2))
+      : specifier.startsWith(".")
+        ? path.resolve(path.dirname(from), specifier)
+        : undefined;
+    if (!stem) return undefined;
+    return [stem, `${stem}.ts`, `${stem}.tsx`, `${stem}.mts`, path.join(stem, "index.ts"), path.join(stem, "index.tsx")]
+      .find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+  };
+  const dependencies = new Map<string, string[]>();
+  for (const file of sourceFiles) {
+    const text = fs.readFileSync(file, "utf8");
+    const imports = [...text.matchAll(/(?:import|export)\s+(?!type\b)[\s\S]*?\sfrom\s+["']([^"']+)["']|import\s*["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g)]
+      .flatMap((match) => {
+        const resolved = resolveImport(file, match[1] ?? match[2] ?? match[3]);
+        return resolved ? [resolved] : [];
+      });
+    dependencies.set(file, imports);
+  }
+  const clientRoots = sourceFiles.filter((file) => /^\s*["']use client["'];/m.test(fs.readFileSync(file, "utf8")));
+  for (const root of clientRoots) {
+    const pending = [root];
+    const seen = new Set<string>();
+    while (pending.length) {
+      const file = pending.pop()!;
+      if (seen.has(file)) continue;
+      seen.add(file);
+      assert.equal(
+        forbidden.has(file),
+        false,
+        `${path.relative(sourceRoot, root)} reaches server story module ${path.relative(sourceRoot, file)}`,
+      );
+      pending.push(...(dependencies.get(file) ?? []));
+    }
+  }
+});
 
 function persistedPlan(totalPeriods = 6): PersistedStoryPlan {
   const reference = storyForTermStartDay("2026-08-31");
@@ -196,6 +256,76 @@ test("two learners receive the same persisted sequence for the same term boundar
     assert.deepEqual(sequences[0], sequences[1]);
   } finally {
     await Promise.all(learners.map((externalLearnerId) => resetLearnerInDb(integration.id, externalLearnerId)));
+  }
+});
+
+test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;
+  const legacy = configuredWeek(`period-${crypto.randomUUID()}`, `legacy-term-${crypto.randomUUID()}`);
+  delete (legacy.metadata as { term_week_count?: number }).term_week_count;
+  try {
+    await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
+    const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
+    const [plan] = await getDb().select().from(storyPlans).where(eq(storyPlans.learnerId, learnerId));
+    assert.equal(plan?.totalPeriods, 16);
+    assert.equal((await getDb().select().from(storyPlanChapters).where(eq(storyPlanChapters.storyPlanId, plan!.id))).length, 16);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("in-memory and persisted ledgers share story/title projection and streak loss cannot revoke", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `fixture-persisted-parity-${crypto.randomUUID()}`;
+  const periodKey = `period-${crypto.randomUUID()}`;
+  try {
+    await processEventInDb(integration.id, externalLearnerId, configuredWeek(periodKey), crypto.randomUUID());
+    const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
+    await getDb().update(economy).set({
+      streakCurrent: 2,
+      streakLastDay: "2026-08-30",
+    }).where(eq(economy.learnerId, learnerId));
+    await processEventInDb(integration.id, externalLearnerId, dailyLog(periodKey), crypto.randomUUID());
+
+    const plan = await loadPersistedStoryPlan(getDb(), learnerId, "story-term");
+    assert.ok(plan);
+    const persistedGrants = await getDb().select().from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId))
+      .orderBy(asc(learnerRewardGrants.grantOrder));
+    assert.equal(persistedGrants.length, 2);
+    assert.equal(new Set(persistedGrants.map((grant) => grant.sourceFactId)).size, 1);
+
+    const fixture = new StoryFixtureLedger(plan);
+    for (const persisted of persistedGrants) {
+      if (persisted.kind === "story_chapter") {
+        fixture.grantStoryChapter(persisted.storyPlanChapterId!, persisted.sourceFactId);
+      } else {
+        assert.equal(persisted.behaviorTitleId, "rhythm-builder");
+        fixture.grantBehaviorTitle("rhythm-builder", persisted.sourceFactId);
+      }
+    }
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    assert.deepEqual(fixture.progression(), snapshot.progression);
+    const displayReward = (reward: PalRewardNotice) => ({
+      title: reward.title,
+      description: reward.description,
+      kind: reward.kind,
+      collectibleTitle: reward.collectibleTitle,
+      titleAward: reward.titleAward,
+      titleRevealCopy: reward.titleRevealCopy,
+      icon: reward.icon,
+      assetUrl: reward.assetUrl,
+    });
+    assert.deepEqual(fixture.rewards().map(displayReward), snapshot.rewards.map(displayReward));
+    assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
+
+    await getDb().update(economy).set({ streakCurrent: 0, streakLastDay: null }).where(eq(economy.learnerId, learnerId));
+    const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    assert.equal(afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"), true);
+    assert.equal(afterBreak.progression?.currentTitle, "Gentle Keeper");
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
   }
 });
 

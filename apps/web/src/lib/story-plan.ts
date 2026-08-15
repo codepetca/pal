@@ -37,15 +37,16 @@ function termPeriodFromMetadata(metadata: Record<string, unknown>): TermPeriod |
     typeof metadata.term_token !== "string" ||
     typeof metadata.term_start_day !== "string" ||
     typeof metadata.period_key !== "string" ||
-    !Number.isInteger(metadata.week_index) ||
-    !Number.isInteger(metadata.term_week_count)
+    !Number.isInteger(metadata.week_index)
   ) {
     return null;
   }
   return {
     termKey: metadata.term_token,
     termStartDay: metadata.term_start_day,
-    totalPeriods: metadata.term_week_count as number,
+    totalPeriods: Number.isInteger(metadata.term_week_count)
+      ? (metadata.term_week_count as number)
+      : 16,
     periodKey: metadata.period_key,
     periodNumber: metadata.week_index as number,
   };
