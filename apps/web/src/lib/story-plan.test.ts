@@ -648,7 +648,6 @@ test(
         new Set(awards.map((award) => award.titleId)),
         new Set(["rhythm-builder", "gentle-keeper"]),
       );
-      assert.equal(awards[0]?.createdAt.getTime(), awards[1]?.createdAt.getTime());
       assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);

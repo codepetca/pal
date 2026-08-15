@@ -309,7 +309,12 @@ export async function loadLearnerSnapshot(
         .from(titleAwards)
         .where(eq(titleAwards.learnerId, learnerId))
         .orderBy(
-          desc(titleAwards.createdAt),
+          sql`max(${titleAwards.createdAt}) over (
+            partition by coalesce(
+              ${titleAwards.sourceFactId}::text,
+              ${titleAwards.id}::text
+            )
+          ) desc`,
           sql`case
             when ${titleAwards.kind} = 'story' then 100 + case ${titleAwards.titleId}
               when 'true-friend' then 40

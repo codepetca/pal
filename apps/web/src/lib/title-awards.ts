@@ -17,11 +17,11 @@ export async function awardLearnerTitle(
     earnedAt: Date;
   },
 ): Promise<void> {
-  // The learner row lock serializes events. transaction_timestamp() gives every
-  // title granted by one event the same ordering key, so the snapshot's
-  // explicit story-title tie-break decides same-action awards.
+  // The learner row lock serializes events. statement_timestamp() records grant
+  // order after that lock; snapshot reads group awards sharing sourceFactId so
+  // their explicit same-action tie-break applies before individual insert order.
   await db
     .insert(titleAwards)
-    .values({ ...input, createdAt: sql`transaction_timestamp()` })
+    .values({ ...input, createdAt: sql`statement_timestamp()` })
     .onConflictDoNothing();
 }
