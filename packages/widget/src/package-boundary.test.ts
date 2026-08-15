@@ -217,7 +217,10 @@ test("Vercel previews build without migrations while production keeps its releas
 });
 
 test("sandbox uses one public widget boundary for fixture and persisted clients", () => {
-  assert.match(sandboxSource, /createFixturePalClient\(createEmptyFixtureSnapshot\(\)\)/);
+  assert.match(
+    sandboxSource,
+    /create(?:FixturePalClient\(createEmptyFixtureSnapshot\(\)\)|StoryFixturePalClient\(apiBaseUrl\))/,
+  );
   assert.match(sandboxSource, /createSandboxPalClient\(learnerId, apiBaseUrl\)/);
   assert.match(sandboxSource, /<PalProvider/);
   assert.match(sandboxSource, /<PalAchievements \/>/);
