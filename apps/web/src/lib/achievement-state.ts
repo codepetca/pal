@@ -96,6 +96,7 @@ export type WeeklyConfigurationError =
   | "closed_period_revision"
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
+  | "invalid_term_story_schedule"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -326,6 +327,17 @@ export async function weeklyConfigurationRejection(
   const eligibleDays = metadataInteger(event, "eligible_days");
   const periodStatus = metadataString(event, "period_status");
   const calendar = termCalendarMetadata(event);
+  if (calendar) {
+    const totalWeeks = calendar.term_week_count ?? 16;
+    if (
+      totalWeeks < 6 ||
+      totalWeeks > 24 ||
+      calendar.week_index < 1 ||
+      calendar.week_index > totalWeeks
+    ) {
+      return "invalid_term_story_schedule";
+    }
+  }
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,

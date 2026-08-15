@@ -17,10 +17,11 @@ export async function awardLearnerTitle(
     earnedAt: Date;
   },
 ): Promise<void> {
-  // The learner row lock serializes awards. statement_timestamp() records when
-  // PAL actually granted the title, independent of delayed source event time.
+  // The learner row lock serializes events. transaction_timestamp() gives every
+  // title granted by one event the same ordering key, so the snapshot's
+  // explicit story-title tie-break decides same-action awards.
   await db
     .insert(titleAwards)
-    .values({ ...input, createdAt: sql`statement_timestamp()` })
+    .values({ ...input, createdAt: sql`transaction_timestamp()` })
     .onConflictDoNothing();
 }

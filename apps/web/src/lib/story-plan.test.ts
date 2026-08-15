@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
+  economy,
   getDb,
   rewardNotices,
   storyPlanChapters,
@@ -588,6 +589,67 @@ test(
         new Set(awards.map((award) => award.titleId)),
         new Set(["on-time-pro", "gentle-keeper"]),
       );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "prefers a story title when one action also earns a behavior title",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `same-action-title-${crypto.randomUUID()}`;
+    const periodKey = `same-action-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(periodKey, 1, 6, 1),
+        key(),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      await getDb()
+        .update(economy)
+        .set({ streakCurrent: 2, streakLastDay: "2026-08-30" })
+        .where(eq(economy.learnerId, learnerId));
+
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log.completed",
+          { period_key: periodKey, activity_day: "2026-08-31" },
+          "2026-08-31T15:00:00.000Z",
+        ),
+        key(),
+      );
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-08-31T16:00:00.000Z") },
+      );
+      const awards = await getDb()
+        .select()
+        .from(titleAwards)
+        .where(eq(titleAwards.learnerId, learnerId));
+
+      assert.deepEqual(
+        new Set(awards.map((award) => award.titleId)),
+        new Set(["rhythm-builder", "gentle-keeper"]),
+      );
+      assert.equal(awards[0]?.createdAt.getTime(), awards[1]?.createdAt.getTime());
+      assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
