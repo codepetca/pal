@@ -191,8 +191,8 @@ export const storyPlans = pgTable(
 );
 
 // A normalized chapter assignment avoids nullable/multidimensional array
-// states and lets an earned chapter retain its exact opaque period identity
-// while later, unearned assignments are regenerated around it.
+// states and gives each stable ordinal at most one opaque period binding.
+// Midterm chapter regeneration is not supported in the first story release.
 export const storyPlanChapters = pgTable(
   "story_plan_chapters",
   {
