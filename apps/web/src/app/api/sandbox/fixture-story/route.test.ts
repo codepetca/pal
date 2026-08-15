@@ -32,3 +32,22 @@ test("fixture story route rejects malformed commands", async () => {
   );
   assert.equal(response.status, 422);
 });
+
+test("fixture story route enforces its byte limit without Content-Length", async () => {
+  const request = new NextRequest(
+    "https://pal.example/api/sandbox/fixture-story",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        termWeeks: 16,
+        commands: [],
+        padding: "x".repeat(70_000),
+      }),
+    },
+  );
+  assert.equal(request.headers.get("content-length"), null);
+  const response = await POST(request);
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "request_too_large" });
+});

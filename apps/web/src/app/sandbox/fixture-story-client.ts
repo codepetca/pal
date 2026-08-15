@@ -9,12 +9,11 @@ import {
   type PalFixtureController,
   type PalWidgetSnapshot,
 } from "@codepet/pal-widget";
-import type {
-  FixtureStoryCommand,
-  FixtureStoryRequest,
+import {
+  MAX_FIXTURE_COMMANDS,
+  type FixtureStoryCommand,
+  type FixtureStoryRequest,
 } from "./fixture-story-contract";
-
-const MAX_FIXTURE_COMMANDS = 256;
 
 export function createStoryFixturePalClient(
   apiBaseUrl: string,

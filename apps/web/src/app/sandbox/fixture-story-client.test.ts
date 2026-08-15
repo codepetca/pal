@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parsePalWidgetSnapshot } from "@codepet/pal-widget";
 import { createStoryFixturePalClient } from "./fixture-story-client";
-import { parseFixtureStoryRequest } from "./fixture-story-contract";
+import {
+  MAX_FIXTURE_COMMANDS,
+  parseFixtureStoryRequest,
+} from "./fixture-story-contract";
 import { projectStoryFixture } from "@/lib/story-fixture";
 
 test("interactive fixture uses the server projector and keeps acknowledged ownership", async () => {
@@ -63,11 +67,30 @@ test("fixture story request rejects private or unbounded commands", () => {
   assert.equal(
     parseFixtureStoryRequest({
       termWeeks: 16,
-      commands: Array.from({ length: 257 }, (_, index) => ({
+      commands: Array.from({ length: MAX_FIXTURE_COMMANDS + 1 }, (_, index) => ({
         type: "acknowledge",
         rewardId: `reward-${index}`,
       })),
     }),
     undefined,
   );
+});
+
+test("the maximum accepted action history still produces a valid public snapshot", async () => {
+  const request = parseFixtureStoryRequest({
+    termWeeks: 16,
+    commands: Array.from({ length: MAX_FIXTURE_COMMANDS }, (_, index) => ({
+      type: "action",
+      id: `ready-${index}`,
+      action: "item-opened-early",
+      context: { itemToken: `item-${index}` },
+    })),
+  });
+  assert.ok(request);
+  const snapshot = await projectStoryFixture(request);
+  assert.equal(
+    snapshot.roadmap.weeks[0]?.achievements.length,
+    MAX_FIXTURE_COMMANDS,
+  );
+  assert.doesNotThrow(() => parsePalWidgetSnapshot(snapshot));
 });

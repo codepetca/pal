@@ -3,7 +3,7 @@ import type {
   PalFixtureActionContext,
 } from "@codepet/pal-widget";
 
-const MAX_FIXTURE_COMMANDS = 256;
+export const MAX_FIXTURE_COMMANDS = 96;
 const MAX_ID_LENGTH = 160;
 
 const FIXTURE_ACTIONS = new Set<Exclude<PalFixtureAction, "reset">>([
