@@ -129,9 +129,8 @@ older widget/API pair.
   Each award stores both source occurrence and PAL grant order. The display
   keeps the most recently granted title across later snapshots without delayed
   delivery rewriting the learner's visible history; a story title wins when
-  one action awards multiple titles at the same time. Pre-ledger migrations
-  use null source provenance when the original qualifying fact cannot be
-  reconstructed; they never attribute a title to an unrelated later event.
+  one action awards multiple titles at the same time. Historical achievements
+  never create reward grants; every new grant has an exact source fact.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once earned, that week's slot reveals its collectible (at

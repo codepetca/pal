@@ -1194,7 +1194,7 @@ export async function applyAchievementFact(
             learnerId,
             achievementInstanceId: outcome.id,
             rewardKey: "fish-snack-v1",
-            title: "A treat for Pip!",
+            title: "A treat for your companion!",
             description: "Your on-time work earned a fish snack.",
             icon: "🐟",
           })

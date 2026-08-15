@@ -329,8 +329,21 @@ export async function processEventInDb(
       activityDayStatus === "pending"
         ? { state, mutations: [], trace: [], truncated: [] }
         : processEvent(event, state, defaultRulePack);
+    let rhythmBuilderTransitioned =
+      state.economy.streak_current < 3 &&
+      result.state.economy.streak_current >= 3;
+    const appendAndTrackEconomyTransition = (nextEvent: IncomingEvent) => {
+      const previousStreak = result.state.economy.streak_current;
+      result = appendEngineEvent(result, nextEvent);
+      if (
+        previousStreak < 3 &&
+        result.state.economy.streak_current >= 3
+      ) {
+        rhythmBuilderTransitioned = true;
+      }
+    };
     if (dailyRewardSettled) {
-      result = appendEngineEvent(result, {
+      appendAndTrackEconomyTransition({
         event_type: DAILY_LOG_REWARD_SETTLED,
         occurred_at: event.occurred_at,
         metadata: {},
@@ -343,8 +356,8 @@ export async function processEventInDb(
         event,
       );
       for (const pendingEvent of pendingEvents) {
-        result = appendEngineEvent(result, pendingEvent);
-        result = appendEngineEvent(result, {
+        appendAndTrackEconomyTransition(pendingEvent);
+        appendAndTrackEconomyTransition({
           event_type: DAILY_LOG_REWARD_SETTLED,
           occurred_at: pendingEvent.occurred_at,
           metadata: {},
@@ -435,10 +448,7 @@ export async function processEventInDb(
         },
       });
 
-    if (
-      state.economy.streak_current < 3 &&
-      result.state.economy.streak_current >= 3
-    ) {
+    if (rhythmBuilderTransitioned) {
       await grantBehaviorTitle(tx, {
         learnerId,
         titleId: BEHAVIOR_TITLES.rhythmBuilder.id,

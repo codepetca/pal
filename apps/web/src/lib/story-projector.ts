@@ -131,9 +131,6 @@ export function projectStoryProgression(
       storyGrants.has(chapter.assignmentId),
   );
   return {
-    storyId: plan.storyId,
-    storyVersion: plan.version,
-    storyTotalPeriods: plan.totalPeriods,
     companionReveal: companionChapter
       ? { status: "earned", assetUrl: companionChapter.collectible.assetUrl }
       : { status: "locked", label: "Mystery companion" },

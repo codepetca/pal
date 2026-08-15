@@ -16,7 +16,10 @@ import {
   STORY_REGISTRY,
   storyForTermStartDay,
 } from "@/lib/story-catalog";
-import { StoryFixtureLedger } from "@/lib/story-fixture";
+import {
+  projectStoryFixture,
+  StoryFixtureLedger,
+} from "@/lib/story-fixture";
 import {
   projectStoryProgression,
   type ProjectableRewardGrant,
@@ -159,12 +162,79 @@ test("projector redacts every unearned story field and ignores prior-term grants
   const projection = projectStoryProgression(plan, [priorTermGrant]);
   assert.equal(projection.collectibles[0]?.status, "next");
   const raw = JSON.stringify(projection);
+  assert.equal(raw.includes(plan.storyId), false);
   for (const chapter of plan.chapters) {
     assert.equal(raw.includes(chapter.revealHeadline), false);
     assert.equal(raw.includes(chapter.storyCopy), false);
     assert.equal(raw.includes(chapter.collectible.assetUrl), false);
     assert.equal(raw.includes(chapter.collectible.title), false);
   }
+});
+
+test("server fixture replays grants, titles, and acknowledgement without future content", async () => {
+  const commands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
+    (activityDay, index) => ({
+      type: "action" as const,
+      id: `daily-${index + 1}`,
+      action: "daily-log-completed" as const,
+      context: { activityDay },
+    }),
+  );
+  const locked = await projectStoryFixture({ termWeeks: 16, commands: [] });
+  const lockedRaw = JSON.stringify(locked);
+  assert.equal(lockedRaw.includes("pips-first-recipe"), false);
+  assert.equal(/\bPip\b/.test(lockedRaw), false);
+
+  const earned = await projectStoryFixture({ termWeeks: 16, commands });
+  assert.equal(earned.progression?.collectibles[0]?.status, "earned");
+  assert.equal(
+    earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
+    true,
+  );
+  const storyReward = earned.rewards.find((reward) => reward.kind === "story");
+  assert.ok(storyReward);
+
+  const afterBreak = await projectStoryFixture({
+    termWeeks: 16,
+    commands: [
+      ...commands,
+      {
+        type: "action",
+        id: "daily-break",
+        action: "daily-log-completed",
+        context: { activityDay: "2026-04-21" },
+      },
+    ],
+  });
+  assert.equal(afterBreak.companion.streak, 1);
+  assert.equal(
+    afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"),
+    true,
+  );
+
+  const laterBehavior = await projectStoryFixture({
+    termWeeks: 16,
+    commands: [
+      ...commands,
+      {
+        type: "action",
+        id: "on-time-later",
+        action: "on-time-finish",
+        context: { itemToken: "later-item" },
+      },
+    ],
+  });
+  assert.equal(laterBehavior.progression?.currentTitle, "On-Time Pro");
+
+  const acknowledged = await projectStoryFixture({
+    termWeeks: 16,
+    commands: [...commands, { type: "acknowledge", rewardId: storyReward.id }],
+  });
+  assert.equal(
+    acknowledged.rewards.some((reward) => reward.id === storyReward.id),
+    false,
+  );
+  assert.equal(acknowledged.progression?.collectibles[0]?.status, "earned");
 });
 
 test("durable action order selects titles and a story title wins only its same-action tie", () => {
@@ -239,6 +309,14 @@ function dailyLog(periodKey: string) {
   };
 }
 
+function dailyLogOn(periodKey: string, activityDay: string) {
+  return {
+    event_type: "daily_log.completed",
+    occurred_at: `${activityDay}T15:00:00.000Z`,
+    metadata: { period_key: periodKey, activity_day: activityDay },
+  };
+}
+
 test("two learners receive the same persisted sequence for the same term boundary", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const learners = [`deterministic-a-${crypto.randomUUID()}`, `deterministic-b-${crypto.randomUUID()}`];
@@ -270,6 +348,69 @@ test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !pr
     const [plan] = await getDb().select().from(storyPlans).where(eq(storyPlans.learnerId, learnerId));
     assert.equal(plan?.totalPeriods, 16);
     assert.equal((await getDb().select().from(storyPlanChapters).where(eq(storyPlanChapters.storyPlanId, plan!.id))).length, 16);
+    const lockedSnapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2026-09-01T12:00:00.000Z") },
+    );
+    const lockedRaw = JSON.stringify(lockedSnapshot);
+    assert.equal(lockedRaw.includes(plan!.storyId), false);
+    assert.equal(/\bPip\b/.test(lockedRaw), false);
+    for (const chapter of STORY_REGISTRY.createPlan(16, {
+      storyId: plan!.storyId,
+      version: plan!.storyVersion,
+    }).chapters) {
+      assert.equal(lockedRaw.includes(chapter.storyCopy), false);
+      assert.equal(lockedRaw.includes(chapter.collectible.assetUrl), false);
+    }
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a batched streak crossing grants Rhythm Builder before a later same-action break", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `batched-streak-${crypto.randomUUID()}`;
+  const periodKey = `period-${crypto.randomUUID()}`;
+  const configuration = configuredWeek(periodKey, `term-${crypto.randomUUID()}`);
+  configuration.metadata.eligible_days = 5;
+  try {
+    for (const day of ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-04"]) {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(periodKey, day),
+        crypto.randomUUID(),
+      );
+    }
+    await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuration,
+      crypto.randomUUID(),
+    );
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const [persistedEconomy] = await getDb()
+      .select()
+      .from(economy)
+      .where(eq(economy.learnerId, learnerId));
+    assert.equal(persistedEconomy?.streakCurrent, 1);
+    const grants = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(
+        and(
+          eq(learnerRewardGrants.learnerId, learnerId),
+          eq(learnerRewardGrants.behaviorTitleId, "rhythm-builder"),
+        ),
+      );
+    assert.equal(grants.length, 1);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

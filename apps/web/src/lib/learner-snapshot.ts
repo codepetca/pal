@@ -74,16 +74,19 @@ function companionMood(value: string, expiresAt: Date | null): PalCompanionMood 
     : "neutral";
 }
 
-function moodMessage(mood: PalCompanionMood): string {
+function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
+  const subject = companionRevealed ? "Pip" : "Your companion";
   switch (mood) {
     case "happy":
-      return "Pip is happy about your progress.";
+      return `${subject} is happy about your progress.`;
     case "excited":
-      return "Pip is excited!";
+      return `${subject} is excited!`;
     case "sleeping":
-      return "Pip is taking a rest.";
+      return `${subject} is taking a rest.`;
     default:
-      return "Complete positive learning actions to encourage Pip.";
+      return companionRevealed
+        ? "Complete positive learning actions to encourage Pip."
+        : "Complete positive learning actions to encourage your companion.";
   }
 }
 
@@ -345,6 +348,9 @@ export async function loadLearnerSnapshot(
       const persistedStoryPlan = typeof currentTermToken === "string"
         ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
         : undefined;
+      const progression = persistedStoryPlan
+        ? projectStoryProgression(persistedStoryPlan, grantRows)
+        : undefined;
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -560,8 +566,10 @@ export async function loadLearnerSnapshot(
         pet?.mood ?? "neutral",
         pet?.moodExpiresAt ?? null,
       );
+      const companionRevealed =
+        progression === undefined || progression.companionReveal.status === "earned";
       const companion = {
-        name: "Pip",
+        name: companionRevealed ? "Pip" : "Mystery companion",
         mood,
         moodLabel: mood[0].toUpperCase() + mood.slice(1),
         level: eco?.level ?? 1,
@@ -571,7 +579,7 @@ export async function loadLearnerSnapshot(
           0,
           PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
         ),
-        message: moodMessage(mood),
+        message: moodMessage(mood, companionRevealed),
         ...(persistedStoryPlan
           ? {}
           : { assetUrl: "/assets/pets/default.png" }),
@@ -592,7 +600,10 @@ export async function loadLearnerSnapshot(
         rewards: [
           ...rewards.map((reward) => ({
             id: reward.id,
-            title: reward.title,
+            title:
+              !companionRevealed && reward.rewardKey === "fish-snack-v1"
+                ? "A treat for your companion!"
+                : reward.title,
             description: reward.description,
             ...(reward.icon ? { icon: reward.icon } : {}),
           })),
@@ -600,11 +611,7 @@ export async function loadLearnerSnapshot(
             ? projectUnseenGrantRewards(persistedStoryPlan, grantRows)
             : []),
         ].slice(0, 100),
-        ...(persistedStoryPlan
-          ? {
-              progression: projectStoryProgression(persistedStoryPlan, grantRows),
-            }
-          : {}),
+        ...(progression ? { progression } : {}),
       };
     },
     {
