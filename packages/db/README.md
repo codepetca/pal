@@ -42,8 +42,9 @@ Two constraints carry more weight than the rest:
   `achievement_instances` — lifetime, per-classroom, per-item, and recurring
   weekly awards share the same exactly-once rule.
 - `UNIQUE (learner_id, term_key)` on `story_plans` — concurrent creation cannot
-  give one learner two story plans for the same term. Story revisions run under
-  the learner row lock and may rewrite only future unearned assignments.
+  give one learner two story plans for the same term. The first story release
+  assigns one supported length and rejects later calendar-length changes;
+  maintenance that rewrites a complete plan must run under the learner lock.
 - `UNIQUE (story_plan_id, period_number)`, `UNIQUE (story_plan_id, period_key)`,
   and `UNIQUE (story_plan_id, chapter_id)` on `story_plan_chapters` — one plan
   cannot schedule two rewards in one position, bind one period twice, or repeat

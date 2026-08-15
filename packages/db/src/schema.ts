@@ -161,10 +161,10 @@ export const achievementPeriods = pgTable(
   ],
 );
 
-// One stable story identity per learner and opaque academic term. Future,
-// unearned assignments may be revised when the producer corrects the term
-// length; earned assignments remain bound to their opaque period in the
-// transaction-layer story service. No student work or PII is stored.
+// One stable story identity per learner and opaque academic term. The first
+// story release assigns one supported term length and treats it as immutable;
+// the normalized rows and deferred checks keep any later maintenance atomic
+// and complete. No student work or PII is stored.
 export const storyPlans = pgTable(
   "story_plans",
   {
