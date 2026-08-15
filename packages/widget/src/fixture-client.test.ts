@@ -155,6 +155,21 @@ test("earning Weekly Rhythm queues one story reveal with its collectible and tit
   );
 });
 
+test("short-week completion queues the story reveal exactly once", () => {
+  const client = createFixturePalClient(createFixtureSnapshot(4));
+
+  client.dispatch("short-week-configured");
+  client.dispatch("short-week-configured");
+
+  const storyRewards = client.peek().rewards.filter(
+    (candidate) => candidate.kind === "story",
+  );
+  assert.equal(storyRewards.length, 1);
+  assert.equal(storyRewards[0]?.title, "Hello, Pip");
+  assert.equal(storyRewards[0]?.collectibleTitle, "Meet Pip");
+  assert.equal(client.peek().progression?.companionUnlocked, true);
+});
+
 test("fresh fixture activates Weekly Rhythm and preserves partial history", async () => {
   const client = createFixturePalClient(createEmptyFixtureSnapshot());
 

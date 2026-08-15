@@ -497,6 +497,11 @@ export function createFixturePalClient(
         return "Created a 5-day Weekly Rhythm target";
       }
       if (action === "short-week-configured") {
+        const weekNumber = currentWeek().number;
+        const activeCollectibleWasEarned =
+          snapshot.progression?.collectibles.find(
+            (collectible) => collectible.roadmapWeek === weekNumber,
+          )?.status === "earned";
         const rhythm = ensureCurrentRhythm(2);
         const wasEarned = rhythm.status === "earned";
         if (rhythm.progress) {
@@ -511,6 +516,7 @@ export function createFixturePalClient(
           rhythm,
           itemOccurredAt(),
         );
+        queueStoryReward(weekNumber, activeCollectibleWasEarned);
         return "Revised to a 2-day Weekly Rhythm goal within 3 eligible days";
       }
       if (action === "daily-log-completed") {
