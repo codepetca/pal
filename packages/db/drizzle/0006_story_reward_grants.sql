@@ -119,6 +119,14 @@ $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE FUNCTION "protect_story_plan_identity"() RETURNS trigger AS $$
 BEGIN
+	IF TG_OP = 'DELETE' THEN
+		IF EXISTS (SELECT 1 FROM "learners" WHERE "id" = OLD."learner_id") THEN
+			RAISE EXCEPTION 'assigned story plans are immutable'
+				USING ERRCODE = '23514', CONSTRAINT = 'story_plans_immutable';
+		END IF;
+		RETURN OLD;
+	END IF;
+
 	IF ROW(
 		NEW."learner_id",
 		NEW."term_key",
@@ -198,12 +206,16 @@ BEGIN
 		RAISE EXCEPTION 'learner reward grant ownership is immutable'
 			USING ERRCODE = '23514', CONSTRAINT = 'learner_reward_grants_append_only';
 	END IF;
+	IF OLD."seen_at" IS NOT NULL AND NEW."seen_at" IS DISTINCT FROM OLD."seen_at" THEN
+		RAISE EXCEPTION 'learner reward grant acknowledgement is monotonic'
+			USING ERRCODE = '23514', CONSTRAINT = 'learner_reward_grants_append_only';
+	END IF;
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE TRIGGER "story_plans_immutable_before_update"
-BEFORE UPDATE ON "story_plans"
+BEFORE UPDATE OR DELETE ON "story_plans"
 FOR EACH ROW EXECUTE FUNCTION "protect_story_plan_identity"();
 --> statement-breakpoint
 CREATE TRIGGER "story_plan_chapters_immutable_before_update"
