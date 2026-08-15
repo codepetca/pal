@@ -245,6 +245,47 @@ test(
           .where(eq(storyPlans.id, plan.id));
       });
 
+      const destinationPlan = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(storyPlans)
+          .values({ ...planInput, termKey: `destination-term-${suffix}` })
+          .returning({ id: storyPlans.id });
+        await tx.insert(storyPlanChapters).values(
+          Array.from({ length: 6 }, (_, index) => ({
+            storyPlanId: created.id,
+            learnerId: learnerA.id,
+            periodNumber: index + 1,
+            chapterId: `destination-chapter-${index + 1}`,
+          })),
+        );
+        return created;
+      });
+      await assert.rejects(
+        db.transaction(async (tx) => {
+          await tx
+            .delete(storyPlanChapters)
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, destinationPlan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+          await tx
+            .update(storyPlanChapters)
+            .set({
+              storyPlanId: destinationPlan.id,
+              chapterId: "destination-replacement-chapter",
+            })
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, plan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+
       await assert.rejects(
         db.insert(events).values({
           integrationId: integrationB.id,

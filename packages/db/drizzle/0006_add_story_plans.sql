@@ -70,7 +70,16 @@ END;
 $$ LANGUAGE plpgsql;--> statement-breakpoint
 CREATE FUNCTION "check_story_plan_from_chapter"() RETURNS trigger AS $$
 BEGIN
-	PERFORM "assert_story_plan_complete"(coalesce(NEW."story_plan_id", OLD."story_plan_id"));
+	IF TG_OP = 'INSERT' THEN
+		PERFORM "assert_story_plan_complete"(NEW."story_plan_id");
+	ELSIF TG_OP = 'DELETE' THEN
+		PERFORM "assert_story_plan_complete"(OLD."story_plan_id");
+	ELSE
+		PERFORM "assert_story_plan_complete"(OLD."story_plan_id");
+		IF NEW."story_plan_id" <> OLD."story_plan_id" THEN
+			PERFORM "assert_story_plan_complete"(NEW."story_plan_id");
+		END IF;
+	END IF;
 	RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;--> statement-breakpoint
