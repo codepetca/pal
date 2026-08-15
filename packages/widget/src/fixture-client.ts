@@ -669,6 +669,7 @@ export function createFixturePalClient(
         return "learning_item.completed (on_time) applied to fixture state";
       }
       if (action === "late-finish") {
+        const previouslyEarnedTitles = earnedTitleIds();
         const week = currentWeek();
         const itemToken = itemIdentity(context);
         if (completedItemTokens.has(itemToken)) {
@@ -691,6 +692,7 @@ export function createFixturePalClient(
           occurred_at: itemOccurredAt(),
           metadata: { timing: "late" },
         });
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {

@@ -102,6 +102,28 @@ test("a later behavior title replaces an earlier story title", () => {
   assert.equal(client.peek().progression?.currentTitle, "Level Leader");
 });
 
+test("a late completion crossing Level 5 displays Level Leader", () => {
+  const snapshot = createFixtureSnapshot(4);
+  snapshot.companion.level = 4;
+  snapshot.companion.xp = 450;
+  snapshot.companion.xpToNextLevel = 50;
+  snapshot.progression = createPalProgressionState({
+    currentWeek: snapshot.roadmap.currentWeek,
+    totalWeeks: snapshot.roadmap.weeks.length,
+    level: snapshot.companion.level,
+    streak: snapshot.companion.streak,
+    achievements: snapshot.roadmap.weeks.flatMap((week) => week.achievements),
+    earnedWeeks: [1, 2, 3, 4],
+  });
+  const client = createFixturePalClient(snapshot);
+
+  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
+  client.dispatch("late-finish", { itemToken: "late-level-title" });
+
+  assert.equal(client.peek().companion.level, 5);
+  assert.equal(client.peek().progression?.currentTitle, "Level Leader");
+});
+
 test("fixture refreshes progression when a week or streak milestone changes", () => {
   const emptyClient = createFixturePalClient(createEmptyFixtureSnapshot());
 
