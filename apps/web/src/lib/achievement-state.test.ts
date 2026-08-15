@@ -2604,7 +2604,7 @@ test(
 );
 
 test(
-  "rejects a second period that claims an occupied term week",
+  "rejects occupied term weeks and changes to an assigned term length",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
