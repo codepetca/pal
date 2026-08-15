@@ -107,7 +107,9 @@ try {
   `, [integration.rows[0].id, learnerId, laterConfigEvent.rows[0].id]);
   await testDatabase.query(`
     INSERT INTO achievement_periods (learner_id, period_key, anchor_at)
-    VALUES ($1, 'upgrade-week-1', '2026-08-31T12:00:00Z')
+    VALUES
+      ($1, 'upgrade-week-1', '2026-08-31T12:00:00Z'),
+      ($1, 'upgrade-week-3', '2026-09-14T12:00:00Z')
   `, [learnerId]);
   await testDatabase.query(`
     INSERT INTO economy (
@@ -151,11 +153,15 @@ try {
       plan.rows[0].id,
       learnerId,
       index + 1,
-      index === 0 ? "upgrade-week-1" : null,
+      index === 0
+        ? "upgrade-week-1"
+        : index === 2
+          ? "upgrade-week-3"
+          : null,
       chapterId,
     ]);
   }
-  await testDatabase.query(`
+  const achievements = await testDatabase.query(`
     INSERT INTO achievement_instances (
       learner_id,
       achievement_key,
@@ -166,8 +172,25 @@ try {
       source_fact_id
     ) VALUES
       ($1, 'weekly-rhythm', 'upgrade-week-1', 'upgrade-week-1', 'earned', '2026-08-31T15:00:00Z', $2),
+      ($1, 'weekly-rhythm', 'upgrade-week-3', 'upgrade-week-3', 'earned', '2026-09-14T15:00:00Z', $2),
       ($1, 'on-time-finish', 'upgrade-item', 'upgrade-week-1', 'earned', '2026-08-30T15:00:00Z', $2)
+    RETURNING id, achievement_key, period_key
   `, [learnerId, factId]);
+  const weekOneAchievement = achievements.rows.find(
+    (achievement) =>
+      achievement.achievement_key === "weekly-rhythm" &&
+      achievement.period_key === "upgrade-week-1",
+  );
+  assert.ok(weekOneAchievement);
+  await testDatabase.query(`
+    INSERT INTO reward_notices (
+      learner_id,
+      achievement_instance_id,
+      reward_key,
+      title,
+      description
+    ) VALUES ($1, $2, 'story:pips-first-recipe@1:egg-and-light', 'A story reward', 'Awarded before the title ledger')
+  `, [learnerId, weekOneAchievement.id]);
   await testDatabase.query("COMMIT");
 
   await testDatabase.query(
@@ -194,6 +217,10 @@ try {
   assert.equal(
     awards.rows.find((award) => award.title_id === "gentle-keeper")?.kind,
     "story",
+  );
+  assert.equal(
+    awards.rows.some((award) => award.title_id === "brave-beginner"),
+    false,
   );
   for (const titleId of ["level-leader", "rhythm-builder"]) {
     const migrated = awards.rows.find((award) => award.title_id === titleId);

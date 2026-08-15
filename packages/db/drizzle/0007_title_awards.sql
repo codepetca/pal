@@ -94,12 +94,26 @@ FROM (
 		"achievement_instances"."source_fact_id",
 		"achievement_instances"."earned_at"
 	FROM "story_plan_chapters"
+	JOIN "story_plans"
+		ON "story_plans"."id" = "story_plan_chapters"."story_plan_id"
+		AND "story_plans"."learner_id" = "story_plan_chapters"."learner_id"
 	JOIN "achievement_instances"
 		ON "achievement_instances"."learner_id" = "story_plan_chapters"."learner_id"
 		AND "achievement_instances"."period_key" = "story_plan_chapters"."period_key"
 		AND "achievement_instances"."achievement_key" = 'weekly-rhythm'
 		AND "achievement_instances"."status" = 'earned'
-	WHERE "story_plan_chapters"."chapter_id" IN (
+	JOIN "reward_notices"
+		ON "reward_notices"."learner_id" = "achievement_instances"."learner_id"
+		AND "reward_notices"."achievement_instance_id" = "achievement_instances"."id"
+		AND "reward_notices"."reward_key" IN (
+			'story:' || "story_plan_chapters"."chapter_id",
+			'story:' || "story_plans"."story_id" || '@' ||
+				"story_plans"."story_version"::text || ':' ||
+				"story_plan_chapters"."chapter_id"
+		)
+	WHERE "story_plans"."story_id" = 'pips-first-recipe'
+		AND "story_plans"."story_version" = 1
+		AND "story_plan_chapters"."chapter_id" IN (
 		'egg-and-light',
 		'long-night',
 		'recipe-chosen',

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { and, asc, eq } from "drizzle-orm";
 import {
   achievementInstances,
+  achievementPeriods,
   getDb,
   rewardNotices,
   storyPlanChapters,
@@ -149,6 +150,95 @@ test(
           .where(eq(rewardNotices.learnerId, learnerId))).length,
         0,
       );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "does not reuse a story reward from another term",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `cross-term-story-${crypto.randomUUID()}`;
+    const currentPeriodKey = `current-story-week-${crypto.randomUUID()}`;
+    const oldPeriodKey = `old-story-week-${crypto.randomUUID()}`;
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(currentPeriodKey, 1, 12),
+        key(),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const generated = createPalStoryPlan(12);
+
+      await getDb().transaction(async (tx) => {
+        await tx.insert(achievementPeriods).values({
+          learnerId,
+          periodKey: oldPeriodKey,
+          anchorAt: new Date("2026-01-05T12:00:00.000Z"),
+        });
+        const [oldAchievement] = await tx
+          .insert(achievementInstances)
+          .values({
+            learnerId,
+            achievementKey: "weekly-rhythm",
+            scopeKey: oldPeriodKey,
+            periodKey: oldPeriodKey,
+            status: "earned",
+            earnedAt: new Date("2026-01-09T12:00:00.000Z"),
+          })
+          .returning({ id: achievementInstances.id });
+        const [oldPlan] = await tx
+          .insert(storyPlans)
+          .values({
+            learnerId,
+            termKey: `old-story-term-${crypto.randomUUID()}`,
+            storyId: generated.storyId,
+            storyVersion: generated.version,
+            totalPeriods: generated.totalPeriods,
+          })
+          .returning({ id: storyPlans.id });
+        await tx.insert(storyPlanChapters).values(
+          generated.chapters.map((chapter, index) => ({
+            storyPlanId: oldPlan.id,
+            learnerId,
+            periodNumber: chapter.roadmapWeek,
+            ...(index === 0 ? { periodKey: oldPeriodKey } : {}),
+            chapterId: chapter.id,
+          })),
+        );
+        await tx.insert(rewardNotices).values({
+          learnerId,
+          achievementInstanceId: oldAchievement.id,
+          rewardKey:
+            `story:${generated.storyId}@${generated.version}:` +
+            generated.chapters[0]!.id,
+          title: "An old term reward",
+          description: "This reward belongs only to the old term.",
+        });
+      });
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-01T12:00:00.000Z") },
+      );
+      const firstCollectible = snapshot.progression?.collectibles[0];
+      assert.equal(firstCollectible?.status, "next");
+      assert.equal(firstCollectible?.title, undefined);
+      assert.equal(firstCollectible?.assetUrl, undefined);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }

@@ -20,6 +20,8 @@ import {
   learners,
   petState,
   rewardNotices,
+  storyPlanChapters,
+  storyPlans,
   titleAwards,
   worldState,
   weeklyRhythmConfigs,
@@ -358,13 +360,48 @@ export async function loadLearnerSnapshot(
           }
         }
       }
-      const earnedStoryRewardRows = storyRewardChapterByKey.size > 0
+      const earnedStoryRewardRows =
+        storyRewardChapterByKey.size > 0 && typeof currentTermToken === "string"
         ? await tx
-            .select({ rewardKey: rewardNotices.rewardKey })
+            .select({
+              rewardKey: rewardNotices.rewardKey,
+              chapterId: storyPlanChapters.chapterId,
+            })
             .from(rewardNotices)
+            .innerJoin(
+              achievementInstances,
+              and(
+                eq(
+                  achievementInstances.id,
+                  rewardNotices.achievementInstanceId,
+                ),
+                eq(achievementInstances.learnerId, rewardNotices.learnerId),
+              ),
+            )
+            .innerJoin(
+              storyPlanChapters,
+              and(
+                eq(
+                  storyPlanChapters.learnerId,
+                  achievementInstances.learnerId,
+                ),
+                eq(
+                  storyPlanChapters.periodKey,
+                  achievementInstances.periodKey,
+                ),
+              ),
+            )
+            .innerJoin(
+              storyPlans,
+              and(
+                eq(storyPlans.id, storyPlanChapters.storyPlanId),
+                eq(storyPlans.learnerId, storyPlanChapters.learnerId),
+              ),
+            )
             .where(
               and(
                 eq(rewardNotices.learnerId, learnerId),
+                eq(storyPlans.termKey, currentTermToken),
                 inArray(
                   rewardNotices.rewardKey,
                   [...storyRewardChapterByKey.keys()],
@@ -376,7 +413,7 @@ export async function loadLearnerSnapshot(
         ...new Set(
           earnedStoryRewardRows.flatMap((reward) => {
             const chapterId = storyRewardChapterByKey.get(reward.rewardKey);
-            return chapterId ? [chapterId] : [];
+            return chapterId === reward.chapterId ? [chapterId] : [];
           }),
         ),
       ];
