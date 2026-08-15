@@ -4,6 +4,7 @@ import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
   PalAchievements,
+  PalCollection,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
@@ -898,7 +899,10 @@ function SandboxExperience({
 
           <main className={styles.content}>
             {view === "achievements" ? (
-              <PalAchievements />
+              <>
+                <PalCollection />
+                <PalAchievements />
+              </>
             ) : view === "today" ? (
               <section className={styles.todayContent}>
                 <div className={styles.noClassCard}>No class today</div>

@@ -1,6 +1,6 @@
 {
   "name": "@codepet/pal-widget",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Portable React surfaces for Pal achievements, companion state, and rewards.",
   "license": "MIT",
   "type": "module",
@@ -61,6 +61,7 @@
     "react-dom": "^18.3.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@pal/engine": "workspace:*",
     "@types/node": "^22.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

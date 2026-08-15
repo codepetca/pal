@@ -35,6 +35,14 @@ test("snapshot parser keeps XP fields backward-compatible in schema version 1", 
   assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
 });
 
+test("snapshot parser keeps collection backward-compatible in schema version 1", () => {
+  const fixture = createFixtureSnapshot();
+  delete fixture.collection;
+  const legacySnapshot = JSON.parse(JSON.stringify(fixture)) as unknown;
+
+  assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
+});
+
 test("snapshot parser rejects unsupported schema versions", () => {
   const fixture: unknown = {
     ...createFixtureSnapshot(),
@@ -73,6 +81,33 @@ test("snapshot parser bounds server-controlled collections", () => {
   assert.throws(
     () => parsePalWidgetSnapshot(fixture),
     /rewards.*0 to 100 entries/i,
+  );
+});
+
+test("snapshot parser bounds and deduplicates durable collection items", () => {
+  const tooMany = createFixtureSnapshot();
+  tooMany.collection = {
+    items: Array.from({ length: 51 }, (_, index) => ({
+      id: `item-${index}`,
+      label: "Item",
+      description: "Description",
+    })),
+  };
+  assert.throws(
+    () => parsePalWidgetSnapshot(tooMany),
+    /collection\.items.*0 to 50 entries/i,
+  );
+
+  const duplicate = createFixtureSnapshot();
+  duplicate.collection = {
+    items: [
+      { id: "same", label: "One", description: "One" },
+      { id: "same", label: "Two", description: "Two" },
+    ],
+  };
+  assert.throws(
+    () => parsePalWidgetSnapshot(duplicate),
+    /collection\.items\[1\]\.id.*unique/i,
   );
 });
 

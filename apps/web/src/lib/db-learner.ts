@@ -10,14 +10,25 @@ import {
 import type { Db } from "@pal/db";
 import {
   applyAchievementFact,
+  dailyLogCalendarStatus,
+  earnedWeeklyRhythmCount,
+  recordFirstWeeklyConfigurationMarker,
+  recordImmediateDailyLogSettlement,
+  recordPendingDailyLogReward,
   recordSemanticFact,
   semanticFactAlreadyRecorded,
+  settlePendingDailyLogEvents,
+  weeklyConfigurationDisposition,
   weeklyConfigurationRejection,
   type WeeklyConfigurationError,
 } from "@/lib/achievement-state";
 import {
+  COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
   defaultRulePack,
   processEvent,
+  PROGRESSION_POLICY,
+  WEEKLY_RHYTHM_EARNED,
   type IncomingEvent,
   type LearnerState,
   type ProcessResult,
@@ -89,6 +100,19 @@ function toLearnerState(
       stage: world?.stage ?? 0,
       unlocked_object_ids: world?.unlockedObjectIds ?? [],
     },
+  };
+}
+
+function appendEngineEvent(
+  result: ProcessResult,
+  event: IncomingEvent,
+): ProcessResult {
+  const next = processEvent(event, result.state, defaultRulePack);
+  return {
+    state: next.state,
+    mutations: [...result.mutations, ...next.mutations],
+    trace: [...result.trace, ...next.trace],
+    truncated: [...result.truncated, ...next.truncated],
   };
 }
 
@@ -168,6 +192,33 @@ export async function processEventInDb(
       return { status: "semantic_duplicate" as const };
     }
 
+    const activityDayStatus = await dailyLogCalendarStatus(
+      tx,
+      learnerId,
+      event,
+    );
+    if (activityDayStatus === "invalid") {
+      return {
+        status: "rejected" as const,
+        error: "inconsistent_activity_day" as const,
+      };
+    }
+    if (activityDayStatus === "period-limit-exceeded") {
+      return {
+        status: "rejected" as const,
+        error: "daily_log_period_limit_exceeded" as const,
+      };
+    }
+    const configurationDisposition = await weeklyConfigurationDisposition(
+      tx,
+      learnerId,
+      event,
+    );
+    const isFirstWeeklyConfiguration = configurationDisposition === "first";
+    const configurationAdvances =
+      configurationDisposition === "first" ||
+      configurationDisposition === "higher";
+
     // 4. Reject contradictory/invalid closed-period configuration before the
     // event ledger. A closed period is immutable except for a narrowly scoped,
     // still-closed correction while delayed facts require reconciliation.
@@ -216,6 +267,32 @@ export async function processEventInDb(
     if (!fact) {
       return { status: "semantic_duplicate" as const };
     }
+    if (isFirstWeeklyConfiguration) {
+      await recordFirstWeeklyConfigurationMarker(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        event,
+      });
+    }
+    let dailyRewardSettled = false;
+    if (activityDayStatus === "valid") {
+      dailyRewardSettled = await recordImmediateDailyLogSettlement(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        factId: fact.id,
+        event,
+      });
+    } else if (activityDayStatus === "pending") {
+      await recordPendingDailyLogReward(tx, {
+        integrationId,
+        learnerId,
+        sourceEventId: inserted.id,
+        factId: fact.id,
+        event,
+      });
+    }
 
     // 7. Read current state
     const [eco] = await tx
@@ -238,8 +315,90 @@ export async function processEventInDb(
 
     const state = toLearnerState(eco, pet, world);
 
-    // 8. Run the engine
-    const result = processEvent(event, state, defaultRulePack);
+    // 8. Run the engine. A daily log received before configuration is durably
+    // recorded but reward-pending. A durable settlement marker is the sole
+    // authority to emit DAILY_LOG_REWARD_SETTLED, keeping flat XP exact-once and
+    // independent from the forward-only streak chronology.
+    let result: ProcessResult =
+      activityDayStatus === "pending"
+        ? { state, mutations: [], trace: [], truncated: [] }
+        : processEvent(event, state, defaultRulePack);
+    if (dailyRewardSettled) {
+      result = appendEngineEvent(result, {
+        event_type: DAILY_LOG_REWARD_SETTLED,
+        occurred_at: event.occurred_at,
+        metadata: {},
+      });
+    }
+    if (configurationAdvances) {
+      const pendingEvents = await settlePendingDailyLogEvents(
+        tx,
+        learnerId,
+        event,
+      );
+      for (const pendingEvent of pendingEvents) {
+        result = appendEngineEvent(result, pendingEvent);
+        result = appendEngineEvent(result, {
+          event_type: DAILY_LOG_REWARD_SETTLED,
+          occurred_at: pendingEvent.occurred_at,
+          metadata: {},
+        });
+      }
+    }
+
+    // Achievement transitions and economy progression share this transaction.
+    // Only the first transition to an earned Weekly Rhythm emits the internal
+    // progression event, so retries and configuration revisions cannot re-pay it.
+    const achievementResult = await applyAchievementFact(
+      tx,
+      learnerId,
+      fact,
+      event,
+    );
+    if (achievementResult.weeklyRhythmEarnedCount !== undefined) {
+      const progression = processEvent(
+        {
+          event_type: WEEKLY_RHYTHM_EARNED,
+          occurred_at: event.occurred_at,
+          metadata: {
+            weekly_rhythm_count: achievementResult.weeklyRhythmEarnedCount,
+          },
+        },
+        result.state,
+        defaultRulePack,
+      );
+      result = {
+        state: progression.state,
+        mutations: [...result.mutations, ...progression.mutations],
+        trace: [...result.trace, ...progression.trace],
+        truncated: [...result.truncated, ...progression.truncated],
+      };
+    }
+    const earnedCount = await earnedWeeklyRhythmCount(tx, learnerId);
+    const missingMilestones = PROGRESSION_POLICY.collectionMilestones.filter(
+      (milestone) =>
+        earnedCount >= milestone.weeklyRhythms &&
+        !result.state.world.unlocked_object_ids.includes(milestone.assetRefId),
+    );
+    for (const milestone of missingMilestones) {
+      const collectionProgress = processEvent(
+        {
+          event_type: COLLECTION_SYNC,
+          occurred_at: event.occurred_at,
+          metadata: {
+            weekly_rhythm_count: milestone.weeklyRhythms,
+          },
+        },
+        result.state,
+        defaultRulePack,
+      );
+      result = {
+        state: collectionProgress.state,
+        mutations: [...result.mutations, ...collectionProgress.mutations],
+        trace: [...result.trace, ...collectionProgress.trace],
+        truncated: [...result.truncated, ...collectionProgress.truncated],
+      };
+    }
 
     // 9. Upsert economy
     await tx
@@ -307,9 +466,6 @@ export async function processEventInDb(
           updatedAt: new Date(),
         },
       });
-
-    // 11. Persist fact-derived progress, awards, and one-time reward notices.
-    await applyAchievementFact(tx, learnerId, fact, event);
 
     return { status: "processed" as const, result };
   });

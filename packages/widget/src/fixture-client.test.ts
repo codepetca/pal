@@ -32,6 +32,7 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   );
 
   assert.equal(rhythm?.progress?.current, 3);
+  assert.equal(afterCompletion.companion.streak, 4);
 
   const beforeDuplicate = client.peek();
   const result = client.dispatch("duplicate-replayed");
@@ -111,7 +112,56 @@ test("fixture deduplicates one activity day but keeps genuine items distinct", (
     2,
   );
   assert.equal(snapshot.rewards.length, 2);
-  assert.equal(snapshot.companion.xp, 410);
+  assert.equal(snapshot.companion.xp, 210);
   assert.equal(snapshot.companion.mood, "happy");
   assert.equal(snapshot.companion.message, "Pip is happy about your progress.");
+});
+
+test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  for (const activityDay of [
+    "2026-04-13",
+    "2026-04-14",
+    "2026-04-15",
+    "2026-04-16",
+  ]) {
+    client.dispatch("daily-log-completed", { activityDay });
+  }
+
+  const earned = client.peek();
+  assert.equal(earned.companion.xp, 115); // four logs + Weekly Rhythm
+  assert.equal(earned.companion.mood, "excited");
+  assert.deepEqual(
+    earned.collection?.items.map((item) => item.id),
+    ["world-study-bird-v1"],
+  );
+
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-17" });
+  const overLimit = client.dispatch("daily-log-completed", {
+    activityDay: "2026-04-18",
+  });
+  assert.match(overLimit, /period limit exceeded/i);
+  assert.equal(client.peek().companion.xp, 125);
+  client.dispatch("advance-week");
+  assert.equal(client.peek().companion.xp, 125);
+  assert.deepEqual(
+    client.peek().collection?.items.map((item) => item.id),
+    ["world-study-bird-v1"],
+  );
+});
+
+test("fixture pays distinct out-of-order days without moving the rhythm backward", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-14" });
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-13" });
+
+  const snapshot = client.peek();
+  assert.equal(snapshot.companion.xp, 20);
+  assert.equal(snapshot.companion.streak, 1);
+  assert.equal(
+    snapshot.roadmap.weeks[0]?.achievements.find(
+      (achievement) => achievement.title === "Weekly Rhythm",
+    )?.progress?.current,
+    2,
+  );
 });

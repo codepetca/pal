@@ -19,6 +19,7 @@ import {
   learners,
   petState,
   rewardNotices,
+  worldState,
   weeklyRhythmConfigs,
   type Db,
 } from "@pal/db";
@@ -28,10 +29,11 @@ import type {
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
+import { collectionItemsForUnlocks } from "@codepet/pal-widget";
+import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
 
 const LEGACY_SEMESTER_WEEKS = 16;
-const LEVEL_UP_COST_XP = 500;
 
 export class LearnerScopeError extends Error {
   constructor() {
@@ -256,6 +258,11 @@ export async function loadLearnerSnapshot(
         .select()
         .from(petState)
         .where(eq(petState.learnerId, learnerId))
+        .limit(1);
+      const worldRows = await tx
+        .select()
+        .from(worldState)
+        .where(eq(worldState.learnerId, learnerId))
         .limit(1);
       const configurations = await tx
         .select()
@@ -532,9 +539,17 @@ export async function loadLearnerSnapshot(
           level: eco?.level ?? 1,
           streak: eco?.streakCurrent ?? 0,
           xp: eco?.xp ?? 0,
-          xpToNextLevel: Math.max(0, LEVEL_UP_COST_XP - (eco?.xp ?? 0)),
+          xpToNextLevel: Math.max(
+            0,
+            PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
+          ),
           message: moodMessage(mood),
           assetUrl: "/assets/pets/default.png",
+        },
+        collection: {
+          items: collectionItemsForUnlocks(
+            worldRows[0]?.unlockedObjectIds ?? [],
+          ),
         },
         rewards: rewards.map((reward) => ({
           id: reward.id,

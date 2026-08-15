@@ -215,6 +215,10 @@ deduplication, persistence, achievement evaluation, award/reward persistence, th
 learner snapshot API, and the reward acknowledgement API. CI asserts parity for the
 Weekly Rhythm activation-and-advance scenario against disposable Postgres.
 
+Render `PalCollection` alongside `PalAchievements` when the host exposes learner
+progression. The optional v1 `collection.items` snapshot field is bounded and
+backward-compatible; current Pal snapshots derive it from durable world unlock IDs.
+
 Persisted sandbox routes are local-only and fail closed with 404 in Vercel previews and
 production. Preview deployments therefore need no database, sandbox integration secret,
 or read-token signing key. The widget is built from each branch's workspace source; the

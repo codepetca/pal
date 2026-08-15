@@ -4,6 +4,8 @@ import type {
   PalBadge,
   PalCompanionMood,
   PalCompanionState,
+  PalCollectionItem,
+  PalCollectionState,
   PalProgress,
   PalRewardNotice,
   PalRoadmapWeek,
@@ -16,6 +18,7 @@ const MAX_URL_LENGTH = 2_048;
 const MAX_WEEKS = 64;
 const MAX_ACHIEVEMENTS_PER_WEEK = 100;
 const MAX_REWARDS = 100;
+const MAX_COLLECTION_ITEMS = 50;
 
 export interface PalSnapshotValidationOptions {
   /**
@@ -339,6 +342,46 @@ function parseReward(
   };
 }
 
+function parseCollectionItem(
+  value: unknown,
+  path: string,
+  ids: Set<string>,
+  assetPolicy: AssetPolicy,
+): PalCollectionItem {
+  const source = record(value, path);
+  const icon = optionalText(source.icon, `${path}.icon`);
+  const assetUrl = optionalAssetUrl(
+    source.assetUrl,
+    `${path}.assetUrl`,
+    assetPolicy,
+  );
+  return {
+    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    label: text(source.label, `${path}.label`),
+    description: text(source.description, `${path}.description`),
+    ...(icon === undefined ? {} : { icon }),
+    ...(assetUrl === undefined ? {} : { assetUrl }),
+  };
+}
+
+function parseCollection(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalCollectionState {
+  const source = record(value, path);
+  const ids = new Set<string>();
+  return {
+    items: boundedArray(
+      source.items,
+      `${path}.items`,
+      MAX_COLLECTION_ITEMS,
+    ).map((item, index) =>
+      parseCollectionItem(item, `${path}.items[${index}]`, ids, assetPolicy),
+    ),
+  };
+}
+
 /**
  * Validates the untrusted JSON returned by Pal before it reaches React state.
  */
@@ -379,6 +422,10 @@ export function parsePalWidgetSnapshot(
   }
 
   const rewardIds = new Set<string>();
+  const collection =
+    source.collection === undefined
+      ? undefined
+      : parseCollection(source.collection, "snapshot.collection", assetPolicy);
   return {
     schemaVersion: 1,
     roadmap: {
@@ -394,6 +441,7 @@ export function parsePalWidgetSnapshot(
       "snapshot.companion",
       assetPolicy,
     ),
+    ...(collection === undefined ? {} : { collection }),
     rewards: boundedArray(
       source.rewards,
       "snapshot.rewards",

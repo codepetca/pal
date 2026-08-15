@@ -3,11 +3,12 @@ import { v1 } from "@pal/contract";
 import type { IncomingEvent } from "@pal/engine";
 import { identifyIntegration, resolveIntegration } from "@/lib/integration-auth";
 import { processEventInDb } from "@/lib/db-learner";
+import { isPlausibleActivityDay } from "@/lib/activity-day";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
 // Small on purpose: it only absorbs clock drift between an integration and us
 // (minutes at worst), not timezones — occurred_at is an absolute instant. The
-// rejection itself is UTC-day-granular to match the streak engine; see below.
+// rejection is instant-granular so same-day future hours are not admitted.
 const CLOCK_SKEW_MS = 60 * 60 * 1000;
 
 // POST /api/v1/events
@@ -31,22 +32,32 @@ export async function POST(req: NextRequest) {
   const { event } = validation;
 
   const occurredAtMs = Date.parse(event.occurred_at);
+  const latestAllowedMs = Date.now() + CLOCK_SKEW_MS;
 
-  // Reject events dated on a future UTC day. The engine's streak guard is forward-only
-  // and deliberately never self-heals, so a future-dated check-in that got in would pin
-  // `streak_last_day` ahead of every real day and freeze the learner's streak — and
-  // their check-in XP — until that date. The engine is pure and has no clock; keeping
-  // poisoned days out is ingest's job.
-  //
-  // The comparison is UTC-day-granular to match the engine (an instant-level "not more
-  // than N hours ahead" check would still admit a whole future UTC day). The skew term
-  // means: the event's day may not be ahead of the day the server will be in within an
-  // hour — so a slightly-fast integration clock just before UTC midnight still passes,
-  // while anything a full day out is rejected.
-  const eventUtcDay = new Date(occurredAtMs).toISOString().slice(0, 10);
-  const latestAllowedUtcDay = new Date(Date.now() + CLOCK_SKEW_MS).toISOString().slice(0, 10);
-  if (eventUtcDay > latestAllowedUtcDay) {
+  // The engine is pure and forward-only, so ingest must keep future chronology
+  // out. One hour absorbs integration clock drift without admitting later hours
+  // merely because they share the server's UTC calendar date.
+  if (occurredAtMs > latestAllowedMs) {
     return NextResponse.json({ error: "future_occurred_at" }, { status: 422 });
+  }
+  const eventUtcDay = new Date(occurredAtMs).toISOString().slice(0, 10);
+  if (event.event_type === "daily_log.completed") {
+    // Runtime validation above guarantees this field for daily-log events. The
+    // contract's generic envelope does not preserve that metadata narrowing in
+    // TypeScript, so retain a defensive property check here as well.
+    const activityDay =
+      "activity_day" in event.metadata
+        ? String(event.metadata.activity_day)
+        : eventUtcDay;
+    // Before reading a configured period timezone, bound the claim to every date
+    // that can exist at this instant anywhere in the IANA range (UTC-12..UTC+14).
+    // The learner transaction performs the stricter configured-timezone check.
+    if (!isPlausibleActivityDay(activityDay, occurredAtMs)) {
+      return NextResponse.json(
+        { error: "implausible_activity_day" },
+        { status: 422 },
+      );
+    }
   }
 
   const engineEvent: IncomingEvent = {
@@ -83,15 +94,22 @@ export async function POST(req: NextRequest) {
   }
 
   if (result.status === "rejected") {
+    const detail = {
+      closed_period_revision:
+        "A closed Weekly Rhythm period cannot be revised",
+      contradictory_period_configuration:
+        "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
+      conflicting_period_calendar:
+        "A period's term range and week position must remain stable and unique",
+      inconsistent_activity_day:
+        "The activity day does not match occurred_at in the configured term timezone",
+      daily_log_period_limit_exceeded:
+        "The version 1 period has exhausted its qualifying or correction daily-log capacity",
+    }[result.error];
     return NextResponse.json(
       {
         error: result.error,
-        detail:
-          result.error === "closed_period_revision"
-            ? "A closed Weekly Rhythm period cannot be revised"
-            : result.error === "conflicting_period_calendar"
-              ? "A period's term range and week position must remain stable and unique"
-            : "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
+        detail,
       },
       { status: 422 },
     );

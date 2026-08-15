@@ -1,42 +1,12 @@
-import { LEVEL_UP, STREAK_MILESTONE, XP_CHANGED } from "./apply";
-import type { Rule, RulePack } from "./types";
-
-// Economy numbers. See docs/economy-design.md — change them here, not in the rules.
-const ITEM_XP = 150;
-const ITEM_ON_TIME_BONUS_XP = 50;
-const DAILY_LOG_XP = 10;
-const STREAK_BONUS_XP = 3;
-const STREAK_BONUS_EVERY_DAYS = 2;
-const STREAK_BONUS_MAX_XP = 15;
-const LEVEL_UP_COST_XP = 500;
-
-// "+3 XP every 2 days, capped at +15" is a formula, but rule effects are literal
-// mutations by design — the engine does no arithmetic. So the formula is expanded
-// into one rule per tier (streak 2, 4, 6, 8, 10), each granting a flat +3. A
-// learner on a 10-day streak matches all five and earns the full +15.
-//
-// The tiers fire on STREAK_MILESTONE, not on the daily-log event itself: the
-// milestone is derived *after* the streak advances, so `streak_current` is the
-// learner's streak including today. Reading it on the daily-log event would see
-// yesterday's streak and pay every bonus a day late.
-const streakBonusRules: Rule[] = Array.from(
-  { length: STREAK_BONUS_MAX_XP / STREAK_BONUS_XP },
-  (_, tier) => {
-    const streakDays = (tier + 1) * STREAK_BONUS_EVERY_DAYS;
-    return {
-      id: `daily-log-${streakDays}-streak-bonus`,
-      trigger: { event_type: STREAK_MILESTONE },
-      conditions: [
-        {
-          field: "economy.streak_current",
-          op: "gte" as const,
-          value: streakDays,
-        },
-      ],
-      effects: [{ type: "XP_GRANT" as const, amount: STREAK_BONUS_XP }],
-    };
-  }
-);
+import {
+  COLLECTION_SYNC,
+  DAILY_LOG_REWARD_SETTLED,
+  LEVEL_UP,
+  WEEKLY_RHYTHM_EARNED,
+  XP_CHANGED,
+} from "./apply";
+import { PROGRESSION_POLICY } from "./progression-policy";
+import type { RulePack } from "./types";
 
 // The default rule pack — used by the dev sandbox and as the baseline for integrations.
 // Operators can create custom rule packs that extend or replace these rules.
@@ -49,7 +19,7 @@ export const defaultRulePack: RulePack = {
       trigger: { event_type: "learning_item.completed" },
       conditions: [],
       effects: [
-        { type: "XP_GRANT", amount: ITEM_XP },
+        { type: "XP_GRANT", amount: PROGRESSION_POLICY.learningItemXp },
         { type: "PET_MOOD", mood: "happy", duration_minutes: 30 },
       ],
     },
@@ -57,30 +27,62 @@ export const defaultRulePack: RulePack = {
       id: "learning-item-on-time-bonus",
       trigger: { event_type: "learning_item.completed" },
       conditions: [{ field: "metadata.timing", op: "eq", value: "on_time" }],
-      effects: [{ type: "XP_GRANT", amount: ITEM_ON_TIME_BONUS_XP }],
+      effects: [
+        {
+          type: "XP_GRANT",
+          amount: PROGRESSION_POLICY.learningItemOnTimeBonusXp,
+        },
+      ],
     },
 
     // ── Daily log completed ─────────────────────────────────────────────
     {
-      // The daily-log event only advances the streak; it grants no XP itself. The
-      // XP is paid on the derived STREAK_MILESTONE below, which fires once per UTC
-      // day — so a learner sending several daily-log events in one day earns the
-      // day's XP exactly once. Paying XP here instead would let repeated same-day
-      // events farm DAILY_LOG_XP without limit.
+      // The source event advances only the forward-only rhythm. Persistence emits
+      // DAILY_LOG_REWARD_SETTLED exactly once when it inserts the durable settlement
+      // marker, so a valid older day can still earn flat XP without moving the streak
+      // backward and retries cannot farm the reward.
       id: "daily-log-streak",
       trigger: { event_type: "daily_log.completed" },
       conditions: [],
       effects: [{ type: "STREAK", continue_streak: true }],
     },
     {
-      // The once-per-day base reward. STREAK_MILESTONE is derived only when the
-      // streak actually advanced, so this cannot double-pay within a day.
+      // The once-per-qualified-day base reward. This internal event is never accepted
+      // at the public API; the transactional persistence orchestrator emits it only
+      // after winning the exact-once settlement-marker insert.
       id: "daily-log-xp",
-      trigger: { event_type: STREAK_MILESTONE },
+      trigger: { event_type: DAILY_LOG_REWARD_SETTLED },
       conditions: [],
-      effects: [{ type: "XP_GRANT", amount: DAILY_LOG_XP }],
+      effects: [{ type: "XP_GRANT", amount: PROGRESSION_POLICY.dailyLogXp }],
     },
-    ...streakBonusRules,
+
+    // ── Weekly Rhythm earned ─────────────────────────────────────────────
+    {
+      id: "weekly-rhythm-xp",
+      trigger: { event_type: WEEKLY_RHYTHM_EARNED },
+      conditions: [],
+      effects: [
+        { type: "XP_GRANT", amount: PROGRESSION_POLICY.weeklyRhythmXp },
+        { type: "PET_MOOD", mood: "excited", duration_minutes: 60 },
+      ],
+    },
+    ...PROGRESSION_POLICY.collectionMilestones.map((milestone) => ({
+      id: `weekly-rhythm-${milestone.weeklyRhythms}-collection-unlock`,
+      trigger: { event_type: COLLECTION_SYNC },
+      conditions: [
+        {
+          field: "metadata.weekly_rhythm_count",
+          // COLLECTION_SYNC is emitted once for each genuinely missing
+          // milestone. Exact matching keeps the mutation stream idempotent too,
+          // rather than merely relying on world-state application to dedupe it.
+          op: "eq" as const,
+          value: milestone.weeklyRhythms,
+        },
+      ],
+      effects: [
+        { type: "WORLD_UNLOCK" as const, asset_ref_id: milestone.assetRefId },
+      ],
+    })),
 
     // ── Level up ─────────────────────────────────────────────────────────
     {
@@ -90,9 +92,15 @@ export const defaultRulePack: RulePack = {
       // limit. Any XP past that stays in the balance and levels on the next event.
       id: "level-up",
       trigger: { event_type: XP_CHANGED },
-      conditions: [{ field: "economy.xp", op: "gte", value: LEVEL_UP_COST_XP }],
+      conditions: [
+        {
+          field: "economy.xp",
+          op: "gte",
+          value: PROGRESSION_POLICY.levelUpCostXp,
+        },
+      ],
       effects: [
-        { type: "XP_GRANT", amount: -LEVEL_UP_COST_XP },
+        { type: "XP_GRANT", amount: -PROGRESSION_POLICY.levelUpCostXp },
         { type: "LEVEL_GRANT", levels: 1 },
       ],
     },
@@ -103,14 +111,6 @@ export const defaultRulePack: RulePack = {
       trigger: { event_type: LEVEL_UP },
       conditions: [],
       effects: [{ type: "PET_MOOD", mood: "excited", duration_minutes: 60 }],
-    },
-
-    // ── Streak milestones ────────────────────────────────────────────────
-    {
-      id: "streak-7-world-unlock",
-      trigger: { event_type: STREAK_MILESTONE },
-      conditions: [{ field: "economy.streak_current", op: "gte", value: 7 }],
-      effects: [{ type: "WORLD_UNLOCK", asset_ref_id: "world-bird-v1" }],
     },
   ],
 };

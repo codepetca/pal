@@ -30,16 +30,20 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 3. **Rule engine** (`events/` domain) runs the rule pack against the event and current learner state. It produces a list of mutations:
    ```
-   XP_GRANT: 150
-   XP_GRANT: 50   ← on_time bonus
+   XP_GRANT: 75
+   XP_GRANT: 25   ← on_time bonus
    PET_MOOD: happy for 30 minutes
    ```
 
-4. **Economy service** (`economy/` domain) applies the XP grants — now at 200 XP — and emits an `XP_CHANGED` derived event. The applier feeds that back through the rule engine, where the `level-up` rule decides whether the learner crossed a threshold. The *threshold lives in the rule pack*, not in this handler: operators tune levelling without a deploy. See [rule-engine.md](rule-engine.md).
+4. **Economy service** (`economy/` domain) applies the 100 XP total and emits an
+   `XP_CHANGED` derived event. The applier feeds that back through the rule engine,
+   where the `level-up` rule decides whether the learner crossed a threshold. The
+   policy lives in `packages/engine/src/progression-policy.ts`; see
+   [rule-engine.md](rule-engine.md).
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
-6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing. XP bar has moved. If the student had hit a 7-day streak, a bird would have appeared in their world.
+6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. Earning a Weekly Rhythm also advances the durable collection.
 
 That's the full loop. Each domain owns one step.
 
@@ -173,6 +177,11 @@ Domains don't apply their own mutations ad hoc — they **register handlers** wi
 | Nudge handler | `frontend/` | `NUDGE` | — |
 
 One owner for the transaction means partial application is impossible: either every mutation from an evaluation lands, or none do. Handlers may return **derived events** (see [rule-engine.md](rule-engine.md)), which the applier feeds back through the engine within the same transaction.
+
+The same transaction may also emit persistence-authorized internal events after a
+durable transition succeeds. `DAILY_LOG_REWARD_SETTLED` follows the first insert of
+a daily settlement marker, and `WEEKLY_RHYTHM_EARNED` follows the first earned
+achievement transition. Neither is accepted from an integration.
 
 ---
 
