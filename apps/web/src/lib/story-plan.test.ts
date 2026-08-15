@@ -139,9 +139,10 @@ test(
       const firstCollectible = snapshot.progression?.collectibles[0];
 
       assert.equal(firstCollectible?.status, "next");
-      assert.equal(firstCollectible?.title, undefined);
-      assert.equal(firstCollectible?.assetUrl, undefined);
-      assert.equal(firstCollectible?.storyCopy, undefined);
+      assert.ok(firstCollectible);
+      assert.equal("title" in firstCollectible, false);
+      assert.equal("assetUrl" in firstCollectible, false);
+      assert.equal("storyCopy" in firstCollectible, false);
       assert.equal(snapshot.progression?.currentTitle, undefined);
       assert.equal(
         (await getDb()
@@ -237,8 +238,9 @@ test(
       );
       const firstCollectible = snapshot.progression?.collectibles[0];
       assert.equal(firstCollectible?.status, "next");
-      assert.equal(firstCollectible?.title, undefined);
-      assert.equal(firstCollectible?.assetUrl, undefined);
+      assert.ok(firstCollectible);
+      assert.equal("title" in firstCollectible, false);
+      assert.equal("assetUrl" in firstCollectible, false);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -339,7 +341,13 @@ test(
         )?.roadmapWeek;
         assert.equal(snapshot.roadmap.weeks.length, totalWeeks);
         assert.equal(snapshot.progression?.storyTotalPeriods, totalWeeks);
-        assert.equal(snapshot.progression?.companionUnlockWeek, pipWeek);
+        assert.equal(snapshot.progression?.companionReveal.status, "locked");
+        assert.match(
+          snapshot.progression?.companionReveal.status === "locked"
+            ? snapshot.progression.companionReveal.label
+            : "",
+          new RegExp(`Complete Week ${pipWeek} to meet Pip`),
+        );
       } finally {
         await resetLearnerInDb(integration.id, externalLearnerId);
       }
