@@ -1,7 +1,6 @@
 import {
   and,
   asc,
-  desc,
   eq,
   getTableColumns,
   gte,
@@ -17,12 +16,10 @@ import {
   economy,
   getDb,
   learnerFacts,
+  learnerRewardGrants,
   learners,
   petState,
   rewardNotices,
-  storyPlanChapters,
-  storyPlans,
-  titleAwards,
   worldState,
   weeklyRhythmConfigs,
   type Db,
@@ -34,14 +31,13 @@ import type {
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 import { collectionItemsForUnlocks } from "@codepet/pal-widget";
-import { createPalProgressionState } from "@codepet/pal-widget/progression";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
+import { loadPersistedStoryPlan } from "@/lib/story-plan";
 import {
-  loadPersistedStoryPlan,
-  storyRewardDetails,
-  storyRewardKeysForChapter,
-} from "@/lib/story-plan";
+  projectStoryProgression,
+  projectUnseenGrantRewards,
+} from "@/lib/story-projector";
 
 const LEGACY_SEMESTER_WEEKS = 16;
 
@@ -304,32 +300,11 @@ export async function loadLearnerSnapshot(
         )
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
-      const titleAwardRows = await tx
+      const grantRows = await tx
         .select()
-        .from(titleAwards)
-        .where(eq(titleAwards.learnerId, learnerId))
-        .orderBy(
-          sql`max(${titleAwards.createdAt}) over (
-            partition by coalesce(
-              ${titleAwards.sourceFactId}::text,
-              ${titleAwards.id}::text
-            )
-          ) desc`,
-          sql`case
-            when ${titleAwards.kind} = 'story' then 100 + case ${titleAwards.titleId}
-              when 'true-friend' then 40
-              when 'try-again-chef' then 30
-              when 'brave-beginner' then 20
-              when 'gentle-keeper' then 10
-              else 0
-            end
-            when ${titleAwards.titleId} = 'level-leader' then 30
-            when ${titleAwards.titleId} = 'on-time-pro' then 20
-            when ${titleAwards.titleId} = 'rhythm-builder' then 10
-            else 0
-          end desc`,
-          desc(titleAwards.titleId),
-        );
+        .from(learnerRewardGrants)
+        .where(eq(learnerRewardGrants.learnerId, learnerId))
+        .orderBy(asc(learnerRewardGrants.grantOrder));
 
       const latestCalendarFact = selectCurrentTermFact(
         calendarFacts,
@@ -351,77 +326,6 @@ export async function loadLearnerSnapshot(
       const persistedStoryPlan = typeof currentTermToken === "string"
         ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
         : undefined;
-      const storyRewardChapterByKey = new Map<string, string>();
-      if (persistedStoryPlan) {
-        for (const chapter of persistedStoryPlan.chapters) {
-          for (const rewardKey of storyRewardKeysForChapter(
-            {
-              storyId: persistedStoryPlan.storyId,
-              version: persistedStoryPlan.version,
-            },
-            chapter.id,
-          )) {
-            storyRewardChapterByKey.set(rewardKey, chapter.id);
-          }
-        }
-      }
-      const earnedStoryRewardRows =
-        storyRewardChapterByKey.size > 0 && typeof currentTermToken === "string"
-        ? await tx
-            .select({
-              rewardKey: rewardNotices.rewardKey,
-              chapterId: storyPlanChapters.chapterId,
-            })
-            .from(rewardNotices)
-            .innerJoin(
-              achievementInstances,
-              and(
-                eq(
-                  achievementInstances.id,
-                  rewardNotices.achievementInstanceId,
-                ),
-                eq(achievementInstances.learnerId, rewardNotices.learnerId),
-              ),
-            )
-            .innerJoin(
-              storyPlanChapters,
-              and(
-                eq(
-                  storyPlanChapters.learnerId,
-                  achievementInstances.learnerId,
-                ),
-                eq(
-                  storyPlanChapters.periodKey,
-                  achievementInstances.periodKey,
-                ),
-              ),
-            )
-            .innerJoin(
-              storyPlans,
-              and(
-                eq(storyPlans.id, storyPlanChapters.storyPlanId),
-                eq(storyPlans.learnerId, storyPlanChapters.learnerId),
-              ),
-            )
-            .where(
-              and(
-                eq(rewardNotices.learnerId, learnerId),
-                eq(storyPlans.termKey, currentTermToken),
-                inArray(
-                  rewardNotices.rewardKey,
-                  [...storyRewardChapterByKey.keys()],
-                ),
-              ),
-            )
-        : [];
-      const earnedChapterIds = [
-        ...new Set(
-          earnedStoryRewardRows.flatMap((reward) => {
-            const chapterId = storyRewardChapterByKey.get(reward.rewardKey);
-            return chapterId === reward.chapterId ? [chapterId] : [];
-          }),
-        ),
-      ];
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -612,7 +516,6 @@ export async function loadLearnerSnapshot(
         },
       );
 
-      const progressionAchievements: PalAchievement[] = [];
       for (const instance of instances) {
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
@@ -625,7 +528,6 @@ export async function loadLearnerSnapshot(
             : false,
         );
         if (achievement) {
-          progressionAchievements.push(achievement);
           weeks[weekNumber - 1].achievements.push(achievement);
         }
       }
@@ -668,29 +570,20 @@ export async function loadLearnerSnapshot(
             worldRows[0]?.unlockedObjectIds ?? [],
           ),
         },
-        rewards: rewards.map((reward) => ({
-          id: reward.id,
-          title: reward.title,
-          description: reward.description,
-          ...(reward.icon ? { icon: reward.icon } : {}),
-          ...storyRewardDetails(reward.rewardKey),
-        })),
+        rewards: [
+          ...rewards.map((reward) => ({
+            id: reward.id,
+            title: reward.title,
+            description: reward.description,
+            ...(reward.icon ? { icon: reward.icon } : {}),
+          })),
+          ...(persistedStoryPlan
+            ? projectUnseenGrantRewards(persistedStoryPlan, grantRows)
+            : []),
+        ].slice(0, 100),
         ...(persistedStoryPlan
           ? {
-              progression: createPalProgressionState({
-                currentWeek,
-                totalWeeks: weeks.length,
-                level: companion.level,
-                streak: companion.streak,
-                achievements: progressionAchievements,
-                companionName: companion.name,
-                storyPlan: persistedStoryPlan,
-                earnedChapterIds,
-                earnedTitleIds: titleAwardRows.map((award) => award.titleId),
-                ...(titleAwardRows[0]
-                  ? { currentTitleId: titleAwardRows[0].titleId }
-                  : {}),
-              }),
+              progression: projectStoryProgression(persistedStoryPlan, grantRows),
             }
           : {}),
       };
@@ -720,14 +613,23 @@ export async function acknowledgeLearnerReward(
     .limit(1);
   if (!learner) throw new LearnerScopeError();
 
-  await db
-    .update(rewardNotices)
-    .set({ seenAt: new Date() })
-    .where(
-      and(
+  const seenAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(rewardNotices)
+      .set({ seenAt })
+      .where(and(
         eq(rewardNotices.id, rewardId),
         eq(rewardNotices.learnerId, learnerId),
         isNull(rewardNotices.seenAt),
-      ),
-    );
+      ));
+    await tx
+      .update(learnerRewardGrants)
+      .set({ seenAt })
+      .where(and(
+        eq(learnerRewardGrants.id, rewardId),
+        eq(learnerRewardGrants.learnerId, learnerId),
+        isNull(learnerRewardGrants.seenAt),
+      ));
+  });
 }

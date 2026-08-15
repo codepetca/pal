@@ -54,9 +54,6 @@ jobs:
       - name: Migrate from zero
         run: pnpm --filter @pal/db migrate
 
-      - name: Verify title award upgrade
-        run: pnpm --filter @pal/db verify:title-upgrade
-
       - name: Database ownership constraint tests
         run: pnpm --filter @pal/db test
 

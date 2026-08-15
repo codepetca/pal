@@ -20,7 +20,6 @@ routes live elsewhere and import from here.
 | `learner_reward_grants` | append-only durable story chapter and behavior title ownership | learner + earned reward |
 | `weekly_rhythm_configs` | latest accepted weekly opportunity configuration | learner + period |
 | `achievement_instances` | progress or an outcome for a scoped achievement | learner + achievement + scope |
-| `title_awards` | durable grant order and optional pre-ledger provenance | learner + title |
 | `reward_notices` | one-time presentation notice attached to an award | awarded achievement |
 | `economy` | XP, level, streak | learner |
 | `pet_state` | mood, mood expiry, animation | learner |
@@ -60,11 +59,6 @@ Two constraints carry more weight than the rest:
   durably; only `seen_at` may change after insert.
 - `UNIQUE (achievement_instance_id)` on `reward_notices` — retrying an award
   cannot queue a second celebration.
-- `UNIQUE (learner_id, title_id)` on `title_awards` — each identity title is
-  earned once. The source-fact ownership foreign key prevents cross-learner
-  attribution when audit provenance is available; pre-ledger backfills keep
-  both source fact and event time null when it is not. `created_at` preserves
-  PAL's serialized grant order under delayed delivery.
 
 ## Privacy
 
@@ -72,8 +66,7 @@ No column holds a name, email, raw student ID, grade, score, ranking, or student
 writing. Free-form event/fact metadata is gated at the API boundary by a strict
 per-event-type allow-list. Period, item, and classroom keys are opaque
 integration-scoped tokens. Deleting a learner cascades to facts, achievements,
-title awards, rewards, events, and state, so consent withdrawal remains a
-single `DELETE`.
+rewards, events, and state, so consent withdrawal remains a single `DELETE`.
 
 ## Local setup
 

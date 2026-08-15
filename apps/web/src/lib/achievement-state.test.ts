@@ -84,7 +84,6 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
         achievement.title === "On-Time Finish" &&
         achievement.status === "earned",
     ).length,
-    rewards: snapshot.rewards.length,
     companion: {
       level: snapshot.companion.level,
       mood: snapshot.companion.mood,
@@ -96,7 +95,7 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
 }
 
 test(
-  "public fixture matches the persisted Weekly Rhythm scenario",
+  "public presentation fixture matches persisted non-durable behavior",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;

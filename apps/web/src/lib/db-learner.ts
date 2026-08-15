@@ -34,10 +34,7 @@ import {
   type ProcessResult,
 } from "@pal/engine";
 import { ensureStoryPlanForEvent } from "@/lib/story-plan";
-import {
-  awardLearnerTitle,
-  BEHAVIOR_TITLES,
-} from "@/lib/title-awards";
+import { BEHAVIOR_TITLES, grantBehaviorTitle } from "@/lib/reward-grants";
 
 // ---------------------------------------------------------------------------
 // Learner lookup / creation  (by integration's external learner ID)
@@ -438,26 +435,21 @@ export async function processEventInDb(
         },
       });
 
-    const titleEarnedAt = new Date(event.occurred_at);
     if (
       state.economy.streak_current < 3 &&
       result.state.economy.streak_current >= 3
     ) {
-      await awardLearnerTitle(tx, {
+      await grantBehaviorTitle(tx, {
         learnerId,
         titleId: BEHAVIOR_TITLES.rhythmBuilder.id,
-        kind: "behavior",
         sourceFactId: fact.id,
-        earnedAt: titleEarnedAt,
       });
     }
     if (state.economy.level < 5 && result.state.economy.level >= 5) {
-      await awardLearnerTitle(tx, {
+      await grantBehaviorTitle(tx, {
         learnerId,
         titleId: BEHAVIOR_TITLES.levelLeader.id,
-        kind: "behavior",
         sourceFactId: fact.id,
-        earnedAt: titleEarnedAt,
       });
     }
 

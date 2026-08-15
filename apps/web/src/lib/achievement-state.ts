@@ -8,11 +8,11 @@ import {
   type Db,
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
-import { awardStoryCollectibleForPeriod } from "@/lib/story-plan";
 import {
-  awardLearnerTitle,
   BEHAVIOR_TITLES,
-} from "@/lib/title-awards";
+  grantBehaviorTitle,
+  grantStoryChapterForPeriod,
+} from "@/lib/reward-grants";
 
 export const ACHIEVEMENT_KEYS = {
   firstLogin: "first-pika-login",
@@ -1007,14 +1007,7 @@ async function recomputeWeeklyRhythm(
       })
       .where(eq(achievementInstances.id, existing.id));
     if (status === "earned") {
-      await awardStoryCollectibleForPeriod(
-        db,
-        learnerId,
-        periodKey,
-        existing.id,
-        factId,
-        occurredAt,
-      );
+      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
     }
     return status === "earned";
   }
@@ -1035,14 +1028,7 @@ async function recomputeWeeklyRhythm(
     .returning({ id: achievementInstances.id });
   if (!created) throw new Error("Failed to create Weekly Rhythm achievement");
   if (status === "earned") {
-    await awardStoryCollectibleForPeriod(
-      db,
-      learnerId,
-      periodKey,
-      created.id,
-      factId,
-      occurredAt,
-    );
+    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
   }
   return status === "earned";
 }
@@ -1197,12 +1183,10 @@ export async function applyAchievementFact(
         occurredAt,
       });
       if (earned && outcome.created) {
-        await awardLearnerTitle(db, {
+        await grantBehaviorTitle(db, {
           learnerId,
           titleId: BEHAVIOR_TITLES.onTimePro.id,
-          kind: "behavior",
           sourceFactId: fact.id,
-          earnedAt: occurredAt,
         });
         await db
           .insert(rewardNotices)

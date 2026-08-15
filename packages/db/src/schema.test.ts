@@ -12,7 +12,6 @@ import {
   rewardNotices,
   storyPlanChapters,
   storyPlans,
-  titleAwards,
   weeklyRhythmConfigs,
 } from "./schema";
 import { getDb, getPool } from "./client";
@@ -38,7 +37,7 @@ function postgresViolation(error: unknown, code: string): boolean {
 }
 
 test(
-  "rejects cross-owner events, facts, achievements, titles, periods, and rewards",
+  "rejects cross-owner events, facts, achievements, periods, and rewards",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -554,73 +553,6 @@ test(
           sourceFactId: factA.id,
         })
         .returning({ id: achievementInstances.id });
-
-      await assert.rejects(
-        db.insert(titleAwards).values({
-          learnerId: learnerB.id,
-          titleId: "cross-owner-title",
-          kind: "behavior",
-          sourceFactId: factA.id,
-          earnedAt: new Date(),
-        }),
-        foreignKeyViolation,
-      );
-      for (const invalid of [
-        { titleId: "", kind: "behavior" },
-        { titleId: "invalid-kind", kind: "unknown" },
-      ]) {
-        await assert.rejects(
-          db.insert(titleAwards).values({
-            learnerId: learnerA.id,
-            titleId: invalid.titleId,
-            kind: invalid.kind,
-            sourceFactId: factA.id,
-            earnedAt: new Date(),
-          }),
-          (error) => postgresViolation(error, "23514"),
-        );
-      }
-      for (const partial of [
-        {
-          titleId: "source-without-time",
-          sourceFactId: factA.id,
-        },
-        {
-          titleId: "time-without-source",
-          earnedAt: new Date(),
-        },
-      ]) {
-        await assert.rejects(
-          db.insert(titleAwards).values({
-            learnerId: learnerA.id,
-            kind: "behavior",
-            ...partial,
-          }),
-          (error) => postgresViolation(error, "23514"),
-        );
-      }
-      await db.insert(titleAwards).values({
-        learnerId: learnerA.id,
-        titleId: "migrated-title-with-unknown-provenance",
-        kind: "behavior",
-      });
-      await db.insert(titleAwards).values({
-        learnerId: learnerA.id,
-        titleId: "valid-title",
-        kind: "behavior",
-        sourceFactId: factA.id,
-        earnedAt: new Date(),
-      });
-      await assert.rejects(
-        db.insert(titleAwards).values({
-          learnerId: learnerA.id,
-          titleId: "valid-title",
-          kind: "behavior",
-          sourceFactId: factA.id,
-          earnedAt: new Date(),
-        }),
-        (error) => postgresViolation(error, "23505"),
-      );
 
       await assert.rejects(
         db.insert(rewardNotices).values({
