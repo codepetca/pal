@@ -239,6 +239,31 @@ test(
         (error) => postgresViolation(error, "23514"),
       );
 
+      await assert.rejects(
+        db.transaction(async (tx) => {
+          const [replaceableChapter] = await tx
+            .select()
+            .from(storyPlanChapters)
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, plan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+          await tx
+            .delete(storyPlanChapters)
+            .where(eq(storyPlanChapters.id, replaceableChapter.id));
+          await tx.insert(storyPlanChapters).values({
+            storyPlanId: plan.id,
+            learnerId: learnerA.id,
+            periodNumber: replaceableChapter.periodNumber,
+            periodKey: replaceableChapter.periodKey,
+            chapterId: "replacement-chapter",
+          });
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+
       const destinationPlan = await db.transaction(async (tx) => {
         const [created] = await tx
           .insert(storyPlans)
