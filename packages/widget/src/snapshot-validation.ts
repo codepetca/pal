@@ -610,6 +610,24 @@ function parseProgression(
   ) {
     fail(path, "expected one canonical companionReveal decision");
   }
+  const collectibles = boundedArray(
+    source.collectibles,
+    `${path}.collectibles`,
+    MAX_COLLECTIBLES,
+    1,
+  ).map((collectible, index) =>
+    parseCollectible(
+      collectible,
+      `${path}.collectibles[${index}]`,
+      collectibleIds,
+      collectibleRoadmapWeeks,
+      validRoadmapWeeks,
+      assetPolicy,
+    ),
+  );
+  if (collectibleRoadmapWeeks.size !== validRoadmapWeeks.size) {
+    fail(`${path}.collectibles`, "expected exactly one decision for every roadmap week");
+  }
   return {
     ...(storyId === undefined ? {} : { storyId }),
     ...(storyVersion === undefined ? {} : { storyVersion }),
@@ -620,21 +638,7 @@ function parseProgression(
       assetPolicy,
     ),
     ...(currentTitle === undefined ? {} : { currentTitle }),
-    collectibles: boundedArray(
-      source.collectibles,
-      `${path}.collectibles`,
-      MAX_COLLECTIBLES,
-      1,
-    ).map((collectible, index) =>
-      parseCollectible(
-        collectible,
-        `${path}.collectibles[${index}]`,
-        collectibleIds,
-        collectibleRoadmapWeeks,
-        validRoadmapWeeks,
-        assetPolicy,
-      ),
-    ),
+    collectibles,
     titles: boundedArray(
       source.titles,
       `${path}.titles`,

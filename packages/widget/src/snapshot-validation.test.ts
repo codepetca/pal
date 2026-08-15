@@ -146,6 +146,16 @@ test("snapshot parser allows at most one collectible reward per roadmap week", (
   );
 });
 
+test("snapshot parser requires one collectible decision for every roadmap week", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.progression!.collectibles.pop();
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /collectibles.*exactly one decision for every roadmap week/i,
+  );
+});
+
 test("snapshot parser keeps progression references inside the supplied roadmap", () => {
   const collectibleOutsideRoadmap = createFixtureSnapshot();
   collectibleOutsideRoadmap.progression!.collectibles[0]!.roadmapWeek = 99;
