@@ -279,6 +279,10 @@ test(
         }),
         (error) => postgresViolation(error, "23514"),
       );
+      await assert.rejects(
+        db.delete(storyPlans).where(eq(storyPlans.id, destinationPlan.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
 
       await assert.rejects(
         db.insert(events).values({
@@ -463,10 +467,20 @@ test(
         (error) => postgresViolation(error, "23505"),
       );
 
+      const acknowledgedAt = new Date();
       await db
         .update(learnerRewardGrants)
-        .set({ seenAt: new Date() })
+        .set({ seenAt: acknowledgedAt })
         .where(eq(learnerRewardGrants.id, storyGrant.id));
+      for (const seenAt of [null, new Date(acknowledgedAt.getTime() + 1)]) {
+        await assert.rejects(
+          db
+            .update(learnerRewardGrants)
+            .set({ seenAt })
+            .where(eq(learnerRewardGrants.id, storyGrant.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
       await assert.rejects(
         db
           .update(learnerRewardGrants)
