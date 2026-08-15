@@ -6,7 +6,7 @@ export default defineConfig([
     // here would delete the other context's output after an isolated file change.
     clean: false,
     dts: true,
-    entry: ["src/index.ts", "src/theme-contract.ts"],
+    entry: ["src/index.ts", "src/theme-contract.ts", "src/fixture-client.ts"],
     external: ["react", "react-dom", "react/jsx-runtime"],
     format: ["esm"],
     outDir: "dist",
