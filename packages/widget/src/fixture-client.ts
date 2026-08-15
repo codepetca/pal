@@ -17,8 +17,9 @@ import type {
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "./types";
-import { createPalProgressionState } from "./progression";
-import { MAX_STORY_PERIODS, MIN_STORY_PERIODS } from "./story";
+
+const MIN_STORY_PERIODS = 6;
+const MAX_STORY_PERIODS = 24;
 
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 const DEFAULT_WEEKLY_TARGET = 4;
@@ -37,15 +38,20 @@ function requireFixtureTermWeeks(totalWeeks: number): number {
   return totalWeeks;
 }
 
-function earnedCollectibleWeeks(weeks: readonly PalRoadmapWeek[]): number[] {
-  return weeks.flatMap((week) =>
-    week.achievements.some(
-      (achievement) =>
-        achievement.title === "Weekly Rhythm" && achievement.status === "earned",
-    )
-      ? [week.number]
-      : [],
-  );
+function concealedProgression(totalWeeks: number): PalWidgetSnapshot["progression"] {
+  return {
+    companionReveal: {
+      status: "locked",
+      label: "Mystery companion. Keep building your Weekly Rhythm to reveal it.",
+    },
+    collectibles: Array.from({ length: totalWeeks }, (_, index) => ({
+      id: `locked-collectible-week-${index + 1}`,
+      roadmapWeek: index + 1,
+      status: index === 0 ? "next" as const : "locked" as const,
+      statusLabel: "Locked",
+    })),
+    titles: [],
+  };
 }
 
 function weeklyRhythm(
@@ -146,14 +152,7 @@ export function createEmptyFixtureSnapshot(totalWeeks = 16): PalWidgetSnapshot {
     companion,
     collection: { items: [] },
     rewards: [],
-    progression: createPalProgressionState({
-      currentWeek,
-      totalWeeks: weeks.length,
-      level: companion.level,
-      streak: companion.streak,
-      achievements: [],
-      earnedWeeks: earnedCollectibleWeeks(weeks),
-    }),
+    progression: concealedProgression(weeks.length),
   };
 }
 
@@ -198,22 +197,9 @@ export function createFixtureSnapshot(
       weeks,
     },
     companion,
-    collection: {
-      items: collectionItemsForUnlocks(
-        PROGRESSION_POLICY.collectionMilestones
-          .filter((milestone) => milestone.weeklyRhythms < boundedCurrentWeek)
-          .map((milestone) => milestone.assetRefId),
-      ),
-    },
+    collection: { items: [] },
     rewards: [],
-    progression: createPalProgressionState({
-      currentWeek: boundedCurrentWeek,
-      totalWeeks: weeks.length,
-      level: companion.level,
-      streak: companion.streak,
-      achievements: weeks.flatMap((week) => week.achievements),
-      earnedWeeks: earnedCollectibleWeeks(weeks),
-    }),
+    progression: concealedProgression(weeks.length),
   };
 }
 
@@ -221,27 +207,21 @@ function cloneSnapshot(snapshot: PalWidgetSnapshot): PalWidgetSnapshot {
   return structuredClone(snapshot);
 }
 
-function currentTitleIdForSnapshot(snapshot: PalWidgetSnapshot): string | undefined {
-  const currentTitle = snapshot.progression?.currentTitle;
-  if (!currentTitle) return undefined;
-  return snapshot.progression?.titles.find(
-    (title) => title.status === "earned" && title.label === currentTitle,
-  )?.id;
+function refreshProgression(
+  _snapshot: PalWidgetSnapshot,
+  _currentTitleId?: string,
+): void {
+  void _snapshot;
+  void _currentTitleId;
+  // The widget fixture intentionally does not infer durable ownership. A host
+  // fixture that owns a grant ledger may replace the supplied projection.
 }
 
-function refreshProgression(
-  snapshot: PalWidgetSnapshot,
-  currentTitleId?: string,
-): void {
-  snapshot.progression = createPalProgressionState({
-    currentWeek: snapshot.roadmap.currentWeek,
-    totalWeeks: snapshot.roadmap.weeks.length,
-    level: snapshot.companion.level,
-    streak: snapshot.companion.streak,
-    achievements: snapshot.roadmap.weeks.flatMap((week) => week.achievements),
-    earnedWeeks: earnedCollectibleWeeks(snapshot.roadmap.weeks),
-    ...(currentTitleId ? { currentTitleId } : {}),
-  });
+function currentTitleIdForSnapshot(
+  _snapshot: PalWidgetSnapshot,
+): string | undefined {
+  void _snapshot;
+  return undefined;
 }
 
 export function createFixturePalClient(

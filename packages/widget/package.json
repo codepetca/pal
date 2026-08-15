@@ -42,10 +42,6 @@
       "types": "./dist/theme-contract.d.ts",
       "import": "./dist/theme-contract.js"
     },
-    "./progression": {
-      "types": "./dist/progression.d.ts",
-      "import": "./dist/progression.js"
-    },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },

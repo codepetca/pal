@@ -42,10 +42,9 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /stroke-dasharray="100 0"/);
   assert.match(html, /class="pal-badge-progress-label" aria-hidden="true">4\/4</);
   assert.match(html, /Earned/);
-  assert.match(html, /Pip, your Pal companion/);
-  assert.match(html, /Level 2; 2 school-day rhythm/);
-  assert.match(html, /Hello, Pip/);
-  assert.match(html, /Story unlocked/);
+  assert.match(html, /Mystery companion/);
+  assert.match(html, /A treat for Pip!/);
+  assert.match(html, /Reward earned/);
   assert.ok(snapshot.rewards.some((reward) => reward.title === "A treat for Pip!"));
   assert.match(html, />Continue</);
   assert.match(html, /data-pal-theme="dark"/);
@@ -100,7 +99,20 @@ test("roadmap keeps a schema-v1 preterm snapshot renderable", () => {
 });
 
 test("each week has a collectible slot that reveals only earned rewards", () => {
-  const client = createFixturePalClient(createFixtureSnapshot(2));
+  const snapshot = createFixtureSnapshot(2);
+  snapshot.progression!.collectibles[0] = {
+    id: "earned-week-one",
+    chapterId: "earned-chapter",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Mystery Egg",
+    description: "An earned keepsake.",
+    kind: "room",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  };
+  snapshot.progression!.currentTitle = "Rhythm Builder";
+  const client = createFixturePalClient(snapshot);
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}
@@ -207,9 +219,9 @@ test("the companion stays in its mystery egg until week four", () => {
   );
 
   assert.match(html, /data-pal-companion-unlocked="false"/);
-  assert.match(html, /reward-mystery-egg-v1\.png/);
+  assert.doesNotMatch(html, /<img/);
   assert.doesNotMatch(html, /assets\/pets\/default\.png/);
-  assert.match(html, /Complete Week 4 to meet Pip/);
+  assert.match(html, /Keep building your Weekly Rhythm/);
 });
 
 test("the companion renders only the canonical reveal decision", () => {
@@ -253,7 +265,7 @@ test("the companion does not rebuild its display from collectible lookups", () =
   );
 
   assert.match(html, /data-pal-companion-unlocked="false"/);
-  assert.match(html, /reward-mystery-egg-v1\.png/);
+  assert.doesNotMatch(html, /<img/);
   assert.doesNotMatch(html, /assets\/pets\/default\.png/);
 });
 
@@ -302,8 +314,17 @@ test("host-managed rewards leave dialog and focus ownership to the host", () => 
 });
 
 test("story reveal presents headline, collectible, story, then title", () => {
-  const client = createFixturePalClient(createFixtureSnapshot(3));
-  client.dispatch("daily-log-completed", { activityDay: "2026-05-01" });
+  const snapshot = createFixtureSnapshot(3);
+  snapshot.rewards.unshift({
+    id: "story-reveal",
+    kind: "story",
+    title: "Keep the light on",
+    description: "The coldest night arrived.",
+    collectibleTitle: "Warming Lantern",
+    assetUrl: "/assets/world/reward-warming-lantern-v1.png",
+    titleAward: "Gentle Keeper",
+  });
+  const client = createFixturePalClient(snapshot);
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}

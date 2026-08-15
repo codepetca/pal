@@ -6,7 +6,6 @@ import {
   createFixturePalClient,
   createFixtureSnapshot,
 } from "./fixture-client";
-import { createPalProgressionState } from "./progression";
 
 test("fixture client exposes a 16-week roadmap with a current week", async () => {
   const client = createFixturePalClient();
@@ -24,7 +23,7 @@ test("fixture client exposes a 16-week roadmap with a current week", async () =>
 test("fixture projection redacts unearned story content and companion art", () => {
   const serialized = JSON.stringify(createFixtureSnapshot(2));
 
-  assert.match(serialized, /reward-mystery-egg-v1\.png/);
+  assert.doesNotMatch(serialized, /\/assets\/world\/reward-/);
   assert.doesNotMatch(serialized, /Cloud Blanket/);
   assert.doesNotMatch(serialized, /reward-cloud-blanket-v1\.png/);
   assert.doesNotMatch(serialized, /Meet Pip/);
@@ -32,20 +31,15 @@ test("fixture projection redacts unearned story content and companion art", () =
   assert.doesNotMatch(serialized, /Brave Beginner/);
 });
 
-test("fixture rebuilds deterministic story plans for different term lengths", () => {
+test("fixture rebuilds concealed presentation slots for different term lengths", () => {
   const client = createFixturePalClient(createFixtureSnapshot(4, 12));
   assert.equal(client.peek().roadmap.weeks.length, 12);
   assert.equal(client.peek().progression?.collectibles.length, 12);
-  assert.deepEqual(client.peek().progression?.companionReveal, {
-    status: "locked",
-    label: "Mystery companion. Complete Week 4 to meet Pip.",
-    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
-  });
+  assert.equal(client.peek().progression?.companionReveal.status, "locked");
 
   client.setTermWeeks?.(20);
   assert.equal(client.peek().roadmap.weeks.length, 20);
   assert.equal(client.peek().progression?.collectibles.length, 20);
-  assert.equal(client.peek().progression?.storyTotalPeriods, 20);
   assert.throws(() => client.setTermWeeks?.(25), /6–24/);
 });
 
@@ -58,7 +52,6 @@ test("fixture reset preserves the selected term length", () => {
 
   assert.equal(client.peek().roadmap.weeks.length, 6);
   assert.equal(client.peek().progression?.collectibles.length, 6);
-  assert.equal(client.peek().progression?.storyTotalPeriods, 6);
 });
 
 test("fixture actions update visible state while duplicate replay is inert", async () => {
@@ -84,104 +77,6 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   assert.deepEqual(afterDuplicate, beforeDuplicate);
 });
 
-test("fixture actions refresh titles derived from earned achievements", async () => {
-  const client = createFixturePalClient();
-
-  client.dispatch("on-time-finish");
-  const title = (await client.getSnapshot()).progression?.titles.find(
-    (candidate) => candidate.id === "on-time-pro",
-  );
-
-  assert.equal(title?.status, "earned");
-});
-
-test("a later behavior title replaces an earlier story title", () => {
-  const client = createFixturePalClient(createFixtureSnapshot(4));
-
-  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
-  client.dispatch("on-time-finish", { itemToken: "later-title" });
-
-  assert.equal(client.peek().progression?.currentTitle, "On-Time Pro");
-
-  client.dispatch("classroom-joined");
-  client.dispatch("advance-week");
-  assert.equal(client.peek().progression?.currentTitle, "On-Time Pro");
-
-  let completion = 1;
-  while (client.peek().companion.level < 5) {
-    completion += 1;
-    client.dispatch("on-time-finish", {
-      itemToken: `level-title-${completion}`,
-    });
-  }
-  assert.equal(client.peek().progression?.currentTitle, "Level Leader");
-});
-
-test("a late completion crossing Level 5 displays Level Leader", () => {
-  const snapshot = createFixtureSnapshot(4);
-  snapshot.companion.level = 4;
-  snapshot.companion.xp = 450;
-  snapshot.companion.xpToNextLevel = 50;
-  snapshot.progression = createPalProgressionState({
-    currentWeek: snapshot.roadmap.currentWeek,
-    totalWeeks: snapshot.roadmap.weeks.length,
-    level: snapshot.companion.level,
-    streak: snapshot.companion.streak,
-    achievements: snapshot.roadmap.weeks.flatMap((week) => week.achievements),
-    earnedWeeks: [1, 2, 3, 4],
-  });
-  const client = createFixturePalClient(snapshot);
-
-  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
-  client.dispatch("late-finish", { itemToken: "late-level-title" });
-
-  assert.equal(client.peek().companion.level, 5);
-  assert.equal(client.peek().progression?.currentTitle, "Level Leader");
-});
-
-test("fixture refreshes progression when a week or streak milestone changes", () => {
-  const emptyClient = createFixturePalClient(createEmptyFixtureSnapshot());
-
-  assert.equal(emptyClient.peek().progression?.companionReveal.status, "locked");
-  emptyClient.dispatch("on-time-finish", { itemToken: "first-item" });
-  assert.equal(emptyClient.peek().progression?.currentTitle, "On-Time Pro");
-
-  emptyClient.dispatch("advance-week");
-  emptyClient.dispatch("advance-week");
-  emptyClient.dispatch("advance-week");
-  for (let day = 1; day <= 4; day += 1) {
-    emptyClient.dispatch("daily-log-completed", {
-      activityDay: `2026-05-0${day}`,
-    });
-  }
-  const weekProgression = emptyClient.peek().progression;
-
-  assert.equal(weekProgression?.companionReveal.status, "earned");
-  assert.equal(
-    weekProgression?.collectibles.find(
-      (collectible) => collectible.id === "pip-companion-v1",
-    )?.status,
-    "earned",
-  );
-
-  const streakSnapshot = createFixtureSnapshot(2);
-  streakSnapshot.companion.streak = 2;
-  streakSnapshot.progression = createPalProgressionState({
-    currentWeek: streakSnapshot.roadmap.currentWeek,
-    totalWeeks: streakSnapshot.roadmap.weeks.length,
-    level: streakSnapshot.companion.level,
-    streak: streakSnapshot.companion.streak,
-    achievements: streakSnapshot.roadmap.weeks.flatMap(
-      (week) => week.achievements,
-    ),
-  });
-  const streakClient = createFixturePalClient(streakSnapshot);
-
-  streakClient.dispatch("daily-log-completed");
-
-  assert.equal(streakClient.peek().progression?.currentTitle, "Rhythm Builder");
-});
-
 test("fixture reward can be acknowledged exactly once by the client", async () => {
   const client = createFixturePalClient();
 
@@ -194,40 +89,6 @@ test("fixture reward can be acknowledged exactly once by the client", async () =
 
   await client.markRewardSeen(reward.id);
   assert.equal((await client.getSnapshot()).rewards.length, 0);
-});
-
-test("earning Weekly Rhythm queues one story reveal with its collectible and title", () => {
-  const client = createFixturePalClient(createFixtureSnapshot(3));
-
-  client.dispatch("daily-log-completed", { activityDay: "2026-05-01" });
-  client.dispatch("daily-log-completed", { activityDay: "2026-05-02" });
-
-  const [reward] = client.peek().rewards;
-  assert.equal(reward?.kind, "story");
-  assert.equal(reward?.title, "Keep the light on");
-  assert.equal(reward?.collectibleTitle, "Warming Lantern");
-  assert.equal(reward?.assetUrl, "/assets/world/reward-warming-lantern-v1.png");
-  assert.equal(reward?.titleAward, "Gentle Keeper");
-  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
-  assert.equal(
-    client.peek().rewards.filter((candidate) => candidate.kind === "story").length,
-    1,
-  );
-});
-
-test("short-week completion queues the story reveal exactly once", () => {
-  const client = createFixturePalClient(createFixtureSnapshot(4));
-
-  client.dispatch("short-week-configured");
-  client.dispatch("short-week-configured");
-
-  const storyRewards = client.peek().rewards.filter(
-    (candidate) => candidate.kind === "story",
-  );
-  assert.equal(storyRewards.length, 1);
-  assert.equal(storyRewards[0]?.title, "Hello, Pip");
-  assert.equal(storyRewards[0]?.collectibleTitle, "Meet Pip");
-  assert.equal(client.peek().progression?.companionReveal.status, "earned");
 });
 
 test("fresh fixture activates Weekly Rhythm and preserves partial history", async () => {
@@ -366,7 +227,6 @@ test("fixture XP crosses production level thresholds without awarding story prop
   }
 
   const progression = client.peek().progression;
-  assert.equal(progression?.currentTitle, "Level Leader");
   assert.equal(
     progression?.collectibles.some((reward) => reward.status === "earned"),
     false,

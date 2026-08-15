@@ -6,12 +6,17 @@ import { createPalHttpClient } from "./http-client";
 
 test("HTTP client keeps the integration secret out and uses a learner token", async () => {
   const requests: Array<{ input: string; init?: RequestInit }> = [];
+  const responseSnapshot = createFixtureSnapshot(5);
+  responseSnapshot.progression!.companionReveal = {
+    status: "earned",
+    assetUrl: "/assets/pets/default.png",
+  };
   const client = createPalHttpClient({
     apiBaseUrl: "https://pal.example",
     getAccessToken: async () => "short-lived-reader-token",
     fetchImplementation: async (input, init) => {
       requests.push({ input: String(input), init });
-      return new Response(JSON.stringify(createFixtureSnapshot(5)), {
+      return new Response(JSON.stringify(responseSnapshot), {
         status: 200,
         headers: { "content-type": "application/json" },
       });

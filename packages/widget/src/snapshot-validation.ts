@@ -637,7 +637,7 @@ function parseProgression(
       source.titles,
       `${path}.titles`,
       MAX_TITLES,
-      1,
+      0,
     ).map((title, index) =>
       parseTitle(title, `${path}.titles[${index}]`, titleIds),
     ),

@@ -191,9 +191,12 @@ test("snapshot parser rejects concealed content on locked rewards", () => {
   const lockedTitle = createFixtureSnapshot(2) as unknown as {
     progression: { titles: Array<Record<string, unknown>> };
   };
-  lockedTitle.progression.titles.find(
-    (title) => title.status !== "earned",
-  )!.label = "Secret title";
+  lockedTitle.progression.titles.push({
+    id: "locked-title",
+    status: "locked",
+    statusLabel: "Locked",
+    label: "Secret title",
+  });
   assert.throws(
     () => parsePalWidgetSnapshot(lockedTitle),
     /concealed title content while locked/i,
@@ -216,11 +219,16 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   );
 
   const unsafeCollectible = createFixtureSnapshot();
-  const earnedCollectible = unsafeCollectible.progression!.collectibles.find(
-    (collectible) => collectible.status === "earned",
-  );
-  assert.ok(earnedCollectible);
-  earnedCollectible.assetUrl = "javascript:alert(1)";
+  unsafeCollectible.progression!.collectibles[0] = {
+    id: "earned-collectible",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Earned collectible",
+    description: "Already earned.",
+    kind: "room",
+    assetUrl: "javascript:alert(1)",
+  };
   assert.throws(
     () => parsePalWidgetSnapshot(unsafeCollectible),
     /progression.*assetUrl.*HTTPS origin|root-relative/i,
@@ -247,6 +255,7 @@ test("snapshot parser rejects root-relative URL normalization bypasses", () => {
 
 test("snapshot parser resolves relative assets and permits explicit Pal CDN origins", () => {
   const fixture = createFixtureSnapshot(5);
+  fixture.companion.assetUrl = "/assets/pets/default.png";
   fixture.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl =
     "https://assets.pal.example/badges/rhythm.png";
 
@@ -256,7 +265,7 @@ test("snapshot parser resolves relative assets and permits explicit Pal CDN orig
   });
 
   assert.equal(
-    parsed.progression?.companionReveal.assetUrl,
+    parsed.companion.assetUrl,
     "https://api.pal.example/assets/pets/default.png",
   );
   assert.equal(
