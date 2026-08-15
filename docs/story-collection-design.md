@@ -205,6 +205,13 @@ The roadmap card then keeps the earned artwork and collectible name visible for
 that period. A locked card continues to show only the lock treatment. The next
 scheduled collectible is not previewed.
 
+Pal derives this display state at the authenticated snapshot boundary from the
+learner's pinned story plan and durable awards. That canonical projector removes
+locked names, copy, title definitions, and asset URLs before serialization and
+emits one companion reveal decision. Fixtures call the same projector. The
+widget validates the resulting transport shape and renders it without
+re-evaluating chapter eligibility.
+
 Reduced-motion mode should replace scale, bounce, or sparkle sequences with a
 short opacity transition. The full reveal must remain understandable with no
 animation and no sound.

@@ -11,7 +11,7 @@ test("HTTP client keeps the integration secret out and uses a learner token", as
     getAccessToken: async () => "short-lived-reader-token",
     fetchImplementation: async (input, init) => {
       requests.push({ input: String(input), init });
-      return new Response(JSON.stringify(createFixtureSnapshot()), {
+      return new Response(JSON.stringify(createFixtureSnapshot(5)), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
@@ -21,7 +21,7 @@ test("HTTP client keeps the integration secret out and uses a learner token", as
   const snapshot = await client.getSnapshot();
   assert.equal(snapshot.schemaVersion, 1);
   assert.equal(
-    snapshot.companion.assetUrl,
+    snapshot.progression?.companionReveal.assetUrl,
     "https://pal.example/assets/pets/default.png",
   );
   assert.equal(requests[0]?.input, "https://pal.example/api/v1/learner/snapshot");

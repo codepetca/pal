@@ -154,18 +154,49 @@ test("snapshot parser keeps progression references inside the supplied roadmap",
     /collectibles\[0\]\.roadmapWeek.*supplied roadmap week/i,
   );
 
-  const unlockOutsideRoadmap = createFixtureSnapshot();
-  unlockOutsideRoadmap.progression!.companionUnlockWeek = 99;
-  assert.throws(
-    () => parsePalWidgetSnapshot(unlockOutsideRoadmap),
-    /companionUnlockWeek.*supplied roadmap week/i,
-  );
-
   const mismatchedStoryLength = createFixtureSnapshot();
   mismatchedStoryLength.progression!.storyTotalPeriods = 15;
   assert.throws(
     () => parsePalWidgetSnapshot(mismatchedStoryLength),
     /storyTotalPeriods.*match the roadmap period count/i,
+  );
+});
+
+test("snapshot parser requires one canonical companion reveal decision", () => {
+  const fixture = createFixtureSnapshot() as unknown as {
+    progression: Record<string, unknown>;
+  };
+  fixture.progression.companionUnlocked = true;
+  fixture.progression.companionUnlockWeek = 1;
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /one canonical companionReveal decision/i,
+  );
+});
+
+test("snapshot parser rejects concealed content on locked rewards", () => {
+  const fixture = createFixtureSnapshot(2) as unknown as {
+    progression: {
+      collectibles: Array<Record<string, unknown>>;
+      titles: Array<Record<string, unknown>>;
+    };
+  };
+  fixture.progression.collectibles[1]!.title = "Cloud Blanket";
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /concealed collectible content while locked/i,
+  );
+
+  const lockedTitle = createFixtureSnapshot(2) as unknown as {
+    progression: { titles: Array<Record<string, unknown>> };
+  };
+  lockedTitle.progression.titles.find(
+    (title) => title.status !== "earned",
+  )!.label = "Secret title";
+  assert.throws(
+    () => parsePalWidgetSnapshot(lockedTitle),
+    /concealed title content while locked/i,
   );
 });
 
@@ -185,8 +216,11 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   );
 
   const unsafeCollectible = createFixtureSnapshot();
-  unsafeCollectible.progression!.collectibles[0]!.assetUrl =
-    "javascript:alert(1)";
+  const earnedCollectible = unsafeCollectible.progression!.collectibles.find(
+    (collectible) => collectible.status === "earned",
+  );
+  assert.ok(earnedCollectible);
+  earnedCollectible.assetUrl = "javascript:alert(1)";
   assert.throws(
     () => parsePalWidgetSnapshot(unsafeCollectible),
     /progression.*assetUrl.*HTTPS origin|root-relative/i,
@@ -212,7 +246,7 @@ test("snapshot parser rejects root-relative URL normalization bypasses", () => {
 });
 
 test("snapshot parser resolves relative assets and permits explicit Pal CDN origins", () => {
-  const fixture = createFixtureSnapshot();
+  const fixture = createFixtureSnapshot(5);
   fixture.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl =
     "https://assets.pal.example/badges/rhythm.png";
 
@@ -222,7 +256,7 @@ test("snapshot parser resolves relative assets and permits explicit Pal CDN orig
   });
 
   assert.equal(
-    parsed.companion.assetUrl,
+    parsed.progression?.companionReveal.assetUrl,
     "https://api.pal.example/assets/pets/default.png",
   );
   assert.equal(

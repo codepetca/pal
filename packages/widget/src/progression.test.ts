@@ -13,15 +13,20 @@ test("keeps Pip hidden while revealing only earned weekly chapters", () => {
     earnedWeeks: [1],
   });
 
-  assert.equal(progression.companionUnlocked, false);
+  assert.equal(progression.companionReveal.status, "locked");
+  assert.match(
+    progression.companionReveal.status === "locked"
+      ? progression.companionReveal.label
+      : "",
+    /Complete Week 4 to meet Pip/,
+  );
   assert.equal(progression.collectibles[0]?.status, "earned");
-  assert.equal(progression.collectibles[1]?.title, "Cloud Blanket");
   assert.equal(progression.collectibles[1]?.status, "next");
+  assert.equal("title" in progression.collectibles[1]!, false);
   assert.equal(
-    progression.collectibles.find((item) => item.id === "pip-companion-v1")?.status,
+    progression.collectibles.find((item) => item.roadmapWeek === 4)?.status,
     "locked",
   );
-  assert.equal(progression.companionUnlockWeek, 4);
 });
 
 test("unlocks collectibles and advances the learner title from durable state", () => {
@@ -43,7 +48,11 @@ test("unlocks collectibles and advances the learner title from durable state", (
     earnedWeeks: Array.from({ length: 8 }, (_, index) => index + 1),
   });
 
-  assert.equal(progression.companionUnlocked, true);
+  assert.equal(progression.companionReveal.status, "earned");
+  assert.equal(
+    progression.companionReveal.assetUrl,
+    "/assets/pets/default.png",
+  );
   assert.equal(progression.currentTitle, "Brave Beginner");
   assert.equal(
     progression.collectibles.find((item) => item.id === "measuring-spoons-v1")?.status,

@@ -4,6 +4,7 @@ import type {
   PalBadge,
   PalCollectibleKind,
   PalCollectibleUnlock,
+  PalCompanionReveal,
   PalCompanionMood,
   PalCompanionState,
   PalCollectionItem,
@@ -159,11 +160,6 @@ function optionalInteger(
   minimum = 0,
 ): number | undefined {
   return value === undefined ? undefined : integer(value, path, minimum);
-}
-
-function boolean(value: unknown, path: string): boolean {
-  if (typeof value !== "boolean") return fail(path, "expected a boolean");
-  return value;
 }
 
 function member<T extends string>(
@@ -434,16 +430,56 @@ function parseCollectible(
   assetPolicy: AssetPolicy,
 ): PalCollectibleUnlock {
   const source = record(value, path);
+  const progress =
+    source.progress === undefined
+      ? undefined
+      : parseProgress(source.progress, `${path}.progress`);
+  const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
+  const status = member<PalUnlockStatus>(
+    source.status,
+    `${path}.status`,
+    ["earned", "next", "locked"],
+  );
+  const statusLabel = text(source.statusLabel, `${path}.statusLabel`);
+  const roadmapWeek = uniqueInteger(
+    source.roadmapWeek,
+    assignedRoadmapWeeks,
+    `${path}.roadmapWeek`,
+    1,
+  );
+  if (!validRoadmapWeeks.has(roadmapWeek)) {
+    fail(`${path}.roadmapWeek`, "must identify a supplied roadmap week");
+  }
+  if (status !== "earned") {
+    const concealedFields = [
+      "chapterId",
+      "title",
+      "description",
+      "revealHeadline",
+      "storyCopy",
+      "titleAward",
+      "titleRevealCopy",
+      "kind",
+      "assetUrl",
+    ];
+    if (concealedFields.some((field) => source[field] !== undefined)) {
+      fail(path, "expected concealed collectible content while locked");
+    }
+    return {
+      id,
+      roadmapWeek,
+      status,
+      statusLabel,
+      ...(progress === undefined ? {} : { progress }),
+    };
+  }
+
   const assetUrl = optionalAssetUrl(
     source.assetUrl,
     `${path}.assetUrl`,
     assetPolicy,
   );
   if (assetUrl === undefined) fail(`${path}.assetUrl`, "expected an asset URL");
-  const progress =
-    source.progress === undefined
-      ? undefined
-      : parseProgress(source.progress, `${path}.progress`);
   const chapterId = optionalText(source.chapterId, `${path}.chapterId`);
   const revealHeadline = optionalText(
     source.revealHeadline,
@@ -455,17 +491,8 @@ function parseCollectible(
     source.titleRevealCopy,
     `${path}.titleRevealCopy`,
   );
-  const roadmapWeek = uniqueInteger(
-    source.roadmapWeek,
-    assignedRoadmapWeeks,
-    `${path}.roadmapWeek`,
-    1,
-  );
-  if (!validRoadmapWeeks.has(roadmapWeek)) {
-    fail(`${path}.roadmapWeek`, "must identify a supplied roadmap week");
-  }
   return {
-    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    id,
     ...(chapterId === undefined ? {} : { chapterId }),
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
@@ -479,12 +506,8 @@ function parseCollectible(
       `${path}.kind`,
       ["companion", "room", "cosmetic"],
     ),
-    status: member<PalUnlockStatus>(
-      source.status,
-      `${path}.status`,
-      ["earned", "next", "locked"],
-    ),
-    statusLabel: text(source.statusLabel, `${path}.statusLabel`),
+    status,
+    statusLabel,
     assetUrl,
     ...(progress === undefined ? {} : { progress }),
   };
@@ -496,16 +519,57 @@ function parseTitle(
   ids: Set<string>,
 ): PalTitleUnlock {
   const source = record(value, path);
+  const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
+  const status = member<PalUnlockStatus>(
+    source.status,
+    `${path}.status`,
+    ["earned", "next", "locked"],
+  );
+  const statusLabel = text(source.statusLabel, `${path}.statusLabel`);
+  if (status !== "earned") {
+    if (source.label !== undefined || source.description !== undefined) {
+      fail(path, "expected concealed title content while locked");
+    }
+    return { id, status, statusLabel };
+  }
   return {
-    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    id,
     label: text(source.label, `${path}.label`),
     description: text(source.description, `${path}.description`),
-    status: member<PalUnlockStatus>(
-      source.status,
-      `${path}.status`,
-      ["earned", "next", "locked"],
-    ),
-    statusLabel: text(source.statusLabel, `${path}.statusLabel`),
+    status,
+    statusLabel,
+  };
+}
+
+function parseCompanionReveal(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalCompanionReveal {
+  const source = record(value, path);
+  const status = member<PalCompanionReveal["status"]>(
+    source.status,
+    `${path}.status`,
+    ["earned", "locked"],
+  );
+  const assetUrl = optionalAssetUrl(
+    source.assetUrl,
+    `${path}.assetUrl`,
+    assetPolicy,
+  );
+  if (status === "earned") {
+    if (source.label !== undefined) {
+      fail(`${path}.label`, "expected no locked label after reveal");
+    }
+    if (assetUrl === undefined) {
+      fail(`${path}.assetUrl`, "expected earned companion artwork");
+    }
+    return { status, assetUrl };
+  }
+  return {
+    status,
+    label: text(source.label, `${path}.label`),
+    ...(assetUrl === undefined ? {} : { assetUrl }),
   };
 }
 
@@ -538,23 +602,21 @@ function parseProgression(
     fail(`${path}.storyTotalPeriods`, "must match the roadmap period count");
   }
   const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
-  const companionUnlockWeek = integer(
-    source.companionUnlockWeek,
-    `${path}.companionUnlockWeek`,
-    1,
-  );
-  if (!validRoadmapWeeks.has(companionUnlockWeek)) {
-    fail(`${path}.companionUnlockWeek`, "must identify a supplied roadmap week");
+  if (
+    source.companionUnlocked !== undefined ||
+    source.companionUnlockWeek !== undefined
+  ) {
+    fail(path, "expected one canonical companionReveal decision");
   }
   return {
     ...(storyId === undefined ? {} : { storyId }),
     ...(storyVersion === undefined ? {} : { storyVersion }),
     ...(storyTotalPeriods === undefined ? {} : { storyTotalPeriods }),
-    companionUnlocked: boolean(
-      source.companionUnlocked,
-      `${path}.companionUnlocked`,
+    companionReveal: parseCompanionReveal(
+      source.companionReveal,
+      `${path}.companionReveal`,
+      assetPolicy,
     ),
-    companionUnlockWeek,
     ...(currentTitle === undefined ? {} : { currentTitle }),
     collectibles: boundedArray(
       source.collectibles,
@@ -583,7 +645,9 @@ function parseProgression(
 }
 
 /**
- * Validates the untrusted JSON returned by Pal before it reaches React state.
+ * Structurally validates network JSON before it reaches React state. Pal's
+ * authenticated snapshot projector remains authoritative for story awards and
+ * reveal eligibility; the widget intentionally does not re-run those rules.
  */
 export function parsePalWidgetSnapshot(
   value: unknown,

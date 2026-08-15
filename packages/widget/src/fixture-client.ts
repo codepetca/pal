@@ -135,7 +135,6 @@ export function createEmptyFixtureSnapshot(totalWeeks = 16): PalWidgetSnapshot {
     xp: 0,
     xpToNextLevel: 500,
     message: "Complete positive learning actions to encourage Pip.",
-    assetUrl: "/assets/pets/default.png",
   };
   return {
     schemaVersion: 1,
@@ -189,7 +188,6 @@ export function createFixtureSnapshot(
     xp: 230,
     xpToNextLevel: 270,
     message: "Two daily-log days complete this week.",
-    assetUrl: "/assets/pets/default.png",
   };
 
   return {

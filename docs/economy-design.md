@@ -109,14 +109,21 @@ older widget/API pair.
   Rhythm achievement is earned. Level, streak, and assignment milestones may
   award titles or ordinary rewards, but never unlock story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
-  16-week plan), and the companion surface also requires the Meet Pip
-  collectible itself to be earned before showing Pip.
+  16-week plan). The canonical progression projector evaluates the persisted
+  plan and durable awards once, then emits a single display-ready
+  `companionReveal` decision. The companion surface renders that decision and
+  never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
 - Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
   Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
 - The widget gives every roadmap week a collectible-style slot while concealing
-  locked art and names. Once earned, that week's slot reveals its collectible
-  (at most one reward per period). Older snapshots without `progression` keep
-  the existing cat and achievement UI.
+  locked art, names, story copy, and title definitions in the raw projection as
+  well as the UI. Once earned, that week's slot reveals its collectible (at
+  most one reward per period). Older snapshots without `progression` keep the
+  existing cat and achievement UI.
+- Pal's authenticated snapshot producer is the authority for story awards and
+  reveal eligibility. The widget's network parser validates shape, bounds, and
+  asset origins; it deliberately does not maintain a second story engine or
+  attempt to prove entitlement from other fields in the same response.
 - Catch-up remains deliberately deferred. The story copy, collectible briefs,
   scheduling rules, and that boundary are defined in
   [Pip's First Recipe — Story Collection Design](story-collection-design.md).

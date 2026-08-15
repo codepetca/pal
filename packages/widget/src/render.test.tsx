@@ -171,7 +171,10 @@ test("companion owns the complete portable cat surface", () => {
   client.dispatch("daily-log-completed", { activityDay: "2026-05-01" });
   client.dispatch("daily-log-completed", { activityDay: "2026-05-02" });
   const snapshot = client.peek();
-  snapshot.companion.assetUrl = "https://pal.example/assets/pets/default.png";
+  snapshot.progression!.companionReveal = {
+    status: "earned",
+    assetUrl: "https://pal.example/assets/pets/default.png",
+  };
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}
@@ -209,28 +212,30 @@ test("the companion stays in its mystery egg until week four", () => {
   assert.match(html, /Complete Week 4 to meet Pip/);
 });
 
-test("the roadmap week prevents a malformed projection from revealing Pip early", () => {
+test("the companion renders only the canonical reveal decision", () => {
   const snapshot = createFixtureSnapshot(2);
-  snapshot.progression!.companionUnlocked = true;
-  snapshot.progression!.companionUnlockWeek = 1;
+  snapshot.progression!.companionReveal = {
+    status: "earned",
+    assetUrl: "/assets/pets/default.png",
+  };
   const client = createFixturePalClient(snapshot);
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}
       initialSnapshot={client.peek()}
-      scopeKey="malformed-early-fixture-learner"
+      scopeKey="canonical-reveal-fixture-learner"
       motion="reduced"
     >
       <PalCompanion />
     </PalProvider>,
   );
 
-  assert.match(html, /data-pal-companion-unlocked="false"/);
-  assert.match(html, /reward-mystery-egg-v1\.png/);
-  assert.doesNotMatch(html, /assets\/pets\/default\.png/);
+  assert.match(html, /data-pal-companion-unlocked="true"/);
+  assert.match(html, /assets\/pets\/default\.png/);
+  assert.doesNotMatch(html, /reward-mystery-egg-v1\.png/);
 });
 
-test("an incomplete early projection never falls through to the Pip artwork", () => {
+test("the companion does not rebuild its display from collectible lookups", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles = snapshot.progression!.collectibles.filter(
     (collectible) => collectible.id !== "mystery-egg-v1",
@@ -248,17 +253,17 @@ test("an incomplete early projection never falls through to the Pip artwork", ()
   );
 
   assert.match(html, /data-pal-companion-unlocked="false"/);
-  assert.doesNotMatch(html, /reward-mystery-egg-v1\.png/);
+  assert.match(html, /reward-mystery-egg-v1\.png/);
   assert.doesNotMatch(html, /assets\/pets\/default\.png/);
 });
 
-test("a locked mystery egg never leaks into the early companion surface", () => {
+test("a locked reveal without earned mystery art renders no image", () => {
   const snapshot = createFixtureSnapshot(2);
-  const egg = snapshot.progression!.collectibles.find(
-    (collectible) => collectible.id === "mystery-egg-v1",
-  );
-  assert.ok(egg);
-  egg.status = "locked";
+  snapshot.progression!.companionReveal = {
+    status: "locked",
+    label: "Mystery companion.",
+  };
+  snapshot.companion.assetUrl = "/assets/pets/default.png";
   const client = createFixturePalClient(snapshot);
   const html = renderToStaticMarkup(
     <PalProvider

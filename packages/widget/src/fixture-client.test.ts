@@ -21,11 +21,26 @@ test("fixture client exposes a 16-week roadmap with a current week", async () =>
   );
 });
 
+test("fixture projection redacts unearned story content and companion art", () => {
+  const serialized = JSON.stringify(createFixtureSnapshot(2));
+
+  assert.match(serialized, /reward-mystery-egg-v1\.png/);
+  assert.doesNotMatch(serialized, /Cloud Blanket/);
+  assert.doesNotMatch(serialized, /reward-cloud-blanket-v1\.png/);
+  assert.doesNotMatch(serialized, /Meet Pip/);
+  assert.doesNotMatch(serialized, /assets\/pets\/default\.png/);
+  assert.doesNotMatch(serialized, /Brave Beginner/);
+});
+
 test("fixture rebuilds deterministic story plans for different term lengths", () => {
   const client = createFixturePalClient(createFixtureSnapshot(4, 12));
   assert.equal(client.peek().roadmap.weeks.length, 12);
   assert.equal(client.peek().progression?.collectibles.length, 12);
-  assert.equal(client.peek().progression?.companionUnlockWeek, 4);
+  assert.deepEqual(client.peek().progression?.companionReveal, {
+    status: "locked",
+    label: "Mystery companion. Complete Week 4 to meet Pip.",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  });
 
   client.setTermWeeks?.(20);
   assert.equal(client.peek().roadmap.weeks.length, 20);
@@ -127,7 +142,7 @@ test("a late completion crossing Level 5 displays Level Leader", () => {
 test("fixture refreshes progression when a week or streak milestone changes", () => {
   const emptyClient = createFixturePalClient(createEmptyFixtureSnapshot());
 
-  assert.equal(emptyClient.peek().progression?.companionUnlocked, false);
+  assert.equal(emptyClient.peek().progression?.companionReveal.status, "locked");
   emptyClient.dispatch("on-time-finish", { itemToken: "first-item" });
   assert.equal(emptyClient.peek().progression?.currentTitle, "On-Time Pro");
 
@@ -141,7 +156,7 @@ test("fixture refreshes progression when a week or streak milestone changes", ()
   }
   const weekProgression = emptyClient.peek().progression;
 
-  assert.equal(weekProgression?.companionUnlocked, true);
+  assert.equal(weekProgression?.companionReveal.status, "earned");
   assert.equal(
     weekProgression?.collectibles.find(
       (collectible) => collectible.id === "pip-companion-v1",
@@ -212,7 +227,7 @@ test("short-week completion queues the story reveal exactly once", () => {
   assert.equal(storyRewards.length, 1);
   assert.equal(storyRewards[0]?.title, "Hello, Pip");
   assert.equal(storyRewards[0]?.collectibleTitle, "Meet Pip");
-  assert.equal(client.peek().progression?.companionUnlocked, true);
+  assert.equal(client.peek().progression?.companionReveal.status, "earned");
 });
 
 test("fresh fixture activates Weekly Rhythm and preserves partial history", async () => {

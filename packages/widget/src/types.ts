@@ -92,39 +92,65 @@ export interface PalCollectionState {
   items: PalCollectionItem[];
 }
 
-export interface PalCollectibleUnlock {
+interface PalCollectibleUnlockBase {
   id: string;
-  /** Stable story chapter identity. Omitted by older schema-v1 hosts. */
-  chapterId?: string;
-  title: string;
-  description: string;
-  revealHeadline?: string;
-  storyCopy?: string;
-  titleAward?: string;
-  titleRevealCopy?: string;
   /** Roadmap week whose collectible slot reveals this reward after it is earned. */
   roadmapWeek: number;
-  kind: PalCollectibleKind;
-  status: PalUnlockStatus;
   statusLabel: string;
-  assetUrl: string;
   progress?: PalProgress;
 }
 
-export interface PalTitleUnlock {
+export type PalCollectibleUnlock =
+  | PalCollectibleUnlockBase & {
+      status: "earned";
+      /** Stable story chapter identity. */
+      chapterId?: string;
+      title: string;
+      description: string;
+      revealHeadline?: string;
+      storyCopy?: string;
+      titleAward?: string;
+      titleRevealCopy?: string;
+      kind: PalCollectibleKind;
+      assetUrl: string;
+    }
+  | PalCollectibleUnlockBase & {
+      status: "next" | "locked";
+    };
+
+export type PalTitleUnlock = {
   id: string;
-  label: string;
-  description: string;
-  status: PalUnlockStatus;
   statusLabel: string;
-}
+} & (
+  | {
+      status: "earned";
+      label: string;
+      description: string;
+    }
+  | {
+      status: "next" | "locked";
+    }
+);
+
+/** Display-ready companion decision emitted by Pal's canonical projector. */
+export type PalCompanionReveal =
+  | {
+      status: "locked";
+      label: string;
+      /** The only mystery artwork the widget may display before the reveal. */
+      assetUrl?: string;
+    }
+  | {
+      status: "earned";
+      /** The only companion artwork the widget may display after the reveal. */
+      assetUrl: string;
+    };
 
 export interface PalProgressionState {
   storyId?: string;
   storyVersion?: number;
   storyTotalPeriods?: number;
-  companionUnlocked: boolean;
-  companionUnlockWeek: number;
+  companionReveal: PalCompanionReveal;
   currentTitle?: string;
   collectibles: PalCollectibleUnlock[];
   titles: PalTitleUnlock[];

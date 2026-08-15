@@ -219,6 +219,12 @@ Render `PalCollection` alongside `PalAchievements` when the host exposes learner
 progression. The optional v1 `collection.items` snapshot field is bounded and
 backward-compatible; current Pal snapshots derive it from durable world unlock IDs.
 
+The optional `progression` field is already a redacted, display-ready projection
+from Pal. Hosts and widget components must not reconstruct story eligibility from
+roadmap position or combine parallel unlock flags. `companionReveal` is the sole
+companion display decision; locked collectible and title records contain no hidden
+names, story copy, or asset URLs.
+
 Persisted sandbox routes are local-only and fail closed with 404 in Vercel previews and
 production. Preview deployments therefore need no database, sandbox integration secret,
 or read-token signing key. The widget is built from each branch's workspace source; the

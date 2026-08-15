@@ -15,6 +15,8 @@ type ProgressionInput = {
   achievements: readonly PalAchievement[];
   /** Latest durably awarded title. Used when award chronology is available. */
   currentTitleId?: string;
+  /** Runtime companion rest art. Defaults to the story companion collectible. */
+  companionAssetUrl?: string;
   /** Periods whose weekly eligibility goal was durably earned. */
   earnedWeeks?: readonly number[];
   /** Persisted term plan. When absent, a deterministic plan is derived. */
@@ -32,6 +34,14 @@ type TitleDefinition = {
   label: string;
   description: string;
   milestone: Milestone;
+};
+
+type TitleCandidate = {
+  id: string;
+  label: string;
+  description: string;
+  status: "earned" | "next" | "locked";
+  statusLabel: string;
 };
 
 const TITLES: readonly TitleDefinition[] = [
@@ -123,14 +133,20 @@ export function createPalProgressionState(
       ),
   );
   let nextCollectibleAssigned = false;
+  const chapterEarned = (chapter: PalStoryPlan["chapters"][number]) =>
+    earnedWeeks.has(chapter.roadmapWeek);
   const collectibles: PalCollectibleUnlock[] = storyPlan.chapters.map((chapter) => {
-    const earned = earnedWeeks.has(chapter.roadmapWeek);
-    const status = earned
-      ? "earned"
-      : nextCollectibleAssigned
-        ? "locked"
-        : "next";
-    if (!earned && !nextCollectibleAssigned) nextCollectibleAssigned = true;
+    const earned = chapterEarned(chapter);
+    if (!earned) {
+      const status = nextCollectibleAssigned ? "locked" : "next";
+      nextCollectibleAssigned = true;
+      return {
+        id: `locked-collectible-week-${chapter.roadmapWeek}`,
+        roadmapWeek: chapter.roadmapWeek,
+        status,
+        statusLabel: "Locked",
+      };
+    }
     return {
       id: chapter.collectible.id,
       chapterId: chapter.id,
@@ -146,8 +162,8 @@ export function createPalProgressionState(
         : {}),
       roadmapWeek: chapter.roadmapWeek,
       kind: chapter.collectible.kind,
-      status,
-      statusLabel: earned ? "Earned" : "Locked",
+      status: "earned",
+      statusLabel: "Earned",
       assetUrl: chapter.collectible.assetUrl,
     };
   });
@@ -156,11 +172,27 @@ export function createPalProgressionState(
     (chapter) => chapter.collectible.id === "pip-companion-v1",
   );
   if (!pipChapter) throw new Error("Pip story plan must contain Pip's reveal");
-  const companionUnlocked = earnedWeeks.has(pipChapter.roadmapWeek);
+  const companionUnlocked = chapterEarned(pipChapter);
+  const mysteryChapter = storyPlan.chapters.find(
+    (chapter) => chapter.collectible.id === "mystery-egg-v1",
+  );
+  const companionReveal: PalProgressionState["companionReveal"] =
+    companionUnlocked
+      ? {
+          status: "earned",
+          assetUrl: input.companionAssetUrl ?? pipChapter.collectible.assetUrl,
+        }
+      : {
+          status: "locked",
+          label: `Mystery companion. Complete Week ${pipChapter.roadmapWeek} to meet Pip.`,
+          ...(mysteryChapter && chapterEarned(mysteryChapter)
+            ? { assetUrl: mysteryChapter.collectible.assetUrl }
+            : {}),
+        };
 
   let nextTitleAssigned = false;
   let fallbackCurrentTitle: string | undefined;
-  const behaviorTitles: PalTitleUnlock[] = TITLES.map((definition) => {
+  const behaviorTitles: TitleCandidate[] = TITLES.map((definition) => {
     const milestone = milestoneProgress(definition.milestone, input);
     if (milestone.earned) fallbackCurrentTitle = definition.label;
     const status = milestone.earned
@@ -178,7 +210,7 @@ export function createPalProgressionState(
     };
   });
 
-  const storyTitles: PalTitleUnlock[] = storyPlan.chapters.flatMap((chapter) => {
+  const storyTitles: TitleCandidate[] = storyPlan.chapters.flatMap((chapter) => {
     if (!chapter.title) return [];
     const earned = earnedWeeks.has(chapter.roadmapWeek);
     // When award chronology is unavailable, the latest earned story chapter is
@@ -195,19 +227,27 @@ export function createPalProgressionState(
     }];
   });
 
-  const titles = [...behaviorTitles, ...storyTitles];
+  const titleCandidates = [...behaviorTitles, ...storyTitles];
   const currentTitle = input.currentTitleId
-    ? titles.find(
+    ? titleCandidates.find(
         (title) => title.id === input.currentTitleId && title.status === "earned",
       )?.label ?? fallbackCurrentTitle
     : fallbackCurrentTitle;
+  const titles = titleCandidates.map((title, index): PalTitleUnlock =>
+    title.status === "earned"
+      ? title
+      : {
+          id: `locked-title-${index + 1}`,
+          status: title.status,
+          statusLabel: "Locked",
+        },
+  );
 
   return {
     storyId: storyPlan.storyId,
     storyVersion: storyPlan.version,
     storyTotalPeriods: storyPlan.totalPeriods,
-    companionUnlocked,
-    companionUnlockWeek: pipChapter.roadmapWeek,
+    companionReveal,
     ...(currentTitle ? { currentTitle } : {}),
     collectibles,
     titles,
