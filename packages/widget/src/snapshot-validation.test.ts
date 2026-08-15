@@ -26,6 +26,22 @@ test("snapshot parser preserves the v1 current-week domain", () => {
   );
 });
 
+test("snapshot parser requires one contiguous entry for every roadmap week", () => {
+  const duplicate = createFixtureSnapshot();
+  duplicate.roadmap.weeks[1]!.number = duplicate.roadmap.weeks[0]!.number;
+  assert.throws(
+    () => parsePalWidgetSnapshot(duplicate),
+    /unique roadmap week/i,
+  );
+
+  const gap = createFixtureSnapshot();
+  gap.roadmap.weeks[1]!.number = 99;
+  assert.throws(
+    () => parsePalWidgetSnapshot(gap),
+    /contiguous range/i,
+  );
+});
+
 test("snapshot parser keeps XP fields backward-compatible in schema version 1", () => {
   const fixture = createFixtureSnapshot();
   delete fixture.companion.xp;
@@ -127,6 +143,29 @@ test("snapshot parser allows at most one collectible reward per roadmap week", (
   assert.throws(
     () => parsePalWidgetSnapshot(fixture),
     /unique roadmap week/i,
+  );
+});
+
+test("snapshot parser keeps progression references inside the supplied roadmap", () => {
+  const collectibleOutsideRoadmap = createFixtureSnapshot();
+  collectibleOutsideRoadmap.progression!.collectibles[0]!.roadmapWeek = 99;
+  assert.throws(
+    () => parsePalWidgetSnapshot(collectibleOutsideRoadmap),
+    /collectibles\[0\]\.roadmapWeek.*supplied roadmap week/i,
+  );
+
+  const unlockOutsideRoadmap = createFixtureSnapshot();
+  unlockOutsideRoadmap.progression!.companionUnlockWeek = 99;
+  assert.throws(
+    () => parsePalWidgetSnapshot(unlockOutsideRoadmap),
+    /companionUnlockWeek.*supplied roadmap week/i,
+  );
+
+  const mismatchedStoryLength = createFixtureSnapshot();
+  mismatchedStoryLength.progression!.storyTotalPeriods = 15;
+  assert.throws(
+    () => parsePalWidgetSnapshot(mismatchedStoryLength),
+    /storyTotalPeriods.*match the roadmap period count/i,
   );
 });
 

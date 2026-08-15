@@ -67,3 +67,26 @@ test("keeps the latest earned story title displayed after its reveal week", () =
 
   assert.equal(progression.currentTitle, "Brave Beginner");
 });
+
+test("uses durable award chronology when a later behavior title is supplied", () => {
+  const progression = createPalProgressionState({
+    currentWeek: 4,
+    totalWeeks: 16,
+    level: 2,
+    streak: 3,
+    achievements: [
+      {
+        id: "on-time-finish-week-4",
+        title: "On-Time Finish",
+        description: "Finished on time.",
+        status: "earned",
+        statusLabel: "Earned",
+        badge: { label: "On-Time Finish" },
+      },
+    ],
+    earnedWeeks: [1, 2, 3, 4],
+    currentTitleId: "on-time-pro",
+  });
+
+  assert.equal(progression.currentTitle, "On-Time Pro");
+});

@@ -283,13 +283,14 @@ function parseWeek(
   value: unknown,
   path: string,
   weekIds: Set<string>,
+  weekNumbers: Set<number>,
   achievementIds: Set<string>,
   assetPolicy: AssetPolicy,
 ): PalRoadmapWeek {
   const source = record(value, path);
   return {
     id: uniqueId(text(source.id, `${path}.id`), weekIds, `${path}.id`),
-    number: integer(source.number, `${path}.number`, 1),
+    number: uniqueInteger(source.number, weekNumbers, `${path}.number`, 1),
     label: text(source.label, `${path}.label`),
     dateLabel: text(source.dateLabel, `${path}.dateLabel`),
     status: member<PalWeekStatus>(
@@ -428,7 +429,8 @@ function parseCollectible(
   value: unknown,
   path: string,
   ids: Set<string>,
-  roadmapWeeks: Set<number>,
+  assignedRoadmapWeeks: Set<number>,
+  validRoadmapWeeks: ReadonlySet<number>,
   assetPolicy: AssetPolicy,
 ): PalCollectibleUnlock {
   const source = record(value, path);
@@ -453,6 +455,15 @@ function parseCollectible(
     source.titleRevealCopy,
     `${path}.titleRevealCopy`,
   );
+  const roadmapWeek = uniqueInteger(
+    source.roadmapWeek,
+    assignedRoadmapWeeks,
+    `${path}.roadmapWeek`,
+    1,
+  );
+  if (!validRoadmapWeeks.has(roadmapWeek)) {
+    fail(`${path}.roadmapWeek`, "must identify a supplied roadmap week");
+  }
   return {
     id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
     ...(chapterId === undefined ? {} : { chapterId }),
@@ -462,12 +473,7 @@ function parseCollectible(
     ...(storyCopy === undefined ? {} : { storyCopy }),
     ...(titleAward === undefined ? {} : { titleAward }),
     ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
-    roadmapWeek: uniqueInteger(
-      source.roadmapWeek,
-      roadmapWeeks,
-      `${path}.roadmapWeek`,
-      1,
-    ),
+    roadmapWeek,
     kind: member<PalCollectibleKind>(
       source.kind,
       `${path}.kind`,
@@ -506,6 +512,8 @@ function parseTitle(
 function parseProgression(
   value: unknown,
   path: string,
+  validRoadmapWeeks: ReadonlySet<number>,
+  roadmapPeriodCount: number,
   assetPolicy: AssetPolicy,
 ): PalProgressionState {
   const source = record(value, path);
@@ -523,7 +531,21 @@ function parseProgression(
     `${path}.storyTotalPeriods`,
     1,
   );
+  if (
+    storyTotalPeriods !== undefined &&
+    storyTotalPeriods !== roadmapPeriodCount
+  ) {
+    fail(`${path}.storyTotalPeriods`, "must match the roadmap period count");
+  }
   const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
+  const companionUnlockWeek = integer(
+    source.companionUnlockWeek,
+    `${path}.companionUnlockWeek`,
+    1,
+  );
+  if (!validRoadmapWeeks.has(companionUnlockWeek)) {
+    fail(`${path}.companionUnlockWeek`, "must identify a supplied roadmap week");
+  }
   return {
     ...(storyId === undefined ? {} : { storyId }),
     ...(storyVersion === undefined ? {} : { storyVersion }),
@@ -532,11 +554,7 @@ function parseProgression(
       source.companionUnlocked,
       `${path}.companionUnlocked`,
     ),
-    companionUnlockWeek: integer(
-      source.companionUnlockWeek,
-      `${path}.companionUnlockWeek`,
-      1,
-    ),
+    companionUnlockWeek,
     ...(currentTitle === undefined ? {} : { currentTitle }),
     collectibles: boundedArray(
       source.collectibles,
@@ -549,6 +567,7 @@ function parseProgression(
         `${path}.collectibles[${index}]`,
         collectibleIds,
         collectibleRoadmapWeeks,
+        validRoadmapWeeks,
         assetPolicy,
       ),
     ),
@@ -578,6 +597,7 @@ export function parsePalWidgetSnapshot(
 
   const roadmap = record(source.roadmap, "snapshot.roadmap");
   const weekIds = new Set<string>();
+  const weekNumbers = new Set<number>();
   const achievementIds = new Set<string>();
   const weeks = boundedArray(
     roadmap.weeks,
@@ -589,10 +609,17 @@ export function parsePalWidgetSnapshot(
       week,
       `snapshot.roadmap.weeks[${index}]`,
       weekIds,
+      weekNumbers,
       achievementIds,
       assetPolicy,
     ),
   );
+  if (weeks.some((week) => week.number > weeks.length)) {
+    fail(
+      "snapshot.roadmap.weeks",
+      "week numbers must form the contiguous range 1 through the roadmap length",
+    );
+  }
   const currentWeek = integer(
     roadmap.currentWeek,
     "snapshot.roadmap.currentWeek",
@@ -613,8 +640,10 @@ export function parsePalWidgetSnapshot(
       : parseProgression(
           source.progression,
           "snapshot.progression",
-           assetPolicy,
-         );
+          weekNumbers,
+          weeks.length,
+          assetPolicy,
+        );
   return {
     schemaVersion: 1,
     roadmap: {

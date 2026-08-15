@@ -223,7 +223,18 @@ function cloneSnapshot(snapshot: PalWidgetSnapshot): PalWidgetSnapshot {
   return structuredClone(snapshot);
 }
 
-function refreshProgression(snapshot: PalWidgetSnapshot): void {
+function currentTitleIdForSnapshot(snapshot: PalWidgetSnapshot): string | undefined {
+  const currentTitle = snapshot.progression?.currentTitle;
+  if (!currentTitle) return undefined;
+  return snapshot.progression?.titles.find(
+    (title) => title.status === "earned" && title.label === currentTitle,
+  )?.id;
+}
+
+function refreshProgression(
+  snapshot: PalWidgetSnapshot,
+  currentTitleId?: string,
+): void {
   snapshot.progression = createPalProgressionState({
     currentWeek: snapshot.roadmap.currentWeek,
     totalWeeks: snapshot.roadmap.weeks.length,
@@ -231,6 +242,7 @@ function refreshProgression(snapshot: PalWidgetSnapshot): void {
     streak: snapshot.companion.streak,
     achievements: snapshot.roadmap.weeks.flatMap((week) => week.achievements),
     earnedWeeks: earnedCollectibleWeeks(snapshot.roadmap.weeks),
+    ...(currentTitleId ? { currentTitleId } : {}),
   });
 }
 
@@ -246,6 +258,7 @@ export function createFixturePalClient(
   let generatedDayIdentity = 0;
   let generatedItemIdentity = 0;
   let earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+  let currentTitleId = currentTitleIdForSnapshot(snapshot);
   let engineState = progressionStateForSnapshot(snapshot);
 
   function progressionStateForSnapshot(value: PalWidgetSnapshot): LearnerState {
@@ -328,7 +341,25 @@ export function createFixturePalClient(
     snapshot.collection = {
       items: collectionItemsForUnlocks(engineState.world.unlocked_object_ids),
     };
-    refreshProgression(snapshot);
+    refreshProgression(snapshot, currentTitleId);
+  }
+
+  function earnedTitleIds(): Set<string> {
+    return new Set(
+      snapshot.progression?.titles
+        .filter((title) => title.status === "earned")
+        .map((title) => title.id) ?? [],
+    );
+  }
+
+  function selectLatestNewTitle(previouslyEarned: ReadonlySet<string>): void {
+    const newlyEarned = snapshot.progression?.titles.filter(
+      (title) => title.status === "earned" && !previouslyEarned.has(title.id),
+    ) ?? [];
+    const latest = newlyEarned[newlyEarned.length - 1];
+    if (!latest) return;
+    currentTitleId = latest.id;
+    refreshProgression(snapshot, currentTitleId);
   }
 
   function applyProgression(event: IncomingEvent): void {
@@ -463,6 +494,7 @@ export function createFixturePalClient(
         generatedDayIdentity = 0;
         generatedItemIdentity = 0;
         earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+        currentTitleId = currentTitleIdForSnapshot(snapshot);
         engineState = progressionStateForSnapshot(snapshot);
         syncMissingCollection("2026-04-13T12:00:00.000Z");
         return "Fixture learner reset";
@@ -489,7 +521,7 @@ export function createFixturePalClient(
                 : "Opens when the week begins";
         }
         ensureCurrentRhythm();
-        refreshProgression(snapshot);
+        refreshProgression(snapshot, currentTitleId);
         return nextWeek === finalWeek ? "Moved to final semester week" : `Moved to week ${nextWeek}`;
       }
       if (action === "week-configured") {
@@ -497,6 +529,7 @@ export function createFixturePalClient(
         return "Created a 5-day Weekly Rhythm target";
       }
       if (action === "short-week-configured") {
+        const previouslyEarnedTitles = earnedTitleIds();
         const weekNumber = currentWeek().number;
         const activeCollectibleWasEarned =
           snapshot.progression?.collectibles.find(
@@ -517,6 +550,7 @@ export function createFixturePalClient(
           itemOccurredAt(),
         );
         queueStoryReward(weekNumber, activeCollectibleWasEarned);
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "Revised to a 2-day Weekly Rhythm goal within 3 eligible days";
       }
       if (action === "daily-log-completed") {
@@ -535,6 +569,7 @@ export function createFixturePalClient(
         if (acceptedCount >= eligibleDaysForFixtureRhythm(rhythm)) {
           return "daily_log.completed: period limit exceeded — no progress changed";
         }
+        const previouslyEarnedTitles = earnedTitleIds();
         const activeCollectibleWasEarned =
           snapshot.progression?.collectibles.find(
             (collectible) => collectible.roadmapWeek === snapshot.roadmap.currentWeek,
@@ -567,6 +602,7 @@ export function createFixturePalClient(
         });
         rewardWeeklyRhythmIfNewlyEarned(wasEarned, rhythm, occurredAt);
         queueStoryReward(snapshot.roadmap.currentWeek, activeCollectibleWasEarned);
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "daily_log.completed applied to fixture state";
       }
       if (action === "classroom-joined") {
@@ -604,6 +640,7 @@ export function createFixturePalClient(
         return "learning_item.viewed (early) applied to fixture state";
       }
       if (action === "on-time-finish") {
+        const previouslyEarnedTitles = earnedTitleIds();
         const week = currentWeek();
         const itemToken = itemIdentity(context);
         if (completedItemTokens.has(itemToken)) {
@@ -628,6 +665,7 @@ export function createFixturePalClient(
           occurred_at: itemOccurredAt(),
           metadata: { timing: "on_time" },
         });
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "learning_item.completed (on_time) applied to fixture state";
       }
       if (action === "late-finish") {
@@ -685,6 +723,7 @@ export function createFixturePalClient(
       completedItemTokens.clear();
       viewedItemTokens.clear();
       earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+      currentTitleId = currentTitleIdForSnapshot(snapshot);
       engineState = progressionStateForSnapshot(snapshot);
       syncMissingCollection(itemOccurredAt());
     },
@@ -701,6 +740,7 @@ export function createFixturePalClient(
       completedItemTokens.clear();
       viewedItemTokens.clear();
       earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+      currentTitleId = currentTitleIdForSnapshot(snapshot);
       engineState = progressionStateForSnapshot(snapshot);
       syncMissingCollection(itemOccurredAt());
     },

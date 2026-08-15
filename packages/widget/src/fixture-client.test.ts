@@ -80,6 +80,28 @@ test("fixture actions refresh titles derived from earned achievements", async ()
   assert.equal(title?.status, "earned");
 });
 
+test("a later behavior title replaces an earlier story title", () => {
+  const client = createFixturePalClient(createFixtureSnapshot(4));
+
+  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
+  client.dispatch("on-time-finish", { itemToken: "later-title" });
+
+  assert.equal(client.peek().progression?.currentTitle, "On-Time Pro");
+
+  client.dispatch("classroom-joined");
+  client.dispatch("advance-week");
+  assert.equal(client.peek().progression?.currentTitle, "On-Time Pro");
+
+  let completion = 1;
+  while (client.peek().companion.level < 5) {
+    completion += 1;
+    client.dispatch("on-time-finish", {
+      itemToken: `level-title-${completion}`,
+    });
+  }
+  assert.equal(client.peek().progression?.currentTitle, "Level Leader");
+});
+
 test("fixture refreshes progression when a week or streak milestone changes", () => {
   const emptyClient = createFixturePalClient(createEmptyFixtureSnapshot());
 
@@ -149,6 +171,7 @@ test("earning Weekly Rhythm queues one story reveal with its collectible and tit
   assert.equal(reward?.collectibleTitle, "Warming Lantern");
   assert.equal(reward?.assetUrl, "/assets/world/reward-warming-lantern-v1.png");
   assert.equal(reward?.titleAward, "Gentle Keeper");
+  assert.equal(client.peek().progression?.currentTitle, "Gentle Keeper");
   assert.equal(
     client.peek().rewards.filter((candidate) => candidate.kind === "story").length,
     1,

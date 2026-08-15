@@ -13,6 +13,8 @@ type ProgressionInput = {
   level: number;
   streak: number;
   achievements: readonly PalAchievement[];
+  /** Latest durably awarded title. Used when award chronology is available. */
+  currentTitleId?: string;
   /** Periods whose weekly eligibility goal was durably earned. */
   earnedWeeks?: readonly number[];
   /** Persisted term plan. When absent, a deterministic plan is derived. */
@@ -157,10 +159,10 @@ export function createPalProgressionState(
   const companionUnlocked = earnedWeeks.has(pipChapter.roadmapWeek);
 
   let nextTitleAssigned = false;
-  let currentTitle: string | undefined;
+  let fallbackCurrentTitle: string | undefined;
   const behaviorTitles: PalTitleUnlock[] = TITLES.map((definition) => {
     const milestone = milestoneProgress(definition.milestone, input);
-    if (milestone.earned) currentTitle = definition.label;
+    if (milestone.earned) fallbackCurrentTitle = definition.label;
     const status = milestone.earned
       ? "earned"
       : nextTitleAssigned
@@ -179,11 +181,10 @@ export function createPalProgressionState(
   const storyTitles: PalTitleUnlock[] = storyPlan.chapters.flatMap((chapter) => {
     if (!chapter.title) return [];
     const earned = earnedWeeks.has(chapter.roadmapWeek);
-    // Chapters are ordered by roadmap week, so the final earned story title is
-    // the latest story identity the learner has reached. Keep it displayed in
-    // later weeks instead of falling back merely because its reveal week ended.
+    // When award chronology is unavailable, the latest earned story chapter is
+    // the safest deterministic fallback and stays displayed in later weeks.
     if (earned) {
-      currentTitle = chapter.title.label;
+      fallbackCurrentTitle = chapter.title.label;
     }
     return [{
       id: chapter.title.id,
@@ -194,6 +195,13 @@ export function createPalProgressionState(
     }];
   });
 
+  const titles = [...behaviorTitles, ...storyTitles];
+  const currentTitle = input.currentTitleId
+    ? titles.find(
+        (title) => title.id === input.currentTitleId && title.status === "earned",
+      )?.label ?? fallbackCurrentTitle
+    : fallbackCurrentTitle;
+
   return {
     storyId: storyPlan.storyId,
     storyVersion: storyPlan.version,
@@ -202,6 +210,6 @@ export function createPalProgressionState(
     companionUnlockWeek: pipChapter.roadmapWeek,
     ...(currentTitle ? { currentTitle } : {}),
     collectibles,
-    titles: [...behaviorTitles, ...storyTitles],
+    titles,
   };
 }
