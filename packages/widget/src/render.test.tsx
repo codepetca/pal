@@ -224,6 +224,31 @@ test("the companion stays in its mystery egg until week four", () => {
   assert.match(html, /Keep building your Weekly Rhythm/);
 });
 
+test("the canonical projection can name a different companion", () => {
+  const snapshot = createFixtureSnapshot(2);
+  snapshot.companion.name = "Nova";
+  const reveal = snapshot.progression!.companionReveal;
+  assert.equal(reveal.status, "locked");
+  snapshot.progression!.companionReveal = {
+    ...reveal,
+    label: "Mystery companion. Complete Week 4 to meet Nova.",
+  };
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="nova-fixture-learner"
+      motion="reduced"
+    >
+      <PalCompanion />
+    </PalProvider>,
+  );
+
+  assert.match(html, /Complete Week 4 to meet Nova/);
+  assert.doesNotMatch(html, /meet Pip/);
+});
+
 test("the companion renders only the canonical reveal decision", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.companionReveal = {

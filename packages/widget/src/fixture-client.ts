@@ -431,7 +431,14 @@ export function createFixturePalClient(
     const collectible = snapshot.progression?.collectibles.find(
       (candidate) => candidate.roadmapWeek === weekNumber,
     );
-    if (!collectible || collectible.status !== "earned" || !collectible.chapterId) {
+    if (
+      !collectible ||
+      collectible.status !== "earned" ||
+      !collectible.chapterId ||
+      !collectible.title ||
+      !collectible.assetUrl ||
+      !collectible.description
+    ) {
       return;
     }
     const rewardId = `fixture-story-${collectible.chapterId}`;

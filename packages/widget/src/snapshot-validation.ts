@@ -604,7 +604,9 @@ function parseProgression(
   const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
   if (
     source.companionUnlocked !== undefined ||
-    source.companionUnlockWeek !== undefined
+    source.companionUnlockWeek !== undefined ||
+    source.companionCollectibleId !== undefined ||
+    source.mysteryCollectibleId !== undefined
   ) {
     fail(path, "expected one canonical companionReveal decision");
   }

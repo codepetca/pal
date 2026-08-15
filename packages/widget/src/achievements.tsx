@@ -156,9 +156,12 @@ export function PalAchievements() {
           const collectible = progression?.collectibles.find(
             (candidate) => candidate.roadmapWeek === week.number,
           );
-          const earnedReward = collectible?.status === "earned"
-            ? collectible
-            : undefined;
+          const earnedReward =
+            collectible?.status === "earned" &&
+            collectible.title &&
+            collectible.assetUrl
+              ? collectible
+              : undefined;
 
           return (
             <li
