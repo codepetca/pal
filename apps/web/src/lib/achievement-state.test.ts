@@ -3597,6 +3597,91 @@ test(
   },
 );
 
+test(
+  "keeps Weekly Rhythm visible when item outcomes predate a bounded week configuration",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `snapshot-priority-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `priority-week-${crypto.randomUUID()}`;
+    const termToken = `priority-term-${crypto.randomUUID()}`;
+
+    try {
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      await getDb().insert(achievementPeriods).values({
+        learnerId,
+        periodKey,
+        anchorAt: new Date("2026-04-13T11:00:00.000Z"),
+      });
+      await getDb().insert(achievementInstances).values(
+        Array.from({ length: 101 }, (_, itemIndex) => ({
+          learnerId,
+          achievementKey: "ready-early",
+          scopeKey: `priority-${itemIndex}-${crypto.randomUUID()}`,
+          periodKey,
+          status: "earned",
+          createdAt: new Date("2026-04-13T11:00:00.000Z"),
+        })),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 4,
+            term_token: termToken,
+            term_start_day: "2026-04-13",
+            term_end_day: "2026-05-24",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-04-13",
+            week_index: 1,
+          },
+          "2026-04-13T13:00:00.000Z",
+        ),
+        key(),
+      );
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-04-14T12:00:00.000Z") },
+      );
+      const achievements = snapshot.roadmap.weeks[0].achievements;
+      assert.equal(achievements.length, 100);
+      assert.equal(
+        achievements.filter(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ).length,
+        1,
+      );
+      assert.equal(
+        achievements.filter(
+          (achievement) => achievement.title === "Ready Early",
+        ).length,
+        99,
+      );
+      assert.deepEqual(parsePalWidgetSnapshot(snapshot), snapshot);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
 after(async () => {
   if (openedDatabase) await getPool().end();
 });

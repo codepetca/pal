@@ -459,7 +459,14 @@ export async function loadLearnerSnapshot(
           ...getTableColumns(achievementInstances),
           snapshotRank: sql<number>`row_number() over (
             partition by ${achievementInstances.periodKey}
-            order by ${achievementInstances.createdAt}, ${achievementInstances.id}
+            order by
+              case
+                when ${achievementInstances.achievementKey} = ${ACHIEVEMENT_KEYS.weeklyRhythm}
+                  then 0
+                else 1
+              end,
+              ${achievementInstances.createdAt},
+              ${achievementInstances.id}
           )`.as("snapshot_rank"),
         })
         .from(achievementInstances)
