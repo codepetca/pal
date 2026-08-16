@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
   events,
   integrations,
   learnerFacts,
+  learnerRewardGrants,
   learners,
   rewardNotices,
+  storyPlanChapters,
+  storyPlans,
   weeklyRhythmConfigs,
 } from "./schema";
 import { getDb, getPool } from "./client";
@@ -21,6 +24,15 @@ function foreignKeyViolation(error: unknown): boolean {
   return (
     candidate.code === "23503" ||
     (candidate.cause !== undefined && foreignKeyViolation(candidate.cause))
+  );
+}
+
+function postgresViolation(error: unknown, code: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; cause?: unknown };
+  return (
+    candidate.code === code ||
+    (candidate.cause !== undefined && postgresViolation(candidate.cause, code))
   );
 }
 
@@ -63,6 +75,277 @@ test(
           },
         ])
         .returning({ id: learners.id });
+
+      const [periodA, periodB] = await db
+        .insert(achievementPeriods)
+        .values([
+          {
+            learnerId: learnerA.id,
+            periodKey: `week-a-${suffix}`,
+            anchorAt: new Date(),
+          },
+          {
+            learnerId: learnerB.id,
+            periodKey: `week-b-${suffix}`,
+            anchorAt: new Date(),
+          },
+        ])
+        .returning({ periodKey: achievementPeriods.periodKey });
+
+      const planInput = {
+        learnerId: learnerA.id,
+        termKey: `term-${suffix}`,
+        termStartDay: "2026-08-31",
+        storyId: "pips-first-recipe",
+        storyVersion: 1,
+        totalPeriods: 6,
+      };
+      for (const invalid of [
+        { ...planInput, termKey: `term-short-${suffix}`, totalPeriods: 5 },
+        { ...planInput, termKey: `term-long-${suffix}`, totalPeriods: 25 },
+        { ...planInput, termKey: `term-version-${suffix}`, storyVersion: 0 },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlans).values(invalid),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      for (const [index, [termKey, storyId, firstChapterId]] of [
+        ["", "pips-first-recipe", "chapter-1"],
+        ["   ", "pips-first-recipe", "chapter-1"],
+        [`invalid-story-empty-${suffix}`, "", "chapter-1"],
+        [`invalid-story-blank-${suffix}`, "   ", "chapter-1"],
+        [`invalid-chapter-empty-${suffix}`, "pips-first-recipe", ""],
+        [`invalid-chapter-blank-${suffix}`, "pips-first-recipe", "   "],
+      ].entries()) {
+        await assert.rejects(
+          db.transaction(async (tx) => {
+            const [invalidPlan] = await tx
+              .insert(storyPlans)
+              .values({ ...planInput, termKey, storyId })
+              .returning({ id: storyPlans.id });
+            await tx.insert(storyPlanChapters).values(
+              Array.from({ length: 6 }, (_, chapterIndex) => ({
+                storyPlanId: invalidPlan.id,
+                learnerId: learnerA.id,
+                periodNumber: chapterIndex + 1,
+                chapterId:
+                  chapterIndex === 0
+                    ? firstChapterId
+                    : `invalid-identifier-${index}-chapter-${chapterIndex + 1}`,
+              })),
+            );
+          }),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      const plan = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(storyPlans)
+          .values(planInput)
+          .returning({ id: storyPlans.id });
+        await tx.insert(storyPlanChapters).values(
+          Array.from({ length: 6 }, (_, index) => ({
+            storyPlanId: created.id,
+            learnerId: learnerA.id,
+            periodNumber: index + 1,
+            ...(index === 0 ? { periodKey: periodA.periodKey } : {}),
+            chapterId: `chapter-${index + 1}`,
+          })),
+        );
+        return created;
+      });
+      await assert.rejects(
+        db.insert(storyPlans).values(planInput),
+        (error) => postgresViolation(error, "23505"),
+      );
+
+      for (const invalid of [
+        {
+          storyPlanId: plan.id,
+          learnerId: learnerA.id,
+          periodNumber: 0,
+          chapterId: "invalid-period",
+        },
+        {
+          storyPlanId: plan.id,
+          learnerId: learnerA.id,
+          periodNumber: 7,
+          chapterId: "",
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlanChapters).values(invalid),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+      for (const duplicate of [
+        {
+          storyPlanId: plan.id,
+          learnerId: learnerA.id,
+          periodNumber: 1,
+          chapterId: "different-chapter",
+        },
+        {
+          storyPlanId: plan.id,
+          learnerId: learnerA.id,
+          periodNumber: 2,
+          chapterId: "chapter-1",
+        },
+        {
+          storyPlanId: plan.id,
+          learnerId: learnerA.id,
+          periodNumber: 2,
+          periodKey: periodA.periodKey,
+          chapterId: "different-chapter",
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(storyPlanChapters).values(duplicate),
+          (error) => postgresViolation(error, "23505"),
+        );
+      }
+
+      const [boundChapter] = await db
+        .select({ id: storyPlanChapters.id })
+        .from(storyPlanChapters)
+        .where(
+          and(
+            eq(storyPlanChapters.storyPlanId, plan.id),
+            eq(storyPlanChapters.periodNumber, 1),
+          ),
+        );
+      for (const foreignPeriodKey of [periodB.periodKey, `missing-${suffix}`]) {
+        await assert.rejects(
+          db
+            .update(storyPlanChapters)
+            .set({ periodKey: foreignPeriodKey })
+            .where(eq(storyPlanChapters.id, boundChapter.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      for (const [termKey, periodNumbers] of [
+        [`term-incomplete-${suffix}`, [1, 2, 3, 4, 5]],
+        [`term-gapped-${suffix}`, [1, 2, 3, 4, 5, 24]],
+      ] as const) {
+        await assert.rejects(
+          db.transaction(async (tx) => {
+            const [invalidPlan] = await tx
+              .insert(storyPlans)
+              .values({ ...planInput, termKey })
+              .returning({ id: storyPlans.id });
+            await tx.insert(storyPlanChapters).values(
+              periodNumbers.map((periodNumber, index) => ({
+                storyPlanId: invalidPlan.id,
+                learnerId: learnerA.id,
+                periodNumber,
+                chapterId: `${termKey}-chapter-${index + 1}`,
+              })),
+            );
+          }),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      for (const change of [
+        { id: crypto.randomUUID() },
+        { createdAt: new Date(0) },
+        { totalPeriods: 7 },
+        { storyVersion: 2 },
+        { storyId: "replacement-story" },
+        { termStartDay: "2026-09-01" },
+      ]) {
+        await assert.rejects(
+          db.update(storyPlans).set(change).where(eq(storyPlans.id, plan.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+      for (const change of [
+        { id: crypto.randomUUID() },
+        { createdAt: new Date(0) },
+        { chapterId: "replacement-chapter" },
+      ]) {
+        await assert.rejects(
+          db
+            .update(storyPlanChapters)
+            .set(change)
+            .where(eq(storyPlanChapters.id, boundChapter.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      await assert.rejects(
+        db.transaction(async (tx) => {
+          const [replaceableChapter] = await tx
+            .select()
+            .from(storyPlanChapters)
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, plan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+          await tx
+            .delete(storyPlanChapters)
+            .where(eq(storyPlanChapters.id, replaceableChapter.id));
+          await tx.insert(storyPlanChapters).values({
+            storyPlanId: plan.id,
+            learnerId: learnerA.id,
+            periodNumber: replaceableChapter.periodNumber,
+            periodKey: replaceableChapter.periodKey,
+            chapterId: "replacement-chapter",
+          });
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+
+      const destinationPlan = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(storyPlans)
+          .values({ ...planInput, termKey: `destination-term-${suffix}` })
+          .returning({ id: storyPlans.id });
+        await tx.insert(storyPlanChapters).values(
+          Array.from({ length: 6 }, (_, index) => ({
+            storyPlanId: created.id,
+            learnerId: learnerA.id,
+            periodNumber: index + 1,
+            chapterId: `destination-chapter-${index + 1}`,
+          })),
+        );
+        return created;
+      });
+      await assert.rejects(
+        db.transaction(async (tx) => {
+          await tx
+            .delete(storyPlanChapters)
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, destinationPlan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+          await tx
+            .update(storyPlanChapters)
+            .set({
+              storyPlanId: destinationPlan.id,
+              chapterId: "destination-replacement-chapter",
+            })
+            .where(
+              and(
+                eq(storyPlanChapters.storyPlanId, plan.id),
+                eq(storyPlanChapters.periodNumber, 6),
+              ),
+            );
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.delete(storyPlans).where(eq(storyPlans.id, destinationPlan.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
 
       await assert.rejects(
         db.insert(events).values({
@@ -123,15 +406,197 @@ test(
           metadata: {},
         })
         .returning({ id: learnerFacts.id });
+      const [factA2] = await db
+        .insert(learnerFacts)
+        .values({
+          integrationId: integrationA.id,
+          learnerId: learnerA.id,
+          sourceEventId: eventA.id,
+          eventType: "platform.session.started",
+          semanticKey: `fact-a2-${suffix}`,
+          occurredAt: new Date(),
+          metadata: {},
+        })
+        .returning({ id: learnerFacts.id });
 
-      const [periodA] = await db
-        .insert(achievementPeriods)
+      const [secondChapter] = await db
+        .select({ id: storyPlanChapters.id })
+        .from(storyPlanChapters)
+        .where(
+          and(
+            eq(storyPlanChapters.storyPlanId, plan.id),
+            eq(storyPlanChapters.periodNumber, 2),
+          ),
+        );
+      await assert.rejects(
+        db
+          .update(storyPlanChapters)
+          .set({ periodKey: periodB.periodKey })
+          .where(eq(storyPlanChapters.id, secondChapter.id)),
+        foreignKeyViolation,
+      );
+
+      for (const invalidGrant of [
+        {
+          learnerId: learnerA.id,
+          kind: "story_chapter",
+          sourceFactId: factA.id,
+          behaviorTitleId: "not-a-story-payload",
+        },
+        {
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA.id,
+          behaviorTitleId: "   ",
+        },
+      ]) {
+        await assert.rejects(
+          db.insert(learnerRewardGrants).values(invalidGrant),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      await assert.rejects(
+        db.insert(learnerRewardGrants).values({
+          learnerId: learnerB.id,
+          kind: "behavior_title",
+          sourceFactId: factA.id,
+          behaviorTitleId: "cross-owner",
+        }),
+        foreignKeyViolation,
+      );
+
+      const [storyGrant] = await db
+        .insert(learnerRewardGrants)
         .values({
           learnerId: learnerA.id,
-          periodKey: "week-a",
-          anchorAt: new Date(),
+          kind: "story_chapter",
+          sourceFactId: factA.id,
+          storyPlanId: plan.id,
+          storyPlanChapterId: boundChapter.id,
         })
-        .returning({ periodKey: achievementPeriods.periodKey });
+        .returning({
+          id: learnerRewardGrants.id,
+          grantOrder: learnerRewardGrants.grantOrder,
+        });
+      await assert.rejects(
+        db
+          .update(storyPlanChapters)
+          .set({ id: crypto.randomUUID() })
+          .where(eq(storyPlanChapters.id, boundChapter.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      const [behaviorGrant] = await db
+        .insert(learnerRewardGrants)
+        .values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA.id,
+          behaviorTitleId: "rhythm-builder",
+        })
+        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+      assert.ok(behaviorGrant.grantOrder > storyGrant.grantOrder);
+
+      await assert.rejects(
+        db.insert(learnerRewardGrants).values({
+          learnerId: learnerA.id,
+          kind: "story_chapter",
+          sourceFactId: factA.id,
+          storyPlanId: plan.id,
+          storyPlanChapterId: secondChapter.id,
+        }),
+        (error) => postgresViolation(error, "23505"),
+      );
+      await assert.rejects(
+        db.insert(learnerRewardGrants).values({
+          learnerId: learnerA.id,
+          kind: "story_chapter",
+          sourceFactId: factA2.id,
+          storyPlanId: destinationPlan.id,
+          storyPlanChapterId: secondChapter.id,
+        }),
+        foreignKeyViolation,
+      );
+      await assert.rejects(
+        db.insert(learnerRewardGrants).values({
+          learnerId: learnerA.id,
+          kind: "story_chapter",
+          sourceFactId: factA2.id,
+          storyPlanId: plan.id,
+          storyPlanChapterId: boundChapter.id,
+        }),
+        (error) => postgresViolation(error, "23505"),
+      );
+      await assert.rejects(
+        db.insert(learnerRewardGrants).values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA.id,
+          behaviorTitleId: "rhythm-builder",
+        }),
+        (error) => postgresViolation(error, "23505"),
+      );
+
+      await db.execute(
+        sql.raw(
+          "ALTER SEQUENCE learner_reward_grants_grant_order_seq RESTART WITH 9007199254740992",
+        ),
+      );
+      const [firstLargeOrder] = await db
+        .insert(learnerRewardGrants)
+        .values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA2.id,
+          behaviorTitleId: "lossless-order-a",
+        })
+        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+      const [secondLargeOrder] = await db
+        .insert(learnerRewardGrants)
+        .values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA2.id,
+          behaviorTitleId: "lossless-order-b",
+        })
+        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+      assert.equal(
+        firstLargeOrder.grantOrder,
+        BigInt("9007199254740992"),
+      );
+      assert.equal(
+        secondLargeOrder.grantOrder,
+        BigInt("9007199254740993"),
+      );
+      assert.notEqual(firstLargeOrder.grantOrder, secondLargeOrder.grantOrder);
+
+      const acknowledgedAt = new Date();
+      await db
+        .update(learnerRewardGrants)
+        .set({ seenAt: acknowledgedAt })
+        .where(eq(learnerRewardGrants.id, storyGrant.id));
+      for (const seenAt of [null, new Date(acknowledgedAt.getTime() + 1)]) {
+        await assert.rejects(
+          db
+            .update(learnerRewardGrants)
+            .set({ seenAt })
+            .where(eq(learnerRewardGrants.id, storyGrant.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+      await assert.rejects(
+        db
+          .update(learnerRewardGrants)
+          .set({ sourceFactId: crypto.randomUUID() })
+          .where(eq(learnerRewardGrants.id, storyGrant.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db
+          .delete(learnerRewardGrants)
+          .where(eq(learnerRewardGrants.id, storyGrant.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
 
       await assert.rejects(
         db.insert(weeklyRhythmConfigs).values({

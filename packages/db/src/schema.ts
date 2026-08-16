@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -10,6 +11,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -158,6 +160,176 @@ export const achievementPeriods = pgTable(
       t.learnerId,
       t.periodKey,
     ),
+  ],
+);
+
+// One stable story identity per learner and opaque academic term. The first
+// story release pins the authoritative term start, catalog version, and one
+// supported term length. Migration triggers make that identity immutable; the
+// normalized rows and deferred checks require a complete plan at commit.
+// No student work or PII is stored.
+export const storyPlans = pgTable(
+  "story_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id")
+      .notNull()
+      .references(() => learners.id, { onDelete: "cascade" }),
+    termKey: text("term_key").notNull(),
+    termStartDay: date("term_start_day").notNull(),
+    storyId: text("story_id").notNull(),
+    storyVersion: integer("story_version").notNull(),
+    totalPeriods: integer("total_periods").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_plans_learner_term_uq").on(t.learnerId, t.termKey),
+    unique("story_plans_id_learner_uq").on(t.id, t.learnerId),
+    check(
+      "story_plans_term_key_nonempty",
+      sql`length(btrim(${t.termKey})) > 0`,
+    ),
+    check(
+      "story_plans_story_id_nonempty",
+      sql`length(btrim(${t.storyId})) > 0`,
+    ),
+    check("story_plans_version_positive", sql`${t.storyVersion} >= 1`),
+    check(
+      "story_plans_period_count_range",
+      sql`${t.totalPeriods} >= 6 AND ${t.totalPeriods} <= 24`,
+    ),
+  ],
+);
+
+// A normalized chapter assignment avoids nullable/multidimensional array
+// states and gives each stable ordinal at most one opaque period binding.
+// Migration triggers make the assignment immutable and permit period_key to
+// move only once from null to its learner-owned opaque week.
+export const storyPlanChapters = pgTable(
+  "story_plan_chapters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    storyPlanId: uuid("story_plan_id").notNull(),
+    learnerId: uuid("learner_id").notNull(),
+    periodNumber: integer("period_number").notNull(),
+    periodKey: text("period_key"),
+    chapterId: text("chapter_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_plan_chapters_plan_period_number_uq").on(
+      t.storyPlanId,
+      t.periodNumber,
+    ),
+    unique("story_plan_chapters_plan_period_key_uq").on(
+      t.storyPlanId,
+      t.periodKey,
+    ),
+    unique("story_plan_chapters_plan_chapter_uq").on(
+      t.storyPlanId,
+      t.chapterId,
+    ),
+    unique("story_plan_chapters_learner_period_uq").on(
+      t.learnerId,
+      t.periodKey,
+    ),
+    unique("story_plan_chapters_id_plan_learner_uq").on(
+      t.id,
+      t.storyPlanId,
+      t.learnerId,
+    ),
+    foreignKey({
+      columns: [t.storyPlanId, t.learnerId],
+      foreignColumns: [storyPlans.id, storyPlans.learnerId],
+      name: "story_plan_chapters_plan_owner_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.learnerId, t.periodKey],
+      foreignColumns: [achievementPeriods.learnerId, achievementPeriods.periodKey],
+      name: "story_plan_chapters_period_owner_fk",
+    }).onDelete("cascade"),
+    check(
+      "story_plan_chapters_period_number_range",
+      sql`${t.periodNumber} >= 1 AND ${t.periodNumber} <= 24`,
+    ),
+    check(
+      "story_plan_chapters_chapter_id_nonempty",
+      sql`length(btrim(${t.chapterId})) > 0`,
+    ),
+  ],
+);
+
+// Append-only durable ownership ledger. Source facts group grants from one
+// accepted action; grant_order gives those action groups stable database order
+// even when timestamps collide. Story content is resolved from the exact
+// pinned plan assignment at read time and is never copied into this table.
+export const learnerRewardGrants = pgTable(
+  "learner_reward_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    grantOrder: bigint("grant_order", { mode: "bigint" })
+      .generatedAlwaysAsIdentity()
+      .notNull(),
+    learnerId: uuid("learner_id").notNull(),
+    kind: text("kind").notNull(),
+    sourceFactId: uuid("source_fact_id").notNull(),
+    storyPlanId: uuid("story_plan_id"),
+    storyPlanChapterId: uuid("story_plan_chapter_id"),
+    behaviorTitleId: text("behavior_title_id"),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("learner_reward_grants_order_uq").on(t.grantOrder),
+    foreignKey({
+      columns: [t.sourceFactId, t.learnerId],
+      foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
+      name: "learner_reward_grants_source_owner_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.storyPlanId, t.learnerId],
+      foreignColumns: [storyPlans.id, storyPlans.learnerId],
+      name: "learner_reward_grants_plan_owner_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.storyPlanChapterId, t.storyPlanId, t.learnerId],
+      foreignColumns: [
+        storyPlanChapters.id,
+        storyPlanChapters.storyPlanId,
+        storyPlanChapters.learnerId,
+      ],
+      name: "learner_reward_grants_chapter_owner_fk",
+    }).onDelete("cascade"),
+    check(
+      "learner_reward_grants_kind_payload",
+      sql`(
+        ${t.kind} = 'story_chapter'
+        AND ${t.storyPlanId} IS NOT NULL
+        AND ${t.storyPlanChapterId} IS NOT NULL
+        AND ${t.behaviorTitleId} IS NULL
+      ) OR (
+        ${t.kind} = 'behavior_title'
+        AND ${t.storyPlanId} IS NULL
+        AND ${t.storyPlanChapterId} IS NULL
+        AND length(btrim(${t.behaviorTitleId})) > 0
+      )`,
+    ),
+    uniqueIndex("learner_reward_grants_story_slot_uq")
+      .on(t.storyPlanChapterId)
+      .where(sql`${t.kind} = 'story_chapter'`),
+    uniqueIndex("learner_reward_grants_story_source_uq")
+      .on(t.learnerId, t.sourceFactId)
+      .where(sql`${t.kind} = 'story_chapter'`),
+    uniqueIndex("learner_reward_grants_behavior_title_uq")
+      .on(t.learnerId, t.behaviorTitleId)
+      .where(sql`${t.kind} = 'behavior_title'`),
+    index("learner_reward_grants_projection_idx").on(
+      t.learnerId,
+      t.grantOrder.desc(),
+    ),
+    index("learner_reward_grants_unseen_idx").on(t.learnerId, t.seenAt),
   ],
 );
 
@@ -362,6 +534,8 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   events: many(events),
   facts: many(learnerFacts),
   periods: many(achievementPeriods),
+  storyPlans: many(storyPlans),
+  rewardGrants: many(learnerRewardGrants),
   weeklyRhythmConfigs: many(weeklyRhythmConfigs),
   achievementInstances: many(achievementInstances),
   rewardNotices: many(rewardNotices),
@@ -399,6 +573,60 @@ export const achievementPeriodsRelations = relations(
     learner: one(learners, {
       fields: [achievementPeriods.learnerId],
       references: [learners.id],
+    }),
+  }),
+);
+
+export const storyPlansRelations = relations(storyPlans, ({ one, many }) => ({
+  learner: one(learners, {
+    fields: [storyPlans.learnerId],
+    references: [learners.id],
+  }),
+  chapters: many(storyPlanChapters),
+  rewardGrants: many(learnerRewardGrants),
+}));
+
+export const storyPlanChaptersRelations = relations(
+  storyPlanChapters,
+  ({ one, many }) => ({
+    storyPlan: one(storyPlans, {
+      fields: [storyPlanChapters.storyPlanId, storyPlanChapters.learnerId],
+      references: [storyPlans.id, storyPlans.learnerId],
+    }),
+    period: one(achievementPeriods, {
+      fields: [storyPlanChapters.learnerId, storyPlanChapters.periodKey],
+      references: [achievementPeriods.learnerId, achievementPeriods.periodKey],
+    }),
+    rewardGrants: many(learnerRewardGrants),
+  }),
+);
+
+export const learnerRewardGrantsRelations = relations(
+  learnerRewardGrants,
+  ({ one }) => ({
+    learner: one(learners, {
+      fields: [learnerRewardGrants.learnerId],
+      references: [learners.id],
+    }),
+    sourceFact: one(learnerFacts, {
+      fields: [learnerRewardGrants.sourceFactId, learnerRewardGrants.learnerId],
+      references: [learnerFacts.id, learnerFacts.learnerId],
+    }),
+    storyPlan: one(storyPlans, {
+      fields: [learnerRewardGrants.storyPlanId, learnerRewardGrants.learnerId],
+      references: [storyPlans.id, storyPlans.learnerId],
+    }),
+    storyPlanChapter: one(storyPlanChapters, {
+      fields: [
+        learnerRewardGrants.storyPlanChapterId,
+        learnerRewardGrants.storyPlanId,
+        learnerRewardGrants.learnerId,
+      ],
+      references: [
+        storyPlanChapters.id,
+        storyPlanChapters.storyPlanId,
+        storyPlanChapters.learnerId,
+      ],
     }),
   }),
 );
@@ -459,6 +687,9 @@ export type PetState = typeof petState.$inferSelect;
 export type WorldState = typeof worldState.$inferSelect;
 export type LearnerFact = typeof learnerFacts.$inferSelect;
 export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
+export type StoryPlan = typeof storyPlans.$inferSelect;
+export type StoryPlanChapter = typeof storyPlanChapters.$inferSelect;
+export type LearnerRewardGrant = typeof learnerRewardGrants.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;
