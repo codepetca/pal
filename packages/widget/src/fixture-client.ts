@@ -441,7 +441,15 @@ export function createFixturePalClient(
     if (!snapshot.rewards.some((reward) => reward.id === rewardId)) {
       snapshot.rewards.push({
         id: rewardId,
-        kind: "achievement",
+        kind: "standard",
+        title: presentation.title,
+        description: presentation.description,
+        ...(presentation.badge.assetUrl === undefined
+          ? {}
+          : { assetUrl: presentation.badge.assetUrl }),
+        ...(presentation.badge.icon === undefined
+          ? {}
+          : { icon: presentation.badge.icon }),
         achievement: {
           id: achievement.id,
           ...presentation,
@@ -513,6 +521,7 @@ export function createFixturePalClient(
       }
       if (action === "advance-week") {
         const finalWeek = snapshot.roadmap.weeks.length;
+        const closesSemester = snapshot.roadmap.currentWeek === finalWeek;
         const nextWeek = Math.min(finalWeek, snapshot.roadmap.currentWeek + 1);
         snapshot.roadmap.currentWeek = nextWeek;
         for (const week of snapshot.roadmap.weeks) {
@@ -531,7 +540,11 @@ export function createFixturePalClient(
         }
         ensureCurrentRhythm();
         refreshProgression(snapshot, currentTitleId);
-        return nextWeek === finalWeek ? "Moved to final semester week" : `Moved to week ${nextWeek}`;
+        return closesSemester
+          ? "Finished the semester story"
+          : nextWeek === finalWeek
+            ? "Moved to final semester week"
+            : `Moved to week ${nextWeek}`;
       }
       if (action === "week-configured") {
         ensureCurrentRhythm();

@@ -99,7 +99,7 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
 function achievementCelebrationPresentations(snapshot: PalWidgetSnapshot) {
   return snapshot.rewards
     .flatMap((reward) =>
-      reward.kind === "achievement"
+      reward.achievement !== undefined
         ? [{
             key: reward.achievement.key,
             title: reward.achievement.title,
@@ -391,7 +391,7 @@ test(
         ["world-study-bird-v1"],
       );
       const achievementCelebrations = snapshot.rewards.filter(
-        (reward) => reward.kind === "achievement",
+        (reward) => reward.achievement !== undefined,
       );
       assert.equal(achievementCelebrations.length, 5);
       const roadmapAchievements = snapshot.roadmap.weeks.flatMap(
@@ -415,7 +415,7 @@ test(
       assert.equal(
         snapshot.rewards.some(
           (reward) =>
-            reward.kind !== "achievement" &&
+            reward.achievement === undefined &&
             reward.titleAward === "On-Time Pro",
         ),
         true,

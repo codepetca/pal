@@ -68,18 +68,35 @@ export async function grantStoryChapterForPeriod(
  */
 export async function grantStoryChapterForScheduleAdvance(
   db: Db,
-  input: { learnerId: string; sourceFactId: string; event: IncomingEvent },
+  input: {
+    learnerId: string;
+    sourceFactId: string;
+    event: IncomingEvent;
+    configurationAdvances: boolean;
+  },
 ): Promise<void> {
-  if (input.event.event_type !== "daily_log_week.configured") return;
+  if (
+    input.event.event_type !== "daily_log_week.configured" ||
+    !input.configurationAdvances
+  ) return;
   const termKey = input.event.metadata.term_token;
   const weekIndex = input.event.metadata.week_index;
   const periodStatus = input.event.metadata.period_status;
+  const totalPeriods = input.event.metadata.term_week_count ?? 16;
   if (
     typeof termKey !== "string" ||
     !Number.isInteger(weekIndex) ||
-    (weekIndex as number) < 1
+    (weekIndex as number) < 1 ||
+    !Number.isInteger(totalPeriods)
   ) return;
-  const targetPeriod = periodStatus === "closed"
+
+  const finalPeriodClosed =
+    periodStatus === "closed" && weekIndex === totalPeriods;
+  const weekHasStarted =
+    periodStatus === "open" && configuredWeekHasStarted(input.event);
+  if (!finalPeriodClosed && !weekHasStarted) return;
+
+  const targetPeriod = finalPeriodClosed
     ? (weekIndex as number)
     : (weekIndex as number) - 1;
   if (targetPeriod < 1) return;
@@ -104,7 +121,7 @@ export async function grantStoryChapterForScheduleAdvance(
     .limit(1);
   if (!assignment) return;
   let sourceFactId = input.sourceFactId;
-  if (periodStatus !== "closed") {
+  if (!finalPeriodClosed) {
     const [periodConfiguration] = await db
       .select({ id: learnerFacts.id })
       .from(learnerFacts)
@@ -125,4 +142,49 @@ export async function grantStoryChapterForScheduleAdvance(
     storyPlanId: assignment.storyPlanId,
     storyPlanChapterId: assignment.storyPlanChapterId,
   }).onConflictDoNothing();
+}
+
+function configuredWeekHasStarted(event: IncomingEvent): boolean {
+  if (event.event_type !== "daily_log_week.configured") return false;
+  const { metadata } = event;
+  const weekIndex = metadata.week_index;
+  const termStartDay = metadata.term_start_day;
+  const timeZone = metadata.term_timezone;
+  if (
+    typeof weekIndex !== "number" ||
+    !Number.isInteger(weekIndex) ||
+    weekIndex < 1 ||
+    typeof termStartDay !== "string" ||
+    typeof timeZone !== "string"
+  ) return false;
+  const startDay = typeof metadata.week_start_day === "string"
+    ? metadata.week_start_day
+    : addCalendarDays(
+        termStartDay,
+        (weekIndex - 1) * 7,
+      );
+  if (!startDay) return false;
+  return calendarDayInTimeZone(
+    new Date(event.occurred_at),
+    timeZone,
+  ) >= startDay;
+}
+
+function addCalendarDays(day: string, count: number): string | undefined {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
+}
+
+function calendarDayInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }

@@ -97,12 +97,18 @@ export interface PalGrantRewardNotice {
   titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
+  achievement?: never;
 }
 
 export interface PalAchievementCelebrationNotice {
   /** Transient acknowledgement identity. */
   id: string;
-  kind: "achievement";
+  /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
+  kind: "standard";
+  title: string;
+  description: string;
+  assetUrl?: string;
+  icon?: string;
   /** Presentation-safe identity selected by the authenticated Pal server. */
   achievement: PalAchievementPresentation & {
     /** Stable earned achievement-instance identity used by the roadmap. */

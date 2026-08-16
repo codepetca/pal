@@ -84,7 +84,8 @@ test("fixture achievement celebration can be acknowledged exactly once", async (
   client.dispatch("on-time-finish", { itemToken: "acknowledged-item" });
   const reward = (await client.getSnapshot()).rewards[0];
   assert.ok(reward);
-  assert.equal(reward.kind, "achievement");
+  assert.equal(reward.kind, "standard");
+  assert.ok(reward.achievement);
 
   await client.markRewardSeen(reward.id);
   assert.equal((await client.getSnapshot()).rewards.length, 0);
@@ -111,7 +112,7 @@ test("every newly earned fixture achievement queues one canonical celebration", 
 
   const earned = client.peek();
   const celebrations = earned.rewards.filter(
-    (reward) => reward.kind === "achievement",
+    (reward) => reward.achievement !== undefined,
   );
   assert.equal(celebrations.length, 5);
   for (const celebration of celebrations) {
