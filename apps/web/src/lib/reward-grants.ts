@@ -60,11 +60,12 @@ export async function grantStoryChapterForPeriod(
 }
 
 /**
- * Guarantees the story without manufacturing achievement credit. Opening a new
- * configured week grants the immediately preceding bound chapter as a sketch;
- * closing the final week grants that week's chapter. Weekly Rhythm may have
- * granted the same assignment earlier, and the ownership constraint makes this
- * schedule fallback idempotent.
+ * Guarantees the story without manufacturing achievement credit. A started
+ * configured week—or its first later accepted learner event—grants the
+ * immediately preceding bound chapter as a sketch; closing the final week
+ * grants that week's chapter. Weekly Rhythm may have granted the same
+ * assignment earlier, and the ownership constraint makes reconciliation
+ * idempotent.
  */
 export async function grantStoryChapterForScheduleAdvance(
   db: Db,
@@ -75,37 +76,15 @@ export async function grantStoryChapterForScheduleAdvance(
     configurationAdvances: boolean;
   },
 ): Promise<void> {
-  if (
-    input.event.event_type !== "daily_log_week.configured" ||
-    !input.configurationAdvances
-  ) return;
-  const termKey = input.event.metadata.term_token;
-  const weekIndex = input.event.metadata.week_index;
-  const periodStatus = input.event.metadata.period_status;
-  const totalPeriods = input.event.metadata.term_week_count ?? 16;
-  if (
-    typeof termKey !== "string" ||
-    !Number.isInteger(weekIndex) ||
-    (weekIndex as number) < 1 ||
-    !Number.isInteger(totalPeriods)
-  ) return;
-
-  const finalPeriodClosed =
-    periodStatus === "closed" && weekIndex === totalPeriods;
-  const weekHasStarted =
-    periodStatus === "open" && configuredWeekHasStarted(input.event);
-  if (!finalPeriodClosed && !weekHasStarted) return;
-
-  const targetPeriod = finalPeriodClosed
-    ? (weekIndex as number)
-    : (weekIndex as number) - 1;
-  if (targetPeriod < 1) return;
-
-  const [assignment] = await db
+  const periodKey = input.event.metadata.period_key;
+  if (typeof periodKey !== "string") return;
+  const [currentAssignment] = await db
     .select({
       periodKey: storyPlanChapters.periodKey,
       storyPlanId: storyPlans.id,
       storyPlanChapterId: storyPlanChapters.id,
+      periodNumber: storyPlanChapters.periodNumber,
+      totalPeriods: storyPlans.totalPeriods,
     })
     .from(storyPlanChapters)
     .innerJoin(storyPlans, and(
@@ -113,40 +92,112 @@ export async function grantStoryChapterForScheduleAdvance(
       eq(storyPlans.learnerId, storyPlanChapters.learnerId),
     ))
     .where(and(
-      eq(storyPlans.learnerId, input.learnerId),
-      eq(storyPlans.termKey, termKey),
-      eq(storyPlanChapters.periodNumber, targetPeriod),
+      eq(storyPlanChapters.learnerId, input.learnerId),
+      eq(storyPlanChapters.periodKey, periodKey),
+    ))
+    .limit(1);
+  if (!currentAssignment) return;
+
+  const finalPeriodClosed =
+    input.event.event_type === "daily_log_week.configured" &&
+    input.configurationAdvances &&
+    input.event.metadata.period_status === "closed" &&
+    currentAssignment.periodNumber === currentAssignment.totalPeriods;
+  if (finalPeriodClosed) {
+    await insertStoryChapterGrant(db, {
+      learnerId: input.learnerId,
+      sourceFactId: input.sourceFactId,
+      storyPlanId: currentAssignment.storyPlanId,
+      storyPlanChapterId: currentAssignment.storyPlanChapterId,
+    });
+    return;
+  }
+  if (
+    input.event.event_type === "daily_log_week.configured" &&
+    !input.configurationAdvances
+  ) return;
+  if (currentAssignment.periodNumber <= 1) return;
+
+  const [currentPeriodConfiguration] = await db
+    .select({ metadata: learnerFacts.metadata })
+    .from(learnerFacts)
+    .where(and(
+      eq(learnerFacts.learnerId, input.learnerId),
+      eq(learnerFacts.eventType, "daily_log_week.configured"),
+      eq(learnerFacts.periodKey, periodKey),
+    ))
+    .orderBy(asc(learnerFacts.createdAt))
+    .limit(1);
+  const currentPeriodMetadata = currentPeriodConfiguration?.metadata;
+  if (
+    !currentPeriodMetadata ||
+    typeof currentPeriodMetadata !== "object" ||
+    Array.isArray(currentPeriodMetadata) ||
+    !configuredWeekHasStarted(
+      currentPeriodMetadata as Record<string, unknown>,
+      new Date(input.event.occurred_at),
+    )
+  ) return;
+
+  const [priorAssignment] = await db
+    .select({
+      periodKey: storyPlanChapters.periodKey,
+      storyPlanId: storyPlanChapters.storyPlanId,
+      storyPlanChapterId: storyPlanChapters.id,
+    })
+    .from(storyPlanChapters)
+    .where(and(
+      eq(storyPlanChapters.learnerId, input.learnerId),
+      eq(storyPlanChapters.storyPlanId, currentAssignment.storyPlanId),
+      eq(
+        storyPlanChapters.periodNumber,
+        currentAssignment.periodNumber - 1,
+      ),
       isNotNull(storyPlanChapters.periodKey),
     ))
     .limit(1);
-  if (!assignment) return;
-  let sourceFactId = input.sourceFactId;
-  if (!finalPeriodClosed) {
-    const [periodConfiguration] = await db
+  if (!priorAssignment) return;
+  const [priorPeriodConfiguration] = await db
       .select({ id: learnerFacts.id })
       .from(learnerFacts)
       .where(and(
         eq(learnerFacts.learnerId, input.learnerId),
         eq(learnerFacts.eventType, "daily_log_week.configured"),
-        eq(learnerFacts.periodKey, assignment.periodKey!),
+        eq(learnerFacts.periodKey, priorAssignment.periodKey!),
       ))
       .orderBy(asc(learnerFacts.createdAt))
       .limit(1);
-    if (!periodConfiguration) return;
-    sourceFactId = periodConfiguration.id;
-  }
+  if (!priorPeriodConfiguration) return;
+  await insertStoryChapterGrant(db, {
+    learnerId: input.learnerId,
+    sourceFactId: priorPeriodConfiguration.id,
+    storyPlanId: priorAssignment.storyPlanId,
+    storyPlanChapterId: priorAssignment.storyPlanChapterId,
+  });
+}
+
+async function insertStoryChapterGrant(
+  db: Db,
+  input: {
+    learnerId: string;
+    sourceFactId: string;
+    storyPlanId: string;
+    storyPlanChapterId: string;
+  },
+): Promise<void> {
   await db.insert(learnerRewardGrants).values({
     learnerId: input.learnerId,
     kind: "story_chapter",
-    sourceFactId,
-    storyPlanId: assignment.storyPlanId,
-    storyPlanChapterId: assignment.storyPlanChapterId,
+    sourceFactId: input.sourceFactId,
+    storyPlanId: input.storyPlanId,
+    storyPlanChapterId: input.storyPlanChapterId,
   }).onConflictDoNothing();
 }
 
-function configuredWeekHasStarted(event: IncomingEvent): boolean {
-  if (event.event_type !== "daily_log_week.configured") return false;
-  const { metadata } = event;
+function configuredWeekHasStarted(
+  metadata: Record<string, unknown>,
+  occurredAt: Date,
+): boolean {
   const weekIndex = metadata.week_index;
   const termStartDay = metadata.term_start_day;
   const timeZone = metadata.term_timezone;
@@ -165,7 +216,7 @@ function configuredWeekHasStarted(event: IncomingEvent): boolean {
       );
   if (!startDay) return false;
   return calendarDayInTimeZone(
-    new Date(event.occurred_at),
+    occurredAt,
     timeZone,
   ) >= startDay;
 }

@@ -424,6 +424,7 @@ test("a future week does not open the prior sketch until its local start", { ski
     futureWeek.occurred_at = "2026-09-01T12:00:00.000Z";
     futureWeek.metadata.week_index = 2;
     futureWeek.metadata.week_start_day = "2026-09-07";
+    futureWeek.metadata.eligible_days = 5;
     assert.equal((await processEventInDb(
       integration.id,
       externalLearnerId,
@@ -441,15 +442,24 @@ test("a future week does not open the prior sketch until its local start", { ski
       eq(learnerRewardGrants.kind, "story_chapter"),
     ))).length, 0);
 
-    const startedWeek = structuredClone(futureWeek);
-    startedWeek.occurred_at = "2026-09-07T12:00:00.000Z";
-    startedWeek.metadata.config_version = 2;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      startedWeek,
-      crypto.randomUUID(),
-    )).status, "processed");
+    const concurrentStarts = await Promise.all([
+      processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(weekTwoKey, "2026-09-07"),
+        crypto.randomUUID(),
+      ),
+      processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(weekTwoKey, "2026-09-08"),
+        crypto.randomUUID(),
+      ),
+    ]);
+    assert.deepEqual(
+      concurrentStarts.map((result) => result.status),
+      ["processed", "processed"],
+    );
     assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
       eq(learnerRewardGrants.learnerId, learnerId),
       eq(learnerRewardGrants.kind, "story_chapter"),

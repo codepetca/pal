@@ -120,8 +120,9 @@ older widget/API pair.
   Weekly Rhythm reveals the same collectible immediately in full color. The
   configured-week boundary uses its authoritative local start day: a future
   preconfiguration cannot reveal the prior chapter early, and a non-final
-  close cannot reveal its own chapter. Pika activates a preconfigured week with
-  a higher accepted revision when that local start arrives. The
+  close cannot reveal its own chapter. If Pika preconfigures a week early, the
+  first accepted learner event after its local start reconciles the due sketch
+  from the original configuration. The
   append-only chapter grant stays singular and exact-once; color is a
   presentation tier derived from the durable weekly achievement, not a second
   inventory item. Level, streak, and assignment milestones may award titles or
