@@ -307,6 +307,7 @@ export async function processEventInDb(
       learnerId,
       sourceFactId: fact.id,
       event,
+      configurationAdvances,
     });
 
     // 7. Read current state

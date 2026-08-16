@@ -126,6 +126,13 @@ export function PalRewardCelebration({
           {grantReward.collectibleTitle}
         </strong>
       ) : null}
+      {storyReward && grantReward.collectibleFinish ? (
+        <span className="pal-celebration-finish">
+          {grantReward.collectibleFinish === "sketch"
+            ? "Storybook sketch"
+            : "Brought to life in full color"}
+        </span>
+      ) : null}
       <p id={descriptionId}>{description}</p>
       {grantReward?.titleAward ? (
         <div className="pal-celebration-title">

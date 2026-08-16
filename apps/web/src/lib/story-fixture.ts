@@ -203,7 +203,10 @@ export async function projectStoryFixture(
       ledger.grantStoryChapter(assignment.assignmentId, command.id, "color");
     }
 
-    if (command.action === "advance-week" && after.roadmap.currentWeek > beforeWeek) {
+    if (
+      command.action === "advance-week" &&
+      (after.roadmap.currentWeek > beforeWeek || beforeWeek === plan.totalPeriods)
+    ) {
       const completedAssignment = plan.chapters.find(
         (chapter) => chapter.roadmapWeek === beforeWeek,
       );

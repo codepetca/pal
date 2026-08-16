@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createFixtureSnapshot } from "./fixture-client";
+import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+  createFixtureSnapshot,
+} from "./fixture-client";
 import { parsePalWidgetSnapshot } from "./snapshot-validation";
 
 test("snapshot parser accepts the bounded v1 fixture", () => {
@@ -141,6 +145,23 @@ test("snapshot parser preserves a presentation-safe achievement celebration", ()
     () => parsePalWidgetSnapshot(unknown),
     /achievement\.key.*expected one of/i,
   );
+});
+
+test("new achievement celebrations retain the deployed schema-v1 reward envelope", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  client.dispatch("classroom-joined");
+  const reward = client.peek().rewards.find(
+    (candidate) => candidate.achievement !== undefined,
+  );
+  assert.ok(reward);
+
+  // This is the outer contract required by the parser shipped before nested
+  // achievement presentation was added. Unknown fields are intentionally ignored.
+  assert.equal(reward.kind, "standard");
+  assert.equal(typeof reward.title, "string");
+  assert.equal(typeof reward.description, "string");
+  assert.ok(reward.title.length > 0);
+  assert.ok(reward.description.length > 0);
 });
 
 test("snapshot parser bounds and deduplicates durable collection items", () => {
