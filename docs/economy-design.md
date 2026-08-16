@@ -105,20 +105,9 @@ older widget/API pair.
 - A deterministic story plan selects one chapter for each supported 6–24 week
   instructional term. Eight core chapters preserve the emotional arc while
   optional chapters let longer terms breathe.
-- The first calendar-bearing weekly configuration persists the complete plan
-  under the learner row lock. Each later configuration binds its opaque period
-  to that plan's matching ordinal; snapshots read this stored order rather than
-  silently generating a new schedule. The original five-field calendar form
-  remains supported as a 16-week plan.
-- Story content is registered by immutable story ID and version. The default
-  reference is used only for new plans; persisted plans and reward notices
-  continue resolving through their assigned version, so a new story or Pip v2
-  does not require a database or learning-event contract change.
 - A period's collectible is earned only when that period's durable Weekly
-  Rhythm achievement is earned. That transition queues one story reveal linked
-  to the weekly achievement, so retries and later activity cannot create a
-  second collectible. Level, streak, and assignment milestones may award titles
-  or ordinary rewards, but never unlock story props.
+  Rhythm achievement is earned. Level, streak, and assignment milestones may
+  award titles or ordinary rewards, but never unlock story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready
@@ -126,11 +115,6 @@ older widget/API pair.
   never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
 - Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
   Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
-  Each award stores both source occurrence and PAL grant order. The display
-  keeps the most recently granted title across later snapshots without delayed
-  delivery rewriting the learner's visible history; a story title wins when
-  one action awards multiple titles at the same time. Historical achievements
-  never create reward grants; every new grant has an exact source fact.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once earned, that week's slot reveals its collectible (at

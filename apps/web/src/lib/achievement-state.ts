@@ -8,11 +8,6 @@ import {
   type Db,
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
-import {
-  BEHAVIOR_TITLES,
-  grantBehaviorTitle,
-  grantStoryChapterForPeriod,
-} from "@/lib/reward-grants";
 
 export const ACHIEVEMENT_KEYS = {
   firstLogin: "first-pika-login",
@@ -96,7 +91,6 @@ export type WeeklyConfigurationError =
   | "closed_period_revision"
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
-  | "invalid_term_story_schedule"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -327,17 +321,6 @@ export async function weeklyConfigurationRejection(
   const eligibleDays = metadataInteger(event, "eligible_days");
   const periodStatus = metadataString(event, "period_status");
   const calendar = termCalendarMetadata(event);
-  if (calendar) {
-    const totalWeeks = calendar.term_week_count ?? 16;
-    if (
-      totalWeeks < 6 ||
-      totalWeeks > 24 ||
-      calendar.week_index < 1 ||
-      calendar.week_index > totalWeeks
-    ) {
-      return "invalid_term_story_schedule";
-    }
-  }
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,
@@ -1006,30 +989,20 @@ async function recomputeWeeklyRhythm(
         updatedAt: new Date(),
       })
       .where(eq(achievementInstances.id, existing.id));
-    if (status === "earned") {
-      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
-    }
     return status === "earned";
   }
 
-  const [created] = await db
-    .insert(achievementInstances)
-    .values({
-      learnerId,
-      achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
-      scopeKey: periodKey,
-      periodKey,
-      status,
-      progressCurrent: displayCurrent,
-      progressTarget: displayTarget,
-      earnedAt: status === "earned" ? occurredAt : null,
-      sourceFactId: factId,
-    })
-    .returning({ id: achievementInstances.id });
-  if (!created) throw new Error("Failed to create Weekly Rhythm achievement");
-  if (status === "earned") {
-    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
-  }
+  await db.insert(achievementInstances).values({
+    learnerId,
+    achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
+    scopeKey: periodKey,
+    periodKey,
+    status,
+    progressCurrent: displayCurrent,
+    progressTarget: displayTarget,
+    earnedAt: status === "earned" ? occurredAt : null,
+    sourceFactId: factId,
+  });
   return status === "earned";
 }
 
@@ -1183,18 +1156,13 @@ export async function applyAchievementFact(
         occurredAt,
       });
       if (earned && outcome.created) {
-        await grantBehaviorTitle(db, {
-          learnerId,
-          titleId: BEHAVIOR_TITLES.onTimePro.id,
-          sourceFactId: fact.id,
-        });
         await db
           .insert(rewardNotices)
           .values({
             learnerId,
             achievementInstanceId: outcome.id,
             rewardKey: "fish-snack-v1",
-            title: "A treat for your companion!",
+            title: "A treat for Pip!",
             description: "Your on-time work earned a fish snack.",
             icon: "🐟",
           })

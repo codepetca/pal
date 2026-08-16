@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
   PalAchievements,
   PalCompanion,
   PalProvider,
@@ -44,7 +46,6 @@ import {
   createSandboxPalClient,
   type SandboxPalClient,
 } from "./sandbox-client";
-import { createStoryFixturePalClient } from "./fixture-story-client";
 import {
   addDays,
   eventForAction,
@@ -923,7 +924,7 @@ function SandboxExperience({
                     onTermWeeksChange={(weeks) => {
                       setTermWeeks(weeks);
                       setSimulatedDate((current) => {
-                        const currentWeek = semesterWeekForDate(current, 24);
+                        const currentWeek = semesterWeekForDate(current);
                         return currentWeek <= weeks
                           ? current
                           : addDays(
@@ -1084,11 +1085,10 @@ export function WidgetSandbox({
 
   const client = useMemo(
     () => {
-      if (!apiBaseUrl) return null;
       if (mode === "fixture") {
-        return createStoryFixturePalClient(apiBaseUrl);
+        return createFixturePalClient(createEmptyFixtureSnapshot());
       }
-      return createSandboxPalClient(learnerId, apiBaseUrl);
+      return apiBaseUrl ? createSandboxPalClient(learnerId, apiBaseUrl) : null;
     },
     [apiBaseUrl, learnerId, mode],
   );

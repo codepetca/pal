@@ -26,11 +26,11 @@ const SEMESTER_START = new Date(FICTIONAL_SEMESTER_START_ISO);
 export const FICTIONAL_SEMESTER_END_DAY = "2026-08-02";
 export const FICTIONAL_TERM_TIME_ZONE = "America/Toronto";
 
-export function semesterWeekForDate(date: Date, totalWeeks = 16): number {
+export function semesterWeekForDate(date: Date): number {
   const diffDays = Math.floor(
     (date.getTime() - SEMESTER_START.getTime()) / (24 * 60 * 60 * 1000),
   );
-  return Math.max(1, Math.min(totalWeeks, Math.floor(diffDays / 7) + 1));
+  return Math.max(1, Math.min(16, Math.floor(diffDays / 7) + 1));
 }
 
 export function periodKeyForDate(date: Date): string {

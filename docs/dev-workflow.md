@@ -83,12 +83,9 @@ The fictional configuration includes the same privacy-safe term range and author
 IANA timezone and week index that Pika will send, so a persisted learner can jump directly to any simulated
 week without Pal renumbering it from the learner's first observed event.
 
-In fixture mode, the browser keeps only a bounded synthetic action history. The
-fixture endpoint replays it into a fresh in-memory reward-grant ledger, calls the
-same server projector as persistence, and returns a fully redacted snapshot through
-the public provider; reward acknowledgement is another replayed fixture command.
-No fixture session or learner state is stored on the server. In persisted mode,
-`/api/sandbox/events` attaches the sandbox integration secret server-side and
+In fixture mode, every visible surface reads an in-memory snapshot through the public
+provider and reward acknowledgement mutates only that browser's client. In persisted
+mode, `/api/sandbox/events` attaches the sandbox integration secret server-side and
 `/api/sandbox/read-token` exchanges the unguessable browser-session learner ID for a
 five-minute learner-scoped token; neither secret reaches the browser. Reward dismissal
 calls the real idempotent acknowledgement endpoint. Those persisted routes are local-only

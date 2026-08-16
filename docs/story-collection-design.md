@@ -113,33 +113,10 @@ For 9–24 periods, place the core beats near these relative positions:
 | Sharing Bowl | Around 85% |
 | Meet Lumi | Final period |
 
-The generated plan must be persisted for the learner and term. A producer may
-choose any supported term length when it first assigns the term, but that
-length and the resulting chapter schedule are immutable afterward. A changed
-calendar is rejected instead of silently moving earned or future chapters.
-Titles attach to story chapter IDs, not period numbers. Midterm plan revision
-is a future capability, not part of the first story release.
-
-## Catalog versioning
-
-The story registry is keyed by `(story ID, story version)`. Pip's First Recipe
-v1 remains registered permanently after release. Changing the registry's
-default affects only newly created term plans; an existing learner continues
-to resolve chapters, rewards, and titles through the version stored on their
-plan.
-
-- Before a catalog is assigned, its draft copy and art may change freely.
-  After assignment, any copy, art, narrative, chapter, pacing, collectible, or
-  title-contract change creates a new version while retaining every earlier
-  version.
-- A different story uses a new story ID and begins at version 1.
-- Chapter, collectible, and title IDs are durable references. Do not rename or
-  repurpose them; add a new ID when the identity changes.
-
-The database and learning-event contract remain story-agnostic. Adding a
-catalog within the supported term-length envelope requires only the new content
-module and one registry entry. Versioned reward keys include the stored story
-reference; legacy Pip v1 reward keys remain readable.
+The generated plan must be persisted for the learner and term. If the host
+changes the schedule, earned chapters never move. Only future, unearned
+optional chapters may be inserted or removed. Titles attach to story chapter
+IDs, not period numbers.
 
 ## Titles
 
