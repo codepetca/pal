@@ -354,6 +354,113 @@ test("two learners receive the same persisted sequence for the same term boundar
   }
 });
 
+test("a preconfigured future week cannot earn or reveal its story chapter", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `future-story-${crypto.randomUUID()}`;
+  const periodKey = `future-period-${crypto.randomUUID()}`;
+  const configuration = configuredWeek(periodKey, `future-term-${crypto.randomUUID()}`);
+  configuration.metadata.week_index = 6;
+  configuration.metadata.week_start_day = "2026-10-05";
+  try {
+    const pending = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLog(periodKey),
+      crypto.randomUUID(),
+    );
+    assert.equal(pending.status, "processed");
+
+    const configured = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuration,
+      crypto.randomUUID(),
+    );
+    assert.equal(configured.status, "processed");
+
+    const early = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLogOn(periodKey, "2026-09-01"),
+      crypto.randomUUID(),
+    );
+    assert.deepEqual(early, {
+      status: "rejected",
+      error: "inconsistent_activity_day",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const grants = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId));
+    assert.equal(grants.length, 0);
+
+    const snapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2026-09-01T12:00:00.000Z") },
+    );
+    assert.equal(snapshot.roadmap.currentWeek, 1);
+    assert.equal(snapshot.roadmap.weeks[5]?.status, "future");
+    assert.equal(snapshot.progression?.collectibles[5]?.status, "locked");
+    const raw = JSON.stringify(snapshot);
+    assert.equal(raw.includes("Meet Lumi"), false);
+    assert.equal(raw.includes("/assets/pets/lumi-v1.png"), false);
+    assert.equal(raw.includes("True Friend"), false);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a legacy calendar derives the same future-week grant boundary", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `future-legacy-story-${crypto.randomUUID()}`;
+  const periodKey = `future-legacy-period-${crypto.randomUUID()}`;
+  const configuration = configuredWeek(periodKey, `future-legacy-term-${crypto.randomUUID()}`);
+  configuration.metadata.week_index = 6;
+  delete (configuration.metadata as Record<string, unknown>).term_week_count;
+  delete (configuration.metadata as Record<string, unknown>).week_start_day;
+  try {
+    const configured = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuration,
+      crypto.randomUUID(),
+    );
+    assert.equal(configured.status, "processed");
+
+    const early = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLog(periodKey),
+      crypto.randomUUID(),
+    );
+    assert.deepEqual(early, {
+      status: "rejected",
+      error: "inconsistent_activity_day",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const grants = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId));
+    assert.equal(grants.length, 0);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;

@@ -380,8 +380,9 @@ function SandboxControls({
             </div>
             {fixture ? (
               <p>
-                Controls update an in-memory learner snapshot through the same
-                public Pal provider and widget surfaces used in production.
+                Controls keep a bounded action history in this browser and ask
+                Pal&apos;s server projector for the same public snapshot rendered in
+                production.
               </p>
             ) : (
               <p>

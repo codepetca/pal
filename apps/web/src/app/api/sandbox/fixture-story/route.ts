@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFixtureStoryRequest } from "@/app/sandbox/fixture-story-contract";
+import { isSandboxPageAllowed } from "@/lib/sandbox-learner";
 import { projectStoryFixture } from "@/lib/story-fixture";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,9 @@ async function boundedJson(
 
 /** Public, synthetic fixture projection. It has no learner data or credentials. */
 export async function POST(request: NextRequest) {
+  if (!isSandboxPageAllowed()) {
+    return new NextResponse(null, { status: 404 });
+  }
   const result = await boundedJson(request);
   if (result.error === "request_too_large") {
     return noStore({ error: result.error }, 413);

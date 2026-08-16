@@ -75,3 +75,21 @@ test("fixture story route enforces its byte limit without Content-Length", async
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { error: "request_too_large" });
 });
+
+test("fixture story route fails closed in production", async () => {
+  const previousVercelEnv = process.env.VERCEL_ENV;
+  try {
+    process.env.VERCEL_ENV = "production";
+    const response = await POST(
+      new NextRequest("https://pal.example/api/sandbox/fixture-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ termWeeks: 16, commands: [] }),
+      }),
+    );
+    assert.equal(response.status, 404);
+  } finally {
+    if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = previousVercelEnv;
+  }
+});
