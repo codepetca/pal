@@ -110,7 +110,13 @@ export function PalRewardCelebration({
       <h2 id={titleId}>{title}</h2>
       <div className="pal-celebration-icon" aria-hidden="true">
         {assetUrl ? (
-          <img src={assetUrl} alt="" width="80" height="80" />
+          <img
+            data-collectible-finish={grantReward?.collectibleFinish ?? "color"}
+            src={assetUrl}
+            alt=""
+            width="80"
+            height="80"
+          />
         ) : (
           icon ?? "★"
         )}

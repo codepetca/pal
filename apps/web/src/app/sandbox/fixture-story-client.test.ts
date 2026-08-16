@@ -27,6 +27,12 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
   const earned = await client.getSnapshot();
   assert.equal(earned.progression?.collectibles[0]?.status, "earned");
   assert.equal(
+    earned.progression?.collectibles[0]?.status === "earned"
+      ? earned.progression.collectibles[0].finish
+      : undefined,
+    "color",
+  );
+  assert.equal(
     earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
     true,
   );
@@ -77,6 +83,31 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
     assert.equal(acknowledged.progression?.collectibles[0]?.status, "earned");
   }
   assert.deepEqual(acknowledged.rewards, []);
+});
+
+test("advancing the fixture guarantees the prior story keepsake as a sketch", async () => {
+  const fetchFixture: typeof fetch = async (_input, init) => {
+    const parsed = parseFixtureStoryRequest(JSON.parse(String(init?.body)));
+    assert.ok(parsed);
+    return Response.json(await projectStoryFixture(parsed));
+  };
+  const client = createStoryFixturePalClient("https://pal.example", fetchFixture);
+
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-13" });
+  client.dispatch("advance-week");
+  const snapshot = await client.getSnapshot();
+  const keepsake = snapshot.progression?.collectibles[0];
+  assert.equal(keepsake?.status, "earned");
+  assert.equal(keepsake?.status === "earned" ? keepsake.finish : undefined, "sketch");
+  const storyReward = snapshot.rewards.find((reward) => reward.kind === "story");
+  assert.ok(storyReward && storyReward.kind !== "achievement");
+  assert.equal(storyReward.collectibleFinish, "sketch");
+  assert.equal(
+    snapshot.roadmap.weeks[0]?.achievements.find(
+      (achievement) => achievement.title === "Weekly Rhythm",
+    )?.status,
+    "in-progress",
+  );
 });
 
 test("fixture story request rejects private or unbounded commands", () => {

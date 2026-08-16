@@ -114,11 +114,14 @@ older widget/API pair.
   reference is used only for new plans; persisted plans and reward notices
   continue resolving through their assigned version, so a new story or Pip v2
   does not require a database or learning-event contract change.
-- A period's collectible is earned only when that period's durable Weekly
-  Rhythm achievement is earned. That transition queues one story reveal linked
-  to the weekly achievement, so retries and later activity cannot create a
-  second collectible. Level, streak, and assignment milestones may award titles
-  or ordinary rewards, but never unlock story props.
+- Every period grants its story chapter and collectible as a grayscale sketch
+  when the next configured week begins (or when the final period closes), so an
+  absence never removes part of Pip's story. Earning that period's durable
+  Weekly Rhythm reveals the same collectible immediately in full color. The
+  append-only chapter grant stays singular and exact-once; color is a
+  presentation tier derived from the durable weekly achievement, not a second
+  inventory item. Level, streak, and assignment milestones may award titles or
+  ordinary rewards, but never color story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready
@@ -133,9 +136,9 @@ older widget/API pair.
   never create reward grants; every new grant has an exact source fact.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
-  well as the UI. Once earned, that week's slot reveals its collectible (at
-  most one reward per period). Older snapshots without `progression` keep the
-  existing cat and achievement UI.
+  well as the UI. Once the chapter is granted, that week's slot reveals one
+  sketch or full-color collectible (at most one reward per period). Older
+  snapshots without `progression` keep the existing cat and achievement UI.
 - Pal's authenticated snapshot producer is the authority for story awards and
   reveal eligibility. The widget's network parser validates shape, bounds, and
   asset origins; it deliberately does not maintain a second story engine or

@@ -115,6 +115,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
     title: "Mystery Egg",
     description: "An earned keepsake.",
     kind: "room",
+    finish: "sketch",
     assetUrl: "/assets/world/reward-mystery-egg-v1.png",
   };
   snapshot.progression!.currentTitle = "Rhythm Builder";
@@ -134,11 +135,11 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.match(html, />Rhythm Builder</);
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 1<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="earned" aria-label="Week 1 collectible: Mystery Egg, earned" role="img"><span class="pal-week-collectible-art" aria-hidden="true"><img src="\/assets\/world\/reward-mystery-egg-v1\.png"/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 1<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="earned" data-collectible-finish="sketch" aria-label="Week 1 collectible: Mystery Egg, storybook sketch" role="img"><span class="pal-week-collectible-art" aria-hidden="true"><img src="\/assets\/world\/reward-mystery-egg-v1\.png"/,
   );
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
 
