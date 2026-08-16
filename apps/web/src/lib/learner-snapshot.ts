@@ -16,6 +16,7 @@ import {
   economy,
   getDb,
   learnerFacts,
+  learnerRewardGrants,
   learners,
   petState,
   rewardNotices,
@@ -25,15 +26,42 @@ import {
 } from "@pal/db";
 import type {
   PalAchievement,
+  PalCollectionItem,
   PalCompanionMood,
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
-import { collectionItemsForUnlocks } from "@codepet/pal-widget";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
+import {
+  loadPersistedStoryPlan,
+  loadPersistedStoryPlansByIds,
+} from "@/lib/story-plan";
+import {
+  projectStoryProgression,
+  projectUnseenGrantRewards,
+} from "@/lib/story-projector";
 
 const LEGACY_SEMESTER_WEEKS = 16;
+
+const COLLECTION_ITEMS = new Map<string, PalCollectionItem>(
+  PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
+    milestone.assetRefId,
+    {
+      id: milestone.assetRefId,
+      label: milestone.label,
+      description: milestone.description,
+      icon: milestone.icon,
+    },
+  ]),
+);
+
+function collectionItemsForUnlocks(unlockedObjectIds: readonly string[]) {
+  return unlockedObjectIds.flatMap((id) => {
+    const item = COLLECTION_ITEMS.get(id);
+    return item ? [{ ...item }] : [];
+  });
+}
 
 export class LearnerScopeError extends Error {
   constructor() {
@@ -49,16 +77,19 @@ function companionMood(value: string, expiresAt: Date | null): PalCompanionMood 
     : "neutral";
 }
 
-function moodMessage(mood: PalCompanionMood): string {
+function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
+  const subject = companionRevealed ? "Pip" : "Your companion";
   switch (mood) {
     case "happy":
-      return "Pip is happy about your progress.";
+      return `${subject} is happy about your progress.`;
     case "excited":
-      return "Pip is excited!";
+      return `${subject} is excited!`;
     case "sleeping":
-      return "Pip is taking a rest.";
+      return `${subject} is taking a rest.`;
     default:
-      return "Complete positive learning actions to encourage Pip.";
+      return companionRevealed
+        ? "Complete positive learning actions to encourage Pip."
+        : "Complete positive learning actions to encourage your companion.";
   }
 }
 
@@ -294,6 +325,11 @@ export async function loadLearnerSnapshot(
         )
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
+      const grantRows = await tx
+        .select()
+        .from(learnerRewardGrants)
+        .where(eq(learnerRewardGrants.learnerId, learnerId))
+        .orderBy(asc(learnerRewardGrants.grantOrder));
 
       const latestCalendarFact = selectCurrentTermFact(
         calendarFacts,
@@ -312,6 +348,27 @@ export async function loadLearnerSnapshot(
         (currentTermMetadata?.term_week_count as number) <= 24
           ? (currentTermMetadata?.term_week_count as number)
           : LEGACY_SEMESTER_WEEKS;
+      const persistedStoryPlan = typeof currentTermToken === "string"
+        ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
+        : undefined;
+      const historicalStoryPlans = await loadPersistedStoryPlansByIds(
+        tx,
+        learnerId,
+        grantRows.flatMap((grant) =>
+          grant.kind === "story_chapter" &&
+          grant.storyPlanId &&
+          grant.storyPlanId !== persistedStoryPlan?.id
+            ? [grant.storyPlanId]
+            : [],
+        ),
+      );
+      const storyPlansById = new Map(historicalStoryPlans);
+      if (persistedStoryPlan) {
+        storyPlansById.set(persistedStoryPlan.id, persistedStoryPlan);
+      }
+      const progression = persistedStoryPlan
+        ? projectStoryProgression(persistedStoryPlan, grantRows, storyPlansById)
+        : undefined;
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -513,7 +570,9 @@ export async function loadLearnerSnapshot(
             ? (reconciliation.get(instance.periodKey) ?? false)
             : false,
         );
-        if (achievement) weeks[weekNumber - 1].achievements.push(achievement);
+        if (achievement) {
+          weeks[weekNumber - 1].achievements.push(achievement);
+        }
       }
       for (const week of weeks) {
         week.achievements = week.achievements.slice(0, 100);
@@ -525,6 +584,24 @@ export async function loadLearnerSnapshot(
         pet?.mood ?? "neutral",
         pet?.moodExpiresAt ?? null,
       );
+      const companionRevealed =
+        progression === undefined || progression.companionReveal.status === "earned";
+      const companion = {
+        name: companionRevealed ? "Pip" : "Mystery companion",
+        mood,
+        moodLabel: mood[0].toUpperCase() + mood.slice(1),
+        level: eco?.level ?? 1,
+        streak: eco?.streakCurrent ?? 0,
+        xp: eco?.xp ?? 0,
+        xpToNextLevel: Math.max(
+          0,
+          PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
+        ),
+        message: moodMessage(mood, companionRevealed),
+        ...(persistedStoryPlan
+          ? {}
+          : { assetUrl: "/assets/pets/default.png" }),
+      };
       return {
         schemaVersion: 1,
         roadmap: {
@@ -532,31 +609,31 @@ export async function loadLearnerSnapshot(
           currentWeek,
           weeks,
         },
-        companion: {
-          name: "Pip",
-          mood,
-          moodLabel: mood[0].toUpperCase() + mood.slice(1),
-          level: eco?.level ?? 1,
-          streak: eco?.streakCurrent ?? 0,
-          xp: eco?.xp ?? 0,
-          xpToNextLevel: Math.max(
-            0,
-            PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
-          ),
-          message: moodMessage(mood),
-          assetUrl: "/assets/pets/default.png",
-        },
+        companion,
         collection: {
           items: collectionItemsForUnlocks(
             worldRows[0]?.unlockedObjectIds ?? [],
           ),
         },
-        rewards: rewards.map((reward) => ({
-          id: reward.id,
-          title: reward.title,
-          description: reward.description,
-          ...(reward.icon ? { icon: reward.icon } : {}),
-        })),
+        rewards: [
+          ...rewards.map((reward) => ({
+            id: reward.id,
+            title:
+              !companionRevealed && reward.rewardKey === "fish-snack-v1"
+                ? "A treat for your companion!"
+                : reward.title,
+            description: reward.description,
+            ...(reward.icon ? { icon: reward.icon } : {}),
+          })),
+          ...(persistedStoryPlan
+            ? projectUnseenGrantRewards(
+                persistedStoryPlan,
+                grantRows,
+                storyPlansById,
+              )
+            : []),
+        ].slice(0, 100),
+        ...(progression ? { progression } : {}),
       };
     },
     {
@@ -584,14 +661,23 @@ export async function acknowledgeLearnerReward(
     .limit(1);
   if (!learner) throw new LearnerScopeError();
 
-  await db
-    .update(rewardNotices)
-    .set({ seenAt: new Date() })
-    .where(
-      and(
+  const seenAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(rewardNotices)
+      .set({ seenAt })
+      .where(and(
         eq(rewardNotices.id, rewardId),
         eq(rewardNotices.learnerId, learnerId),
         isNull(rewardNotices.seenAt),
-      ),
-    );
+      ));
+    await tx
+      .update(learnerRewardGrants)
+      .set({ seenAt })
+      .where(and(
+        eq(learnerRewardGrants.id, rewardId),
+        eq(learnerRewardGrants.learnerId, learnerId),
+        isNull(learnerRewardGrants.seenAt),
+      ));
+  });
 }
