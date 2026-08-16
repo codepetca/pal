@@ -120,6 +120,27 @@ must assign a new plan or catalog version at a future term boundary rather than
 mutating the current plan. Titles attach to story chapter IDs, not period
 numbers.
 
+## Catalog versioning
+
+The story registry is keyed by `(story ID, story version)`. Pip's First Recipe
+v1 remains registered permanently after release. Changing the registry's
+default affects only newly created term plans; an existing learner continues
+to resolve chapters, rewards, and titles through the version stored on their
+plan.
+
+- Before a catalog is assigned, its draft copy and art may change freely.
+  After assignment, any copy, art, narrative, chapter, pacing, collectible, or
+  title-contract change creates a new version while retaining every earlier
+  version.
+- A different story uses a new story ID and begins at version 1.
+- Chapter, collectible, and title IDs are durable references. Do not rename or
+  repurpose them; add a new ID when the identity changes.
+
+The database and learning-event contract remain story-agnostic. Adding a
+catalog within the supported term-length envelope requires only the new content
+module and one registry entry. Versioned reward keys include the stored story
+reference; legacy Pip v1 reward keys remain readable.
+
 ## Titles
 
 Titles are a lightweight identity reward, not a second collection to browse.

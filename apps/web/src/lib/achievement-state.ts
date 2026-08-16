@@ -8,6 +8,11 @@ import {
   type Db,
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
+import {
+  BEHAVIOR_TITLES,
+  grantBehaviorTitle,
+  grantStoryChapterForPeriod,
+} from "@/lib/reward-grants";
 
 export const ACHIEVEMENT_KEYS = {
   firstLogin: "first-pika-login",
@@ -91,6 +96,7 @@ export type WeeklyConfigurationError =
   | "closed_period_revision"
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
+  | "invalid_term_story_schedule"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -142,7 +148,9 @@ function isCompatibleCalendarRevision(
   const leftWeekCount = leftAdaptive ? left.term_week_count : 16;
   const rightWeekCount = rightAdaptive ? right.term_week_count : 16;
   if (leftWeekCount !== rightWeekCount) return false;
-  return !leftAdaptive || !rightAdaptive || left.week_start_day === right.week_start_day;
+  const leftStartDay = periodCalendarFromMetadata(left).startDay;
+  const rightStartDay = periodCalendarFromMetadata(right).startDay;
+  return leftStartDay !== null && leftStartDay === rightStartDay;
 }
 
 function isCompatibleTermRevision(
@@ -161,13 +169,80 @@ function isCompatibleTermRevision(
   return leftWeekCount === rightWeekCount;
 }
 
-async function firstConfigurationTimeZone(
+type PeriodCalendar = {
+  timeZone: string | null;
+  startDay: string | null;
+  endDay: string | null;
+};
+
+function offsetCalendarDay(day: string, days: number): string | null {
+  const timestamp = Date.parse(`${day}T00:00:00.000Z`);
+  return Number.isNaN(timestamp)
+    ? null
+    : new Date(timestamp + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function periodCalendarFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): PeriodCalendar {
+  const timeZone =
+    typeof metadata?.term_timezone === "string"
+      ? metadata.term_timezone
+      : null;
+  const termStartDay =
+    typeof metadata?.term_start_day === "string"
+      ? metadata.term_start_day
+      : null;
+  const termEndDay =
+    typeof metadata?.term_end_day === "string"
+      ? metadata.term_end_day
+      : null;
+  const weekIndex = metadata?.week_index;
+  const explicitWeekStart = metadata?.week_start_day;
+  const startDay =
+    typeof explicitWeekStart === "string"
+      ? explicitWeekStart
+      : termStartDay && Number.isInteger(weekIndex)
+        ? offsetCalendarDay(termStartDay, ((weekIndex as number) - 1) * 7)
+        : null;
+  const nominalEndDay = startDay ? offsetCalendarDay(startDay, 6) : null;
+  const endDay =
+    nominalEndDay && termEndDay && termEndDay < nominalEndDay
+      ? termEndDay
+      : nominalEndDay;
+  return { timeZone, startDay, endDay };
+}
+
+function hasValidStoryWeekPosition(calendar: TermCalendarMetadata): boolean {
+  const totalWeeks = calendar.term_week_count ?? 16;
+  const earliestStart = offsetCalendarDay(
+    calendar.term_start_day,
+    (calendar.week_index - 1) * 7,
+  );
+  const latestStart = offsetCalendarDay(
+    calendar.term_end_day,
+    -(totalWeeks - calendar.week_index) * 7,
+  );
+  const actualStart = calendar.week_start_day ?? earliestStart;
+  return Boolean(
+    earliestStart &&
+      latestStart &&
+      actualStart &&
+      earliestStart <= actualStart &&
+      actualStart <= latestStart,
+  );
+}
+
+async function firstConfigurationCalendar(
   db: Db,
   learnerId: string,
   periodKey: string,
-): Promise<string | null> {
+): Promise<PeriodCalendar> {
   const [marker] = await db
-    .select({ metadata: learnerFacts.metadata })
+    .select({
+      sourceEventId: learnerFacts.sourceEventId,
+      metadata: learnerFacts.metadata,
+    })
     .from(learnerFacts)
     .where(
       and(
@@ -178,8 +253,44 @@ async function firstConfigurationTimeZone(
     )
     .limit(1);
   if (marker) {
-    const timeZone = (marker.metadata as Record<string, unknown>).term_timezone;
-    return typeof timeZone === "string" ? timeZone : null;
+    const [configuration] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          eq(learnerFacts.periodKey, periodKey),
+          eq(learnerFacts.sourceEventId, marker.sourceEventId),
+        ),
+      )
+      .limit(1);
+    const markerCalendar = periodCalendarFromMetadata(
+      (configuration?.metadata ?? marker.metadata) as Record<string, unknown>,
+    );
+    if (markerCalendar.startDay !== null) return markerCalendar;
+
+    // A period can predate the term-calendar rollout. In that case the first
+    // weekly configuration remains the reward-policy authority, while the
+    // first later calendar-bearing fact becomes the immutable date window.
+    const [firstCalendarConfiguration] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          eq(learnerFacts.periodKey, periodKey),
+          sql`${learnerFacts.metadata} ? 'term_timezone'`,
+        ),
+      )
+      .orderBy(sql`(${learnerFacts.metadata}->>'config_version')::int asc`)
+      .limit(1);
+    return firstCalendarConfiguration
+      ? periodCalendarFromMetadata(
+          firstCalendarConfiguration.metadata as Record<string, unknown>,
+        )
+      : markerCalendar;
   }
 
   // Backward-compatible fallback for periods created before durable first-config
@@ -196,10 +307,9 @@ async function firstConfigurationTimeZone(
     )
     .orderBy(asc(learnerFacts.createdAt), asc(learnerFacts.id))
     .limit(1);
-  const timeZone = (
-    configuration?.metadata as Record<string, unknown> | undefined
-  )?.term_timezone;
-  return typeof timeZone === "string" ? timeZone : null;
+  return periodCalendarFromMetadata(
+    configuration?.metadata as Record<string, unknown> | undefined,
+  );
 }
 
 type DailyLogFactRow = {
@@ -240,15 +350,20 @@ async function boundedDailyLogFacts(
 
 function calendarValidDailyLogFacts(
   facts: DailyLogFactRow[],
-  timeZone: string | null,
+  calendar: PeriodCalendar,
 ): DailyLogFactRow[] {
-  if (!timeZone) return facts;
   return facts.filter((fact) => {
     const activityDay = (fact.metadata as Record<string, unknown>).activity_day;
-    return (
-      typeof activityDay === "string" &&
-      calendarDayInTimeZone(fact.occurredAt, timeZone) === activityDay
-    );
+    if (typeof activityDay !== "string") return false;
+    if (
+      calendar.timeZone &&
+      calendarDayInTimeZone(fact.occurredAt, calendar.timeZone) !== activityDay
+    ) {
+      return false;
+    }
+    if (calendar.startDay && activityDay < calendar.startDay) return false;
+    if (calendar.endDay && activityDay > calendar.endDay) return false;
+    return true;
   });
 }
 
@@ -256,14 +371,14 @@ async function validCompletionFacts(
   db: Db,
   learnerId: string,
   periodKey: string,
-  firstTimeZoneOverride?: string,
+  firstCalendarOverride?: PeriodCalendar,
 ): Promise<DailyLogFactRow[]> {
-  const timeZone =
-    firstTimeZoneOverride ??
-    (await firstConfigurationTimeZone(db, learnerId, periodKey));
+  const calendar =
+    firstCalendarOverride ??
+    (await firstConfigurationCalendar(db, learnerId, periodKey));
   return calendarValidDailyLogFacts(
     await boundedDailyLogFacts(db, learnerId, periodKey),
-    timeZone,
+    calendar,
   );
 }
 
@@ -271,7 +386,7 @@ async function completionCounts(
   db: Db,
   learnerId: string,
   periodKey: string,
-  firstTimeZoneOverride?: string,
+  firstCalendarOverride?: PeriodCalendar,
 ): Promise<{ settled: number; valid: number }> {
   const [firstConfigurationMarker] = await db
     .select({ id: learnerFacts.id })
@@ -288,7 +403,7 @@ async function completionCounts(
     db,
     learnerId,
     periodKey,
-    firstTimeZoneOverride,
+    firstCalendarOverride,
   );
   if (!firstConfigurationMarker || facts.length === 0) {
     return { settled: facts.length, valid: facts.length };
@@ -321,6 +436,18 @@ export async function weeklyConfigurationRejection(
   const eligibleDays = metadataInteger(event, "eligible_days");
   const periodStatus = metadataString(event, "period_status");
   const calendar = termCalendarMetadata(event);
+  if (calendar) {
+    const totalWeeks = calendar.term_week_count ?? 16;
+    if (
+      totalWeeks < 6 ||
+      totalWeeks > 24 ||
+      calendar.week_index < 1 ||
+      calendar.week_index > totalWeeks ||
+      !hasValidStoryWeekPosition(calendar)
+    ) {
+      return "invalid_term_story_schedule";
+    }
+  }
   const [existing] = await db
     .select({
       configVersion: weeklyRhythmConfigs.configVersion,
@@ -335,10 +462,12 @@ export async function weeklyConfigurationRejection(
       ),
     )
     .limit(1);
-  const firstConfigurationTimeZoneOverride = existing
-    ? undefined
-    : typeof calendar?.term_timezone === "string"
-      ? calendar.term_timezone
+  const existingCalendar = existing
+    ? await firstConfigurationCalendar(db, learnerId, periodKey)
+    : undefined;
+  const firstConfigurationCalendarOverride =
+    !existing || (existingCalendar?.startDay === null && calendar)
+      ? periodCalendarFromMetadata(calendar)
       : undefined;
   if (
     periodStatus === "closed" &&
@@ -347,7 +476,7 @@ export async function weeklyConfigurationRejection(
         db,
         learnerId,
         periodKey,
-        firstConfigurationTimeZoneOverride,
+        firstConfigurationCalendarOverride,
       )).length
   ) {
     return "contradictory_period_configuration";
@@ -495,30 +624,20 @@ export async function dailyLogCalendarStatus(
       : "pending";
   }
 
-  const [calendar] = await db
-    .select({ metadata: learnerFacts.metadata })
-    .from(learnerFacts)
-    .where(
-      and(
-        eq(learnerFacts.learnerId, learnerId),
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-        eq(learnerFacts.periodKey, periodKey),
-        sql`${learnerFacts.metadata} ? 'term_timezone'`,
-      ),
-    )
-    .limit(1);
-  const timeZone = (calendar?.metadata as Record<string, unknown> | undefined)
-    ?.term_timezone;
+  const calendar = await firstConfigurationCalendar(db, learnerId, periodKey);
+  const activityDay = metadataString(event, "activity_day");
   if (
-    typeof timeZone === "string" &&
-    metadataString(event, "activity_day") !==
-      calendarDayInTimeZone(new Date(event.occurred_at), timeZone)
+    (calendar.timeZone &&
+      activityDay !==
+        calendarDayInTimeZone(new Date(event.occurred_at), calendar.timeZone)) ||
+    (calendar.startDay && activityDay < calendar.startDay) ||
+    (calendar.endDay && activityDay > calendar.endDay)
   ) {
     return "invalid";
   }
   const qualifyingFacts = calendarValidDailyLogFacts(
     existingFacts,
-    typeof timeZone === "string" ? timeZone : null,
+    calendar,
   );
   if (
     qualifyingFacts.length >= MAX_DAILY_LOG_DAYS_PER_PERIOD ||
@@ -681,8 +800,7 @@ export async function settlePendingDailyLogEvents(
   const periodKey = metadataString(event, "period_key");
   const eligibleDays = metadataInteger(event, "eligible_days");
   if (eligibleDays === 0) return [];
-  const timeZoneValue = termCalendarMetadata(event)?.term_timezone;
-  const timeZone = typeof timeZoneValue === "string" ? timeZoneValue : null;
+  const calendar = await firstConfigurationCalendar(db, learnerId, periodKey);
   const boundedFacts = await boundedDailyLogFacts(db, learnerId, periodKey);
   if (boundedFacts.length > MAX_DAILY_LOG_FACTS_PER_PERIOD) return [];
 
@@ -706,7 +824,7 @@ export async function settlePendingDailyLogEvents(
   );
   if (remainingAllowance === 0) return [];
 
-  const candidates = calendarValidDailyLogFacts(boundedFacts, timeZone)
+  const candidates = calendarValidDailyLogFacts(boundedFacts, calendar)
     .filter((fact) => !existingSettlementIds.has(fact.id))
     .toSorted((left, right) => {
       const leftDay = String(
@@ -989,20 +1107,30 @@ async function recomputeWeeklyRhythm(
         updatedAt: new Date(),
       })
       .where(eq(achievementInstances.id, existing.id));
+    if (status === "earned") {
+      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
+    }
     return status === "earned";
   }
 
-  await db.insert(achievementInstances).values({
-    learnerId,
-    achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
-    scopeKey: periodKey,
-    periodKey,
-    status,
-    progressCurrent: displayCurrent,
-    progressTarget: displayTarget,
-    earnedAt: status === "earned" ? occurredAt : null,
-    sourceFactId: factId,
-  });
+  const [created] = await db
+    .insert(achievementInstances)
+    .values({
+      learnerId,
+      achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
+      scopeKey: periodKey,
+      periodKey,
+      status,
+      progressCurrent: displayCurrent,
+      progressTarget: displayTarget,
+      earnedAt: status === "earned" ? occurredAt : null,
+      sourceFactId: factId,
+    })
+    .returning({ id: achievementInstances.id });
+  if (!created) throw new Error("Failed to create Weekly Rhythm achievement");
+  if (status === "earned") {
+    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
+  }
   return status === "earned";
 }
 
@@ -1156,13 +1284,18 @@ export async function applyAchievementFact(
         occurredAt,
       });
       if (earned && outcome.created) {
+        await grantBehaviorTitle(db, {
+          learnerId,
+          titleId: BEHAVIOR_TITLES.onTimePro.id,
+          sourceFactId: fact.id,
+        });
         await db
           .insert(rewardNotices)
           .values({
             learnerId,
             achievementInstanceId: outcome.id,
             rewardKey: "fish-snack-v1",
-            title: "A treat for Pip!",
+            title: "A treat for your companion!",
             description: "Your on-time work earned a fish snack.",
             icon: "🐟",
           })

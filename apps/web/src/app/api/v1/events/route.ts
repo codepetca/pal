@@ -101,6 +101,8 @@ export async function POST(req: NextRequest) {
         "A closed Weekly Rhythm period cannot have fewer eligible days than stored completion facts",
       conflicting_period_calendar:
         "A period's term range and week position must remain stable and unique",
+      invalid_term_story_schedule:
+        "A story term must contain 6 to 24 weeks and leave room for the declared week position",
       inconsistent_activity_day:
         "The activity day does not match occurred_at in the configured term timezone",
       daily_log_period_limit_exceeded:
