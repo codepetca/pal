@@ -202,14 +202,16 @@ Pal's sandbox imports only the package's public exports. It contains:
 
 - a minimal host shell with content and overlay layers;
 - light, dark, wide, and narrow host scenarios;
-- the package's in-memory fixture client for public previews;
+- an application fixture client that sends bounded synthetic actions to Pal's
+  server-owned in-memory grant projector for public previews;
 - the package's authenticated HTTP client for optional local persisted testing;
 - the compact fictional-semester control panel; and
 - all six v1 fact-shaped scenarios, plus short-week revision, duplicate replay,
   and reset controls. Local persisted mode injects them through Pal's real API.
 
 The control panel is an application-development tool and is not exported from the
-widget package. In public previews its actions update a fresh in-memory snapshot. In
+widget package. In public previews its bounded action history is replayed into a
+fresh server-side in-memory grant ledger and only the redacted projection returns. In
 optional local persisted mode the same controls pass through validation,
 deduplication, persistence, achievement evaluation, award/reward persistence, the
 learner snapshot API, and the reward acknowledgement API. CI asserts parity for the

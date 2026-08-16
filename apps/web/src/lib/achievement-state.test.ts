@@ -84,7 +84,6 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
         achievement.title === "On-Time Finish" &&
         achievement.status === "earned",
     ).length,
-    rewards: snapshot.rewards.length,
     companion: {
       level: snapshot.companion.level,
       mood: snapshot.companion.mood,
@@ -96,7 +95,7 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
 }
 
 test(
-  "public fixture matches the persisted Weekly Rhythm scenario",
+  "public presentation fixture matches persisted non-durable behavior",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -2604,7 +2603,7 @@ test(
 );
 
 test(
-  "rejects a second period that claims an occupied term week",
+  "rejects occupied term weeks and changes to an assigned term length",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -2675,6 +2674,59 @@ test(
       });
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "rejects story schedules outside the supported term and week bounds",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const cases = [
+      { label: "too-short", totalWeeks: 5, weekIndex: 1 },
+      { label: "too-long", totalWeeks: 25, weekIndex: 1 },
+      { label: "zero-week", totalWeeks: 16, weekIndex: 0 },
+      { label: "past-term", totalWeeks: 16, weekIndex: 17 },
+    ];
+
+    for (const scenario of cases) {
+      const externalLearnerId = `invalid-story-schedule-${scenario.label}-${crypto.randomUUID()}`;
+      try {
+        const result = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: `period-${crypto.randomUUID()}`,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: `term-${crypto.randomUUID()}`,
+              term_start_day: "2026-08-31",
+              term_end_day: "2027-03-01",
+              term_timezone: "America/Toronto",
+              term_week_count: scenario.totalWeeks,
+              week_start_day: "2026-08-31",
+              week_index: scenario.weekIndex,
+            },
+            "2026-08-31T12:00:00.000Z",
+          ),
+          key(),
+        );
+        assert.deepEqual(result, {
+          status: "rejected",
+          error: "invalid_term_story_schedule",
+        });
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
     }
   },
 );

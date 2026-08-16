@@ -33,6 +33,8 @@ import {
   type LearnerState,
   type ProcessResult,
 } from "@pal/engine";
+import { ensureStoryPlanForEvent } from "@/lib/story-plan";
+import { BEHAVIOR_TITLES, grantBehaviorTitle } from "@/lib/reward-grants";
 
 // ---------------------------------------------------------------------------
 // Learner lookup / creation  (by integration's external learner ID)
@@ -294,6 +296,10 @@ export async function processEventInDb(
       });
     }
 
+    // Calendar-bearing weekly facts create and bind the learner's immutable
+    // term story schedule before an achievement can earn its collectible.
+    await ensureStoryPlanForEvent(tx, learnerId, event);
+
     // 7. Read current state
     const [eco] = await tx
       .select()
@@ -323,8 +329,21 @@ export async function processEventInDb(
       activityDayStatus === "pending"
         ? { state, mutations: [], trace: [], truncated: [] }
         : processEvent(event, state, defaultRulePack);
+    let rhythmBuilderTransitioned =
+      state.economy.streak_current < 3 &&
+      result.state.economy.streak_current >= 3;
+    const appendAndTrackEconomyTransition = (nextEvent: IncomingEvent) => {
+      const previousStreak = result.state.economy.streak_current;
+      result = appendEngineEvent(result, nextEvent);
+      if (
+        previousStreak < 3 &&
+        result.state.economy.streak_current >= 3
+      ) {
+        rhythmBuilderTransitioned = true;
+      }
+    };
     if (dailyRewardSettled) {
-      result = appendEngineEvent(result, {
+      appendAndTrackEconomyTransition({
         event_type: DAILY_LOG_REWARD_SETTLED,
         occurred_at: event.occurred_at,
         metadata: {},
@@ -337,8 +356,8 @@ export async function processEventInDb(
         event,
       );
       for (const pendingEvent of pendingEvents) {
-        result = appendEngineEvent(result, pendingEvent);
-        result = appendEngineEvent(result, {
+        appendAndTrackEconomyTransition(pendingEvent);
+        appendAndTrackEconomyTransition({
           event_type: DAILY_LOG_REWARD_SETTLED,
           occurred_at: pendingEvent.occurred_at,
           metadata: {},
@@ -428,6 +447,21 @@ export async function processEventInDb(
           updatedAt: new Date(),
         },
       });
+
+    if (rhythmBuilderTransitioned) {
+      await grantBehaviorTitle(tx, {
+        learnerId,
+        titleId: BEHAVIOR_TITLES.rhythmBuilder.id,
+        sourceFactId: fact.id,
+      });
+    }
+    if (state.economy.level < 5 && result.state.economy.level >= 5) {
+      await grantBehaviorTitle(tx, {
+        learnerId,
+        titleId: BEHAVIOR_TITLES.levelLeader.id,
+        sourceFactId: fact.id,
+      });
+    }
 
     // 9. Upsert pet state
     await tx
