@@ -119,7 +119,7 @@ function grant(
 ): ProjectableRewardGrant {
   return {
     id: `grant-${order}`,
-    grantOrder: order,
+    grantOrder: BigInt(order),
     learnerId: "learner-current",
     kind: "behavior_title",
     sourceFactId: `fact-${order}`,

@@ -28,8 +28,12 @@ type EarnedTitle = {
   revealCopy: string;
   kind: "story" | "behavior";
   sourceFactId: string;
-  grantOrder: number;
+  grantOrder: bigint;
 };
+
+function compareGrantOrder(left: bigint, right: bigint): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 function titleForGrant(
   grant: ProjectableRewardGrant,
@@ -51,20 +55,22 @@ function titleForGrant(
 }
 
 function currentTitle(titles: readonly EarnedTitle[]): EarnedTitle | undefined {
-  const actions = new Map<string, { actionOrder: number; titles: EarnedTitle[] }>();
+  const actions = new Map<string, { actionOrder: bigint; titles: EarnedTitle[] }>();
   for (const title of titles) {
     const action = actions.get(title.sourceFactId);
     if (action) {
-      action.actionOrder = Math.min(action.actionOrder, title.grantOrder);
+      if (title.grantOrder < action.actionOrder) action.actionOrder = title.grantOrder;
       action.titles.push(title);
     } else {
       actions.set(title.sourceFactId, { actionOrder: title.grantOrder, titles: [title] });
     }
   }
-  const latest = [...actions.values()].sort((left, right) => right.actionOrder - left.actionOrder)[0];
+  const latest = [...actions.values()].sort((left, right) =>
+    compareGrantOrder(right.actionOrder, left.actionOrder)
+  )[0];
   return latest?.titles.sort((left, right) => {
     if (left.kind !== right.kind) return left.kind === "story" ? -1 : 1;
-    return right.grantOrder - left.grantOrder;
+    return compareGrantOrder(right.grantOrder, left.grantOrder);
   })[0];
 }
 
@@ -119,7 +125,7 @@ export function projectStoryProgression(
   });
   const selected = currentTitle(earnedTitles);
   const titles: PalTitleUnlock[] = [...new Map(earnedTitles.map((title) => [title.id, title])).values()]
-    .sort((left, right) => left.grantOrder - right.grantOrder)
+    .sort((left, right) => compareGrantOrder(left.grantOrder, right.grantOrder))
     .map((title) => ({
       id: title.id,
       status: "earned",
@@ -154,7 +160,7 @@ export function projectUnseenGrantRewards(
       if (left.sourceFactId === right.sourceFactId && left.kind !== right.kind) {
         return left.kind === "story_chapter" ? 1 : -1;
       }
-      return left.grantOrder - right.grantOrder;
+      return compareGrantOrder(left.grantOrder, right.grantOrder);
     })
     .flatMap<PalRewardNotice>((grant) => {
       if (grant.kind === "behavior_title" && grant.behaviorTitleId) {

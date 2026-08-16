@@ -25,7 +25,7 @@ import {
 export class StoryFixtureLedger {
   readonly #plan: PersistedStoryPlan;
   readonly #grants: ProjectableRewardGrant[] = [];
-  #nextOrder = 1;
+  #nextOrder = BigInt(1);
 
   constructor(plan: PersistedStoryPlan) {
     this.#plan = plan;
