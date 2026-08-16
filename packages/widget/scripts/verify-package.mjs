@@ -80,6 +80,7 @@ try {
     assert.equal(typeof widget.PalProvider, "function");
     assert.equal(typeof widget.PalAchievements, "function");
     assert.equal(typeof widget.PalCollection, "function");
+    assert.equal(widget.createFixtureSnapshot, undefined);
     assert.equal(typeof fixture.createEmptyFixtureSnapshot, "function");
     assert.equal(typeof fixture.createFixturePalClient, "function");
     assert.equal(
@@ -90,6 +91,7 @@ try {
     assert.match(stylesheetUrl, /\\/dist\\/styles\\.css$/);
     assert.match(readFileSync(new URL(entryUrl), "utf8"), /^"use client";/);
     assert.doesNotMatch(readFileSync(new URL(fixtureUrl), "utf8"), /^"use client";/);
+    assert.doesNotMatch(readFileSync(new URL(entryUrl), "utf8"), /PROGRESSION_POLICY|function processEvent|fixture-fish-reward/);
     assert.equal(packageJson.peerDependencies.react, "^18.3.0 || ^19.0.0");
     assert.equal(packageJson.peerDependencies["react-dom"], "^18.3.0 || ^19.0.0");
     assert.equal(packageJson.license, "MIT");

@@ -12,10 +12,10 @@ import {
   PAL_ACHIEVEMENT_KEYS,
   resolvePalAchievementPresentation,
 } from "./achievement-presentation";
-import { collectionItemsForUnlocks } from "./collection";
 import type {
   PalAchievement,
   PalAchievementKey,
+  PalCollectionItem,
   PalFixtureAction,
   PalFixtureActionContext,
   PalFixtureController,
@@ -29,6 +29,25 @@ const MAX_STORY_PERIODS = 24;
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 const DEFAULT_WEEKLY_TARGET = 4;
 const FIRST_GENERATED_ACTIVITY_DAY = "2026-04-13";
+
+const FIXTURE_COLLECTION_ITEMS = new Map<string, PalCollectionItem>(
+  PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
+    milestone.assetRefId,
+    {
+      id: milestone.assetRefId,
+      label: milestone.label,
+      description: milestone.description,
+      icon: milestone.icon,
+    },
+  ]),
+);
+
+export function collectionItemsForUnlocks(unlockedObjectIds: readonly string[]) {
+  return unlockedObjectIds.flatMap((id) => {
+    const item = FIXTURE_COLLECTION_ITEMS.get(id);
+    return item ? [{ ...item }] : [];
+  });
+}
 
 function fixtureAchievement(
   id: string,

@@ -6,6 +6,9 @@
     "sandbox:setup": "node scripts/setup-shared-sandbox.mjs",
     "sandbox:verify": "node --env-file=apps/web/.env.local scripts/verify-shared-sandbox.mjs",
     "build": "turbo build",
+    "test": "pnpm test:unit",
+    "test:unit": "pnpm --filter @pal/contract test && pnpm --filter @pal/engine test && pnpm --filter @codepet/pal-widget test && DATABASE_URL= pnpm --filter @pal/db test && DATABASE_URL= pnpm --filter @pal/web test",
+    "test:db": "node scripts/require-database-url.mjs && pnpm --filter @pal/db test && pnpm --filter @pal/web test",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck"
   },

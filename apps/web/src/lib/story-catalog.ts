@@ -10,6 +10,11 @@ export interface StoryReference {
   version: number;
 }
 
+export interface StoryRelease {
+  eligibleFromTermStartDay: string;
+  story: StoryReference;
+}
+
 export interface StoryTitleDefinition {
   id: string;
   label: string;
@@ -201,6 +206,18 @@ function createPipPlan(totalPeriods: number): StoryPlanDefinition {
   };
 }
 
+export const STORY_TITLE_CHAPTER_IDS = deepFreeze([
+  ...new Set(
+    Array.from(
+      { length: MAX_STORY_PERIODS - MIN_STORY_PERIODS + 1 },
+      (_, index) => createPipPlan(MIN_STORY_PERIODS + index).chapters,
+    )
+      .flat()
+      .filter((chapter) => chapter.title)
+      .map((chapter) => chapter.id),
+  ),
+]);
+
 function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
   if ((typeof value !== "object" && typeof value !== "function") || value === null) return value;
   const object = value as object;
@@ -284,7 +301,53 @@ const pipCatalog: StoryCatalog = {
 
 export const STORY_REGISTRY = createStoryRegistry([pipCatalog]);
 
-export const STORY_RELEASE_SCHEDULE = deepFreeze([
+function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
+export function createStoryReleaseSchedule(
+  releases: readonly StoryRelease[],
+  registry: Pick<StoryRegistry, "requireCatalog"> = STORY_REGISTRY,
+): readonly StoryRelease[] {
+  if (releases.length === 0) throw new Error("Story release schedule cannot be empty");
+  let previousDay: string | undefined;
+  const schedule = releases.map((release) => {
+    if (!isCalendarDay(release.eligibleFromTermStartDay)) {
+      throw new Error(`Invalid story release day: ${release.eligibleFromTermStartDay}`);
+    }
+    if (previousDay !== undefined && release.eligibleFromTermStartDay <= previousDay) {
+      throw new Error("Story release days must be unique and strictly increasing");
+    }
+    registry.requireCatalog(release.story);
+    previousDay = release.eligibleFromTermStartDay;
+    return {
+      eligibleFromTermStartDay: release.eligibleFromTermStartDay,
+      story: { ...release.story },
+    };
+  });
+  return deepFreeze(schedule);
+}
+
+export function selectStoryForTermStartDay(
+  termStartDay: string,
+  schedule: readonly StoryRelease[],
+): StoryReference {
+  if (!isCalendarDay(termStartDay)) throw new Error(`Invalid term start day: ${termStartDay}`);
+  const release = schedule.reduce<StoryRelease | undefined>((selected, candidate) => {
+    if (candidate.eligibleFromTermStartDay > termStartDay) return selected;
+    return !selected ||
+      candidate.eligibleFromTermStartDay > selected.eligibleFromTermStartDay
+      ? candidate
+      : selected;
+  }, undefined);
+  if (!release) throw new Error("No story release is eligible for this term start");
+  return release.story;
+}
+
+export const STORY_RELEASE_SCHEDULE = createStoryReleaseSchedule([
   {
     eligibleFromTermStartDay: "0001-01-01",
     story: { storyId: PIP_STORY_ID, version: PIP_STORY_VERSION },
@@ -292,9 +355,5 @@ export const STORY_RELEASE_SCHEDULE = deepFreeze([
 ] as const);
 
 export function storyForTermStartDay(termStartDay: string): StoryReference {
-  const release = [...STORY_RELEASE_SCHEDULE]
-    .reverse()
-    .find((candidate) => candidate.eligibleFromTermStartDay <= termStartDay);
-  if (!release) throw new Error("No story release is eligible for this term start");
-  return release.story;
+  return selectStoryForTermStartDay(termStartDay, STORY_RELEASE_SCHEDULE);
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createFixtureSnapshot } from "@codepet/pal-widget";
+import { createFixtureSnapshot } from "@codepet/pal-widget/fixture";
 import { createSandboxPalClient } from "./sandbox-client";
 
 const learnerId = "sandbox-00000000-0000-4000-8000-000000000001";

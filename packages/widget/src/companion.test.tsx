@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { act, create } from "react-test-renderer";
+import { act, create } from "./test-renderer";
 
 import { PalCompanion } from "./companion";
 import { createFixtureSnapshot } from "./fixture-client";

@@ -4,12 +4,14 @@ import type { IncomingEvent } from "@pal/engine";
 import { identifyIntegration, resolveIntegration } from "@/lib/integration-auth";
 import { processEventInDb } from "@/lib/db-learner";
 import { isPlausibleActivityDay } from "@/lib/activity-day";
+import { readBoundedJson } from "@/lib/bounded-json";
 
 // Clock-drift allowance when deciding whether an occurred_at is future-dated.
 // Small on purpose: it only absorbs clock drift between an integration and us
 // (minutes at worst), not timezones — occurred_at is an absolute instant. The
 // rejection is instant-granular so same-day future hours are not admitted.
 const CLOCK_SKEW_MS = 60 * 60 * 1000;
+const MAX_EVENT_BODY_BYTES = 65_536;
 
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
@@ -22,7 +24,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const validation = v1.validateV1Event(await req.json());
+  const parsed = await readBoundedJson(req, MAX_EVENT_BODY_BYTES);
+  if (!parsed.ok) {
+    return NextResponse.json(
+      { error: parsed.error },
+      { status: parsed.error === "request_too_large" ? 413 : 400 },
+    );
+  }
+
+  const validation = v1.validateV1Event(parsed.value);
   if (!validation.ok) {
     return NextResponse.json(
       { error: validation.error, detail: validation.detail },

@@ -1,7 +1,7 @@
 # Rule Engine
 
 > Living document. Update as rule pack schema evolves.
-> Last updated: 2026-07-14
+> Last updated: 2026-08-16
 
 ---
 
@@ -24,8 +24,8 @@ Rules are JSON config — operators can tune gameplay without code changes.
 {
   "rules": [
     {
-      "id": "assignment-xp",
-      "trigger": { "event_type": "assignment.completed" },
+      "id": "learning-item-xp",
+      "trigger": { "event_type": "learning_item.completed" },
       "conditions": [],
       "effects": [
         { "type": "XP_GRANT", "amount": 75 },
@@ -34,8 +34,8 @@ Rules are JSON config — operators can tune gameplay without code changes.
     },
     {
       "id": "on-time-bonus",
-      "trigger": { "event_type": "assignment.completed" },
-      "conditions": [{ "field": "metadata.on_time", "op": "eq", "value": true }],
+      "trigger": { "event_type": "learning_item.completed" },
+      "conditions": [{ "field": "metadata.timing", "op": "eq", "value": "on_time" }],
       "effects": [{ "type": "XP_GRANT", "amount": 25 }]
     },
     {
@@ -79,8 +79,8 @@ strength:
 | `excited` | 2 |
 
 Without this, the default rule pack contradicts itself. A level-up sets `excited` for
-60 minutes, but `assignment.completed` sets `happy` unconditionally — so the next
-assignment a minute later would drop the pet straight back to `happy` and the
+60 minutes, but `learning_item.completed` sets `happy` unconditionally — so the next
+completion a minute later would drop the pet straight back to `happy` and the
 celebration would never be seen. The rank makes the stronger mood hold its window.
 
 Three consequences worth knowing before you write a rule that sets a mood:
@@ -94,7 +94,7 @@ Three consequences worth knowing before you write a rule that sets a mood:
   apply normally — a rule that grants XP and sets a mood still pays the XP.
 
 Within a single cascade the same rank applies in mutation order, which is why an
-assignment that also levels the learner up ends on `excited`: `happy` lands first,
+completion that also levels the learner up ends on `excited`: `happy` lands first,
 then `excited` outranks it.
 
 Because the engine has no clock, "still running" is judged against the event's own
@@ -118,7 +118,7 @@ Applying a mutation can create a new fact that rules care about. The canonical e
 
 ![One event flows through evaluate(), produces mutations, and the applier feeds derived events back in for up to four rounds before state settles.](images/rule-cascade.svg)
 
-This diagram is a snapshot, not a source of truth — if the cascade shape changes, redraw it rather than trust it. It walks a single `assignment.completed` through one round: `evaluate()` returns the XP and mood mutations, the applier commits them, and the XP grant derives `XP_CHANGED`, which is fed back into `evaluate()` for the next round (the loop at the top right). A level-up would extend the same loop by one more round.
+This diagram is a snapshot, not a source of truth — if the cascade shape changes, redraw it rather than trust it. It walks a single `learning_item.completed` through one round: `evaluate()` returns the XP and mood mutations, the applier commits them, and the XP grant derives `XP_CHANGED`, which is fed back into `evaluate()` for the next round (the loop at the top right). A level-up would extend the same loop by one more round.
 
 | Derived event | Emitted when |
 |---|---|
@@ -135,7 +135,7 @@ Rules of the cascade:
 
 - **The engine stays pure.** It never emits events and never knows about the cascade — only the applier (`processEvent`) orchestrates re-evaluation.
 - **Depth limit: 4.** The original event plus three rounds of derived events, then stop. A rule pack that cascades deeper is usually a config bug; the applier reports what it dropped (`ProcessResult.truncated`) for the AuditLog and stops, rather than looping forever. The limit is *also* what bounds the economy: levelling spends XP, which changes XP, which can level again — so one event can raise a learner at most three levels, and any surplus XP stays banked for their next event.
-- **Internal and derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`assignment.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` or `DAILY_LOG_REWARD_SETTLED` could hand itself progression; the ingest allow-list rejects them.
+- **Internal and derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`learning_item.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` or `DAILY_LOG_REWARD_SETTLED` could hand itself progression; the ingest allow-list rejects them.
 
 ---
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
+  achievementInstances,
   achievementPeriods,
   economy,
   events,
@@ -13,11 +14,13 @@ import {
   worldState,
 } from "@pal/db";
 import {
-  createEmptyFixtureSnapshot,
-  createFixturePalClient,
   parsePalWidgetSnapshot,
   type PalWidgetSnapshot,
 } from "@codepet/pal-widget";
+import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+} from "@codepet/pal-widget/fixture";
 import {
   getOrCreateLearnerIdentity,
   processEventInDb,
@@ -3506,6 +3509,89 @@ test(
       );
     } finally {
       releaseRead();
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "bounds achievement projection per current-term week without one week starving another",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `snapshot-bounds-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const termToken = `bounded-term-${crypto.randomUUID()}`;
+    const periodKeys = [
+      `bounded-week-1-${crypto.randomUUID()}`,
+      `bounded-week-2-${crypto.randomUUID()}`,
+    ];
+
+    try {
+      for (const [index, periodKey] of periodKeys.entries()) {
+        await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: periodKey,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 4,
+              term_token: termToken,
+              term_start_day: "2026-08-31",
+              term_end_day: "2026-10-11",
+              term_timezone: "America/Toronto",
+              term_week_count: 6,
+              week_start_day: index === 0 ? "2026-08-31" : "2026-09-07",
+              week_index: index + 1,
+            },
+            index === 0
+              ? "2026-08-31T12:00:00.000Z"
+              : "2026-09-07T12:00:00.000Z",
+          ),
+          key(),
+        );
+      }
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      await getDb().insert(achievementInstances).values(
+        periodKeys.flatMap((periodKey, periodIndex) =>
+          Array.from({ length: 101 }, (_, itemIndex) => ({
+            learnerId,
+            achievementKey: "ready-early",
+            scopeKey: `bounded-${periodIndex}-${itemIndex}-${crypto.randomUUID()}`,
+            periodKey,
+            status: "earned",
+          })),
+        ),
+      );
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-09-08T12:00:00.000Z") },
+      );
+      assert.equal(snapshot.roadmap.weeks[0].achievements.length, 100);
+      assert.equal(snapshot.roadmap.weeks[1].achievements.length, 100);
+      assert.ok(
+        snapshot.roadmap.weeks.slice(0, 2).every((week) =>
+          week.achievements.some(
+            (achievement) => achievement.title === "Weekly Rhythm",
+          ),
+        ),
+      );
+      assert.deepEqual(parsePalWidgetSnapshot(snapshot), snapshot);
+    } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },

@@ -1,14 +1,16 @@
 "use client";
 
 import {
-  createEmptyFixtureSnapshot,
-  createFixturePalClient,
   parsePalWidgetSnapshot,
   type PalFixtureAction,
   type PalFixtureActionContext,
   type PalFixtureController,
   type PalWidgetSnapshot,
 } from "@codepet/pal-widget";
+import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+} from "@codepet/pal-widget/fixture";
 import {
   MAX_FIXTURE_COMMANDS,
   type FixtureStoryCommand,

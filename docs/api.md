@@ -13,13 +13,14 @@
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
 | GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
-| POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
-| POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
 The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
 and public PR previews; production and optional local persisted clients use these
 learner routes.
+
+Rule preview, integration-triggered learner deletion, scheduling, and admin APIs remain
+planned work; they are not current routes or contracts.
 
 ### Read-token request
 
@@ -100,6 +101,8 @@ Authorization: Bearer <integration_secret>
 ```
 
 Responses:
+- `400 { "error": "invalid_json" }` — the authenticated request body is not valid JSON
+- `413 { "error": "request_too_large" }` — the request body exceeds the 64 KiB ingest limit
 - `401` — missing or invalid integration secret
 - `200 { "status": "processed", "mutations": [...] }` — the fact was durably accepted and any eligible rule mutations were applied. A daily log received before configuration or beyond the current `eligible_days` allowance is accepted with no mutations and a durable pending marker; the first and every accepted higher configuration settle only the remaining allowance under the latest `eligible_days`, after validating source days. Each newly inserted exact-once settlement marker emits one internal flat-XP reward event. `mutations` is the full list the cascade applied, in order; the dev sandbox renders it.
 - `200 { "status": "duplicate" }` — the idempotency key was already seen, or a second delivery identity asserted the same semantic fact (for example, another key for the same learner/activity date); no state is applied twice

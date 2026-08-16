@@ -4,12 +4,7 @@ export {
   resolvePalAchievementPresentation,
 } from "./achievement-presentation";
 export { PalCompanion } from "./companion";
-export { collectionItemsForUnlocks, PalCollection } from "./collection";
-export {
-  createEmptyFixtureSnapshot,
-  createFixturePalClient,
-  createFixtureSnapshot,
-} from "./fixture-client";
+export { PalCollection } from "./collection";
 export { createPalHttpClient, type PalHttpClientOptions } from "./http-client";
 export { PalProvider, usePalWidget } from "./provider";
 export { PalRewardCelebration } from "./reward-celebration";

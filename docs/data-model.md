@@ -77,4 +77,4 @@ This is why `@pal/db` connects with node-postgres over a pooled connection rathe
 
 ## Privacy
 
-No column holds a name, email, raw student ID, grade, score, ranking, or student writing. The only free-form field is `events.metadata`, gated at the API boundary by a per-event-type allow-list. Deleting a learner cascades to their events and all three state rows, so consent withdrawal is a single `DELETE`.
+No column holds a name, email, raw student ID, grade, score, ranking, or student writing. The only free-form field is `events.metadata`, gated at the API boundary by a per-event-type allow-list. Deleting a learner cascades through every learner-owned fact, achievement, plan, grant, notice, and state row, so consent withdrawal is a single `DELETE`.

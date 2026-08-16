@@ -470,8 +470,7 @@ export const economy = pgTable(
     xp: integer("xp").notNull().default(0),
     xpLifetime: integer("xp_lifetime").notNull().default(0),
     level: integer("level").notNull().default(1),
-    // Streaks are not computed in the M1 slice; the column exists because the
-    // engine's LearnerState type reads it.
+    // Forward-only daily-log streak derived from validated source activity days.
     streakCurrent: integer("streak_current").notNull().default(0),
     // UTC calendar day (YYYY-MM-DD) the streak last advanced. Anchors day-over-day
     // continuity and the engine's forward-only streak guard; null until the first

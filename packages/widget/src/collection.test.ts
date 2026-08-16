@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collectionItemsForUnlocks } from "./collection";
+import { collectionItemsForUnlocks } from "./fixture-client";
 
 test("does not relabel the legacy streak bird as a Weekly Rhythm keepsake", () => {
   assert.deepEqual(collectionItemsForUnlocks(["world-bird-v1"]), []);

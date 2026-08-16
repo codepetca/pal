@@ -26,7 +26,7 @@ Privacy is a first-class constraint. Pal receives only pseudonymous IDs and low-
 
 ## How it connects to Pika (and other platforms)
 
-The current developer panel exercises `assignment.completed` and `daily_checkin.created`; the prototype ingest API also retains legacy resource and calendar allow-list entries. The target initial Pika adapter will automatically send six normalized, privacy-safe facts:
+The developer panel and Pika adapter use six normalized, privacy-safe facts:
 
 - `platform.session.started`
 - `classroom.joined`

@@ -1,29 +1,6 @@
 "use client";
 
-import { PROGRESSION_POLICY } from "@pal/engine";
 import { usePalWidget } from "./provider";
-import type { PalCollectionItem } from "./types";
-
-const CATALOG: ReadonlyMap<string, PalCollectionItem> = new Map(
-  PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
-    milestone.assetRefId,
-    {
-      id: milestone.assetRefId,
-      label: milestone.label,
-      description: milestone.description,
-      icon: milestone.icon,
-    } satisfies PalCollectionItem,
-  ]),
-);
-
-export function collectionItemsForUnlocks(
-  unlockedObjectIds: readonly string[],
-): PalCollectionItem[] {
-  return unlockedObjectIds.flatMap((id) => {
-    const item = CATALOG.get(id);
-    return item ? [{ ...item }] : [];
-  });
-}
 
 export function PalCollection() {
   const { density, snapshot, state, theme, viewport } = usePalWidget();

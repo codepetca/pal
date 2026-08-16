@@ -38,6 +38,17 @@ function request(body: unknown, bearerSecret = secret): NextRequest {
   });
 }
 
+function rawRequest(body: string, bearerSecret = secret): NextRequest {
+  return new NextRequest("http://localhost/api/v1/events", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${bearerSecret}`,
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+}
+
 function learningItemEvent(
   learnerId: string,
   idempotencyKey = `test-${crypto.randomUUID()}`,
@@ -66,6 +77,24 @@ test("rejects metadata outside the privacy allow-list before opening the databas
 
   assert.equal(response.status, 422);
   assert.equal((await response.json()).error, "invalid_metadata");
+  assert.equal(openedDatabase, false);
+});
+
+test("rejects malformed JSON before opening the database", async () => {
+  const response = await POST(rawRequest("{"));
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_json" });
+  assert.equal(openedDatabase, false);
+});
+
+test("enforces the event byte limit without trusting Content-Length", async () => {
+  const response = await POST(rawRequest(JSON.stringify({
+    padding: "x".repeat(70_000),
+  })));
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "request_too_large" });
   assert.equal(openedDatabase, false);
 });
 

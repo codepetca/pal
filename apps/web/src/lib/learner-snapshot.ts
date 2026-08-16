@@ -1,13 +1,15 @@
 import {
   and,
   asc,
+  desc,
   eq,
   getTableColumns,
   gte,
   inArray,
   isNull,
   lt,
-  notInArray,
+  lte,
+  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -15,11 +17,11 @@ import {
   achievementPeriods,
   economy,
   getDb,
-  learnerFacts,
   learnerRewardGrants,
   learners,
   petState,
   rewardNotices,
+  storyPlanChapters,
   worldState,
   weeklyRhythmConfigs,
   type Db,
@@ -27,7 +29,6 @@ import {
 import type {
   PalAchievement,
   PalAchievementCelebrationNotice,
-  PalCollectionItem,
   PalCompanionMood,
   PalRoadmapWeek,
   PalWidgetSnapshot,
@@ -39,6 +40,12 @@ import {
   ACHIEVEMENT_NOTICE_KEY,
 } from "@/lib/achievement-state";
 import {
+  calendarDayInTimeZone,
+  loadCurrentTermCalendarFacts,
+  nextCalendarDay,
+} from "@/lib/learner-calendar-projection";
+import { collectionItemsForUnlocks } from "@/lib/collection-projection";
+import {
   loadPersistedStoryPlan,
   loadPersistedStoryPlansByIds,
 } from "@/lib/story-plan";
@@ -46,27 +53,14 @@ import {
   projectStoryProgression,
   projectUnseenGrantRewards,
 } from "@/lib/story-projector";
+import { STORY_TITLE_CHAPTER_IDS } from "@/lib/story-catalog";
+import { BEHAVIOR_TITLES } from "@/lib/reward-grants";
 
 const LEGACY_SEMESTER_WEEKS = 16;
-
-const COLLECTION_ITEMS = new Map<string, PalCollectionItem>(
-  PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
-    milestone.assetRefId,
-    {
-      id: milestone.assetRefId,
-      label: milestone.label,
-      description: milestone.description,
-      icon: milestone.icon,
-    },
-  ]),
+const MAX_ACHIEVEMENTS_PER_WEEK = 100;
+const BEHAVIOR_TITLE_IDS = Object.values(BEHAVIOR_TITLES).map(
+  (title) => title.id,
 );
-
-function collectionItemsForUnlocks(unlockedObjectIds: readonly string[]) {
-  return unlockedObjectIds.flatMap((id) => {
-    const item = COLLECTION_ITEMS.get(id);
-    return item ? [{ ...item }] : [];
-  });
-}
 
 export class LearnerScopeError extends Error {
   constructor() {
@@ -99,80 +93,6 @@ function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
 }
 
 type AchievementRow = typeof achievementInstances.$inferSelect;
-
-type CalendarFact = {
-  periodKey: string | null;
-  occurredAt: Date;
-  metadata: unknown;
-};
-
-function selectCurrentTermFact(
-  calendarFacts: CalendarFact[],
-  asOf: Date,
-): CalendarFact | undefined {
-  const terms = new Map<string, CalendarFact>();
-  for (const fact of calendarFacts) {
-    const metadata = fact.metadata as Record<string, unknown>;
-    if (
-      typeof metadata.term_token === "string" &&
-      typeof metadata.term_start_day === "string" &&
-      typeof metadata.term_end_day === "string" &&
-      typeof metadata.term_timezone === "string"
-    ) {
-      terms.set(metadata.term_token, fact);
-    }
-  }
-  const candidates = [...terms.values()];
-  const dates = (fact: CalendarFact) => {
-    const metadata = fact.metadata as Record<string, unknown>;
-    return {
-      start: String(metadata.term_start_day),
-      end: String(metadata.term_end_day),
-      asOfDay: calendarDayInTimeZone(asOf, String(metadata.term_timezone)),
-    };
-  };
-  const active = candidates
-    .filter((fact) => {
-      const { start, end } = dates(fact);
-      const { asOfDay } = dates(fact);
-      return start <= asOfDay && asOfDay <= end;
-    })
-    .toSorted((left, right) => dates(right).start.localeCompare(dates(left).start));
-  if (active[0]) return active[0];
-
-  const completed = candidates
-    .filter((fact) => {
-      const { end, asOfDay } = dates(fact);
-      return end < asOfDay;
-    })
-    .toSorted((left, right) => dates(right).end.localeCompare(dates(left).end));
-  if (completed[0]) return completed[0];
-
-  return candidates
-    .filter((fact) => {
-      const { start, asOfDay } = dates(fact);
-      return start > asOfDay;
-    })
-    .toSorted((left, right) => dates(left).start.localeCompare(dates(right).start))[0];
-}
-
-function calendarDayInTimeZone(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const value = (type: "year" | "month" | "day") =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${value("year")}-${value("month")}-${value("day")}`;
-}
-
-function nextCalendarDay(day: string): string {
-  return new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-}
 
 function achievementFromRow(
   row: AchievementRow,
@@ -250,7 +170,6 @@ function achievementCelebration(
       }
     : null;
 }
-
 export async function loadLearnerSnapshot(
   integrationId: string,
   learnerId: string,
@@ -292,25 +211,15 @@ export async function loadLearnerSnapshot(
         .from(worldState)
         .where(eq(worldState.learnerId, learnerId))
         .limit(1);
-      const configurations = await tx
-        .select()
-        .from(weeklyRhythmConfigs)
-        .where(eq(weeklyRhythmConfigs.learnerId, learnerId));
-      const calendarFacts = await tx
-        .select({
-          periodKey: learnerFacts.periodKey,
-          occurredAt: learnerFacts.occurredAt,
-          metadata: learnerFacts.metadata,
-        })
-        .from(learnerFacts)
-        .where(
-          and(
-            eq(learnerFacts.learnerId, learnerId),
-            eq(learnerFacts.eventType, "daily_log_week.configured"),
-            sql`${learnerFacts.metadata} ? 'term_token'`,
-          ),
-        )
-        .orderBy(asc(learnerFacts.occurredAt));
+      const asOf = options.asOf ?? new Date();
+      const {
+        selectedTermFact: latestCalendarFact,
+        facts: calendarFacts,
+      } = await loadCurrentTermCalendarFacts(
+        tx,
+        learnerId,
+        asOf,
+      );
       const achievementRewards = await tx
         .select({
           id: rewardNotices.id,
@@ -338,16 +247,6 @@ export async function loadLearnerSnapshot(
         )
         .orderBy(asc(rewardNotices.createdAt))
         .limit(100);
-      const grantRows = await tx
-        .select()
-        .from(learnerRewardGrants)
-        .where(eq(learnerRewardGrants.learnerId, learnerId))
-        .orderBy(asc(learnerRewardGrants.grantOrder));
-
-      const latestCalendarFact = selectCurrentTermFact(
-        calendarFacts,
-        options.asOf ?? new Date(),
-      );
       const currentTermMetadata = latestCalendarFact?.metadata as
         | Record<string, unknown>
         | undefined;
@@ -364,6 +263,78 @@ export async function loadLearnerSnapshot(
       const persistedStoryPlan = typeof currentTermToken === "string"
         ? await loadPersistedStoryPlan(tx, learnerId, currentTermToken)
         : undefined;
+      const currentPlanGrantRows = persistedStoryPlan
+        ? await tx
+            .select()
+            .from(learnerRewardGrants)
+            .where(
+              and(
+                eq(learnerRewardGrants.learnerId, learnerId),
+                eq(learnerRewardGrants.storyPlanId, persistedStoryPlan.id),
+              ),
+            )
+        : [];
+      const behaviorTitleGrantRows = await tx
+        .select()
+        .from(learnerRewardGrants)
+        .where(
+          and(
+            eq(learnerRewardGrants.learnerId, learnerId),
+            eq(learnerRewardGrants.kind, "behavior_title"),
+            inArray(learnerRewardGrants.behaviorTitleId, BEHAVIOR_TITLE_IDS),
+          ),
+        )
+        .orderBy(desc(learnerRewardGrants.grantOrder));
+      const storyTitleGrantRows = await tx
+        .selectDistinctOn([storyPlanChapters.chapterId], {
+          ...getTableColumns(learnerRewardGrants),
+        })
+        .from(learnerRewardGrants)
+        .innerJoin(
+          storyPlanChapters,
+          eq(
+            learnerRewardGrants.storyPlanChapterId,
+            storyPlanChapters.id,
+          ),
+        )
+        .where(
+          and(
+            eq(learnerRewardGrants.learnerId, learnerId),
+            eq(learnerRewardGrants.kind, "story_chapter"),
+            inArray(storyPlanChapters.chapterId, STORY_TITLE_CHAPTER_IDS),
+          ),
+        )
+        .orderBy(
+          storyPlanChapters.chapterId,
+          desc(learnerRewardGrants.grantOrder),
+        );
+      const unseenGrantRows = await tx
+        .select()
+        .from(learnerRewardGrants)
+        .where(
+          and(
+            eq(learnerRewardGrants.learnerId, learnerId),
+            isNull(learnerRewardGrants.seenAt),
+          ),
+        )
+        .orderBy(asc(learnerRewardGrants.grantOrder))
+        .limit(100);
+      const grantRows = [
+        ...new Map(
+          [
+            ...currentPlanGrantRows,
+            ...behaviorTitleGrantRows,
+            ...storyTitleGrantRows,
+            ...unseenGrantRows,
+          ].map((grant) => [grant.id, grant]),
+        ).values(),
+      ].toSorted((left, right) =>
+        left.grantOrder < right.grantOrder
+          ? -1
+          : left.grantOrder > right.grantOrder
+            ? 1
+            : 0,
+      );
       const historicalStoryPlans = await loadPersistedStoryPlansByIds(
         tx,
         learnerId,
@@ -403,13 +374,6 @@ export async function loadLearnerSnapshot(
         }
       }
       const authoritativePeriodKeys = [...authoritativeWeekNumbers.keys()];
-      const allCalendarPeriodKeys = [
-        ...new Set(
-          calendarFacts.flatMap((fact) =>
-            fact.periodKey ? [fact.periodKey] : [],
-          ),
-        ),
-      ];
       const authoritativePeriods = authoritativePeriodKeys.length
         ? await tx
             .select()
@@ -450,14 +414,14 @@ export async function loadLearnerSnapshot(
                   lt(legacyPlacementDay, nextCalendarDay(termEndDay)),
                 ]
               : []),
-            ...(allCalendarPeriodKeys.length > 0
-              ? [
-                  notInArray(
-                    achievementPeriods.periodKey,
-                    allCalendarPeriodKeys,
-                  ),
-                ]
-              : []),
+            sql`not exists (
+              select 1
+              from "learner_facts" as "calendar_facts"
+              where "calendar_facts"."learner_id" = "achievement_periods"."learner_id"
+                and "calendar_facts"."period_key" = "achievement_periods"."period_key"
+                and "calendar_facts"."event_type" = 'daily_log_week.configured'
+                and "calendar_facts"."metadata" ? 'term_token'
+            )`,
           ),
         )
         .orderBy(
@@ -478,11 +442,46 @@ export async function loadLearnerSnapshot(
           ]),
         ).values(),
       ];
+      const periodKeys = periods.map((period) => period.periodKey);
+      const configurations = periodKeys.length > 0
+        ? await tx
+            .select()
+            .from(weeklyRhythmConfigs)
+            .where(
+              and(
+                eq(weeklyRhythmConfigs.learnerId, learnerId),
+                inArray(weeklyRhythmConfigs.periodKey, periodKeys),
+              ),
+            )
+        : [];
+      const rankedInstances = tx
+        .select({
+          ...getTableColumns(achievementInstances),
+          snapshotRank: sql<number>`row_number() over (
+            partition by ${achievementInstances.periodKey}
+            order by ${achievementInstances.createdAt}, ${achievementInstances.id}
+          )`.as("snapshot_rank"),
+        })
+        .from(achievementInstances)
+        .where(
+          and(
+            eq(achievementInstances.learnerId, learnerId),
+            periodKeys.length > 0
+              ? or(
+                  isNull(achievementInstances.periodKey),
+                  inArray(achievementInstances.periodKey, periodKeys),
+                )
+              : isNull(achievementInstances.periodKey),
+          ),
+        )
+        .as("snapshot_achievement_instances");
       const instances = await tx
         .select()
-        .from(achievementInstances)
-        .where(eq(achievementInstances.learnerId, learnerId))
-        .orderBy(asc(achievementInstances.createdAt));
+        .from(rankedInstances)
+        .where(
+          lte(rankedInstances.snapshotRank, MAX_ACHIEVEMENTS_PER_WEEK),
+        )
+        .orderBy(asc(rankedInstances.createdAt), asc(rankedInstances.id));
       const periodNumbers = new Map<string, number>();
       for (const period of periods) {
         const authoritativeWeek = authoritativeWeekNumbers.get(period.periodKey);
@@ -511,7 +510,6 @@ export async function loadLearnerSnapshot(
           configuration.reconciliationRequired,
         ]),
       );
-      const asOf = options.asOf ?? new Date();
       const asOfDay =
         typeof termTimezone === "string"
           ? calendarDayInTimeZone(asOf, termTimezone)

@@ -547,8 +547,9 @@ export async function loadLearnerFromDb(
 }
 
 /**
- * Dev-only: deletes a learner and all cascaded state (events, economy,
- * pet_state, world_state). Used by the sandbox reset panel.
+ * Dev-only: deletes a learner and every learner-owned row through database
+ * cascades, including events, facts, achievements, plans, grants, and state.
+ * Used by the sandbox reset panel.
  */
 export async function resetLearnerInDb(
   integrationId: string,

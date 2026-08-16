@@ -13,7 +13,9 @@ import {
   storyPlans,
 } from "@pal/db";
 import {
+  createStoryReleaseSchedule,
   STORY_REGISTRY,
+  selectStoryForTermStartDay,
   storyForTermStartDay,
 } from "@/lib/story-catalog";
 import {
@@ -39,6 +41,52 @@ import {
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
+
+test("story release schedules are validated and selection is declaration-order safe", () => {
+  const storyA = { storyId: "story-a", version: 1 };
+  const storyB = { storyId: "story-b", version: 2 };
+  assert.deepEqual(
+    selectStoryForTermStartDay("2027-01-01", [
+      { eligibleFromTermStartDay: "2026-09-01", story: storyB },
+      { eligibleFromTermStartDay: "0001-01-01", story: storyA },
+    ]),
+    storyB,
+  );
+
+  const reference = storyForTermStartDay("2026-08-31");
+  const schedule = createStoryReleaseSchedule([
+    { eligibleFromTermStartDay: "0001-01-01", story: reference },
+    { eligibleFromTermStartDay: "2027-01-01", story: reference },
+  ]);
+  assert.equal(Object.isFrozen(schedule), true);
+  assert.equal(Object.isFrozen(schedule[0]?.story), true);
+  assert.throws(
+    () => createStoryReleaseSchedule([
+      { eligibleFromTermStartDay: "2027-01-01", story: reference },
+      { eligibleFromTermStartDay: "2026-01-01", story: reference },
+    ]),
+    /strictly increasing/,
+  );
+  assert.throws(
+    () => createStoryReleaseSchedule([
+      { eligibleFromTermStartDay: "2026-01-01", story: reference },
+      { eligibleFromTermStartDay: "2026-01-01", story: reference },
+    ]),
+    /strictly increasing/,
+  );
+  assert.throws(
+    () => createStoryReleaseSchedule([
+      { eligibleFromTermStartDay: "2026-02-30", story: reference },
+    ]),
+    /Invalid story release day/,
+  );
+  assert.throws(
+    () => createStoryReleaseSchedule([
+      { eligibleFromTermStartDay: "2026-01-01", story: { storyId: "missing", version: 1 } },
+    ]),
+    /Unsupported story catalog/,
+  );
+});
 
 test("client dependency graphs cannot reach server story authority", () => {
   const sourceRoot = path.resolve(process.cwd(), "src");

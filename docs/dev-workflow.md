@@ -158,6 +158,21 @@ Run engine tests:
 pnpm --filter @pal/engine test
 ```
 
+Run the complete database-free suite from the repository root:
+
+```bash
+pnpm test
+```
+
+Run PostgreSQL-backed schema and application coverage explicitly:
+
+```bash
+DATABASE_URL=postgresql://... pnpm test:db
+```
+
+`pnpm test:db` fails immediately when `DATABASE_URL` is absent; database coverage is
+never represented as a successful run made entirely of skips.
+
 ---
 
 ## Key conventions
