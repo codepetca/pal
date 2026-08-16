@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
-import { getDb, getPool, integrations } from "@pal/db";
+import { and, eq } from "drizzle-orm";
+import {
+  getDb,
+  getPool,
+  integrations,
+  learnerRewardGrants,
+  learners,
+  storyPlans,
+} from "@pal/db";
 import { v1 } from "@pal/contract";
 import { loadLearnerFromDb, resetLearnerInDb } from "@/lib/db-learner";
 import {
@@ -10,6 +17,7 @@ import {
   resolveSandboxIntegration,
 } from "@/lib/integration-auth";
 import { isPlausibleActivityDay } from "@/lib/activity-day";
+import { loadLearnerSnapshot } from "@/lib/learner-snapshot";
 import { POST } from "./route";
 
 const secret = "route-test-sandbox-secret-at-least-32-characters";
@@ -165,6 +173,66 @@ test("permits legitimate UTC-12 and UTC+14 local-date boundaries", () => {
     true,
   );
 });
+
+test(
+  "rejects a story week ordinal that cannot fit its term range",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `invalid-story-ordinal-${crypto.randomUUID()}`;
+    const integration = await resolveSandboxIntegration();
+    const db = getDb();
+    try {
+      const response = await POST(request({
+        schema_version: 1,
+        idempotency_key: `invalid-story-ordinal-${crypto.randomUUID()}`,
+        learner_id: externalLearnerId,
+        event_type: "daily_log_week.configured",
+        occurred_at: new Date().toISOString(),
+        metadata: {
+          period_key: `invalid-story-period-${crypto.randomUUID()}`,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 4,
+          term_token: `invalid-story-term-${crypto.randomUUID()}`,
+          term_start_day: "2026-04-13",
+          term_end_day: "2026-08-02",
+          term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_start_day: "2026-04-13",
+          week_index: 16,
+        },
+      }));
+      assert.equal(response.status, 422);
+      assert.equal((await response.json()).error, "invalid_term_story_schedule");
+
+      const [learner] = await db
+        .select({ id: learners.id })
+        .from(learners)
+        .where(and(
+          eq(learners.integrationId, integration.id),
+          eq(learners.externalLearnerId, externalLearnerId),
+        ))
+        .limit(1);
+      assert.ok(learner);
+      assert.equal(
+        (await db.select().from(storyPlans).where(eq(storyPlans.learnerId, learner.id))).length,
+        0,
+      );
+      assert.equal(
+        (await db.select().from(learnerRewardGrants).where(eq(learnerRewardGrants.learnerId, learner.id))).length,
+        0,
+      );
+      const snapshot = await loadLearnerSnapshot(integration.id, learner.id, db);
+      const raw = JSON.stringify(snapshot);
+      assert.equal(raw.includes("Meet Lumi"), false);
+      assert.equal(raw.includes("True Friend"), false);
+      assert.equal(raw.includes("/assets/pets/lumi-v1.png"), false);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
 
 test(
   "persists valid events atomically, deduplicates retries, and serializes concurrent writes",

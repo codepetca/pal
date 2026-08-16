@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       conflicting_period_calendar:
         "A period's term range and week position must remain stable and unique",
       invalid_term_story_schedule:
-        "A story term must contain 6 to 24 weeks and the week position must fall within that term",
+        "A story term must contain 6 to 24 weeks and leave room for the declared week position",
       inconsistent_activity_day:
         "The activity day does not match occurred_at in the configured term timezone",
       daily_log_period_limit_exceeded:

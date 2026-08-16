@@ -213,6 +213,26 @@ function periodCalendarFromMetadata(
   return { timeZone, startDay, endDay };
 }
 
+function hasValidStoryWeekPosition(calendar: TermCalendarMetadata): boolean {
+  const totalWeeks = calendar.term_week_count ?? 16;
+  const earliestStart = offsetCalendarDay(
+    calendar.term_start_day,
+    (calendar.week_index - 1) * 7,
+  );
+  const latestStart = offsetCalendarDay(
+    calendar.term_end_day,
+    -(totalWeeks - calendar.week_index) * 7,
+  );
+  const actualStart = calendar.week_start_day ?? earliestStart;
+  return Boolean(
+    earliestStart &&
+      latestStart &&
+      actualStart &&
+      earliestStart <= actualStart &&
+      actualStart <= latestStart,
+  );
+}
+
 async function firstConfigurationCalendar(
   db: Db,
   learnerId: string,
@@ -422,7 +442,8 @@ export async function weeklyConfigurationRejection(
       totalWeeks < 6 ||
       totalWeeks > 24 ||
       calendar.week_index < 1 ||
-      calendar.week_index > totalWeeks
+      calendar.week_index > totalWeeks ||
+      !hasValidStoryWeekPosition(calendar)
     ) {
       return "invalid_term_story_schedule";
     }

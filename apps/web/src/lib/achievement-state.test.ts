@@ -367,18 +367,24 @@ test(
         snapshot.collection?.items.map((item) => item.id),
         ["world-study-bird-v1"],
       );
-      assert.equal(snapshot.rewards.length, 1);
+      assert.equal(snapshot.rewards.length, 2);
+      assert.equal(
+        snapshot.rewards.some((reward) => reward.titleAward === "On-Time Pro"),
+        true,
+      );
 
-      await acknowledgeLearnerReward(
-        integration.id,
-        internalLearnerId,
-        snapshot.rewards[0].id,
-      );
-      await acknowledgeLearnerReward(
-        integration.id,
-        internalLearnerId,
-        snapshot.rewards[0].id,
-      );
+      for (const reward of snapshot.rewards) {
+        await acknowledgeLearnerReward(
+          integration.id,
+          internalLearnerId,
+          reward.id,
+        );
+        await acknowledgeLearnerReward(
+          integration.id,
+          internalLearnerId,
+          reward.id,
+        );
+      }
       assert.equal(
         (await loadLearnerSnapshot(integration.id, internalLearnerId)).rewards
           .length,
@@ -2461,6 +2467,10 @@ test(
 
     for (const termWeekCount of [6, 12, 24]) {
       const externalLearnerId = `term-length-${termWeekCount}-${crypto.randomUUID()}`;
+      const lastWeekStartDay = new Date(
+        Date.parse("2026-01-01T00:00:00.000Z") +
+          (termWeekCount - 1) * 7 * 86_400_000,
+      ).toISOString().slice(0, 10);
       try {
         await processEventInDb(
           integration.id,
@@ -2477,10 +2487,10 @@ test(
               term_end_day: "2026-12-31",
               term_timezone: "America/Toronto",
               term_week_count: termWeekCount,
-              week_start_day: "2026-06-01",
+              week_start_day: lastWeekStartDay,
               week_index: termWeekCount,
             },
-            "2026-06-01T12:00:00.000Z",
+            `${lastWeekStartDay}T12:00:00.000Z`,
           ),
           key(),
         );
@@ -2494,7 +2504,7 @@ test(
           integration.id,
           learnerId,
           getDb(),
-          { asOf: new Date("2026-06-01T12:00:00.000Z") },
+          { asOf: new Date(`${lastWeekStartDay}T12:00:00.000Z`) },
         );
         assert.equal(snapshot.roadmap.weeks.length, termWeekCount);
         assert.equal(snapshot.roadmap.currentWeek, termWeekCount);
@@ -2662,6 +2672,7 @@ test(
             ...calendar,
             period_key: `period-c-${crypto.randomUUID()}`,
             term_week_count: 12,
+            week_start_day: "2026-10-19",
             week_index: 8,
           },
           "2026-10-12T14:00:00.000Z",
@@ -3327,7 +3338,7 @@ test(
       await acknowledgeLearnerReward(sandbox.id, sandboxAId, rewardB.id);
       assert.equal(
         (await loadLearnerSnapshot(sandbox.id, sandboxBId)).rewards.length,
-        1,
+        2,
       );
       await assert.rejects(
         loadLearnerSnapshot(pika.id, sandboxAId),
@@ -3413,7 +3424,7 @@ test(
       const duringCommit = await inFlightSnapshot;
       const afterCommit = await loadLearnerSnapshot(integration.id, learnerId);
       assert.deepEqual(duringCommit, before);
-      assert.equal(afterCommit.rewards.length, before.rewards.length + 1);
+      assert.equal(afterCommit.rewards.length, before.rewards.length + 2);
       assert.equal(
         afterCommit.roadmap.weeks.some((week) =>
           week.achievements.some(

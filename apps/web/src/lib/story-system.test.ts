@@ -177,7 +177,7 @@ test("projector keeps prior-term titles without unlocking current-term collectib
   assert.equal(projection.collectibles[0]?.status, "next");
   assert.equal(projection.currentTitle, "Gentle Keeper");
   assert.equal(projection.titles.some((title) => title.id === "gentle-keeper"), true);
-  assert.equal(projectUnseenGrantRewards(plan, [priorTermGrant], plans).length, 1);
+  assert.equal(projectUnseenGrantRewards([priorTermGrant], plans).length, 1);
   const raw = JSON.stringify(projection);
   assert.equal(raw.includes(plan.storyId), false);
   for (const chapter of plan.chapters) {
@@ -424,6 +424,7 @@ test("a legacy calendar derives the same future-week grant boundary", { skip: !p
   const periodKey = `future-legacy-period-${crypto.randomUUID()}`;
   const configuration = configuredWeek(periodKey, `future-legacy-term-${crypto.randomUUID()}`);
   configuration.metadata.week_index = 6;
+  configuration.metadata.term_end_day = "2026-12-18";
   delete (configuration.metadata as Record<string, unknown>).term_week_count;
   delete (configuration.metadata as Record<string, unknown>).week_start_day;
   try {
@@ -491,7 +492,7 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
     adaptive.occurred_at = "2026-08-04T12:00:00.000Z";
     adaptive.metadata.config_version = 2;
     adaptive.metadata.term_week_count = 16;
-    adaptive.metadata.week_start_day = "2026-08-31";
+    adaptive.metadata.week_start_day = "2026-08-04";
     const moved = await processEventInDb(
       integration.id,
       externalLearnerId,
@@ -618,6 +619,7 @@ test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !pr
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;
   const legacy = configuredWeek(`period-${crypto.randomUUID()}`, `legacy-term-${crypto.randomUUID()}`);
+  legacy.metadata.term_end_day = "2026-12-18";
   delete (legacy.metadata as { term_week_count?: number }).term_week_count;
   try {
     await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
@@ -799,6 +801,61 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
       true,
     );
     assert.equal(snapshot.rewards.some((reward) => reward.kind === "story"), true);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a calendarless behavior title is revealed and acknowledged without losing ownership", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `calendarless-title-${crypto.randomUUID()}`;
+  try {
+    const result = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "learning_item.completed",
+        occurred_at: "2026-08-01T12:00:00.000Z",
+        metadata: {
+          item_token: `calendarless-item-${crypto.randomUUID()}`,
+          kind: "assignment",
+          period_key: `calendarless-period-${crypto.randomUUID()}`,
+          timing: "on_time",
+        },
+      },
+      crypto.randomUUID(),
+    );
+    assert.equal(result.status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const [grant] = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(and(
+        eq(learnerRewardGrants.learnerId, learnerId),
+        eq(learnerRewardGrants.behaviorTitleId, "on-time-pro"),
+      ));
+    assert.ok(grant);
+    assert.equal(grant.seenAt, null);
+
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
+    assert.equal(snapshot.progression, undefined);
+    const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
+    assert.ok(notice);
+    assert.equal(notice.titleAward, "On-Time Pro");
+
+    await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
+    const after = await loadLearnerSnapshot(integration.id, learnerId);
+    assert.equal(after.rewards.some((reward) => reward.id === grant.id), false);
+    const [owned] = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.id, grant.id));
+    assert.ok(owned?.seenAt);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

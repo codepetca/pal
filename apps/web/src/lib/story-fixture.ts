@@ -80,7 +80,10 @@ export class StoryFixtureLedger {
   }
 
   rewards(): PalRewardNotice[] {
-    return projectUnseenGrantRewards(this.#plan, this.#grants);
+    return projectUnseenGrantRewards(
+      this.#grants,
+      new Map([[this.#plan.id, this.#plan]]),
+    );
   }
 
   grants(): readonly ProjectableRewardGrant[] {

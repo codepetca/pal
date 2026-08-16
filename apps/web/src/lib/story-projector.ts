@@ -150,9 +150,8 @@ export function projectStoryProgression(
 }
 
 export function projectUnseenGrantRewards(
-  plan: PersistedStoryPlan,
   grants: readonly ProjectableRewardGrant[],
-  plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map([[plan.id, plan]]),
+  plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map(),
 ): PalRewardNotice[] {
   return grants
     .filter((grant) => grant.seenAt === null)

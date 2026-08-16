@@ -625,13 +625,7 @@ export async function loadLearnerSnapshot(
             description: reward.description,
             ...(reward.icon ? { icon: reward.icon } : {}),
           })),
-          ...(persistedStoryPlan
-            ? projectUnseenGrantRewards(
-                persistedStoryPlan,
-                grantRows,
-                storyPlansById,
-              )
-            : []),
+          ...projectUnseenGrantRewards(grantRows, storyPlansById),
         ].slice(0, 100),
         ...(progression ? { progression } : {}),
       };

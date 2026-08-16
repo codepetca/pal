@@ -154,19 +154,21 @@ test(
         rewards: Array<{ id: string }>;
       };
       assert.equal(snapshot.schemaVersion, 1);
-      assert.equal(snapshot.rewards.length, 1);
+      assert.equal(snapshot.rewards.length, 2);
 
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const acknowledged = await acknowledgeReward(
-          request(
-            `/api/v1/learner/rewards/${snapshot.rewards[0].id}/seen`,
-            token,
-            allowedOrigin,
-            "POST",
-          ),
-          { params: Promise.resolve({ rewardId: snapshot.rewards[0].id }) },
-        );
-        assert.equal(acknowledged.status, 204);
+      for (const reward of snapshot.rewards) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const acknowledged = await acknowledgeReward(
+            request(
+              `/api/v1/learner/rewards/${reward.id}/seen`,
+              token,
+              allowedOrigin,
+              "POST",
+            ),
+            { params: Promise.resolve({ rewardId: reward.id }) },
+          );
+          assert.equal(acknowledged.status, 204);
+        }
       }
 
       const afterAck = await getSnapshot(
