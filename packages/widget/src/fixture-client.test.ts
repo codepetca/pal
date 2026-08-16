@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
+  createFixtureSnapshot,
 } from "./fixture-client";
 
 test("fixture client exposes a 16-week roadmap with a current week", async () => {
@@ -17,6 +18,41 @@ test("fixture client exposes a 16-week roadmap with a current week", async () =>
     snapshot.roadmap.weeks.filter((week) => week.status === "current").length,
     1,
   );
+});
+
+test("fixture projection redacts unearned story content and companion art", () => {
+  const serialized = JSON.stringify(createFixtureSnapshot(2));
+
+  assert.doesNotMatch(serialized, /\/assets\/world\/reward-/);
+  assert.doesNotMatch(serialized, /Cloud Blanket/);
+  assert.doesNotMatch(serialized, /reward-cloud-blanket-v1\.png/);
+  assert.doesNotMatch(serialized, /Meet Pip/);
+  assert.doesNotMatch(serialized, /\bPip\b/);
+  assert.doesNotMatch(serialized, /assets\/pets\/default\.png/);
+  assert.doesNotMatch(serialized, /Brave Beginner/);
+});
+
+test("fixture rebuilds concealed presentation slots for different term lengths", () => {
+  const client = createFixturePalClient(createFixtureSnapshot(4, 12));
+  assert.equal(client.peek().roadmap.weeks.length, 12);
+  assert.equal(client.peek().progression?.collectibles.length, 12);
+  assert.equal(client.peek().progression?.companionReveal.status, "locked");
+
+  client.setTermWeeks?.(20);
+  assert.equal(client.peek().roadmap.weeks.length, 20);
+  assert.equal(client.peek().progression?.collectibles.length, 20);
+  assert.throws(() => client.setTermWeeks?.(25), /6–24/);
+});
+
+test("fixture reset preserves the selected term length", () => {
+  const client = createFixturePalClient();
+
+  client.setTermWeeks?.(6);
+  client.dispatch("daily-log-completed", { activityDay: "2026-05-01" });
+  client.dispatch("reset");
+
+  assert.equal(client.peek().roadmap.weeks.length, 6);
+  assert.equal(client.peek().progression?.collectibles.length, 6);
 });
 
 test("fixture actions update visible state while duplicate replay is inert", async () => {
@@ -114,7 +150,10 @@ test("fixture deduplicates one activity day but keeps genuine items distinct", (
   assert.equal(snapshot.rewards.length, 2);
   assert.equal(snapshot.companion.xp, 210);
   assert.equal(snapshot.companion.mood, "happy");
-  assert.equal(snapshot.companion.message, "Pip is happy about your progress.");
+  assert.equal(
+    snapshot.companion.message,
+    "Your companion is happy about your progress.",
+  );
 });
 
 test("fixture rewards Weekly Rhythm once and keeps its collection unlock", () => {
@@ -163,5 +202,37 @@ test("fixture pays distinct out-of-order days without moving the rhythm backward
       (achievement) => achievement.title === "Weekly Rhythm",
     )?.progress?.current,
     2,
+  );
+});
+
+test("fixture XP crosses production level thresholds without awarding story props", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  client.dispatch("advance-week");
+  client.dispatch("advance-week");
+  client.dispatch("advance-week");
+  const thresholds = [
+    { completions: 5, level: 2, xp: 0 },
+    { completions: 10, level: 3, xp: 0 },
+    { completions: 20, level: 5, xp: 0 },
+    { completions: 25, level: 6, xp: 0 },
+    { completions: 45, level: 10, xp: 0 },
+  ];
+  let completed = 0;
+
+  for (const threshold of thresholds) {
+    while (completed < threshold.completions) {
+      completed += 1;
+      client.dispatch("on-time-finish", { itemToken: `level-item-${completed}` });
+    }
+    const snapshot = client.peek();
+    assert.equal(snapshot.companion.level, threshold.level);
+    assert.equal(snapshot.companion.xp, threshold.xp);
+    assert.equal(snapshot.companion.xpToNextLevel, 500 - threshold.xp);
+  }
+
+  const progression = client.peek().progression;
+  assert.equal(
+    progression?.collectibles.some((reward) => reward.status === "earned"),
+    false,
   );
 });

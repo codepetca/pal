@@ -63,8 +63,10 @@ try {
     import { readFileSync } from "node:fs";
 
     const widget = await import("@codepet/pal-widget");
+    const fixture = await import("@codepet/pal-widget/fixture");
     const theme = await import("@codepet/pal-widget/theme-contract");
     const entryUrl = import.meta.resolve("@codepet/pal-widget");
+    const fixtureUrl = import.meta.resolve("@codepet/pal-widget/fixture");
     const stylesheetUrl = import.meta.resolve("@codepet/pal-widget/styles.css");
     const license = readFileSync(
       new URL("./node_modules/@codepet/pal-widget/LICENSE", import.meta.url),
@@ -77,9 +79,12 @@ try {
     assert.equal(typeof widget.PalProvider, "function");
     assert.equal(typeof widget.PalAchievements, "function");
     assert.equal(typeof widget.PalCollection, "function");
+    assert.equal(typeof fixture.createEmptyFixtureSnapshot, "function");
+    assert.equal(typeof fixture.createFixturePalClient, "function");
     assert.equal(theme.PAL_THEME_CONTRACT_VERSION, 1);
     assert.match(stylesheetUrl, /\\/dist\\/styles\\.css$/);
     assert.match(readFileSync(new URL(entryUrl), "utf8"), /^"use client";/);
+    assert.doesNotMatch(readFileSync(new URL(fixtureUrl), "utf8"), /^"use client";/);
     assert.equal(packageJson.peerDependencies.react, "^18.3.0 || ^19.0.0");
     assert.equal(packageJson.peerDependencies["react-dom"], "^18.3.0 || ^19.0.0");
     assert.equal(packageJson.license, "MIT");

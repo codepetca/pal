@@ -42,6 +42,10 @@
       "types": "./dist/theme-contract.d.ts",
       "import": "./dist/theme-contract.js"
     },
+    "./fixture": {
+      "types": "./dist/fixture-client.d.ts",
+      "import": "./dist/fixture-client.js"
+    },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },

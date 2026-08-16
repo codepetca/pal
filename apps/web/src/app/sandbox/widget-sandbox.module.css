@@ -873,6 +873,26 @@
   background: rgb(255 255 255 / 0.18);
 }
 
+.termLength {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.termLength select {
+  min-height: 30px;
+  padding: 0 1.7rem 0 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.35rem;
+  color: #f8fafc;
+  background: #172033;
+  font: inherit;
+}
+
 .controlActions {
   display: grid;
   gap: 0.25rem;

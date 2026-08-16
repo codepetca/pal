@@ -11,6 +11,8 @@ export type PalAchievementStatus =
   | "upcoming";
 export type PalWeekStatus = "past" | "current" | "future";
 export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
+export type PalUnlockStatus = "earned" | "next" | "locked";
+export type PalCollectibleKind = "companion" | "room" | "cosmetic";
 
 export interface PalProgress {
   current: number;
@@ -70,6 +72,10 @@ export interface PalRewardNotice {
   id: string;
   title: string;
   description: string;
+  kind?: "standard" | "story";
+  collectibleTitle?: string;
+  titleAward?: string;
+  titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
 }
@@ -86,6 +92,67 @@ export interface PalCollectionState {
   items: PalCollectionItem[];
 }
 
+interface PalCollectibleUnlockBase {
+  id: string;
+  /** Roadmap week whose collectible slot reveals this reward after it is earned. */
+  roadmapWeek: number;
+  statusLabel: string;
+  progress?: PalProgress;
+}
+
+export type PalCollectibleUnlock =
+  | PalCollectibleUnlockBase & {
+      status: "earned";
+      /** Stable story chapter identity. */
+      chapterId?: string;
+      title: string;
+      description: string;
+      revealHeadline?: string;
+      storyCopy?: string;
+      titleAward?: string;
+      titleRevealCopy?: string;
+      kind: PalCollectibleKind;
+      assetUrl: string;
+    }
+  | PalCollectibleUnlockBase & {
+      status: "next" | "locked";
+    };
+
+export type PalTitleUnlock = {
+  id: string;
+  statusLabel: string;
+} & (
+  | {
+      status: "earned";
+      label: string;
+      description: string;
+    }
+  | {
+      status: "next" | "locked";
+    }
+);
+
+/** Display-ready companion decision emitted by Pal's canonical projector. */
+export type PalCompanionReveal =
+  | {
+      status: "locked";
+      label: string;
+      /** The only mystery artwork the widget may display before the reveal. */
+      assetUrl?: string;
+    }
+  | {
+      status: "earned";
+      /** The only companion artwork the widget may display after the reveal. */
+      assetUrl: string;
+    };
+
+export interface PalProgressionState {
+  companionReveal: PalCompanionReveal;
+  currentTitle?: string;
+  collectibles: PalCollectibleUnlock[];
+  titles: PalTitleUnlock[];
+}
+
 export interface PalWidgetSnapshot {
   schemaVersion: 1;
   roadmap: PalRoadmapSnapshot;
@@ -93,6 +160,8 @@ export interface PalWidgetSnapshot {
   /** Durable world keepsakes. Optional for backward-compatible v1 snapshots. */
   collection?: PalCollectionState;
   rewards: PalRewardNotice[];
+  /** Optional in schema v1 so older Pal APIs remain compatible. */
+  progression?: PalProgressionState;
 }
 
 export interface PalClient {
@@ -147,6 +216,8 @@ export interface PalFixtureActionContext {
 export interface PalFixtureController extends PalClient {
   dispatch(action: PalFixtureAction, context?: PalFixtureActionContext): string;
   peek(): PalWidgetSnapshot;
-  /** Override the current week number (1-16), rebuilding the snapshot. */
+  /** Override the current week number, bounded by the supplied roadmap. */
   setWeek?(week: number): void;
+  /** Rebuild the fixture with a supported 6–24 period story plan. */
+  setTermWeeks?(weeks: number): void;
 }

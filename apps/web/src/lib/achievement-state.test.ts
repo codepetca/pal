@@ -88,7 +88,6 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
     companion: {
       level: snapshot.companion.level,
       mood: snapshot.companion.mood,
-      message: snapshot.companion.message,
       xp: snapshot.companion.xp,
       streak: snapshot.companion.streak,
     },
@@ -193,6 +192,8 @@ test(
         weeklyRhythmRoadmap(fixture.peek()),
         weeklyRhythmRoadmap(persisted),
       );
+      assert.match(fixture.peek().companion.message, /your companion/i);
+      assert.doesNotMatch(fixture.peek().companion.message, /\bPip\b/);
       assert.deepEqual(itemOutcomeCounts(fixture.peek()), itemOutcomeCounts(persisted));
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);

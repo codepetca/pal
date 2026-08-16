@@ -18,9 +18,41 @@ import type {
   PalWidgetSnapshot,
 } from "./types";
 
+const MIN_STORY_PERIODS = 6;
+const MAX_STORY_PERIODS = 24;
+
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 const DEFAULT_WEEKLY_TARGET = 4;
 const FIRST_GENERATED_ACTIVITY_DAY = "2026-04-13";
+
+function requireFixtureTermWeeks(totalWeeks: number): number {
+  if (
+    !Number.isInteger(totalWeeks) ||
+    totalWeeks < MIN_STORY_PERIODS ||
+    totalWeeks > MAX_STORY_PERIODS
+  ) {
+    throw new Error(
+      `Fixture term must contain ${MIN_STORY_PERIODS}–${MAX_STORY_PERIODS} weeks`,
+    );
+  }
+  return totalWeeks;
+}
+
+function concealedProgression(totalWeeks: number): PalWidgetSnapshot["progression"] {
+  return {
+    companionReveal: {
+      status: "locked",
+      label: "Mystery companion. Keep building your Weekly Rhythm to reveal it.",
+    },
+    collectibles: Array.from({ length: totalWeeks }, (_, index) => ({
+      id: `locked-collectible-week-${index + 1}`,
+      roadmapWeek: index + 1,
+      status: index === 0 ? "next" as const : "locked" as const,
+      statusLabel: "Locked",
+    })),
+    titles: [],
+  };
+}
 
 function weeklyRhythm(
   week: number,
@@ -94,36 +126,44 @@ function emptyWeek(number: number, currentWeek: number): PalRoadmapWeek {
 }
 
 /** A fresh learner snapshot matching the production snapshot's empty defaults. */
-export function createEmptyFixtureSnapshot(): PalWidgetSnapshot {
+export function createEmptyFixtureSnapshot(totalWeeks = 16): PalWidgetSnapshot {
+  requireFixtureTermWeeks(totalWeeks);
   const currentWeek = 1;
+  const weeks = Array.from({ length: totalWeeks }, (_, index) =>
+    emptyWeek(index + 1, currentWeek),
+  );
+  const companion = {
+    name: "Mystery companion",
+    mood: "neutral" as const,
+    moodLabel: "Neutral",
+    level: 1,
+    streak: 0,
+    xp: 0,
+    xpToNextLevel: 500,
+    message: "Complete positive learning actions to encourage your companion.",
+  };
   return {
     schemaVersion: 1,
     roadmap: {
       semesterLabel: "Achievement semester",
       currentWeek,
-      weeks: Array.from({ length: 16 }, (_, index) =>
-        emptyWeek(index + 1, currentWeek),
-      ),
+      weeks,
     },
-    companion: {
-      name: "Pip",
-      mood: "neutral",
-      moodLabel: "Neutral",
-      level: 1,
-      streak: 0,
-      xp: 0,
-      xpToNextLevel: 500,
-      message: "Complete positive learning actions to encourage Pip.",
-      assetUrl: "/assets/pets/default.png",
-    },
+    companion,
     collection: { items: [] },
     rewards: [],
+    progression: concealedProgression(weeks.length),
   };
 }
 
-export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
-  const weeks = Array.from({ length: 16 }, (_, index) =>
-    buildWeek(index + 1, currentWeek),
+export function createFixtureSnapshot(
+  currentWeek = 4,
+  totalWeeks = 16,
+): PalWidgetSnapshot {
+  requireFixtureTermWeeks(totalWeeks);
+  const boundedCurrentWeek = Math.max(1, Math.min(totalWeeks, currentWeek));
+  const weeks = Array.from({ length: totalWeeks }, (_, index) =>
+    buildWeek(index + 1, boundedCurrentWeek),
   );
 
   weeks[0]?.achievements.push({
@@ -138,32 +178,28 @@ export function createFixtureSnapshot(currentWeek = 4): PalWidgetSnapshot {
     },
   });
 
+  const companion = {
+    name: "Mystery companion",
+    mood: "happy" as const,
+    moodLabel: "Happy",
+    level: 2,
+    streak: 3,
+    xp: 230,
+    xpToNextLevel: 270,
+    message: "Two daily-log days complete this week.",
+  };
+
   return {
     schemaVersion: 1,
     roadmap: {
       semesterLabel: "Fall semester",
-      currentWeek,
+      currentWeek: boundedCurrentWeek,
       weeks,
     },
-    companion: {
-      name: "Pip",
-      mood: "happy",
-      moodLabel: "Happy",
-      level: 2,
-      streak: 3,
-      xp: 230,
-      xpToNextLevel: 270,
-      message: "Two daily-log days complete this week.",
-      assetUrl: "/assets/pets/default.png",
-    },
-    collection: {
-      items: collectionItemsForUnlocks(
-        PROGRESSION_POLICY.collectionMilestones
-          .filter((milestone) => milestone.weeklyRhythms < currentWeek)
-          .map((milestone) => milestone.assetRefId),
-      ),
-    },
+    companion,
+    collection: { items: [] },
     rewards: [],
+    progression: concealedProgression(weeks.length),
   };
 }
 
@@ -171,10 +207,27 @@ function cloneSnapshot(snapshot: PalWidgetSnapshot): PalWidgetSnapshot {
   return structuredClone(snapshot);
 }
 
+function refreshProgression(
+  _snapshot: PalWidgetSnapshot,
+  _currentTitleId?: string,
+): void {
+  void _snapshot;
+  void _currentTitleId;
+  // The widget fixture intentionally does not infer durable ownership. A host
+  // fixture that owns a grant ledger may replace the supplied projection.
+}
+
+function currentTitleIdForSnapshot(
+  _snapshot: PalWidgetSnapshot,
+): string | undefined {
+  void _snapshot;
+  return undefined;
+}
+
 export function createFixturePalClient(
   initialSnapshot = createFixtureSnapshot(),
 ): PalFixtureController {
-  const original = cloneSnapshot(initialSnapshot);
+  let original = cloneSnapshot(initialSnapshot);
   let snapshot = cloneSnapshot(initialSnapshot);
   const completedActivityDays = new Set<string>();
   const acceptedDailyLogCounts = new Map<number, number>();
@@ -183,6 +236,7 @@ export function createFixturePalClient(
   let generatedDayIdentity = 0;
   let generatedItemIdentity = 0;
   let earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+  let currentTitleId = currentTitleIdForSnapshot(snapshot);
   let engineState = progressionStateForSnapshot(snapshot);
 
   function progressionStateForSnapshot(value: PalWidgetSnapshot): LearnerState {
@@ -258,13 +312,32 @@ export function createFixturePalClient(
     snapshot.companion.moodLabel = mood[0].toUpperCase() + mood.slice(1);
     snapshot.companion.message =
       mood === "excited"
-        ? "Pip is excited!"
+        ? "Your companion is excited!"
         : mood === "happy"
-          ? "Pip is happy about your progress."
-          : "Complete positive learning actions to encourage Pip.";
+          ? "Your companion is happy about your progress."
+          : "Complete positive learning actions to encourage your companion.";
     snapshot.collection = {
       items: collectionItemsForUnlocks(engineState.world.unlocked_object_ids),
     };
+    refreshProgression(snapshot, currentTitleId);
+  }
+
+  function earnedTitleIds(): Set<string> {
+    return new Set(
+      snapshot.progression?.titles
+        .filter((title) => title.status === "earned")
+        .map((title) => title.id) ?? [],
+    );
+  }
+
+  function selectLatestNewTitle(previouslyEarned: ReadonlySet<string>): void {
+    const newlyEarned = snapshot.progression?.titles.filter(
+      (title) => title.status === "earned" && !previouslyEarned.has(title.id),
+    ) ?? [];
+    const latest = newlyEarned[newlyEarned.length - 1];
+    if (!latest) return;
+    currentTitleId = latest.id;
+    refreshProgression(snapshot, currentTitleId);
   }
 
   function applyProgression(event: IncomingEvent): void {
@@ -346,11 +419,44 @@ export function createFixturePalClient(
     if (!snapshot.rewards.some((reward) => reward.id === rewardId)) {
       snapshot.rewards.push({
         id: rewardId,
-        title: "A treat for Pip!",
+        title: "A treat for your companion!",
         description: "Your on-time work earned a fish snack.",
         icon: "🐟",
       });
     }
+  }
+
+  function queueStoryReward(weekNumber: number, wasEarned: boolean): void {
+    if (wasEarned) return;
+    const collectible = snapshot.progression?.collectibles.find(
+      (candidate) => candidate.roadmapWeek === weekNumber,
+    );
+    if (
+      !collectible ||
+      collectible.status !== "earned" ||
+      !collectible.chapterId ||
+      !collectible.title ||
+      !collectible.assetUrl ||
+      !collectible.description
+    ) {
+      return;
+    }
+    const rewardId = `fixture-story-${collectible.chapterId}`;
+    if (snapshot.rewards.some((reward) => reward.id === rewardId)) return;
+    snapshot.rewards.unshift({
+      id: rewardId,
+      kind: "story",
+      title: collectible.revealHeadline ?? "A new chapter",
+      description: collectible.storyCopy ?? collectible.description,
+      collectibleTitle: collectible.title,
+      assetUrl: collectible.assetUrl,
+      ...(collectible.titleAward
+        ? {
+            titleAward: collectible.titleAward,
+            titleRevealCopy: collectible.titleRevealCopy,
+          }
+        : {}),
+    });
   }
 
   seedAcceptedDailyLogCounts(snapshot);
@@ -373,6 +479,7 @@ export function createFixturePalClient(
         generatedDayIdentity = 0;
         generatedItemIdentity = 0;
         earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+        currentTitleId = currentTitleIdForSnapshot(snapshot);
         engineState = progressionStateForSnapshot(snapshot);
         syncMissingCollection("2026-04-13T12:00:00.000Z");
         return "Fixture learner reset";
@@ -381,7 +488,8 @@ export function createFixturePalClient(
         return "Duplicate replayed — no progress changed";
       }
       if (action === "advance-week") {
-        const nextWeek = Math.min(16, snapshot.roadmap.currentWeek + 1);
+        const finalWeek = snapshot.roadmap.weeks.length;
+        const nextWeek = Math.min(finalWeek, snapshot.roadmap.currentWeek + 1);
         snapshot.roadmap.currentWeek = nextWeek;
         for (const week of snapshot.roadmap.weeks) {
           week.status =
@@ -398,13 +506,20 @@ export function createFixturePalClient(
                 : "Opens when the week begins";
         }
         ensureCurrentRhythm();
-        return nextWeek === 16 ? "Moved to final semester week" : `Moved to week ${nextWeek}`;
+        refreshProgression(snapshot, currentTitleId);
+        return nextWeek === finalWeek ? "Moved to final semester week" : `Moved to week ${nextWeek}`;
       }
       if (action === "week-configured") {
         ensureCurrentRhythm();
         return "Created a 5-day Weekly Rhythm target";
       }
       if (action === "short-week-configured") {
+        const previouslyEarnedTitles = earnedTitleIds();
+        const weekNumber = currentWeek().number;
+        const activeCollectibleWasEarned =
+          snapshot.progression?.collectibles.find(
+            (collectible) => collectible.roadmapWeek === weekNumber,
+          )?.status === "earned";
         const rhythm = ensureCurrentRhythm(2);
         const wasEarned = rhythm.status === "earned";
         if (rhythm.progress) {
@@ -419,7 +534,9 @@ export function createFixturePalClient(
           rhythm,
           itemOccurredAt(),
         );
-        return "Revised Weekly Rhythm to 3 eligible days";
+        queueStoryReward(weekNumber, activeCollectibleWasEarned);
+        selectLatestNewTitle(previouslyEarnedTitles);
+        return "Revised to a 2-day Weekly Rhythm goal within 3 eligible days";
       }
       if (action === "daily-log-completed") {
         const activityDay =
@@ -437,6 +554,11 @@ export function createFixturePalClient(
         if (acceptedCount >= eligibleDaysForFixtureRhythm(rhythm)) {
           return "daily_log.completed: period limit exceeded — no progress changed";
         }
+        const previouslyEarnedTitles = earnedTitleIds();
+        const activeCollectibleWasEarned =
+          snapshot.progression?.collectibles.find(
+            (collectible) => collectible.roadmapWeek === snapshot.roadmap.currentWeek,
+          )?.status === "earned";
         completedActivityDays.add(activityDay);
         acceptedDailyLogCounts.set(weekNumber, acceptedCount + 1);
         const wasEarned = rhythm.status === "earned";
@@ -464,6 +586,8 @@ export function createFixturePalClient(
           metadata: {},
         });
         rewardWeeklyRhythmIfNewlyEarned(wasEarned, rhythm, occurredAt);
+        queueStoryReward(snapshot.roadmap.currentWeek, activeCollectibleWasEarned);
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "daily_log.completed applied to fixture state";
       }
       if (action === "classroom-joined") {
@@ -501,6 +625,7 @@ export function createFixturePalClient(
         return "learning_item.viewed (early) applied to fixture state";
       }
       if (action === "on-time-finish") {
+        const previouslyEarnedTitles = earnedTitleIds();
         const week = currentWeek();
         const itemToken = itemIdentity(context);
         if (completedItemTokens.has(itemToken)) {
@@ -525,9 +650,11 @@ export function createFixturePalClient(
           occurred_at: itemOccurredAt(),
           metadata: { timing: "on_time" },
         });
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "learning_item.completed (on_time) applied to fixture state";
       }
       if (action === "late-finish") {
+        const previouslyEarnedTitles = earnedTitleIds();
         const week = currentWeek();
         const itemToken = itemIdentity(context);
         if (completedItemTokens.has(itemToken)) {
@@ -550,6 +677,7 @@ export function createFixturePalClient(
           occurred_at: itemOccurredAt(),
           metadata: { timing: "late" },
         });
+        selectLatestNewTitle(previouslyEarnedTitles);
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {
@@ -575,13 +703,31 @@ export function createFixturePalClient(
     },
 
     setWeek(week: number) {
-      const clamped = Math.max(1, Math.min(16, week));
-      snapshot = createFixtureSnapshot(clamped);
+      const clamped = Math.max(1, Math.min(snapshot.roadmap.weeks.length, week));
+      snapshot = createFixtureSnapshot(clamped, snapshot.roadmap.weeks.length);
       completedActivityDays.clear();
       seedAcceptedDailyLogCounts(snapshot);
       completedItemTokens.clear();
       viewedItemTokens.clear();
       earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+      currentTitleId = currentTitleIdForSnapshot(snapshot);
+      engineState = progressionStateForSnapshot(snapshot);
+      syncMissingCollection(itemOccurredAt());
+    },
+
+    setTermWeeks(totalWeeks: number) {
+      requireFixtureTermWeeks(totalWeeks);
+      snapshot = createFixtureSnapshot(
+        Math.min(snapshot.roadmap.currentWeek, totalWeeks),
+        totalWeeks,
+      );
+      original = cloneSnapshot(snapshot);
+      completedActivityDays.clear();
+      seedAcceptedDailyLogCounts(snapshot);
+      completedItemTokens.clear();
+      viewedItemTokens.clear();
+      earnedWeeklyRhythms = countEarnedWeeklyRhythms(snapshot);
+      currentTitleId = currentTitleIdForSnapshot(snapshot);
       engineState = progressionStateForSnapshot(snapshot);
       syncMissingCollection(itemOccurredAt());
     },

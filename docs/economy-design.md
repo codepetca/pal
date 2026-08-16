@@ -92,7 +92,41 @@ durable earned-week count with the stored world IDs and emits one exact
 therefore catch up their collection on their next event without receiving retroactive
 XP, and an already-stored unlock is absent from both state changes and the returned
 mutation stream. Delivery retries and configuration revisions cannot repay the weekly
-reward or duplicate a keepsake.
+XP or duplicate collection items.
+
+## Reward progression projection
+
+The learner snapshot can include an optional `progression` projection. It turns
+durable week, level, streak, and achievement state into a visible reward path;
+it does not mutate that state or bypass the rule engine. Keeping the field
+optional preserves schema-version-1 compatibility for integrations pinned to an
+older widget/API pair.
+
+- A deterministic story plan selects one chapter for each supported 6–24 week
+  instructional term. Eight core chapters preserve the emotional arc while
+  optional chapters let longer terms breathe.
+- A period's collectible is earned only when that period's durable Weekly
+  Rhythm achievement is earned. Level, streak, and assignment milestones may
+  award titles or ordinary rewards, but never unlock story props.
+- Pip's reveal is scheduled by the generated plan (Week 4 in the standard
+  16-week plan). The canonical progression projector evaluates the persisted
+  plan and durable awards once, then emits a single display-ready
+  `companionReveal` decision. The companion surface renders that decision and
+  never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
+- Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
+  Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
+- The widget gives every roadmap week a collectible-style slot while concealing
+  locked art, names, story copy, and title definitions in the raw projection as
+  well as the UI. Once earned, that week's slot reveals its collectible (at
+  most one reward per period). Older snapshots without `progression` keep the
+  existing cat and achievement UI.
+- Pal's authenticated snapshot producer is the authority for story awards and
+  reveal eligibility. The widget's network parser validates shape, bounds, and
+  asset origins; it deliberately does not maintain a second story engine or
+  attempt to prove entitlement from other fields in the same response.
+- Catch-up remains deliberately deferred. The story copy, collectible briefs,
+  scheduling rules, and that boundary are defined in
+  [Pip's First Recipe — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy
 `world-bird-v1` ID that the original policy awarded for a seven-day streak.

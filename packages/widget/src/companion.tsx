@@ -12,6 +12,7 @@ import {
 import { usePalWidget } from "./provider";
 import type { PalCompanionMood, PalCompanionProps, PalMotion } from "./types";
 
+
 // The two frames of a mood alternate at this interval. Deliberately slow for a
 // sprite animation: each pose has to register as its own drawing rather than
 // blending into the next.
@@ -337,6 +338,16 @@ function PalCompanion(
   if (state === "error" || !snapshot) return null;
 
   const companion = snapshot.companion;
+  const progression = snapshot.progression;
+  // Pal's canonical projection owns story eligibility. The widget renders that
+  // display decision instead of rebuilding entitlement from duplicate fields.
+  const companionReveal = progression?.companionReveal;
+  const companionUnlocked = companionReveal
+    ? companionReveal.status === "earned"
+    : true;
+  const companionAssetUrl = companionReveal
+    ? companionReveal.assetUrl
+    : companion.assetUrl;
   const companionScale = Number.isFinite(scale)
     ? Math.min(1.2, Math.max(0.4, scale))
     : 1;
@@ -351,7 +362,11 @@ function PalCompanion(
     }
     onPointerDown?.(event);
   };
-  const label = `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} school-day rhythm.`;
+  const label = companionUnlocked
+    ? `${companion.name}, your Pal companion. ${companion.moodLabel}. ${companion.message} Level ${companion.level}; ${companion.streak} school-day rhythm.`
+    : companionReveal?.status === "locked"
+      ? companionReveal.label
+      : "Mystery companion.";
 
   return (
     <aside
@@ -365,16 +380,30 @@ function PalCompanion(
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       data-pal-mood={companion.mood}
+      data-pal-companion-unlocked={companionUnlocked ? "true" : "false"}
       aria-label={label}
     >
       <div className="pal-companion-stage" aria-hidden="true">
-        {companion.assetUrl ? (
+        {!companionUnlocked ? (
+          companionAssetUrl ? (
+            <div className="pal-companion-art">
+              <img
+                className="pal-companion-sprite pal-companion-static"
+                crossOrigin="anonymous"
+                src={companionAssetUrl}
+                alt=""
+                width="512"
+                height="512"
+              />
+            </div>
+          ) : null
+        ) : companionAssetUrl ? (
           <div className="pal-companion-art">
             <PetSprite
-              key={companion.assetUrl}
+              key={companionAssetUrl}
               mood={companion.mood}
               motion={motion}
-              restUrl={companion.assetUrl}
+              restUrl={companionAssetUrl}
             />
           </div>
         ) : (

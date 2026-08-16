@@ -2,15 +2,21 @@ import type {
   PalAchievement,
   PalAchievementStatus,
   PalBadge,
+  PalCollectibleKind,
+  PalCollectibleUnlock,
+  PalCompanionReveal,
   PalCompanionMood,
   PalCompanionState,
   PalCollectionItem,
   PalCollectionState,
   PalProgress,
+  PalProgressionState,
   PalRewardNotice,
   PalRoadmapWeek,
   PalWeekStatus,
   PalWidgetSnapshot,
+  PalTitleUnlock,
+  PalUnlockStatus,
 } from "./types";
 
 const MAX_TEXT_LENGTH = 512;
@@ -19,6 +25,8 @@ const MAX_WEEKS = 64;
 const MAX_ACHIEVEMENTS_PER_WEEK = 100;
 const MAX_REWARDS = 100;
 const MAX_COLLECTION_ITEMS = 50;
+const MAX_COLLECTIBLES = 32;
+const MAX_TITLES = 32;
 
 export interface PalSnapshotValidationOptions {
   /**
@@ -192,6 +200,20 @@ function uniqueId(id: string, ids: Set<string>, path: string): string {
   return id;
 }
 
+function uniqueInteger(
+  value: unknown,
+  values: Set<number>,
+  path: string,
+  minimum: number,
+): number {
+  const parsed = integer(value, path, minimum);
+  if (values.has(parsed)) {
+    return fail(path, "expected a unique roadmap week");
+  }
+  values.add(parsed);
+  return parsed;
+}
+
 function parseProgress(value: unknown, path: string): PalProgress {
   const source = record(value, path);
   const target = integer(source.target, `${path}.target`, 1);
@@ -257,13 +279,14 @@ function parseWeek(
   value: unknown,
   path: string,
   weekIds: Set<string>,
+  weekNumbers: Set<number>,
   achievementIds: Set<string>,
   assetPolicy: AssetPolicy,
 ): PalRoadmapWeek {
   const source = record(value, path);
   return {
     id: uniqueId(text(source.id, `${path}.id`), weekIds, `${path}.id`),
-    number: integer(source.number, `${path}.number`, 1),
+    number: uniqueInteger(source.number, weekNumbers, `${path}.number`, 1),
     label: text(source.label, `${path}.label`),
     dateLabel: text(source.dateLabel, `${path}.dateLabel`),
     status: member<PalWeekStatus>(
@@ -333,10 +356,26 @@ function parseReward(
     `${path}.assetUrl`,
     assetPolicy,
   );
+  const kind = source.kind === undefined
+    ? undefined
+    : member(source.kind, `${path}.kind`, ["standard", "story"] as const);
+  const collectibleTitle = optionalText(
+    source.collectibleTitle,
+    `${path}.collectibleTitle`,
+  );
+  const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
+  const titleRevealCopy = optionalText(
+    source.titleRevealCopy,
+    `${path}.titleRevealCopy`,
+  );
   return {
     id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
+    ...(kind === undefined ? {} : { kind }),
+    ...(collectibleTitle === undefined ? {} : { collectibleTitle }),
+    ...(titleAward === undefined ? {} : { titleAward }),
+    ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
     ...(icon === undefined ? {} : { icon }),
     ...(assetUrl === undefined ? {} : { assetUrl }),
   };
@@ -382,8 +421,225 @@ function parseCollection(
   };
 }
 
+function parseCollectible(
+  value: unknown,
+  path: string,
+  ids: Set<string>,
+  assignedRoadmapWeeks: Set<number>,
+  validRoadmapWeeks: ReadonlySet<number>,
+  assetPolicy: AssetPolicy,
+): PalCollectibleUnlock {
+  const source = record(value, path);
+  const progress =
+    source.progress === undefined
+      ? undefined
+      : parseProgress(source.progress, `${path}.progress`);
+  const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
+  const status = member<PalUnlockStatus>(
+    source.status,
+    `${path}.status`,
+    ["earned", "next", "locked"],
+  );
+  const statusLabel = text(source.statusLabel, `${path}.statusLabel`);
+  const roadmapWeek = uniqueInteger(
+    source.roadmapWeek,
+    assignedRoadmapWeeks,
+    `${path}.roadmapWeek`,
+    1,
+  );
+  if (!validRoadmapWeeks.has(roadmapWeek)) {
+    fail(`${path}.roadmapWeek`, "must identify a supplied roadmap week");
+  }
+  if (status !== "earned") {
+    const concealedFields = [
+      "chapterId",
+      "title",
+      "description",
+      "revealHeadline",
+      "storyCopy",
+      "titleAward",
+      "titleRevealCopy",
+      "kind",
+      "assetUrl",
+    ];
+    if (concealedFields.some((field) => source[field] !== undefined)) {
+      fail(path, "expected concealed collectible content while locked");
+    }
+    return {
+      id,
+      roadmapWeek,
+      status,
+      statusLabel,
+      ...(progress === undefined ? {} : { progress }),
+    };
+  }
+
+  const assetUrl = optionalAssetUrl(
+    source.assetUrl,
+    `${path}.assetUrl`,
+    assetPolicy,
+  );
+  if (assetUrl === undefined) fail(`${path}.assetUrl`, "expected an asset URL");
+  const chapterId = optionalText(source.chapterId, `${path}.chapterId`);
+  const revealHeadline = optionalText(
+    source.revealHeadline,
+    `${path}.revealHeadline`,
+  );
+  const storyCopy = optionalText(source.storyCopy, `${path}.storyCopy`);
+  const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
+  const titleRevealCopy = optionalText(
+    source.titleRevealCopy,
+    `${path}.titleRevealCopy`,
+  );
+  return {
+    id,
+    ...(chapterId === undefined ? {} : { chapterId }),
+    title: text(source.title, `${path}.title`),
+    description: text(source.description, `${path}.description`),
+    ...(revealHeadline === undefined ? {} : { revealHeadline }),
+    ...(storyCopy === undefined ? {} : { storyCopy }),
+    ...(titleAward === undefined ? {} : { titleAward }),
+    ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
+    roadmapWeek,
+    kind: member<PalCollectibleKind>(
+      source.kind,
+      `${path}.kind`,
+      ["companion", "room", "cosmetic"],
+    ),
+    status,
+    statusLabel,
+    assetUrl,
+    ...(progress === undefined ? {} : { progress }),
+  };
+}
+
+function parseTitle(
+  value: unknown,
+  path: string,
+  ids: Set<string>,
+): PalTitleUnlock {
+  const source = record(value, path);
+  const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
+  const status = member<PalUnlockStatus>(
+    source.status,
+    `${path}.status`,
+    ["earned", "next", "locked"],
+  );
+  const statusLabel = text(source.statusLabel, `${path}.statusLabel`);
+  if (status !== "earned") {
+    if (source.label !== undefined || source.description !== undefined) {
+      fail(path, "expected concealed title content while locked");
+    }
+    return { id, status, statusLabel };
+  }
+  return {
+    id,
+    label: text(source.label, `${path}.label`),
+    description: text(source.description, `${path}.description`),
+    status,
+    statusLabel,
+  };
+}
+
+function parseCompanionReveal(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalCompanionReveal {
+  const source = record(value, path);
+  const status = member<PalCompanionReveal["status"]>(
+    source.status,
+    `${path}.status`,
+    ["earned", "locked"],
+  );
+  const assetUrl = optionalAssetUrl(
+    source.assetUrl,
+    `${path}.assetUrl`,
+    assetPolicy,
+  );
+  if (status === "earned") {
+    if (source.label !== undefined) {
+      fail(`${path}.label`, "expected no locked label after reveal");
+    }
+    if (assetUrl === undefined) {
+      fail(`${path}.assetUrl`, "expected earned companion artwork");
+    }
+    return { status, assetUrl };
+  }
+  return {
+    status,
+    label: text(source.label, `${path}.label`),
+    ...(assetUrl === undefined ? {} : { assetUrl }),
+  };
+}
+
+function parseProgression(
+  value: unknown,
+  path: string,
+  validRoadmapWeeks: ReadonlySet<number>,
+  assetPolicy: AssetPolicy,
+): PalProgressionState {
+  const source = record(value, path);
+  const collectibleIds = new Set<string>();
+  const collectibleRoadmapWeeks = new Set<number>();
+  const titleIds = new Set<string>();
+  if (
+    source.storyId !== undefined ||
+    source.storyVersion !== undefined ||
+    source.storyTotalPeriods !== undefined
+  ) {
+    fail(path, "expected no private story catalog metadata");
+  }
+  const currentTitle = optionalText(source.currentTitle, `${path}.currentTitle`);
+  if (
+    source.companionUnlocked !== undefined ||
+    source.companionUnlockWeek !== undefined ||
+    source.companionCollectibleId !== undefined ||
+    source.mysteryCollectibleId !== undefined
+  ) {
+    fail(path, "expected one canonical companionReveal decision");
+  }
+  const collectibles = boundedArray(
+    source.collectibles,
+    `${path}.collectibles`,
+    MAX_COLLECTIBLES,
+    1,
+  ).map((collectible, index) =>
+    parseCollectible(
+      collectible,
+      `${path}.collectibles[${index}]`,
+      collectibleIds,
+      collectibleRoadmapWeeks,
+      validRoadmapWeeks,
+      assetPolicy,
+    ),
+  );
+  if (collectibleRoadmapWeeks.size !== validRoadmapWeeks.size) {
+    fail(`${path}.collectibles`, "expected exactly one decision for every roadmap week");
+  }
+  return {
+    companionReveal: parseCompanionReveal(
+      source.companionReveal,
+      `${path}.companionReveal`,
+      assetPolicy,
+    ),
+    ...(currentTitle === undefined ? {} : { currentTitle }),
+    collectibles,
+    titles: boundedArray(
+      source.titles,
+      `${path}.titles`,
+      MAX_TITLES,
+      0,
+    ).map((title, index) =>
+      parseTitle(title, `${path}.titles[${index}]`, titleIds),
+    ),
+  };
+}
+
 /**
- * Validates the untrusted JSON returned by Pal before it reaches React state.
+ * Structurally validates network JSON before it reaches React state. Pal's
+ * authenticated snapshot projector remains authoritative for story awards and
+ * reveal eligibility; the widget intentionally does not re-run those rules.
  */
 export function parsePalWidgetSnapshot(
   value: unknown,
@@ -397,6 +653,7 @@ export function parsePalWidgetSnapshot(
 
   const roadmap = record(source.roadmap, "snapshot.roadmap");
   const weekIds = new Set<string>();
+  const weekNumbers = new Set<number>();
   const achievementIds = new Set<string>();
   const weeks = boundedArray(
     roadmap.weeks,
@@ -408,10 +665,17 @@ export function parsePalWidgetSnapshot(
       week,
       `snapshot.roadmap.weeks[${index}]`,
       weekIds,
+      weekNumbers,
       achievementIds,
       assetPolicy,
     ),
   );
+  if (weeks.some((week) => week.number > weeks.length)) {
+    fail(
+      "snapshot.roadmap.weeks",
+      "week numbers must form the contiguous range 1 through the roadmap length",
+    );
+  }
   const currentWeek = integer(
     roadmap.currentWeek,
     "snapshot.roadmap.currentWeek",
@@ -426,6 +690,15 @@ export function parsePalWidgetSnapshot(
     source.collection === undefined
       ? undefined
       : parseCollection(source.collection, "snapshot.collection", assetPolicy);
+  const progression =
+    source.progression === undefined
+      ? undefined
+      : parseProgression(
+          source.progression,
+          "snapshot.progression",
+          weekNumbers,
+          assetPolicy,
+        );
   return {
     schemaVersion: 1,
     roadmap: {
@@ -454,5 +727,6 @@ export function parsePalWidgetSnapshot(
         assetPolicy,
       ),
     ),
+    ...(progression === undefined ? {} : { progression }),
   };
 }

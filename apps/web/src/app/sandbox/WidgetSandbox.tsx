@@ -4,7 +4,6 @@ import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
   PalAchievements,
-  PalCollection,
   PalCompanion,
   PalProvider,
   PalRewardCelebration,
@@ -125,7 +124,7 @@ const SANDBOX_ACTIONS: Array<{
   {
     action: "short-week-configured",
     label: "Make it a short week",
-    detail: "Revises Weekly Rhythm to 3 eligible days",
+    detail: "Uses a 2-day Weekly Rhythm goal within 3 eligible days",
   },
   {
     action: "daily-log-completed",
@@ -169,6 +168,8 @@ function SandboxControls({
   learnerId,
   sandboxError,
   currentSemesterWeek,
+  totalSemesterWeeks,
+  onTermWeeksChange,
 }: {
   buildInfo: SandboxBuildInfo;
   client: SandboxClient;
@@ -184,6 +185,8 @@ function SandboxControls({
   learnerId: string;
   sandboxError: string | null;
   currentSemesterWeek: number;
+  totalSemesterWeeks: number;
+  onTermWeeksChange: (weeks: number) => void;
 }) {
   const fixture = isFixtureClient(client);
   const [log, setLog] = useState<string[]>([
@@ -313,6 +316,22 @@ function SandboxControls({
     }
   }
 
+  async function changeTermWeeks(totalWeeks: number) {
+    if (!fixture || busy || !client.setTermWeeks) return;
+    setBusy(true);
+    try {
+      client.setTermWeeks(totalWeeks);
+      onTermWeeksChange(totalWeeks);
+      setLog((current) => [
+        `Rebuilt fixture as a ${totalWeeks}-week story`,
+        ...current,
+      ].slice(0, 6));
+      await onRefresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const openButton = collapsed ? (
     <button
       ref={openButtonRef}
@@ -392,7 +411,7 @@ function SandboxControls({
 
           <div className={styles.dateBar}>
             <span className={styles.dateLabel}>
-              Semester week {currentSemesterWeek} / daily-log date
+              Semester week {currentSemesterWeek} of {totalSemesterWeeks} / daily-log date
             </span>
             <span className={styles.dateValue}>
               {simulatedDate.toLocaleDateString("en-US", {
@@ -415,6 +434,21 @@ function SandboxControls({
                 +1 week
               </button>
             </div>
+            {fixture ? (
+              <label className={styles.termLength}>
+                Story length
+                <select
+                  aria-label="Fixture story length"
+                  disabled={busy}
+                  value={totalSemesterWeeks}
+                  onChange={(event) => void changeTermWeeks(Number(event.target.value))}
+                >
+                  {Array.from({ length: 19 }, (_, index) => index + 6).map((weeks) => (
+                    <option key={weeks} value={weeks}>{weeks} weeks</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
 
           <div className={styles.controlActions}>
@@ -594,16 +628,24 @@ function SandboxExperience({
     () => new Date(FICTIONAL_SEMESTER_START_ISO),
   );
   const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const fixture = isFixtureClient(client);
+  const [termWeeks, setTermWeeks] = useState(() =>
+    fixture ? client.peek().roadmap.weeks.length : 16,
+  );
+  const nextDay = addDays(simulatedDate, 1);
+  const nextWeek = addDays(simulatedDate, 7);
   const canAddDay =
-    isTodayOrEarlier(addDays(simulatedDate, 1)) &&
-    isInsideFictionalSemester(addDays(simulatedDate, 1));
+    isTodayOrEarlier(nextDay) &&
+    semesterWeekForDate(nextDay) <= termWeeks &&
+    (fixture || isInsideFictionalSemester(nextDay));
   const canAddWeek =
-    isTodayOrEarlier(addDays(simulatedDate, 7)) &&
-    isInsideFictionalSemester(addDays(simulatedDate, 7));
+    semesterWeekForDate(simulatedDate) < termWeeks &&
+    isTodayOrEarlier(nextWeek) &&
+    (fixture || isInsideFictionalSemester(nextWeek));
 
   const currentSemesterWeek = useMemo(
-    () => semesterWeekForDate(simulatedDate),
-    [simulatedDate],
+    () => Math.min(termWeeks, semesterWeekForDate(simulatedDate)),
+    [simulatedDate, termWeeks],
   );
 
   const [controlsCollapsed, setControlsCollapsed] = useState(true);
@@ -878,6 +920,19 @@ function SandboxExperience({
                     learnerId={learnerId}
                     sandboxError={sandboxError}
                     currentSemesterWeek={currentSemesterWeek}
+                    totalSemesterWeeks={termWeeks}
+                    onTermWeeksChange={(weeks) => {
+                      setTermWeeks(weeks);
+                      setSimulatedDate((current) => {
+                        const currentWeek = semesterWeekForDate(current);
+                        return currentWeek <= weeks
+                          ? current
+                          : addDays(
+                              new Date(FICTIONAL_SEMESTER_START_ISO),
+                              (weeks - 1) * 7,
+                            );
+                      });
+                    }}
                   />
                 )}
               </SandboxRefreshBridge>
@@ -899,10 +954,7 @@ function SandboxExperience({
 
           <main className={styles.content}>
             {view === "achievements" ? (
-              <>
-                <PalCollection />
-                <PalAchievements />
-              </>
+              <PalAchievements />
             ) : view === "today" ? (
               <section className={styles.todayContent}>
                 <div className={styles.noClassCard}>No class today</div>

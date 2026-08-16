@@ -121,9 +121,11 @@ test("badge tooltips stay hoverable while the pointer enters the disclosure", ()
   assert.match(visibleTooltipRule, /pointer-events: auto/);
 });
 
-test("badge controls keep a minimum 44px target in the narrow cascade", () => {
+test("badges share one circular footprint and keep a minimum 44px target", () => {
   const badgeControlRule =
     styles.match(/\.pal-badge-control \{([^}]+)\}/)?.[1] ?? "";
+  const progressRingRule =
+    styles.match(/\.pal-badge-progress-ring \{([^}]+)\}/)?.[1] ?? "";
   const narrowBadgeRules = [
     ...styles.matchAll(
       /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-badge \{([^}]+)\}/g,
@@ -138,6 +140,10 @@ test("badge controls keep a minimum 44px target in the narrow cascade", () => {
     badgeControlRule,
     /min-height: var\(--pal-effective-control-min\)/,
   );
+  assert.match(badgeControlRule, /width: 4\.5rem/);
+  assert.match(badgeControlRule, /height: 4\.5rem/);
+  assert.match(progressRingRule, /width: 100%/);
+  assert.match(progressRingRule, /height: 100%/);
   assert.equal(narrowBadgeRules.length, 1);
   assert.match(narrowBadgeRules[0]?.[1] ?? "", /width: 3\.5rem/);
   assert.match(narrowBadgeRules[0]?.[1] ?? "", /height: 3\.5rem/);

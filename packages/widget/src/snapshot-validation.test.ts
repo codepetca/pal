@@ -26,6 +26,22 @@ test("snapshot parser preserves the v1 current-week domain", () => {
   );
 });
 
+test("snapshot parser requires one contiguous entry for every roadmap week", () => {
+  const duplicate = createFixtureSnapshot();
+  duplicate.roadmap.weeks[1]!.number = duplicate.roadmap.weeks[0]!.number;
+  assert.throws(
+    () => parsePalWidgetSnapshot(duplicate),
+    /unique roadmap week/i,
+  );
+
+  const gap = createFixtureSnapshot();
+  gap.roadmap.weeks[1]!.number = 99;
+  assert.throws(
+    () => parsePalWidgetSnapshot(gap),
+    /contiguous range/i,
+  );
+});
+
 test("snapshot parser keeps XP fields backward-compatible in schema version 1", () => {
   const fixture = createFixtureSnapshot();
   delete fixture.companion.xp;
@@ -38,6 +54,14 @@ test("snapshot parser keeps XP fields backward-compatible in schema version 1", 
 test("snapshot parser keeps collection backward-compatible in schema version 1", () => {
   const fixture = createFixtureSnapshot();
   delete fixture.collection;
+  const legacySnapshot = JSON.parse(JSON.stringify(fixture)) as unknown;
+
+  assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
+});
+
+test("snapshot parser keeps progression optional in schema version 1", () => {
+  const fixture = createFixtureSnapshot();
+  delete fixture.progression;
   const legacySnapshot = JSON.parse(JSON.stringify(fixture)) as unknown;
 
   assert.deepEqual(parsePalWidgetSnapshot(legacySnapshot), legacySnapshot);
@@ -111,6 +135,86 @@ test("snapshot parser bounds and deduplicates durable collection items", () => {
   );
 });
 
+test("snapshot parser allows at most one collectible reward per roadmap week", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.progression!.collectibles[1]!.roadmapWeek =
+    fixture.progression!.collectibles[0]!.roadmapWeek;
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /unique roadmap week/i,
+  );
+});
+
+test("snapshot parser requires one collectible decision for every roadmap week", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.progression!.collectibles.pop();
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /collectibles.*exactly one decision for every roadmap week/i,
+  );
+});
+
+test("snapshot parser keeps progression references inside the supplied roadmap", () => {
+  const collectibleOutsideRoadmap = createFixtureSnapshot();
+  collectibleOutsideRoadmap.progression!.collectibles[0]!.roadmapWeek = 99;
+  assert.throws(
+    () => parsePalWidgetSnapshot(collectibleOutsideRoadmap),
+    /collectibles\[0\]\.roadmapWeek.*supplied roadmap week/i,
+  );
+
+  const privateStoryMetadata = createFixtureSnapshot() as unknown as {
+    progression: Record<string, unknown>;
+  };
+  privateStoryMetadata.progression.storyId = "private-story-name";
+  assert.throws(
+    () => parsePalWidgetSnapshot(privateStoryMetadata),
+    /no private story catalog metadata/i,
+  );
+});
+
+test("snapshot parser requires one canonical companion reveal decision", () => {
+  const fixture = createFixtureSnapshot() as unknown as {
+    progression: Record<string, unknown>;
+  };
+  fixture.progression.companionUnlocked = true;
+  fixture.progression.companionUnlockWeek = 1;
+
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /one canonical companionReveal decision/i,
+  );
+});
+
+test("snapshot parser rejects concealed content on locked rewards", () => {
+  const fixture = createFixtureSnapshot(2) as unknown as {
+    progression: {
+      collectibles: Array<Record<string, unknown>>;
+      titles: Array<Record<string, unknown>>;
+    };
+  };
+  fixture.progression.collectibles[1]!.title = "Cloud Blanket";
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /concealed collectible content while locked/i,
+  );
+
+  const lockedTitle = createFixtureSnapshot(2) as unknown as {
+    progression: { titles: Array<Record<string, unknown>> };
+  };
+  lockedTitle.progression.titles.push({
+    id: "locked-title",
+    status: "locked",
+    statusLabel: "Locked",
+    label: "Secret title",
+  });
+  assert.throws(
+    () => parsePalWidgetSnapshot(lockedTitle),
+    /concealed title content while locked/i,
+  );
+});
+
 test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   const unsafe = createFixtureSnapshot();
   unsafe.companion.assetUrl = "javascript:alert(1)";
@@ -124,6 +228,22 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   assert.throws(
     () => parsePalWidgetSnapshot(unapproved),
     /not in the allowed Pal asset origin list/i,
+  );
+
+  const unsafeCollectible = createFixtureSnapshot();
+  unsafeCollectible.progression!.collectibles[0] = {
+    id: "earned-collectible",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Earned collectible",
+    description: "Already earned.",
+    kind: "room",
+    assetUrl: "javascript:alert(1)",
+  };
+  assert.throws(
+    () => parsePalWidgetSnapshot(unsafeCollectible),
+    /progression.*assetUrl.*HTTPS origin|root-relative/i,
   );
 });
 
@@ -146,7 +266,8 @@ test("snapshot parser rejects root-relative URL normalization bypasses", () => {
 });
 
 test("snapshot parser resolves relative assets and permits explicit Pal CDN origins", () => {
-  const fixture = createFixtureSnapshot();
+  const fixture = createFixtureSnapshot(5);
+  fixture.companion.assetUrl = "/assets/pets/default.png";
   fixture.roadmap.weeks[0]!.achievements[0]!.badge.assetUrl =
     "https://assets.pal.example/badges/rhythm.png";
 
