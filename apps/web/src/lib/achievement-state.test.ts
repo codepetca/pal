@@ -3712,6 +3712,39 @@ test(
         parsePalWidgetSnapshot(crossPartitionSnapshot),
         crossPartitionSnapshot,
       );
+
+      const legacyPeriodKey = `priority-legacy-${crypto.randomUUID()}`;
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "daily_log_week.configured",
+          {
+            period_key: legacyPeriodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+          },
+          "2026-04-13T12:00:00.000Z",
+        ),
+        key(),
+      );
+      const mixedRolloutSnapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-04-14T12:00:00.000Z") },
+      );
+      const mixedRolloutRhythms = mixedRolloutSnapshot.roadmap.weeks[0]
+        .achievements.filter(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        );
+      assert.equal(mixedRolloutRhythms.length, 1);
+      assert.equal(mixedRolloutRhythms[0]?.progress?.target, 3);
+      assert.deepEqual(
+        parsePalWidgetSnapshot(mixedRolloutSnapshot),
+        mixedRolloutSnapshot,
+      );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }

@@ -577,11 +577,40 @@ export async function loadLearnerSnapshot(
         },
       );
 
+      const preferredWeeklyRhythmByWeek = new Map<
+        number,
+        { id: string; authoritative: boolean }
+      >();
+      for (const instance of instances) {
+        if (instance.achievementKey !== ACHIEVEMENT_KEYS.weeklyRhythm) continue;
+        const weekNumber = instance.periodKey
+          ? periodNumbers.get(instance.periodKey)
+          : 1;
+        if (!weekNumber || weekNumber > termWeekCount) continue;
+        const authoritative = Boolean(
+          instance.periodKey &&
+          authoritativeWeekNumbers.get(instance.periodKey) === weekNumber,
+        );
+        const selected = preferredWeeklyRhythmByWeek.get(weekNumber);
+        if (!selected || (authoritative && !selected.authoritative)) {
+          preferredWeeklyRhythmByWeek.set(weekNumber, {
+            id: instance.id,
+            authoritative,
+          });
+        }
+      }
+
       for (const instance of instances) {
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
           : 1;
         if (!weekNumber || weekNumber > termWeekCount) continue;
+        if (
+          instance.achievementKey === ACHIEVEMENT_KEYS.weeklyRhythm &&
+          preferredWeeklyRhythmByWeek.get(weekNumber)?.id !== instance.id
+        ) {
+          continue;
+        }
         const achievement = achievementFromRow(
           instance,
           instance.periodKey
