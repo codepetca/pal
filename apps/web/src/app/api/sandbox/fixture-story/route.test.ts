@@ -33,6 +33,56 @@ test("fixture story route rejects malformed commands", async () => {
   assert.equal(response.status, 422);
 });
 
+test("fixture story route rejects private fields at every request level", async () => {
+  const privateRequests = [
+    {
+      termWeeks: 16,
+      learner_name: "Alice Example",
+      commands: [],
+    },
+    {
+      termWeeks: 16,
+      commands: [{
+        type: "action",
+        id: "private-command",
+        action: "session-started",
+        email: "alice@example.test",
+      }],
+    },
+    {
+      termWeeks: 16,
+      commands: [{
+        type: "action",
+        id: "private-context",
+        action: "session-started",
+        context: { student_writing: "private text" },
+      }],
+    },
+    {
+      termWeeks: 16,
+      commands: [{
+        type: "acknowledge",
+        rewardId: "fixture-grant-1",
+        email: "alice@example.test",
+      }],
+    },
+  ];
+
+  for (const body of privateRequests) {
+    const response = await POST(
+      new NextRequest("https://pal.example/api/sandbox/fixture-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+    assert.equal(response.status, 422);
+    assert.deepEqual(await response.json(), {
+      error: "invalid_fixture_story_request",
+    });
+  }
+});
+
 for (const activityDay of ["9999-99-99", "2026-02-30"]) {
   test(`fixture story route rejects invalid calendar day ${activityDay}`, async () => {
     const response = await POST(

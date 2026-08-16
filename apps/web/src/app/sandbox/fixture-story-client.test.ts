@@ -44,6 +44,49 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
 
 test("fixture story request rejects private or unbounded commands", () => {
   assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      learner_name: "Alice Example",
+      commands: [],
+    }),
+    undefined,
+  );
+  assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      commands: [{
+        type: "action",
+        id: "private-command",
+        action: "session-started",
+        email: "alice@example.test",
+      }],
+    }),
+    undefined,
+  );
+  assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      commands: [{
+        type: "action",
+        id: "private-context",
+        action: "session-started",
+        context: { student_writing: "private text" },
+      }],
+    }),
+    undefined,
+  );
+  assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      commands: [{
+        type: "acknowledge",
+        rewardId: "fixture-grant-1",
+        email: "alice@example.test",
+      }],
+    }),
+    undefined,
+  );
+  assert.equal(
     parseFixtureStoryRequest({ termWeeks: 25, commands: [] }),
     undefined,
   );

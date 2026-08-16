@@ -43,6 +43,14 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  allowedKeys: readonly string[],
+): boolean {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
 function boundedText(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 && value.length <= MAX_ID_LENGTH
     ? value
@@ -63,7 +71,9 @@ function calendarDay(value: unknown): string | undefined {
 function context(value: unknown): PalFixtureActionContext | undefined | false {
   if (value === undefined) return undefined;
   const source = record(value);
-  if (!source) return false;
+  if (!source || !hasOnlyKeys(source, ["activityDay", "itemToken"])) {
+    return false;
+  }
   const activityDay = source.activityDay;
   const itemToken = source.itemToken;
   const parsedActivityDay = activityDay === undefined
@@ -81,6 +91,7 @@ export function parseFixtureStoryRequest(value: unknown): FixtureStoryRequest | 
   const source = record(value);
   if (
     !source ||
+    !hasOnlyKeys(source, ["termWeeks", "commands"]) ||
     !Number.isInteger(source.termWeeks) ||
     (source.termWeeks as number) < 6 ||
     (source.termWeeks as number) > 24 ||
@@ -96,6 +107,7 @@ export function parseFixtureStoryRequest(value: unknown): FixtureStoryRequest | 
     const command = record(valueCommand);
     if (!command) return undefined;
     if (command.type === "acknowledge") {
+      if (!hasOnlyKeys(command, ["type", "rewardId"])) return undefined;
       const rewardId = boundedText(command.rewardId);
       if (!rewardId) return undefined;
       commands.push({ type: "acknowledge", rewardId });
@@ -106,6 +118,7 @@ export function parseFixtureStoryRequest(value: unknown): FixtureStoryRequest | 
     const parsedContext = context(command.context);
     if (
       command.type !== "action" ||
+      !hasOnlyKeys(command, ["type", "id", "action", "context"]) ||
       !id ||
       actionIds.has(id) ||
       typeof action !== "string" ||
