@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   achievementInstances,
   achievementPeriods,
@@ -107,6 +107,36 @@ test(
       ]) {
         await assert.rejects(
           db.insert(storyPlans).values(invalid),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
+
+      for (const [index, [termKey, storyId, firstChapterId]] of [
+        ["", "pips-first-recipe", "chapter-1"],
+        ["   ", "pips-first-recipe", "chapter-1"],
+        [`invalid-story-empty-${suffix}`, "", "chapter-1"],
+        [`invalid-story-blank-${suffix}`, "   ", "chapter-1"],
+        [`invalid-chapter-empty-${suffix}`, "pips-first-recipe", ""],
+        [`invalid-chapter-blank-${suffix}`, "pips-first-recipe", "   "],
+      ].entries()) {
+        await assert.rejects(
+          db.transaction(async (tx) => {
+            const [invalidPlan] = await tx
+              .insert(storyPlans)
+              .values({ ...planInput, termKey, storyId })
+              .returning({ id: storyPlans.id });
+            await tx.insert(storyPlanChapters).values(
+              Array.from({ length: 6 }, (_, chapterIndex) => ({
+                storyPlanId: invalidPlan.id,
+                learnerId: learnerA.id,
+                periodNumber: chapterIndex + 1,
+                chapterId:
+                  chapterIndex === 0
+                    ? firstChapterId
+                    : `invalid-identifier-${index}-chapter-${chapterIndex + 1}`,
+              })),
+            );
+          }),
           (error) => postgresViolation(error, "23514"),
         );
       }
@@ -221,6 +251,8 @@ test(
       }
 
       for (const change of [
+        { id: crypto.randomUUID() },
+        { createdAt: new Date(0) },
         { totalPeriods: 7 },
         { storyVersion: 2 },
         { storyId: "replacement-story" },
@@ -231,13 +263,19 @@ test(
           (error) => postgresViolation(error, "23514"),
         );
       }
-      await assert.rejects(
-        db
-          .update(storyPlanChapters)
-          .set({ chapterId: "replacement-chapter" })
-          .where(eq(storyPlanChapters.id, boundChapter.id)),
-        (error) => postgresViolation(error, "23514"),
-      );
+      for (const change of [
+        { id: crypto.randomUUID() },
+        { createdAt: new Date(0) },
+        { chapterId: "replacement-chapter" },
+      ]) {
+        await assert.rejects(
+          db
+            .update(storyPlanChapters)
+            .set(change)
+            .where(eq(storyPlanChapters.id, boundChapter.id)),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
 
       await assert.rejects(
         db.transaction(async (tx) => {
@@ -441,6 +479,13 @@ test(
           id: learnerRewardGrants.id,
           grantOrder: learnerRewardGrants.grantOrder,
         });
+      await assert.rejects(
+        db
+          .update(storyPlanChapters)
+          .set({ id: crypto.randomUUID() })
+          .where(eq(storyPlanChapters.id, boundChapter.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
       const [behaviorGrant] = await db
         .insert(learnerRewardGrants)
         .values({
@@ -491,6 +536,39 @@ test(
         }),
         (error) => postgresViolation(error, "23505"),
       );
+
+      await db.execute(
+        sql.raw(
+          "ALTER SEQUENCE learner_reward_grants_grant_order_seq RESTART WITH 9007199254740992",
+        ),
+      );
+      const [firstLargeOrder] = await db
+        .insert(learnerRewardGrants)
+        .values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA2.id,
+          behaviorTitleId: "lossless-order-a",
+        })
+        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+      const [secondLargeOrder] = await db
+        .insert(learnerRewardGrants)
+        .values({
+          learnerId: learnerA.id,
+          kind: "behavior_title",
+          sourceFactId: factA2.id,
+          behaviorTitleId: "lossless-order-b",
+        })
+        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+      assert.equal(
+        firstLargeOrder.grantOrder,
+        BigInt("9007199254740992"),
+      );
+      assert.equal(
+        secondLargeOrder.grantOrder,
+        BigInt("9007199254740993"),
+      );
+      assert.notEqual(firstLargeOrder.grantOrder, secondLargeOrder.grantOrder);
 
       const acknowledgedAt = new Date();
       await db

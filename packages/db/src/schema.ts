@@ -186,6 +186,14 @@ export const storyPlans = pgTable(
   (t) => [
     unique("story_plans_learner_term_uq").on(t.learnerId, t.termKey),
     unique("story_plans_id_learner_uq").on(t.id, t.learnerId),
+    check(
+      "story_plans_term_key_nonempty",
+      sql`length(btrim(${t.termKey})) > 0`,
+    ),
+    check(
+      "story_plans_story_id_nonempty",
+      sql`length(btrim(${t.storyId})) > 0`,
+    ),
     check("story_plans_version_positive", sql`${t.storyVersion} >= 1`),
     check(
       "story_plans_period_count_range",
@@ -248,7 +256,7 @@ export const storyPlanChapters = pgTable(
     ),
     check(
       "story_plan_chapters_chapter_id_nonempty",
-      sql`length(${t.chapterId}) > 0`,
+      sql`length(btrim(${t.chapterId})) > 0`,
     ),
   ],
 );
@@ -261,7 +269,7 @@ export const learnerRewardGrants = pgTable(
   "learner_reward_grants",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    grantOrder: bigint("grant_order", { mode: "number" })
+    grantOrder: bigint("grant_order", { mode: "bigint" })
       .generatedAlwaysAsIdentity()
       .notNull(),
     learnerId: uuid("learner_id").notNull(),

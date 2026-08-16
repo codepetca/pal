@@ -38,7 +38,7 @@ CREATE TABLE "story_plan_chapters" (
 	CONSTRAINT "story_plan_chapters_learner_period_uq" UNIQUE("learner_id","period_key"),
 	CONSTRAINT "story_plan_chapters_id_plan_learner_uq" UNIQUE("id","story_plan_id","learner_id"),
 	CONSTRAINT "story_plan_chapters_period_number_range" CHECK ("story_plan_chapters"."period_number" >= 1 AND "story_plan_chapters"."period_number" <= 24),
-	CONSTRAINT "story_plan_chapters_chapter_id_nonempty" CHECK (length("story_plan_chapters"."chapter_id") > 0)
+	CONSTRAINT "story_plan_chapters_chapter_id_nonempty" CHECK (length(btrim("story_plan_chapters"."chapter_id")) > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "story_plans" (
@@ -53,6 +53,8 @@ CREATE TABLE "story_plans" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "story_plans_learner_term_uq" UNIQUE("learner_id","term_key"),
 	CONSTRAINT "story_plans_id_learner_uq" UNIQUE("id","learner_id"),
+	CONSTRAINT "story_plans_term_key_nonempty" CHECK (length(btrim("story_plans"."term_key")) > 0),
+	CONSTRAINT "story_plans_story_id_nonempty" CHECK (length(btrim("story_plans"."story_id")) > 0),
 	CONSTRAINT "story_plans_version_positive" CHECK ("story_plans"."story_version" >= 1),
 	CONSTRAINT "story_plans_period_count_range" CHECK ("story_plans"."total_periods" >= 6 AND "story_plans"."total_periods" <= 24)
 );
@@ -128,19 +130,23 @@ BEGIN
 	END IF;
 
 	IF ROW(
+		NEW."id",
 		NEW."learner_id",
 		NEW."term_key",
 		NEW."term_start_day",
 		NEW."story_id",
 		NEW."story_version",
-		NEW."total_periods"
+		NEW."total_periods",
+		NEW."created_at"
 	) IS DISTINCT FROM ROW(
+		OLD."id",
 		OLD."learner_id",
 		OLD."term_key",
 		OLD."term_start_day",
 		OLD."story_id",
 		OLD."story_version",
-		OLD."total_periods"
+		OLD."total_periods",
+		OLD."created_at"
 	) THEN
 		RAISE EXCEPTION 'story plan identity is immutable'
 			USING ERRCODE = '23514', CONSTRAINT = 'story_plans_immutable';
@@ -160,15 +166,19 @@ BEGIN
 	END IF;
 
 	IF ROW(
+		NEW."id",
 		NEW."story_plan_id",
 		NEW."learner_id",
 		NEW."period_number",
-		NEW."chapter_id"
+		NEW."chapter_id",
+		NEW."created_at"
 	) IS DISTINCT FROM ROW(
+		OLD."id",
 		OLD."story_plan_id",
 		OLD."learner_id",
 		OLD."period_number",
-		OLD."chapter_id"
+		OLD."chapter_id",
+		OLD."created_at"
 	) OR (
 		OLD."period_key" IS NOT NULL
 		AND NEW."period_key" IS DISTINCT FROM OLD."period_key"

@@ -113,10 +113,12 @@ For 9–24 periods, place the core beats near these relative positions:
 | Sharing Bowl | Around 85% |
 | Meet Lumi | Final period |
 
-The generated plan must be persisted for the learner and term. If the host
-changes the schedule, earned chapters never move. Only future, unearned
-optional chapters may be inserted or removed. Titles attach to story chapter
-IDs, not period numbers.
+The generated plan and every normalized chapter assignment must be persisted
+immutably for the learner and term. Host schedule changes never insert, remove,
+or move even an unearned future chapter. Any future schedule-revision policy
+must assign a new plan or catalog version at a future term boundary rather than
+mutating the current plan. Titles attach to story chapter IDs, not period
+numbers.
 
 ## Titles
 

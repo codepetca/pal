@@ -1378,7 +1378,7 @@
         },
         "story_plan_chapters_chapter_id_nonempty": {
           "name": "story_plan_chapters_chapter_id_nonempty",
-          "value": "length(\"story_plan_chapters\".\"chapter_id\") > 0"
+          "value": "length(btrim(\"story_plan_chapters\".\"chapter_id\")) > 0"
         }
       },
       "isRLSEnabled": false
@@ -1482,6 +1482,14 @@
       },
       "policies": {},
       "checkConstraints": {
+        "story_plans_term_key_nonempty": {
+          "name": "story_plans_term_key_nonempty",
+          "value": "length(btrim(\"story_plans\".\"term_key\")) > 0"
+        },
+        "story_plans_story_id_nonempty": {
+          "name": "story_plans_story_id_nonempty",
+          "value": "length(btrim(\"story_plans\".\"story_id\")) > 0"
+        },
         "story_plans_version_positive": {
           "name": "story_plans_version_positive",
           "value": "\"story_plans\".\"story_version\" >= 1"
