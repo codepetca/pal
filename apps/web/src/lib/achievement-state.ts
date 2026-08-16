@@ -245,9 +245,32 @@ async function firstConfigurationCalendar(
         ),
       )
       .limit(1);
-    return periodCalendarFromMetadata(
+    const markerCalendar = periodCalendarFromMetadata(
       (configuration?.metadata ?? marker.metadata) as Record<string, unknown>,
     );
+    if (markerCalendar.startDay !== null) return markerCalendar;
+
+    // A period can predate the term-calendar rollout. In that case the first
+    // weekly configuration remains the reward-policy authority, while the
+    // first later calendar-bearing fact becomes the immutable date window.
+    const [firstCalendarConfiguration] = await db
+      .select({ metadata: learnerFacts.metadata })
+      .from(learnerFacts)
+      .where(
+        and(
+          eq(learnerFacts.learnerId, learnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+          eq(learnerFacts.periodKey, periodKey),
+          sql`${learnerFacts.metadata} ? 'term_timezone'`,
+        ),
+      )
+      .orderBy(sql`(${learnerFacts.metadata}->>'config_version')::int asc`)
+      .limit(1);
+    return firstCalendarConfiguration
+      ? periodCalendarFromMetadata(
+          firstCalendarConfiguration.metadata as Record<string, unknown>,
+        )
+      : markerCalendar;
   }
 
   // Backward-compatible fallback for periods created before durable first-config
@@ -418,9 +441,13 @@ export async function weeklyConfigurationRejection(
       ),
     )
     .limit(1);
-  const firstConfigurationCalendarOverride = existing
-    ? undefined
-    : periodCalendarFromMetadata(calendar);
+  const existingCalendar = existing
+    ? await firstConfigurationCalendar(db, learnerId, periodKey)
+    : undefined;
+  const firstConfigurationCalendarOverride =
+    !existing || (existingCalendar?.startDay === null && calendar)
+      ? periodCalendarFromMetadata(calendar)
+      : undefined;
   if (
     periodStatus === "closed" &&
     eligibleDays <

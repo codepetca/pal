@@ -521,6 +521,99 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
   }
 });
 
+test("the first calendar-bearing revision quarantines calendarless pending facts", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  for (const adaptive of [false, true]) {
+    const externalLearnerId = `calendar-rollout-${adaptive}-${crypto.randomUUID()}`;
+    const periodKey = `calendar-rollout-period-${crypto.randomUUID()}`;
+    const termKey = `calendar-rollout-term-${crypto.randomUUID()}`;
+    try {
+      assert.equal((await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(periodKey, "2026-08-03"),
+        crypto.randomUUID(),
+      )).status, "processed");
+      assert.equal((await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        {
+          event_type: "daily_log_week.configured",
+          occurred_at: "2026-08-03T18:00:00.000Z",
+          metadata: {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 0,
+          },
+        },
+        crypto.randomUUID(),
+      )).status, "processed");
+
+      const calendarMetadata = {
+        period_key: periodKey,
+        config_version: 2,
+        period_status: "open" as const,
+        eligible_days: 1,
+        term_token: termKey,
+        term_start_day: "2026-07-27",
+        term_end_day: "2026-11-20",
+        term_timezone: "America/Toronto",
+        week_index: 6,
+        ...(adaptive
+          ? { term_week_count: 16, week_start_day: "2026-08-31" }
+          : {}),
+      };
+      const calendarRevision = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        {
+          event_type: "daily_log_week.configured",
+          occurred_at: "2026-08-04T12:00:00.000Z",
+          metadata: calendarMetadata,
+        },
+        crypto.randomUUID(),
+      );
+      assert.equal(calendarRevision.status, "processed");
+      assert.deepEqual(
+        calendarRevision.status === "processed"
+          ? calendarRevision.result.mutations.filter(
+              (mutation) => mutation.type === "XP_GRANT",
+            )
+          : [],
+        [],
+      );
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const grants = await getDb()
+        .select()
+        .from(learnerRewardGrants)
+        .where(eq(learnerRewardGrants.learnerId, learnerId));
+      assert.equal(grants.length, 0);
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-08-04T12:00:00.000Z") },
+      );
+      const raw = JSON.stringify(snapshot);
+      const planned = STORY_REGISTRY.createPlan(16, storyForTermStartDay("2026-07-27"));
+      for (const chapter of planned.chapters) {
+        assert.equal(raw.includes(chapter.storyCopy), false);
+        assert.equal(raw.includes(chapter.collectible.assetUrl), false);
+      }
+      assert.equal(snapshot.rewards.some((reward) => reward.kind === "story"), false);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  }
+});
+
 test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;
