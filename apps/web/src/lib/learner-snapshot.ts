@@ -593,7 +593,12 @@ export async function loadLearnerSnapshot(
         }
       }
       for (const week of weeks) {
-        week.achievements = week.achievements.slice(0, 100);
+        week.achievements = week.achievements
+          .toSorted((left, right) =>
+            Number(right.key === ACHIEVEMENT_KEYS.weeklyRhythm) -
+            Number(left.key === ACHIEVEMENT_KEYS.weeklyRhythm),
+          )
+          .slice(0, MAX_ACHIEVEMENTS_PER_WEEK);
       }
 
       const eco = economyRows[0];

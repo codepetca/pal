@@ -3676,6 +3676,42 @@ test(
         99,
       );
       assert.deepEqual(parsePalWidgetSnapshot(snapshot), snapshot);
+
+      await getDb().insert(achievementInstances).values(
+        Array.from({ length: 100 }, (_, classroomIndex) => ({
+          learnerId,
+          achievementKey: "joined-class",
+          scopeKey: `priority-classroom-${classroomIndex}-${crypto.randomUUID()}`,
+          periodKey: null,
+          status: "earned",
+          createdAt: new Date("2026-04-13T10:00:00.000Z"),
+        })),
+      );
+      const crossPartitionSnapshot = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        { asOf: new Date("2026-04-14T12:00:00.000Z") },
+      );
+      const crossPartitionAchievements =
+        crossPartitionSnapshot.roadmap.weeks[0].achievements;
+      assert.equal(crossPartitionAchievements.length, 100);
+      assert.equal(
+        crossPartitionAchievements.filter(
+          (achievement) => achievement.title === "Weekly Rhythm",
+        ).length,
+        1,
+      );
+      assert.equal(
+        crossPartitionAchievements.filter(
+          (achievement) => achievement.title === "Joined the Class",
+        ).length,
+        99,
+      );
+      assert.deepEqual(
+        parsePalWidgetSnapshot(crossPartitionSnapshot),
+        crossPartitionSnapshot,
+      );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
