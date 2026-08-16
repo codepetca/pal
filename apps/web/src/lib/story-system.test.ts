@@ -461,6 +461,66 @@ test("a legacy calendar derives the same future-week grant boundary", { skip: !p
   }
 });
 
+test("an adaptive revision cannot move an earned legacy week into the future", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `legacy-revision-story-${crypto.randomUUID()}`;
+  const periodKey = `legacy-revision-period-${crypto.randomUUID()}`;
+  const termKey = `legacy-revision-term-${crypto.randomUUID()}`;
+  const legacy = configuredWeek(periodKey, termKey);
+  legacy.occurred_at = "2026-08-03T12:00:00.000Z";
+  legacy.metadata.term_start_day = "2026-06-29";
+  legacy.metadata.term_end_day = "2026-10-16";
+  legacy.metadata.week_index = 6;
+  delete (legacy.metadata as Record<string, unknown>).term_week_count;
+  delete (legacy.metadata as Record<string, unknown>).week_start_day;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      legacy,
+      crypto.randomUUID(),
+    )).status, "processed");
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLogOn(periodKey, "2026-08-03"),
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const adaptive = structuredClone(legacy);
+    adaptive.occurred_at = "2026-08-04T12:00:00.000Z";
+    adaptive.metadata.config_version = 2;
+    adaptive.metadata.term_week_count = 16;
+    adaptive.metadata.week_start_day = "2026-08-31";
+    const moved = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      adaptive,
+      crypto.randomUUID(),
+    );
+    assert.deepEqual(moved, {
+      status: "rejected",
+      error: "conflicting_period_calendar",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const snapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2026-08-04T12:00:00.000Z") },
+    );
+    assert.notEqual(snapshot.roadmap.weeks[5]?.status, "future");
+    assert.equal(snapshot.progression?.collectibles[5]?.status, "earned");
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;

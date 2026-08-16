@@ -148,7 +148,9 @@ function isCompatibleCalendarRevision(
   const leftWeekCount = leftAdaptive ? left.term_week_count : 16;
   const rightWeekCount = rightAdaptive ? right.term_week_count : 16;
   if (leftWeekCount !== rightWeekCount) return false;
-  return !leftAdaptive || !rightAdaptive || left.week_start_day === right.week_start_day;
+  const leftStartDay = periodCalendarFromMetadata(left).startDay;
+  const rightStartDay = periodCalendarFromMetadata(right).startDay;
+  return leftStartDay !== null && leftStartDay === rightStartDay;
 }
 
 function isCompatibleTermRevision(
