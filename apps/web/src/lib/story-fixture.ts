@@ -216,8 +216,8 @@ export async function projectStoryFixture(
   );
   snapshot.progression = progression;
   snapshot.rewards = [
-    ...snapshot.rewards,
     ...ledger.rewards(),
+    ...snapshot.rewards,
   ].slice(0, 100);
   return snapshot;
 }

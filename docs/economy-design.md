@@ -149,10 +149,11 @@ The first milestone uses `world-study-bird-v1`, not the legacy
 Historical world IDs remain stored for backward compatibility, but the collection
 catalog does not misrepresent that older reward as Weekly Rhythm evidence.
 
-The on-time fish is intentionally different: it remains a one-time celebration
-notice, not a durable collection item or consumable inventory. A generalized
-append-only UnlockLedger and consumable inventory still require separate database
-migrations.
+Each newly earned achievement may create one transient celebration notice that
+projects the achievement's canonical identity and artwork. These notices are not
+durable collection items or inventory, and acknowledgement never revokes the
+achievement. A generalized append-only UnlockLedger and consumable inventory still
+require separate database migrations.
 
 ## Level and UI behavior
 

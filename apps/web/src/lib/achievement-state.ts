@@ -7,6 +7,10 @@ import {
   weeklyRhythmConfigs,
   type Db,
 } from "@pal/db";
+import {
+  PAL_ACHIEVEMENT_KEYS,
+  resolvePalAchievementPresentation,
+} from "@codepet/pal-widget/achievement-presentation";
 import type { IncomingEvent } from "@pal/engine";
 import {
   BEHAVIOR_TITLES,
@@ -14,13 +18,8 @@ import {
   grantStoryChapterForPeriod,
 } from "@/lib/reward-grants";
 
-export const ACHIEVEMENT_KEYS = {
-  firstLogin: "first-pika-login",
-  joinedClass: "joined-class",
-  weeklyRhythm: "weekly-rhythm",
-  readyEarly: "ready-early",
-  onTimeFinish: "on-time-finish",
-} as const;
+export const ACHIEVEMENT_KEYS = PAL_ACHIEVEMENT_KEYS;
+export const ACHIEVEMENT_NOTICE_KEY = "achievement-earned-v1";
 
 const FIRST_WEEKLY_CONFIGURATION_FACT =
   "internal.daily_log_week.first_configuration";
@@ -30,6 +29,33 @@ const MAX_DAILY_LOG_DAYS_PER_PERIOD = 5;
 const MAX_DAILY_LOG_FACTS_PER_PERIOD = MAX_DAILY_LOG_DAYS_PER_PERIOD * 2;
 
 type AchievementStatus = "earned" | "in-progress" | "incomplete";
+
+async function queueAchievementCelebration(
+  db: Db,
+  input: {
+    learnerId: string;
+    achievementInstanceId: string;
+    achievementKey: string;
+  },
+): Promise<void> {
+  const presentation = resolvePalAchievementPresentation(input.achievementKey);
+  if (!presentation) {
+    throw new Error(`Unknown achievement presentation: ${input.achievementKey}`);
+  }
+  await db
+    .insert(rewardNotices)
+    .values({
+      learnerId: input.learnerId,
+      achievementInstanceId: input.achievementInstanceId,
+      rewardKey: ACHIEVEMENT_NOTICE_KEY,
+      // These legacy columns remain required by the current schema. Snapshot
+      // projection deliberately resolves the canonical presentation by key.
+      title: presentation.title,
+      description: presentation.description,
+      icon: presentation.badge.icon,
+    })
+    .onConflictDoNothing();
+}
 
 interface FactIdentity {
   semanticKey: string;
@@ -999,7 +1025,16 @@ async function createScopedOutcome(
     })
     .onConflictDoNothing()
     .returning({ id: achievementInstances.id });
-  if (created) return { id: created.id, created: true };
+  if (created) {
+    if (input.status === "earned") {
+      await queueAchievementCelebration(db, {
+        learnerId: input.learnerId,
+        achievementInstanceId: created.id,
+        achievementKey: input.achievementKey,
+      });
+    }
+    return { id: created.id, created: true };
+  }
 
   const [existing] = await db
     .select({ id: achievementInstances.id })
@@ -1108,6 +1143,11 @@ async function recomputeWeeklyRhythm(
       })
       .where(eq(achievementInstances.id, existing.id));
     if (status === "earned") {
+      await queueAchievementCelebration(db, {
+        learnerId,
+        achievementInstanceId: existing.id,
+        achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
+      });
       await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
     }
     return status === "earned";
@@ -1129,6 +1169,11 @@ async function recomputeWeeklyRhythm(
     .returning({ id: achievementInstances.id });
   if (!created) throw new Error("Failed to create Weekly Rhythm achievement");
   if (status === "earned") {
+    await queueAchievementCelebration(db, {
+      learnerId,
+      achievementInstanceId: created.id,
+      achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
+    });
     await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
   }
   return status === "earned";
@@ -1289,17 +1334,6 @@ export async function applyAchievementFact(
           titleId: BEHAVIOR_TITLES.onTimePro.id,
           sourceFactId: fact.id,
         });
-        await db
-          .insert(rewardNotices)
-          .values({
-            learnerId,
-            achievementInstanceId: outcome.id,
-            rewardKey: "fish-snack-v1",
-            title: "A treat for your companion!",
-            description: "Your on-time work earned a fish snack.",
-            icon: "🐟",
-          })
-          .onConflictDoNothing();
       }
       return {};
     }

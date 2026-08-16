@@ -81,7 +81,7 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const firstRequest = deferred<void>();
@@ -131,7 +131,7 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(widget.snapshot?.rewards.length, 1);
   assert.ok(widget.rewardError);
   assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
-  assert.match(JSON.stringify(renderer.toJSON()), /Fish for Pip/);
+  assert.match(JSON.stringify(renderer.toJSON()), /Achievement earned/);
 
   await act(async () => {
     await widget.dismissReward("reward-1");
@@ -145,7 +145,7 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const client: PalClient = {
@@ -245,7 +245,7 @@ test("a host-managed reward does not publish a competing open lifecycle", async 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const openChanges: boolean[] = [];
@@ -275,7 +275,7 @@ test("an older snapshot refresh cannot resurrect an acknowledged reward", async 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const staleRefresh = deferred<PalWidgetSnapshot>();
@@ -546,7 +546,7 @@ test("snapshot refresh does not clear a reward acknowledgement retry", async () 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   let snapshotCalls = 0;

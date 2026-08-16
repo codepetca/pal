@@ -78,18 +78,93 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   assert.deepEqual(afterDuplicate, beforeDuplicate);
 });
 
-test("fixture reward can be acknowledged exactly once by the client", async () => {
+test("fixture achievement celebration can be acknowledged exactly once", async () => {
   const client = createFixturePalClient();
 
-  client.dispatch("reward-earned");
+  client.dispatch("on-time-finish", { itemToken: "acknowledged-item" });
   const reward = (await client.getSnapshot()).rewards[0];
   assert.ok(reward);
+  assert.equal(reward.kind, "achievement");
 
   await client.markRewardSeen(reward.id);
   assert.equal((await client.getSnapshot()).rewards.length, 0);
 
   await client.markRewardSeen(reward.id);
   assert.equal((await client.getSnapshot()).rewards.length, 0);
+});
+
+test("every newly earned fixture achievement queues one canonical celebration", async () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+
+  client.dispatch("session-started");
+  client.dispatch("classroom-joined");
+  client.dispatch("item-opened-early", { itemToken: "early-item" });
+  client.dispatch("on-time-finish", { itemToken: "finished-item" });
+  for (const activityDay of [
+    "2026-04-13",
+    "2026-04-14",
+    "2026-04-15",
+    "2026-04-16",
+  ]) {
+    client.dispatch("daily-log-completed", { activityDay });
+  }
+
+  const earned = client.peek();
+  const celebrations = earned.rewards.filter(
+    (reward) => reward.kind === "achievement",
+  );
+  assert.equal(celebrations.length, 5);
+  for (const celebration of celebrations) {
+    const mapped = earned.roadmap.weeks
+      .flatMap((week) => week.achievements)
+      .find((achievement) => achievement.id === celebration.achievement.id);
+    assert.ok(mapped);
+    assert.equal(mapped.status, "earned");
+    assert.deepEqual(celebration.achievement, {
+      id: mapped.id,
+      key: mapped.key,
+      title: mapped.title,
+      description: mapped.description,
+      badge: mapped.badge,
+    });
+  }
+
+  client.dispatch("session-started");
+  client.dispatch("classroom-joined");
+  client.dispatch("item-opened-early", { itemToken: "early-item" });
+  client.dispatch("on-time-finish", { itemToken: "finished-item" });
+  client.dispatch("daily-log-completed", { activityDay: "2026-04-16" });
+  assert.equal(client.peek().rewards.length, 5);
+
+  const acknowledged = celebrations[0]!;
+  await client.markRewardSeen(acknowledged.id);
+  const afterAcknowledgement = client.peek();
+  assert.equal(
+    afterAcknowledgement.rewards.some(
+      (reward) => reward.id === acknowledged.id,
+    ),
+    false,
+  );
+  assert.ok(
+    afterAcknowledgement.roadmap.weeks
+      .flatMap((week) => week.achievements)
+      .some(
+        (achievement) =>
+          achievement.id === acknowledged.achievement.id &&
+          achievement.status === "earned",
+      ),
+  );
+});
+
+test("fixture history does not synthesize achievement celebrations", () => {
+  const historical = createFixtureSnapshot();
+
+  assert.ok(
+    historical.roadmap.weeks.some((week) =>
+      week.achievements.some((achievement) => achievement.status === "earned"),
+    ),
+  );
+  assert.deepEqual(historical.rewards, []);
 });
 
 test("fresh fixture activates Weekly Rhythm and preserves partial history", async () => {

@@ -16,7 +16,6 @@ test("public surfaces render meaningful status without relying on color", () => 
   const client = createFixturePalClient();
   client.dispatch("daily-log-completed", { activityDay: "2026-05-01" });
   client.dispatch("daily-log-completed", { activityDay: "2026-05-02" });
-  client.dispatch("reward-earned");
   const snapshot = client.peek();
 
   const html = renderToStaticMarkup(
@@ -43,11 +42,14 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /class="pal-badge-progress-label" aria-hidden="true">4\/4</);
   assert.match(html, /Earned/);
   assert.match(html, /Mystery companion/);
-  assert.match(html, /A treat for your companion!/);
-  assert.match(html, /Reward earned/);
+  assert.match(html, /Weekly Rhythm/);
+  assert.match(html, /Achievement earned/);
+  assert.match(html, /badge-checkin-7-day-v1\.png/);
   assert.ok(
     snapshot.rewards.some(
-      (reward) => reward.title === "A treat for your companion!",
+      (reward) =>
+        reward.kind === "achievement" &&
+        reward.achievement.key === "weekly-rhythm",
     ),
   );
   assert.match(html, />Continue</);
@@ -324,7 +326,7 @@ test("a locked reveal without earned mystery art renders no image", () => {
 
 test("host-managed rewards leave dialog and focus ownership to the host", () => {
   const client = createFixturePalClient();
-  client.dispatch("reward-earned");
+  client.dispatch("on-time-finish", { itemToken: "host-managed-item" });
   const html = renderToStaticMarkup(
     <PalProvider
       client={client}

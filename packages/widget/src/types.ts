@@ -26,8 +26,24 @@ export interface PalBadge {
   assetUrl?: string;
 }
 
+export type PalAchievementKey =
+  | "first-pika-login"
+  | "joined-class"
+  | "weekly-rhythm"
+  | "ready-early"
+  | "on-time-finish";
+
+export interface PalAchievementPresentation {
+  key: PalAchievementKey;
+  title: string;
+  description: string;
+  badge: PalBadge;
+}
+
 export interface PalAchievement {
   id: string;
+  /** Stable canonical identity. Optional only for older schema-v1 hosts. */
+  key?: PalAchievementKey;
   title: string;
   description: string;
   status: PalAchievementStatus;
@@ -68,7 +84,7 @@ export interface PalCompanionState {
   assetUrl?: string;
 }
 
-export interface PalRewardNotice {
+export interface PalGrantRewardNotice {
   id: string;
   title: string;
   description: string;
@@ -79,6 +95,21 @@ export interface PalRewardNotice {
   icon?: string;
   assetUrl?: string;
 }
+
+export interface PalAchievementCelebrationNotice {
+  /** Transient acknowledgement identity. */
+  id: string;
+  kind: "achievement";
+  /** Presentation-safe identity selected by the authenticated Pal server. */
+  achievement: PalAchievementPresentation & {
+    /** Stable earned achievement-instance identity used by the roadmap. */
+    id: string;
+  };
+}
+
+export type PalRewardNotice =
+  | PalGrantRewardNotice
+  | PalAchievementCelebrationNotice;
 
 export interface PalCollectionItem {
   id: string;
@@ -201,7 +232,6 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
-  | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";

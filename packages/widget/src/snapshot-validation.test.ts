@@ -108,6 +108,35 @@ test("snapshot parser bounds server-controlled collections", () => {
   );
 });
 
+test("snapshot parser preserves a presentation-safe achievement celebration", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.rewards = [{
+    id: "notice-1",
+    kind: "achievement",
+    achievement: {
+      id: "achievement-1",
+      key: "on-time-finish",
+      title: "On-Time Finish",
+      description: "Completed a learning item by its deadline.",
+      badge: {
+        label: "On-Time Finish",
+        assetUrl: "/assets/badges/badge-on-time-finish.png",
+      },
+    },
+  }];
+
+  assert.deepEqual(parsePalWidgetSnapshot(fixture).rewards, fixture.rewards);
+
+  const unknown = structuredClone(fixture) as unknown as {
+    rewards: Array<{ achievement: { key: string } }>;
+  };
+  unknown.rewards[0]!.achievement.key = "unknown-achievement";
+  assert.throws(
+    () => parsePalWidgetSnapshot(unknown),
+    /achievement\.key.*expected one of/i,
+  );
+});
+
 test("snapshot parser bounds and deduplicates durable collection items", () => {
   const tooMany = createFixtureSnapshot();
   tooMany.collection = {

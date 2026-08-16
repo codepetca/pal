@@ -32,6 +32,10 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
   );
   const storyReward = earned.rewards.find((reward) => reward.kind === "story");
   assert.ok(storyReward);
+  assert.deepEqual(
+    earned.rewards.map((reward) => reward.kind ?? "standard"),
+    ["standard", "story", "achievement"],
+  );
 
   await client.markRewardSeen(storyReward.id);
   const acknowledged = await client.getSnapshot();

@@ -76,7 +76,7 @@ For manual/local-Docker configuration, set:
 
 The Pika-like host preview should show the 16-week Pal roadmap, companion, and
 collapsible semester controls. Configure a week, complete daily logs, or finish an item on
-time and confirm the roadmap, XP/pet state, and fish-reward celebration update.
+time and confirm the roadmap, XP/pet state, and canonical achievement celebration update.
 Advancing by one week automatically emits that new week's normal configuration fact,
 matching Pika's planned adapter behavior.
 The fictional configuration includes the same privacy-safe term range and authoritative

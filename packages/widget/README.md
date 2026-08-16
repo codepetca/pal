@@ -46,6 +46,12 @@ import {
 The host owns placement. Pal owns everything rendered inside each component.
 `PalCollection` renders the optional durable keepsakes in a v1 learner snapshot;
 older snapshots without `collection` remain valid.
+
+Achievement celebrations are display-ready DTOs selected by Pal's authenticated
+server. Each carries the earned achievement instance ID, stable achievement key,
+canonical name, description, and badge presentation. The widget renders that DTO
+directly and does not infer eligibility from roadmap state.
+
 `PalCompanion` is the complete cat surface used by Pika and the sandbox. Hosts
 may set its `scale` prop and attach pointer handlers without reaching into or
 restyling Pal's internal artwork. The host owns any surrounding scenery or

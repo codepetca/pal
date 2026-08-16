@@ -8,9 +8,14 @@ import {
   type IncomingEvent,
   type LearnerState,
 } from "@pal/engine";
+import {
+  PAL_ACHIEVEMENT_KEYS,
+  resolvePalAchievementPresentation,
+} from "./achievement-presentation";
 import { collectionItemsForUnlocks } from "./collection";
 import type {
   PalAchievement,
+  PalAchievementKey,
   PalFixtureAction,
   PalFixtureActionContext,
   PalFixtureController,
@@ -24,6 +29,24 @@ const MAX_STORY_PERIODS = 24;
 const WEEKLY_RHYTHM_ID = "weekly-rhythm";
 const DEFAULT_WEEKLY_TARGET = 4;
 const FIRST_GENERATED_ACTIVITY_DAY = "2026-04-13";
+
+function fixtureAchievement(
+  id: string,
+  key: PalAchievementKey,
+  status: PalAchievement["status"],
+  statusLabel: string,
+  extra: Pick<PalAchievement, "progress" | "rewardLabel"> = {},
+): PalAchievement {
+  const presentation = resolvePalAchievementPresentation(key);
+  if (!presentation) throw new Error(`Unknown fixture achievement: ${key}`);
+  return {
+    id,
+    ...presentation,
+    status,
+    statusLabel,
+    ...extra,
+  };
+}
 
 function requireFixtureTermWeeks(totalWeeks: number): number {
   if (
@@ -60,26 +83,22 @@ function weeklyRhythm(
   target: number,
   status: PalAchievement["status"],
 ): PalAchievement {
-  return {
-    id: `${WEEKLY_RHYTHM_ID}-${week}`,
-    title: "Weekly Rhythm",
-    description: `Complete daily logs on ${target} eligible days this week.`,
+  return fixtureAchievement(
+    `${WEEKLY_RHYTHM_ID}-${week}`,
+    PAL_ACHIEVEMENT_KEYS.weeklyRhythm,
     status,
-    statusLabel:
-      status === "earned"
-        ? "Earned"
-        : status === "in-progress"
-          ? `${current} of ${target} days`
-          : status === "incomplete"
-            ? "Not completed"
-            : "Upcoming",
-    badge: {
-      label: "Weekly Rhythm",
-      assetUrl: "/assets/badges/badge-checkin-7-day-v1.png",
+    status === "earned"
+      ? "Earned"
+      : status === "in-progress"
+        ? `${current} of ${target} days`
+        : status === "incomplete"
+          ? "Not completed"
+          : "Upcoming",
+    {
+      progress: { current, target, label: `${current} of ${target} eligible days` },
+      rewardLabel: status === "earned" ? "Happy companion" : undefined,
     },
-    progress: { current, target, label: `${current} of ${target} eligible days` },
-    rewardLabel: status === "earned" ? "Happy companion" : undefined,
-  };
+  );
 }
 
 function buildWeek(number: number, currentWeek: number): PalRoadmapWeek {
@@ -166,17 +185,14 @@ export function createFixtureSnapshot(
     buildWeek(index + 1, boundedCurrentWeek),
   );
 
-  weeks[0]?.achievements.push({
-    id: "first-pika-login",
-    title: "First Pika Login",
-    description: "Started your first authenticated Pika session.",
-    status: "earned",
-    statusLabel: "Earned",
-    badge: {
-      label: "First Pika Login",
-      assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
-    },
-  });
+  weeks[0]?.achievements.push(
+    fixtureAchievement(
+      "first-pika-login",
+      PAL_ACHIEVEMENT_KEYS.firstLogin,
+      "earned",
+      "Earned",
+    ),
+  );
 
   const companion = {
     name: "Mystery companion",
@@ -356,6 +372,7 @@ export function createFixturePalClient(
     occurredAt: string,
   ): void {
     if (wasEarned || rhythm.status !== "earned") return;
+    queueAchievementCelebration(rhythm);
     earnedWeeklyRhythms += 1;
     applyProgression({
       event_type: WEEKLY_RHYTHM_EARNED,
@@ -404,24 +421,31 @@ export function createFixturePalClient(
     return rhythm;
   }
 
-  function addAchievement(week: PalRoadmapWeek, achievement: PalAchievement): void {
+  function addAchievement(week: PalRoadmapWeek, achievement: PalAchievement): boolean {
     if (!week.achievements.some((candidate) => candidate.id === achievement.id)) {
       week.achievements.push(achievement);
+      return true;
     }
+    return false;
   }
 
   function itemIdentity(context?: PalFixtureActionContext): string {
     return context?.itemToken ?? `fixture-item-${++generatedItemIdentity}`;
   }
 
-  function queueFishReward(itemToken: string): void {
-    const rewardId = `fixture-fish-reward-${itemToken}`;
+  function queueAchievementCelebration(achievement: PalAchievement): void {
+    if (achievement.status !== "earned" || !achievement.key) return;
+    const presentation = resolvePalAchievementPresentation(achievement.key);
+    if (!presentation) return;
+    const rewardId = `fixture-achievement-${achievement.id}`;
     if (!snapshot.rewards.some((reward) => reward.id === rewardId)) {
       snapshot.rewards.push({
         id: rewardId,
-        title: "A treat for your companion!",
-        description: "Your on-time work earned a fish snack.",
-        icon: "🐟",
+        kind: "achievement",
+        achievement: {
+          id: achievement.id,
+          ...presentation,
+        },
       });
     }
   }
@@ -591,17 +615,15 @@ export function createFixturePalClient(
         return "daily_log.completed applied to fixture state";
       }
       if (action === "classroom-joined") {
-        addAchievement(snapshot.roadmap.weeks[0]!, {
-          id: "joined-class",
-          title: "Joined the Class",
-          description: "Joined a new classroom.",
-          status: "earned",
-          statusLabel: "Earned",
-          badge: {
-            label: "Joined the Class",
-            assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
-          },
-        });
+        const achievement = fixtureAchievement(
+          "joined-class",
+          PAL_ACHIEVEMENT_KEYS.joinedClass,
+          "earned",
+          "Earned",
+        );
+        if (addAchievement(snapshot.roadmap.weeks[0]!, achievement)) {
+          queueAchievementCelebration(achievement);
+        }
         return "classroom.joined applied to fixture state";
       }
       if (action === "item-opened-early") {
@@ -611,17 +633,14 @@ export function createFixturePalClient(
           return "learning_item.viewed: semantic duplicate — no progress changed";
         }
         viewedItemTokens.add(itemToken);
-        addAchievement(week, {
-          id: `ready-early-${itemToken}`,
-          title: "Ready Early",
-          description: "Opened a learning item soon after it was released.",
-          status: "earned",
-          statusLabel: "Earned early",
-          badge: {
-            label: "Ready Early",
-            assetUrl: "/assets/badges/badge-ready-early-v1.png",
-          },
-        });
+        const achievement = fixtureAchievement(
+          `ready-early-${itemToken}`,
+          PAL_ACHIEVEMENT_KEYS.readyEarly,
+          "earned",
+          "Earned early",
+        );
+        addAchievement(week, achievement);
+        queueAchievementCelebration(achievement);
         return "learning_item.viewed (early) applied to fixture state";
       }
       if (action === "on-time-finish") {
@@ -632,19 +651,14 @@ export function createFixturePalClient(
           return "learning_item.completed: semantic duplicate — no progress changed";
         }
         completedItemTokens.add(itemToken);
-        addAchievement(week, {
-          id: `on-time-finish-${itemToken}`,
-          title: "On-Time Finish",
-          description: "Completed a learning item on time.",
-          status: "earned",
-          statusLabel: "Earned on time",
-          badge: {
-            label: "On-Time Finish",
-            assetUrl: "/assets/badges/badge-on-time-finish.png",
-          },
-          rewardLabel: "Fish snack",
-        });
-        queueFishReward(itemToken);
+        const achievement = fixtureAchievement(
+          `on-time-finish-${itemToken}`,
+          PAL_ACHIEVEMENT_KEYS.onTimeFinish,
+          "earned",
+          "Earned on time",
+        );
+        addAchievement(week, achievement);
+        queueAchievementCelebration(achievement);
         applyProgression({
           event_type: "learning_item.completed",
           occurred_at: itemOccurredAt(),
@@ -661,17 +675,15 @@ export function createFixturePalClient(
           return "learning_item.completed: semantic duplicate — no progress changed";
         }
         completedItemTokens.add(itemToken);
-        addAchievement(week, {
-          id: `late-finish-${itemToken}`,
-          title: "On-Time Finish",
-          description: "Completed a learning item late.",
-          status: "incomplete",
-          statusLabel: "Completed late",
-          badge: {
-            label: "On-Time Finish",
-            assetUrl: "/assets/badges/badge-on-time-finish.png",
-          },
-        });
+        addAchievement(
+          week,
+          fixtureAchievement(
+            `late-finish-${itemToken}`,
+            PAL_ACHIEVEMENT_KEYS.onTimeFinish,
+            "incomplete",
+            "Completed late",
+          ),
+        );
         applyProgression({
           event_type: "learning_item.completed",
           occurred_at: itemOccurredAt(),
@@ -681,22 +693,19 @@ export function createFixturePalClient(
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {
-        addAchievement(snapshot.roadmap.weeks[0]!, {
-          id: "first-pika-login",
-          title: "First Pika Login",
-          description: "Started your first authenticated Pika session.",
-          status: "earned",
-          statusLabel: "Earned",
-          badge: {
-            label: "First Pika Login",
-            assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
-          },
-        });
+        const achievement = fixtureAchievement(
+          "first-pika-login",
+          PAL_ACHIEVEMENT_KEYS.firstLogin,
+          "earned",
+          "Earned",
+        );
+        if (addAchievement(snapshot.roadmap.weeks[0]!, achievement)) {
+          queueAchievementCelebration(achievement);
+        }
         return "platform.session.started applied to fixture state";
       }
 
-      queueFishReward(itemIdentity(context));
-      return "Fixture reward queued";
+      return "No fixture action applied";
     },
     peek() {
       return cloneSnapshot(snapshot);

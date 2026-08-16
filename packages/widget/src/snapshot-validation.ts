@@ -1,5 +1,7 @@
 import type {
   PalAchievement,
+  PalAchievementKey,
+  PalAchievementPresentation,
   PalAchievementStatus,
   PalBadge,
   PalCollectibleKind,
@@ -18,6 +20,7 @@ import type {
   PalTitleUnlock,
   PalUnlockStatus,
 } from "./types";
+import { PAL_ACHIEVEMENT_KEYS } from "./achievement-presentation";
 
 const MAX_TEXT_LENGTH = 512;
 const MAX_URL_LENGTH = 2_048;
@@ -27,6 +30,7 @@ const MAX_REWARDS = 100;
 const MAX_COLLECTION_ITEMS = 50;
 const MAX_COLLECTIBLES = 32;
 const MAX_TITLES = 32;
+const ACHIEVEMENT_KEYS = Object.values(PAL_ACHIEVEMENT_KEYS);
 
 export interface PalSnapshotValidationOptions {
   /**
@@ -259,8 +263,16 @@ function parseAchievement(
       ? undefined
       : parseProgress(source.progress, `${path}.progress`);
   const rewardLabel = optionalText(source.rewardLabel, `${path}.rewardLabel`);
+  const key = source.key === undefined
+    ? undefined
+    : member<PalAchievementKey>(
+        source.key,
+        `${path}.key`,
+        ACHIEVEMENT_KEYS,
+      );
   return {
     id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    ...(key === undefined ? {} : { key }),
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
     status: member<PalAchievementStatus>(
@@ -272,6 +284,25 @@ function parseAchievement(
     badge: parseBadge(source.badge, `${path}.badge`, assetPolicy),
     ...(progress === undefined ? {} : { progress }),
     ...(rewardLabel === undefined ? {} : { rewardLabel }),
+  };
+}
+
+function parseAchievementPresentation(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalAchievementPresentation & { id: string } {
+  const source = record(value, path);
+  return {
+    id: text(source.id, `${path}.id`),
+    key: member<PalAchievementKey>(
+      source.key,
+      `${path}.key`,
+      ACHIEVEMENT_KEYS,
+    ),
+    title: text(source.title, `${path}.title`),
+    description: text(source.description, `${path}.description`),
+    badge: parseBadge(source.badge, `${path}.badge`, assetPolicy),
   };
 }
 
@@ -350,6 +381,18 @@ function parseReward(
   assetPolicy: AssetPolicy,
 ): PalRewardNotice {
   const source = record(value, path);
+  const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
+  if (source.kind === "achievement") {
+    return {
+      id,
+      kind: "achievement",
+      achievement: parseAchievementPresentation(
+        source.achievement,
+        `${path}.achievement`,
+        assetPolicy,
+      ),
+    };
+  }
   const icon = optionalText(source.icon, `${path}.icon`);
   const assetUrl = optionalAssetUrl(
     source.assetUrl,
@@ -369,7 +412,7 @@ function parseReward(
     `${path}.titleRevealCopy`,
   );
   return {
-    id: uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`),
+    id,
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
     ...(kind === undefined ? {} : { kind }),

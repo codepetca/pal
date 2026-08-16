@@ -57,7 +57,8 @@ versioned independently from event ingestion and includes:
 
 - the authoritative 6–24-week term roadmap and stored achievement state (16 weeks for legacy producers);
 - current companion state; and
-- unseen reward notices.
+- unseen reward notices. Achievement notices include only the earned instance's
+  stable key and canonical presentation-safe name, description, and badge.
 
 The widget receives no raw learner identifier. Pika's backend uses its integration
 credential to mint the learner-scoped token; that credential never enters the

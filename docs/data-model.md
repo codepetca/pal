@@ -42,8 +42,8 @@ Planned, not yet built:
 - **LearnerGroup** — a pseudonymous classroom or cohort.
 - **UnlockLedger** — a future generalized append-only record for world objects and
   consumables. Current Weekly Rhythm keepsakes persist idempotently in
-  `world_state.unlocked_object_ids`; the on-time fish remains a dismissible reward
-  notice rather than durable inventory.
+  `world_state.unlocked_object_ids`; achievement celebrations remain transient
+  notices and never become durable inventory.
 - **AuditLog** — record of every rule engine evaluation and its mutations.
 
 ## Asset registry entities

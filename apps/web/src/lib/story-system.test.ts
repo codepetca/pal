@@ -727,17 +727,26 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     }
     const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
     assert.deepEqual(fixture.progression(), snapshot.progression);
-    const displayReward = (reward: PalRewardNotice) => ({
-      title: reward.title,
-      description: reward.description,
-      kind: reward.kind,
-      collectibleTitle: reward.collectibleTitle,
-      titleAward: reward.titleAward,
-      titleRevealCopy: reward.titleRevealCopy,
-      icon: reward.icon,
-      assetUrl: reward.assetUrl,
-    });
-    assert.deepEqual(fixture.rewards().map(displayReward), snapshot.rewards.map(displayReward));
+    const displayReward = (reward: PalRewardNotice) => {
+      assert.notEqual(reward.kind, "achievement");
+      if (reward.kind === "achievement") throw new Error("Expected a grant reward");
+      return {
+        title: reward.title,
+        description: reward.description,
+        kind: reward.kind,
+        collectibleTitle: reward.collectibleTitle,
+        titleAward: reward.titleAward,
+        titleRevealCopy: reward.titleRevealCopy,
+        icon: reward.icon,
+        assetUrl: reward.assetUrl,
+      };
+    };
+    assert.deepEqual(
+      fixture.rewards().map(displayReward),
+      snapshot.rewards
+        .filter((reward) => reward.kind !== "achievement")
+        .map(displayReward),
+    );
     assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
 
     await getDb().update(economy).set({ streakCurrent: 0, streakLastDay: null }).where(eq(economy.learnerId, learnerId));
@@ -846,6 +855,8 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
     assert.equal(snapshot.progression, undefined);
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
     assert.ok(notice);
+    assert.notEqual(notice.kind, "achievement");
+    if (notice.kind === "achievement") throw new Error("Expected a title notice");
     assert.equal(notice.titleAward, "On-Time Pro");
 
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
@@ -893,7 +904,7 @@ test("Weekly Rhythm grants exactly once under retries and acknowledgement preser
   }
 });
 
-test("historical achievement rows do not backfill reward grants", { skip: !process.env.DATABASE_URL }, async () => {
+test("historical achievement rows do not backfill grants or celebrations", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `no-backfill-${crypto.randomUUID()}`;
   const periodKey = `period-${crypto.randomUUID()}`;
@@ -905,6 +916,12 @@ test("historical achievement rows do not backfill reward grants", { skip: !proce
       eq(achievementInstances.periodKey, periodKey),
     ));
     assert.equal((await getDb().select().from(learnerRewardGrants).where(eq(learnerRewardGrants.learnerId, learnerId))).length, 0);
+    assert.equal(
+      (await loadLearnerSnapshot(integration.id, learnerId)).rewards.some(
+        (reward) => reward.kind === "achievement",
+      ),
+      false,
+    );
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
