@@ -1012,7 +1012,11 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     const fixture = new StoryFixtureLedger(plan);
     for (const persisted of persistedGrants) {
       if (persisted.kind === "story_chapter") {
-        fixture.grantStoryChapter(persisted.storyPlanChapterId!, persisted.sourceFactId);
+        fixture.grantStoryChapter(
+          persisted.storyPlanChapterId!,
+          persisted.sourceFactId,
+          "color",
+        );
       } else {
         assert.equal(persisted.behaviorTitleId, "rhythm-builder");
         fixture.grantBehaviorTitle("rhythm-builder", persisted.sourceFactId);
