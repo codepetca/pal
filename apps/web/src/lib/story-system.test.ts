@@ -482,6 +482,80 @@ test("a future week does not open the prior sketch until its local start", { ski
   }
 });
 
+test("a later calendar-bearing revision reconciles a calendarless started week", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `calendar-upgrade-boundary-${crypto.randomUUID()}`;
+  const termKey = `calendar-upgrade-term-${crypto.randomUUID()}`;
+  const weekOneKey = `calendar-upgrade-one-${crypto.randomUUID()}`;
+  const weekTwoKey = `calendar-upgrade-two-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(weekOneKey, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2026-09-01T12:00:00.000Z",
+        metadata: {
+          period_key: weekTwoKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 5,
+        },
+      },
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const calendarBearingWeek = configuredWeek(weekTwoKey, termKey);
+    calendarBearingWeek.occurred_at = "2026-09-07T12:00:00.000Z";
+    calendarBearingWeek.metadata.config_version = 2;
+    calendarBearingWeek.metadata.week_index = 2;
+    calendarBearingWeek.metadata.week_start_day = "2026-09-07";
+    calendarBearingWeek.metadata.eligible_days = 5;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      calendarBearingWeek,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const activity = await Promise.all([
+      processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(weekTwoKey, "2026-09-07"),
+        crypto.randomUUID(),
+      ),
+      processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(weekTwoKey, "2026-09-08"),
+        crypto.randomUUID(),
+      ),
+    ]);
+    assert.deepEqual(
+      activity.map((result) => result.status),
+      ["processed", "processed"],
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 1);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("only the final period close grants its own guaranteed sketch", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `final-boundary-${crypto.randomUUID()}`;

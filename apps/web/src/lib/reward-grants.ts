@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import {
   learnerFacts,
   learnerRewardGrants,
@@ -125,8 +125,9 @@ export async function grantStoryChapterForScheduleAdvance(
       eq(learnerFacts.learnerId, input.learnerId),
       eq(learnerFacts.eventType, "daily_log_week.configured"),
       eq(learnerFacts.periodKey, periodKey),
+      sql`${learnerFacts.metadata} ? 'term_timezone'`,
     ))
-    .orderBy(asc(learnerFacts.createdAt))
+    .orderBy(sql`(${learnerFacts.metadata}->>'config_version')::int asc`)
     .limit(1);
   const currentPeriodMetadata = currentPeriodConfiguration?.metadata;
   if (
