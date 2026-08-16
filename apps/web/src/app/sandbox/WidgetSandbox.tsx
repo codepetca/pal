@@ -128,7 +128,7 @@ const SANDBOX_ACTIONS: Array<{
   {
     action: "daily-log-completed",
     label: "Complete daily log",
-    detail: "Advances Weekly Rhythm, and grants XP",
+    detail: "Builds toward a full-color weekly keepsake, and grants XP",
   },
   {
     action: "item-opened-early",

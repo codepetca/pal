@@ -35,7 +35,7 @@ const ACHIEVEMENT_PRESENTATIONS: Readonly<
   [PAL_ACHIEVEMENT_KEYS.weeklyRhythm]: Object.freeze({
     key: PAL_ACHIEVEMENT_KEYS.weeklyRhythm,
     title: "Weekly Rhythm",
-    description: "Complete daily logs on the target number of eligible days.",
+    description: "Complete the target number of daily logs to bring this week's keepsake to life in color.",
     badge: Object.freeze({
       label: "Weekly Rhythm",
       assetUrl: "/assets/badges/badge-checkin-7-day-v1.png",

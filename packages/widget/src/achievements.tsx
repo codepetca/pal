@@ -177,8 +177,9 @@ export function PalAchievements() {
                 <div
                   className="pal-week-collectible"
                   data-unlock-status={earnedReward ? "earned" : "locked"}
+                  data-collectible-finish={earnedReward?.finish ?? "color"}
                   aria-label={earnedReward
-                    ? `${week.label} collectible: ${earnedReward.title}, earned`
+                    ? `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
                     : `${week.label} collectible locked`}
                   role="img"
                 >

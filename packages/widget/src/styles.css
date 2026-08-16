@@ -219,6 +219,11 @@
   object-fit: contain;
 }
 
+.pal-week-collectible[data-collectible-finish="sketch"] .pal-week-collectible-art img,
+.pal-celebration-icon img[data-collectible-finish="sketch"] {
+  filter: grayscale(1);
+}
+
 .pal-week-collectible strong {
   overflow: hidden;
   width: 100%;

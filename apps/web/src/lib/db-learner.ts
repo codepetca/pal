@@ -34,7 +34,11 @@ import {
   type ProcessResult,
 } from "@pal/engine";
 import { ensureStoryPlanForEvent } from "@/lib/story-plan";
-import { BEHAVIOR_TITLES, grantBehaviorTitle } from "@/lib/reward-grants";
+import {
+  BEHAVIOR_TITLES,
+  grantBehaviorTitle,
+  grantStoryChapterForScheduleAdvance,
+} from "@/lib/reward-grants";
 
 // ---------------------------------------------------------------------------
 // Learner lookup / creation  (by integration's external learner ID)
@@ -299,6 +303,11 @@ export async function processEventInDb(
     // Calendar-bearing weekly facts create and bind the learner's immutable
     // term story schedule before an achievement can earn its collectible.
     await ensureStoryPlanForEvent(tx, learnerId, event);
+    await grantStoryChapterForScheduleAdvance(tx, {
+      learnerId,
+      sourceFactId: fact.id,
+      event,
+    });
 
     // 7. Read current state
     const [eco] = await tx

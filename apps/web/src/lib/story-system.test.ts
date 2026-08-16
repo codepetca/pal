@@ -205,6 +205,12 @@ test("server fixture replays grants, titles, and acknowledgement without future 
   const earned = await projectStoryFixture({ termWeeks: 16, commands });
   assert.equal(earned.progression?.collectibles[0]?.status, "earned");
   assert.equal(
+    earned.progression?.collectibles[0]?.status === "earned"
+      ? earned.progression.collectibles[0].finish
+      : undefined,
+    "color",
+  );
+  assert.equal(
     earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
     true,
   );
@@ -333,6 +339,71 @@ function dailyLogOn(periodKey: string, activityDay: string) {
     metadata: { period_key: periodKey, activity_day: activityDay },
   };
 }
+
+test("the next configured week guarantees the prior chapter as a sketch", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `sketch-fallback-${crypto.randomUUID()}`;
+  const termKey = `sketch-term-${crypto.randomUUID()}`;
+  const weekOneKey = `sketch-week-one-${crypto.randomUUID()}`;
+  const weekTwoKey = `sketch-week-two-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(weekOneKey, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLogOn(weekTwoKey, "2026-09-07"),
+      crypto.randomUUID(),
+    )).status, "processed");
+    const weekTwo = configuredWeek(weekTwoKey, termKey);
+    weekTwo.occurred_at = "2026-09-07T12:00:00.000Z";
+    weekTwo.metadata.week_index = 2;
+    weekTwo.metadata.week_start_day = "2026-09-07";
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      weekTwo,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const snapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2026-09-08T12:00:00.000Z") },
+    );
+    const weekOne = snapshot.progression?.collectibles[0];
+    assert.equal(weekOne?.status, "earned");
+    assert.equal(weekOne?.status === "earned" ? weekOne.finish : undefined, "sketch");
+    const currentWeek = snapshot.progression?.collectibles[1];
+    assert.equal(currentWeek?.status, "earned");
+    assert.equal(
+      currentWeek?.status === "earned" ? currentWeek.finish : undefined,
+      "color",
+    );
+    assert.equal(
+      (await getDb().select().from(learnerRewardGrants).where(and(
+        eq(learnerRewardGrants.learnerId, learnerId),
+        eq(learnerRewardGrants.kind, "story_chapter"),
+      ))).length,
+      2,
+    );
+    const storyReward = snapshot.rewards.find((reward) => reward.kind === "story");
+    assert.ok(storyReward && storyReward.kind !== "achievement");
+    assert.equal(storyReward.collectibleFinish, "sketch");
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
 
 test("two learners receive the same persisted sequence for the same term boundary", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
@@ -899,6 +970,12 @@ test("Weekly Rhythm grants exactly once under retries and acknowledgement preser
     const after = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
     assert.equal(after.rewards.some((reward) => reward.id === notice.id), false);
     assert.equal(after.progression?.collectibles[0]?.status, "earned");
+    assert.equal(
+      after.progression?.collectibles[0]?.status === "earned"
+        ? after.progression.collectibles[0].finish
+        : undefined,
+      "color",
+    );
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

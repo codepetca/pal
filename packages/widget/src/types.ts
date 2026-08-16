@@ -13,6 +13,7 @@ export type PalWeekStatus = "past" | "current" | "future";
 export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
 export type PalUnlockStatus = "earned" | "next" | "locked";
 export type PalCollectibleKind = "companion" | "room" | "cosmetic";
+export type PalCollectibleFinish = "sketch" | "color";
 
 export interface PalProgress {
   current: number;
@@ -90,6 +91,8 @@ export interface PalGrantRewardNotice {
   description: string;
   kind?: "standard" | "story";
   collectibleTitle?: string;
+  /** Sketch is the guaranteed story keepsake; color marks an earned Weekly Rhythm. */
+  collectibleFinish?: PalCollectibleFinish;
   titleAward?: string;
   titleRevealCopy?: string;
   icon?: string;
@@ -143,6 +146,8 @@ export type PalCollectibleUnlock =
       titleAward?: string;
       titleRevealCopy?: string;
       kind: PalCollectibleKind;
+      /** Presentation tier. Older schema-v1 producers omit this and render in color. */
+      finish?: PalCollectibleFinish;
       assetUrl: string;
     }
   | PalCollectibleUnlockBase & {

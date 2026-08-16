@@ -25,13 +25,19 @@ import {
 export class StoryFixtureLedger {
   readonly #plan: PersistedStoryPlan;
   readonly #grants: ProjectableRewardGrant[] = [];
+  readonly #colorChapterAssignmentIds = new Set<string>();
   #nextOrder = BigInt(1);
 
   constructor(plan: PersistedStoryPlan) {
     this.#plan = plan;
   }
 
-  grantStoryChapter(assignmentId: string, sourceFactId: string): void {
+  grantStoryChapter(
+    assignmentId: string,
+    sourceFactId: string,
+    finish: "sketch" | "color" = "sketch",
+  ): void {
+    if (finish === "color") this.#colorChapterAssignmentIds.add(assignmentId);
     if (
       this.#grants.some(
         (grant) =>
@@ -76,13 +82,16 @@ export class StoryFixtureLedger {
   }
 
   progression(): PalProgressionState {
-    return projectStoryProgression(this.#plan, this.#grants);
+    return projectStoryProgression(this.#plan, this.#grants, undefined, {
+      colorChapterAssignmentIds: this.#colorChapterAssignmentIds,
+    });
   }
 
   rewards(): PalRewardNotice[] {
     return projectUnseenGrantRewards(
       this.#grants,
       new Map([[this.#plan.id, this.#plan]]),
+      { colorChapterAssignmentIds: this.#colorChapterAssignmentIds },
     );
   }
 
@@ -174,6 +183,7 @@ export async function projectStoryFixture(
     }
 
     const before = presentation.peek();
+    const beforeWeek = before.roadmap.currentWeek;
     const beforeRhythms = earnedWeeklyRhythmWeeks(before);
     const beforeOnTime = earnedOnTimeIds(before);
     presentation.dispatch(command.action, command.context);
@@ -189,7 +199,15 @@ export async function projectStoryFixture(
         (chapter) => chapter.roadmapWeek === week,
       );
       if (!assignment) throw new Error("Fixture story plan is missing a week");
-      ledger.grantStoryChapter(assignment.assignmentId, command.id);
+      ledger.grantStoryChapter(assignment.assignmentId, command.id, "color");
+    }
+
+    if (command.action === "advance-week" && after.roadmap.currentWeek > beforeWeek) {
+      const completedAssignment = plan.chapters.find(
+        (chapter) => chapter.roadmapWeek === beforeWeek,
+      );
+      if (!completedAssignment) throw new Error("Fixture story plan is missing a week");
+      ledger.grantStoryChapter(completedAssignment.assignmentId, command.id, "sketch");
     }
 
     if (

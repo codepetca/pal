@@ -4,6 +4,7 @@ import type {
   PalAchievementPresentation,
   PalAchievementStatus,
   PalBadge,
+  PalCollectibleFinish,
   PalCollectibleKind,
   PalCollectibleUnlock,
   PalCompanionReveal,
@@ -406,6 +407,13 @@ function parseReward(
     source.collectibleTitle,
     `${path}.collectibleTitle`,
   );
+  const collectibleFinish = source.collectibleFinish === undefined
+    ? undefined
+    : member<PalCollectibleFinish>(
+        source.collectibleFinish,
+        `${path}.collectibleFinish`,
+        ["sketch", "color"],
+      );
   const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
   const titleRevealCopy = optionalText(
     source.titleRevealCopy,
@@ -417,6 +425,7 @@ function parseReward(
     description: text(source.description, `${path}.description`),
     ...(kind === undefined ? {} : { kind }),
     ...(collectibleTitle === undefined ? {} : { collectibleTitle }),
+    ...(collectibleFinish === undefined ? {} : { collectibleFinish }),
     ...(titleAward === undefined ? {} : { titleAward }),
     ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
     ...(icon === undefined ? {} : { icon }),
@@ -503,6 +512,7 @@ function parseCollectible(
       "titleAward",
       "titleRevealCopy",
       "kind",
+      "finish",
       "assetUrl",
     ];
     if (concealedFields.some((field) => source[field] !== undefined)) {
@@ -534,6 +544,13 @@ function parseCollectible(
     source.titleRevealCopy,
     `${path}.titleRevealCopy`,
   );
+  const finish = source.finish === undefined
+    ? undefined
+    : member<PalCollectibleFinish>(
+        source.finish,
+        `${path}.finish`,
+        ["sketch", "color"],
+      );
   return {
     id,
     ...(chapterId === undefined ? {} : { chapterId }),
@@ -549,6 +566,7 @@ function parseCollectible(
       `${path}.kind`,
       ["companion", "room", "cosmetic"],
     ),
+    ...(finish === undefined ? {} : { finish }),
     status,
     statusLabel,
     assetUrl,
