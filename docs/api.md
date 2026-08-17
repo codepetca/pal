@@ -37,7 +37,9 @@ still-ungranted week.
 If the bounded run reaches its batch cap while more due work may remain, it
 returns `503` with `status: "incomplete"` and `batchLimitReached: true`. This
 makes backlog exhaustion alertable instead of presenting a partially drained
-queue as an ordinary successful cron run; pending rows remain recoverable.
+queue as an ordinary successful cron run; pending rows remain recoverable. If
+learner failures and cap exhaustion happen together, the response is `503` with
+`status: "partial_failure_incomplete"` so neither condition is hidden.
 
 The route does not accept a learner, period, date, or event payload. It derives
 eligibility only from typed, indexed due-work materialized from validated stored

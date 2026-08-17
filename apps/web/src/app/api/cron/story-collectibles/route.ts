@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron-auth";
 import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
-import { storyGrantCronOutcome } from "@/lib/story-grant-cron-result";
+import { storyGrantCronResponse } from "@/lib/story-grant-cron-result";
 import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 
 export const dynamic = "force-dynamic";
@@ -32,9 +32,5 @@ export async function GET(request: NextRequest) {
   const result = await runStoryGrantWorker({
     rolloutEffectiveAt: STORY_SKETCH_REWARDS_EFFECTIVE_AT,
   });
-  const outcome = storyGrantCronOutcome(result);
-  return response(
-    { status: outcome.bodyStatus, ...result },
-    outcome.httpStatus,
-  );
+  return storyGrantCronResponse(result);
 }
