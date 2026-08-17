@@ -493,7 +493,9 @@ test(
             learnerAttempts += 1;
             if (learnerAttempts === 1) {
               throw Object.assign(new Error(externalLearnerId), {
-                code: "57P03",
+                // PostgreSQL uses this when the surrounding statement timeout
+                // wins a lock race; learner-scoped retries must recover it.
+                code: "57014",
               });
             }
             return reconcileDueStoryGrantsForLearner(...args);

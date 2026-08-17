@@ -204,11 +204,12 @@ It never waits for the next instructional week, so holidays and breaks cannot
 delay ownership. Stable learner pages, per-learner transactions, row locks, and
 the reward ledger's uniqueness constraint make retries and concurrent event/cron
 runs safe. Discovery and learner transactions retry transient failures up to a
-small fixed attempt limit during the same invocation; terminal learner failures
-remain isolated from the rest of the batch. Malformed legacy calendar JSON is
-quarantined before any date, integer, or timezone evaluation. Each selected
-learner reconciles all overdue post-rollout weeks, which also repairs missed
-daily invocations.
+small fixed attempt limit during the same invocation. A short transaction-local
+lock timeout prevents a concurrent event from consuming the connection's full
+statement timeout; terminal learner failures remain isolated from the rest of
+the batch. Malformed legacy calendar JSON is quarantined before any date,
+integer, or timezone evaluation. Each selected learner reconciles all overdue
+post-rollout weeks, which also repairs missed daily invocations.
 
 ### Future operator schedules
 

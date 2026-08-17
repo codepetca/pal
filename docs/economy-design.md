@@ -162,8 +162,9 @@ older widget/API pair.
   reveal eligibility. The widget's network parser validates shape, bounds, and
   asset origins; it deliberately does not maintain a second story engine or
   attempt to prove entitlement from other fields in the same response.
-- Catch-up remains deliberately deferred. The story copy, collectible briefs,
-  scheduling rules, and that boundary are defined in
+- The active daily scheduler catches up every overdue post-rollout assignment
+  for each selected learner. Story copy, collectible briefs, and scheduling
+  rules are defined in
   [Pip's First Recipe — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy
