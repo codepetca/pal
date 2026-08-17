@@ -15,7 +15,6 @@ import type { IncomingEvent } from "@pal/engine";
 import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
-  grantStoryChapterForPeriod,
 } from "@/lib/reward-grants";
 
 export const ACHIEVEMENT_KEYS = PAL_ACHIEVEMENT_KEYS;
@@ -209,6 +208,13 @@ function offsetCalendarDay(day: string, days: number): string | null {
     : new Date(timestamp + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+function isoWeekday(day: string): number | null {
+  const timestamp = Date.parse(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(timestamp)) return null;
+  const weekday = new Date(timestamp).getUTCDay();
+  return weekday === 0 ? 7 : weekday;
+}
+
 function periodCalendarFromMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): PeriodCalendar {
@@ -242,15 +248,38 @@ function periodCalendarFromMetadata(
 
 function hasValidStoryWeekPosition(calendar: TermCalendarMetadata): boolean {
   const totalWeeks = calendar.term_week_count ?? 16;
-  const earliestStart = offsetCalendarDay(
+  const termStartWeekday = isoWeekday(calendar.term_start_day);
+  const termEndWeekday = isoWeekday(calendar.term_end_day);
+  if (!termStartWeekday || !termEndWeekday) return false;
+  const firstNormalMonday = offsetCalendarDay(
+    calendar.term_start_day,
+    8 - termStartWeekday,
+  );
+  const finalMonday = offsetCalendarDay(
+    calendar.term_end_day,
+    -(termEndWeekday - 1),
+  );
+  const earliestStart = calendar.week_index === 1
+    ? calendar.term_start_day
+    : firstNormalMonday
+      ? offsetCalendarDay(
+          firstNormalMonday,
+          (calendar.week_index - 2) * 7,
+        )
+      : null;
+  const latestStart = calendar.week_index === 1
+    ? calendar.term_start_day
+    : finalMonday
+      ? offsetCalendarDay(
+          finalMonday,
+          -(totalWeeks - calendar.week_index) * 7,
+        )
+      : null;
+  const compatibilityStart = offsetCalendarDay(
     calendar.term_start_day,
     (calendar.week_index - 1) * 7,
   );
-  const latestStart = offsetCalendarDay(
-    calendar.term_end_day,
-    -(totalWeeks - calendar.week_index) * 7,
-  );
-  const actualStart = calendar.week_start_day ?? earliestStart;
+  const actualStart = calendar.week_start_day ?? compatibilityStart;
   return Boolean(
     earliestStart &&
       latestStart &&
@@ -1164,7 +1193,6 @@ async function recomputeWeeklyRhythm(
         achievementInstanceId: existing.id,
         achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
       });
-      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
     }
     return status === "earned";
   }
@@ -1190,7 +1218,6 @@ async function recomputeWeeklyRhythm(
       achievementInstanceId: created.id,
       achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
     });
-    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
   }
   return status === "earned";
 }

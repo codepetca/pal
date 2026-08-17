@@ -14,8 +14,10 @@ of instructional periods, and Pal schedules exactly one story chapter with one
 offered collectible for each period. Eight core chapters preserve the full arc.
 Sixteen optional chapters let the same story breathe in longer courses.
 
-Catch-up eligibility is deliberately outside this document. This catalog says
-what a period can offer, not how a learner recovers a missed reward.
+Eligibility is intentionally separate from catalog selection. The daily
+story-collectible scheduler grants one durable assignment per eligible
+learner/week after that week's local instructional end; this catalog defines
+what that already-selected assignment reveals.
 
 ## Voice and copy rules
 
@@ -239,11 +241,11 @@ widget validates the resulting transport shape and renders it without
 re-evaluating chapter eligibility.
 
 Guaranteed schedule grants are enabled by an explicit deployment cutoff. Pal
-reconciles all eligible ungranted chapters in a period-bearing event's plan
-through the latest observed started week, but it never turns configurations
-stored before that cutoff into story ownership. A later scheduled boundary
-worker can write to the same idempotent grant ledger under the same eligibility
-rules without changing this contract.
+reconciles every eligible ungranted chapter whose own local due day has arrived.
+The daily worker does not require a learner event, while any later accepted
+event calls the same reconciler as a recovery path. Neither configurations
+stored before the cutoff nor weeks whose due instant predates it become story
+ownership.
 
 Reduced-motion mode should replace scale, bounce, or sparkle sequences with a
 short opacity transition. The full reveal must remain understandable with no

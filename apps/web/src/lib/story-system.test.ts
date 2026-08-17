@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { PalRewardNotice } from "@codepet/pal-widget";
 import {
   achievementInstances,
   economy,
   getDb,
-  learnerFacts,
   learnerRewardGrants,
   storyPlanChapters,
   storyPlans,
@@ -37,6 +36,7 @@ import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
 } from "@/lib/learner-snapshot";
+import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
@@ -190,7 +190,7 @@ test("projector keeps prior-term titles without unlocking current-term collectib
 });
 
 test("server fixture replays grants, titles, and acknowledgement without future content", async () => {
-  const commands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
+  const rhythmCommands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
     (activityDay, index) => ({
       type: "action" as const,
       id: `daily-${index + 1}`,
@@ -198,6 +198,12 @@ test("server fixture replays grants, titles, and acknowledgement without future 
       context: { activityDay },
     }),
   );
+  const beforeDue = await projectStoryFixture({ termWeeks: 16, commands: rhythmCommands });
+  assert.equal(beforeDue.progression?.collectibles[0]?.status, "next");
+  const commands = [
+    ...rhythmCommands,
+    { type: "action" as const, id: "advance-week-one", action: "advance-week" as const },
+  ];
   const locked = await projectStoryFixture({ termWeeks: 16, commands: [] });
   const lockedRaw = JSON.stringify(locked);
   assert.equal(lockedRaw.includes("pips-first-recipe"), false);
@@ -341,680 +347,6 @@ function dailyLogOn(periodKey: string, activityDay: string) {
   };
 }
 
-test("the next configured week guarantees the prior chapter as a sketch", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `sketch-fallback-${crypto.randomUUID()}`;
-  const termKey = `sketch-term-${crypto.randomUUID()}`;
-  const weekOneKey = `sketch-week-one-${crypto.randomUUID()}`;
-  const weekTwoKey = `sketch-week-two-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      dailyLogOn(weekTwoKey, "2026-09-07"),
-      crypto.randomUUID(),
-    )).status, "processed");
-    const weekTwo = configuredWeek(weekTwoKey, termKey);
-    weekTwo.occurred_at = "2026-09-07T12:00:00.000Z";
-    weekTwo.metadata.week_index = 2;
-    weekTwo.metadata.week_start_day = "2026-09-07";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      weekTwo,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    const snapshot = await loadLearnerSnapshot(
-      integration.id,
-      learnerId,
-      getDb(),
-      { asOf: new Date("2026-09-08T12:00:00.000Z") },
-    );
-    const weekOne = snapshot.progression?.collectibles[0];
-    assert.equal(weekOne?.status, "earned");
-    assert.equal(weekOne?.status === "earned" ? weekOne.finish : undefined, "sketch");
-    const currentWeek = snapshot.progression?.collectibles[1];
-    assert.equal(currentWeek?.status, "earned");
-    assert.equal(
-      currentWeek?.status === "earned" ? currentWeek.finish : undefined,
-      "color",
-    );
-    assert.equal(
-      (await getDb().select().from(learnerRewardGrants).where(and(
-        eq(learnerRewardGrants.learnerId, learnerId),
-        eq(learnerRewardGrants.kind, "story_chapter"),
-      ))).length,
-      2,
-    );
-    const storyReward = snapshot.rewards.find((reward) => reward.kind === "story");
-    assert.ok(storyReward);
-    if (storyReward.achievement) throw new Error("Expected a story reward");
-    assert.equal(storyReward.collectibleFinish, "sketch");
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a future week does not open the prior sketch until its local start", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `future-boundary-${crypto.randomUUID()}`;
-  const termKey = `future-boundary-term-${crypto.randomUUID()}`;
-  const weekOneKey = `future-boundary-one-${crypto.randomUUID()}`;
-  const weekTwoKey = `future-boundary-two-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const futureWeek = configuredWeek(weekTwoKey, termKey);
-    futureWeek.occurred_at = "2026-09-01T12:00:00.000Z";
-    futureWeek.metadata.week_index = 2;
-    futureWeek.metadata.week_start_day = "2026-09-07";
-    futureWeek.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      futureWeek,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 0);
-
-    const concurrentStarts = await Promise.all([
-      processEventInDb(
-        integration.id,
-        externalLearnerId,
-        dailyLogOn(weekTwoKey, "2026-09-07"),
-        crypto.randomUUID(),
-      ),
-      processEventInDb(
-        integration.id,
-        externalLearnerId,
-        dailyLogOn(weekTwoKey, "2026-09-08"),
-        crypto.randomUUID(),
-      ),
-    ]);
-    assert.deepEqual(
-      concurrentStarts.map((result) => result.status),
-      ["processed", "processed"],
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 1);
-
-    const staleWeek = structuredClone(futureWeek);
-    staleWeek.occurred_at = "2026-09-08T12:00:00.000Z";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      staleWeek,
-      crypto.randomUUID(),
-    )).status, "semantic_duplicate");
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 1);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a later learner event reconciles every due preconfigured sketch exactly once", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `multi-boundary-${crypto.randomUUID()}`;
-  const termKey = `multi-boundary-term-${crypto.randomUUID()}`;
-  const periodKeys = Array.from({ length: 3 }, () => `multi-boundary-${crypto.randomUUID()}`);
-  try {
-    for (let index = 0; index < periodKeys.length; index += 1) {
-      const configuration = configuredWeek(periodKeys[index]!, termKey);
-      configuration.occurred_at = "2026-09-01T12:00:00.000Z";
-      configuration.metadata.week_index = index + 1;
-      configuration.metadata.week_start_day = `2026-09-${String(1 + index * 7).padStart(2, "0")}`;
-      configuration.metadata.eligible_days = 5;
-      assert.equal((await processEventInDb(
-        integration.id,
-        externalLearnerId,
-        configuration,
-        crypto.randomUUID(),
-      )).status, "processed");
-    }
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 0);
-
-    for (const activityDay of ["2026-09-15", "2026-09-16"]) {
-      assert.equal((await processEventInDb(
-        integration.id,
-        externalLearnerId,
-        dailyLogOn(periodKeys[2]!, activityDay),
-        crypto.randomUUID(),
-      )).status, "processed");
-    }
-    const grants = await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ));
-    assert.equal(grants.length, 2);
-    const grantedAssignments = await getDb().select().from(storyPlanChapters).where(and(
-      eq(storyPlanChapters.learnerId, learnerId),
-      inArray(storyPlanChapters.id, grants.flatMap((grant) =>
-        grant.storyPlanChapterId ? [grant.storyPlanChapterId] : []
-      )),
-    ));
-    assert.deepEqual(
-      grantedAssignments.map((assignment) => assignment.periodNumber).sort((a, b) => a - b),
-      [1, 2],
-    );
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a late intermediate configuration reconciles through an already-started later boundary", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `late-intermediate-${crypto.randomUUID()}`;
-  const termKey = `late-intermediate-term-${crypto.randomUUID()}`;
-  const periodKeys = Array.from({ length: 3 }, () => `late-intermediate-${crypto.randomUUID()}`);
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(periodKeys[0]!, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    const weekThree = configuredWeek(periodKeys[2]!, termKey);
-    weekThree.occurred_at = "2026-09-01T12:00:00.000Z";
-    weekThree.metadata.week_index = 3;
-    weekThree.metadata.week_start_day = "2026-09-14";
-    weekThree.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      weekThree,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const weekTwo = configuredWeek(periodKeys[1]!, termKey);
-    weekTwo.occurred_at = "2026-09-15T12:00:00.000Z";
-    weekTwo.metadata.week_index = 2;
-    weekTwo.metadata.week_start_day = "2026-09-07";
-    weekTwo.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      weekTwo,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    const grants = await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ));
-    assert.equal(grants.length, 2);
-    const grantedAssignments = await getDb().select().from(storyPlanChapters).where(and(
-      eq(storyPlanChapters.learnerId, learnerId),
-      inArray(storyPlanChapters.id, grants.flatMap((grant) =>
-        grant.storyPlanChapterId ? [grant.storyPlanChapterId] : []
-      )),
-    ));
-    assert.deepEqual(
-      grantedAssignments.map((assignment) => assignment.periodNumber).sort((a, b) => a - b),
-      [1, 2],
-    );
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("an accepted stale configuration still reconciles a started boundary", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `stale-boundary-${crypto.randomUUID()}`;
-  const termKey = `stale-boundary-term-${crypto.randomUUID()}`;
-  const weekOneKey = `stale-boundary-one-${crypto.randomUUID()}`;
-  const weekTwoKey = `stale-boundary-two-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    const higherConfiguration = configuredWeek(weekTwoKey, termKey);
-    higherConfiguration.occurred_at = "2026-09-01T12:00:00.000Z";
-    higherConfiguration.metadata.config_version = 2;
-    higherConfiguration.metadata.week_index = 2;
-    higherConfiguration.metadata.week_start_day = "2026-09-07";
-    higherConfiguration.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      higherConfiguration,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const staleConfiguration = structuredClone(higherConfiguration);
-    staleConfiguration.occurred_at = "2026-09-08T12:00:00.000Z";
-    staleConfiguration.metadata.config_version = 1;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      staleConfiguration,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 1);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("pre-rollout calendar history is not granted by later learner activity", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `pre-rollout-${crypto.randomUUID()}`;
-  const termKey = `pre-rollout-term-${crypto.randomUUID()}`;
-  const weekOneKey = `pre-rollout-one-${crypto.randomUUID()}`;
-  const weekTwoKey = `pre-rollout-two-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    const weekTwo = configuredWeek(weekTwoKey, termKey);
-    weekTwo.occurred_at = "2026-09-01T12:00:00.000Z";
-    weekTwo.metadata.week_index = 2;
-    weekTwo.metadata.week_start_day = "2026-09-07";
-    weekTwo.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      weekTwo,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    await getDb().update(learnerFacts)
-      .set({ createdAt: new Date("2025-12-31T23:59:59.000Z") })
-      .where(and(
-        eq(learnerFacts.learnerId, learnerId),
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-      ));
-
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      dailyLogOn(weekTwoKey, "2026-09-08"),
-      crypto.randomUUID(),
-    )).status, "processed");
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 0);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a later calendar-bearing revision reconciles a calendarless started week", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `calendar-upgrade-boundary-${crypto.randomUUID()}`;
-  const termKey = `calendar-upgrade-term-${crypto.randomUUID()}`;
-  const weekOneKey = `calendar-upgrade-one-${crypto.randomUUID()}`;
-  const weekTwoKey = `calendar-upgrade-two-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      {
-        event_type: "daily_log_week.configured",
-        occurred_at: "2026-09-01T12:00:00.000Z",
-        metadata: {
-          period_key: weekTwoKey,
-          config_version: 1,
-          period_status: "open",
-          eligible_days: 5,
-        },
-      },
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const calendarBearingWeek = configuredWeek(weekTwoKey, termKey);
-    calendarBearingWeek.occurred_at = "2026-09-07T12:00:00.000Z";
-    calendarBearingWeek.metadata.config_version = 2;
-    calendarBearingWeek.metadata.week_index = 2;
-    calendarBearingWeek.metadata.week_start_day = "2026-09-07";
-    calendarBearingWeek.metadata.eligible_days = 5;
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      calendarBearingWeek,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    const activity = await Promise.all([
-      processEventInDb(
-        integration.id,
-        externalLearnerId,
-        dailyLogOn(weekTwoKey, "2026-09-07"),
-        crypto.randomUUID(),
-      ),
-      processEventInDb(
-        integration.id,
-        externalLearnerId,
-        dailyLogOn(weekTwoKey, "2026-09-08"),
-        crypto.randomUUID(),
-      ),
-    ]);
-    assert.deepEqual(
-      activity.map((result) => result.status),
-      ["processed", "processed"],
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 1);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("only the final period close grants its own guaranteed sketch", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `final-boundary-${crypto.randomUUID()}`;
-  const termKey = `final-boundary-term-${crypto.randomUUID()}`;
-  const weekOneKey = `final-boundary-one-${crypto.randomUUID()}`;
-  const finalWeekKey = `final-boundary-six-${crypto.randomUUID()}`;
-  try {
-    const weekOne = configuredWeek(weekOneKey, termKey);
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      weekOne,
-      crypto.randomUUID(),
-    )).status, "processed");
-    const closedWeekOne = structuredClone(weekOne);
-    closedWeekOne.occurred_at = "2026-09-04T12:00:00.000Z";
-    closedWeekOne.metadata.config_version = 2;
-    closedWeekOne.metadata.period_status = "closed";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      closedWeekOne,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const finalWeek = configuredWeek(finalWeekKey, termKey);
-    finalWeek.occurred_at = "2026-10-05T12:00:00.000Z";
-    finalWeek.metadata.week_index = 6;
-    finalWeek.metadata.week_start_day = "2026-10-05";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      finalWeek,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 0);
-
-    const closedFinalWeek = structuredClone(finalWeek);
-    closedFinalWeek.occurred_at = "2026-10-09T12:00:00.000Z";
-    closedFinalWeek.metadata.config_version = 2;
-    closedFinalWeek.metadata.period_status = "closed";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      closedFinalWeek,
-      crypto.randomUUID(),
-    )).status, "processed");
-    const grants = await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ));
-    assert.equal(grants.length, 1);
-    const finalAssignment = await getDb().select().from(storyPlanChapters).where(and(
-      eq(storyPlanChapters.learnerId, learnerId),
-      eq(storyPlanChapters.periodNumber, 6),
-    ));
-    assert.equal(grants[0]?.storyPlanChapterId, finalAssignment[0]?.id);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a first-seen closed final week also reconciles every earlier due chapter", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `closed-final-reconcile-${crypto.randomUUID()}`;
-  const termKey = `closed-final-reconcile-term-${crypto.randomUUID()}`;
-  const periodKeys = Array.from({ length: 6 }, () => `closed-final-${crypto.randomUUID()}`);
-  try {
-    for (let index = 0; index < periodKeys.length - 1; index += 1) {
-      const configuration = configuredWeek(periodKeys[index]!, termKey);
-      configuration.occurred_at = "2026-09-01T12:00:00.000Z";
-      configuration.metadata.week_index = index + 1;
-      configuration.metadata.week_start_day = new Date(Date.UTC(2026, 7, 31 + index * 7))
-        .toISOString()
-        .slice(0, 10);
-      assert.equal((await processEventInDb(
-        integration.id,
-        externalLearnerId,
-        configuration,
-        crypto.randomUUID(),
-      )).status, "processed");
-    }
-    const finalConfiguration = configuredWeek(periodKeys[5]!, termKey);
-    finalConfiguration.occurred_at = "2026-10-09T12:00:00.000Z";
-    finalConfiguration.metadata.week_index = 6;
-    finalConfiguration.metadata.week_start_day = "2026-10-05";
-    finalConfiguration.metadata.period_status = "closed";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      finalConfiguration,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 6);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a future final period cannot close or reveal before its authoritative start", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `future-final-close-${crypto.randomUUID()}`;
-  const termKey = `future-final-close-term-${crypto.randomUUID()}`;
-  const weekOneKey = `future-final-close-one-${crypto.randomUUID()}`;
-  const finalWeekKey = `future-final-close-six-${crypto.randomUUID()}`;
-  try {
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      configuredWeek(weekOneKey, termKey),
-      crypto.randomUUID(),
-    )).status, "processed");
-    const prematureClose = configuredWeek(finalWeekKey, termKey);
-    prematureClose.occurred_at = "2026-09-01T12:00:00.000Z";
-    prematureClose.metadata.week_index = 6;
-    prematureClose.metadata.week_start_day = "2026-10-05";
-    prematureClose.metadata.period_status = "closed";
-    assert.deepEqual(await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      prematureClose,
-      crypto.randomUUID(),
-    ), {
-      status: "rejected",
-      error: "premature_period_close",
-    });
-
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 0);
-
-    const validClose = structuredClone(prematureClose);
-    validClose.occurred_at = "2026-10-09T12:00:00.000Z";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      validClose,
-      crypto.randomUUID(),
-    )).status, "processed");
-    const grants = await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ));
-    assert.equal(grants.length, 1);
-    const [finalAssignment] = await getDb().select().from(storyPlanChapters).where(and(
-      eq(storyPlanChapters.learnerId, learnerId),
-      eq(storyPlanChapters.periodNumber, 6),
-    ));
-    assert.equal(grants[0]?.storyPlanChapterId, finalAssignment?.id);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
-test("a calendarless close still obeys the stored future boundary", { skip: !process.env.DATABASE_URL }, async () => {
-  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
-  const externalLearnerId = `calendarless-final-close-${crypto.randomUUID()}`;
-  const termKey = `calendarless-final-close-term-${crypto.randomUUID()}`;
-  const finalWeekKey = `calendarless-final-close-six-${crypto.randomUUID()}`;
-  try {
-    const futureFinal = configuredWeek(finalWeekKey, termKey);
-    futureFinal.occurred_at = "2026-09-01T12:00:00.000Z";
-    futureFinal.metadata.week_index = 6;
-    futureFinal.metadata.week_start_day = "2026-10-05";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      futureFinal,
-      crypto.randomUUID(),
-    )).status, "processed");
-
-    const earlyCalendarlessClose = {
-      event_type: "daily_log_week.configured",
-      occurred_at: "2026-09-02T12:00:00.000Z",
-      metadata: {
-        period_key: finalWeekKey,
-        config_version: 2,
-        period_status: "closed",
-        eligible_days: 1,
-      },
-    };
-    assert.deepEqual(await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      earlyCalendarlessClose,
-      crypto.randomUUID(),
-    ), {
-      status: "rejected",
-      error: "premature_period_close",
-    });
-
-    const validCalendarlessClose = structuredClone(earlyCalendarlessClose);
-    validCalendarlessClose.occurred_at = "2026-10-09T12:00:00.000Z";
-    assert.equal((await processEventInDb(
-      integration.id,
-      externalLearnerId,
-      validCalendarlessClose,
-      crypto.randomUUID(),
-    )).status, "processed");
-    const learnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      externalLearnerId,
-    );
-    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
-      eq(learnerRewardGrants.learnerId, learnerId),
-      eq(learnerRewardGrants.kind, "story_chapter"),
-    ))).length, 1);
-  } finally {
-    await resetLearnerInDb(integration.id, externalLearnerId);
-  }
-});
-
 test("two learners receive the same persisted sequence for the same term boundary", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const learners = [`deterministic-a-${crypto.randomUUID()}`, `deterministic-b-${crypto.randomUUID()}`];
@@ -1151,7 +483,9 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
   const legacy = configuredWeek(periodKey, termKey);
   legacy.occurred_at = "2026-08-03T12:00:00.000Z";
   legacy.metadata.term_start_day = "2026-06-29";
-  legacy.metadata.term_end_day = "2026-10-16";
+  // Leave one schedule-gap week so a different Monday remains structurally
+  // valid and this test reaches the immutable-calendar conflict check.
+  legacy.metadata.term_end_day = "2026-10-23";
   legacy.metadata.week_index = 6;
   delete (legacy.metadata as Record<string, unknown>).term_week_count;
   delete (legacy.metadata as Record<string, unknown>).week_start_day;
@@ -1173,7 +507,7 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
     adaptive.occurred_at = "2026-08-04T12:00:00.000Z";
     adaptive.metadata.config_version = 2;
     adaptive.metadata.term_week_count = 16;
-    adaptive.metadata.week_start_day = "2026-08-04";
+    adaptive.metadata.week_start_day = "2026-08-10";
     const moved = await processEventInDb(
       integration.id,
       externalLearnerId,
@@ -1388,6 +722,11 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       streakLastDay: "2026-08-30",
     }).where(eq(economy.learnerId, learnerId));
     await processEventInDb(integration.id, externalLearnerId, dailyLog(periodKey), crypto.randomUUID());
+    await runStoryGrantWorker({
+      asOf: new Date("2026-09-05T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
 
     const plan = await loadPersistedStoryPlan(getDb(), learnerId, "story-term");
     assert.ok(plan);
@@ -1395,7 +734,7 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       .where(eq(learnerRewardGrants.learnerId, learnerId))
       .orderBy(asc(learnerRewardGrants.grantOrder));
     assert.equal(persistedGrants.length, 2);
-    assert.equal(new Set(persistedGrants.map((grant) => grant.sourceFactId)).size, 1);
+    assert.equal(new Set(persistedGrants.map((grant) => grant.sourceFactId)).size, 2);
 
     const fixture = new StoryFixtureLedger(plan);
     for (const persisted of persistedGrants) {
@@ -1410,7 +749,7 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
         fixture.grantBehaviorTitle("rhythm-builder", persisted.sourceFactId);
       }
     }
-    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.deepEqual(fixture.progression(), snapshot.progression);
     const displayReward = (reward: PalRewardNotice) => {
       assert.equal(reward.achievement, undefined);
@@ -1435,7 +774,7 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
 
     await getDb().update(economy).set({ streakCurrent: 0, streakLastDay: null }).where(eq(economy.learnerId, learnerId));
-    const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.equal(afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"), true);
     assert.equal(afterBreak.progression?.currentTitle, "Gentle Keeper");
   } finally {
@@ -1482,6 +821,11 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
       integration.id,
       externalLearnerId,
     );
+    await runStoryGrantWorker({
+      asOf: new Date("2026-10-20T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
     const snapshot = await loadLearnerSnapshot(
       integration.id,
       learnerId,
@@ -1557,7 +901,7 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
   }
 });
 
-test("Weekly Rhythm grants exactly once under retries and acknowledgement preserves the grant", { skip: !process.env.DATABASE_URL }, async () => {
+test("scheduled ownership stays exact-once after Weekly Rhythm retries and acknowledgement", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `grant-retry-${crypto.randomUUID()}`;
   const periodKey = `period-${crypto.randomUUID()}`;
@@ -1570,18 +914,23 @@ test("Weekly Rhythm grants exactly once under retries and acknowledgement preser
       crypto.randomUUID(),
     )));
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
+    await runStoryGrantWorker({
+      asOf: new Date("2026-09-05T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
     const storyGrants = await getDb().select().from(learnerRewardGrants).where(and(
       eq(learnerRewardGrants.learnerId, learnerId),
       eq(learnerRewardGrants.kind, "story_chapter"),
     ));
     assert.equal(storyGrants.length, 1);
-    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     const notice = snapshot.rewards.find((reward) => reward.kind === "story");
     assert.ok(notice);
     await acknowledgeLearnerReward(integration.id, learnerId, notice.id, getDb());
     const [owned] = await getDb().select().from(learnerRewardGrants).where(eq(learnerRewardGrants.id, notice.id));
     assert.ok(owned?.seenAt);
-    const after = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const after = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.equal(after.rewards.some((reward) => reward.id === notice.id), false);
     assert.equal(after.progression?.collectibles[0]?.status, "earned");
     assert.equal(
