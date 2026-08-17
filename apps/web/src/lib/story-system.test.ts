@@ -895,6 +895,126 @@ test("a first-seen closed final week also reconciles every earlier due chapter",
   }
 });
 
+test("a future final period cannot close or reveal before its authoritative start", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `future-final-close-${crypto.randomUUID()}`;
+  const termKey = `future-final-close-term-${crypto.randomUUID()}`;
+  const weekOneKey = `future-final-close-one-${crypto.randomUUID()}`;
+  const finalWeekKey = `future-final-close-six-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(weekOneKey, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    const prematureClose = configuredWeek(finalWeekKey, termKey);
+    prematureClose.occurred_at = "2026-09-01T12:00:00.000Z";
+    prematureClose.metadata.week_index = 6;
+    prematureClose.metadata.week_start_day = "2026-10-05";
+    prematureClose.metadata.period_status = "closed";
+    assert.deepEqual(await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      prematureClose,
+      crypto.randomUUID(),
+    ), {
+      status: "rejected",
+      error: "premature_period_close",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 0);
+
+    const validClose = structuredClone(prematureClose);
+    validClose.occurred_at = "2026-10-09T12:00:00.000Z";
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      validClose,
+      crypto.randomUUID(),
+    )).status, "processed");
+    const grants = await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ));
+    assert.equal(grants.length, 1);
+    const [finalAssignment] = await getDb().select().from(storyPlanChapters).where(and(
+      eq(storyPlanChapters.learnerId, learnerId),
+      eq(storyPlanChapters.periodNumber, 6),
+    ));
+    assert.equal(grants[0]?.storyPlanChapterId, finalAssignment?.id);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a calendarless close still obeys the stored future boundary", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `calendarless-final-close-${crypto.randomUUID()}`;
+  const termKey = `calendarless-final-close-term-${crypto.randomUUID()}`;
+  const finalWeekKey = `calendarless-final-close-six-${crypto.randomUUID()}`;
+  try {
+    const futureFinal = configuredWeek(finalWeekKey, termKey);
+    futureFinal.occurred_at = "2026-09-01T12:00:00.000Z";
+    futureFinal.metadata.week_index = 6;
+    futureFinal.metadata.week_start_day = "2026-10-05";
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      futureFinal,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const earlyCalendarlessClose = {
+      event_type: "daily_log_week.configured",
+      occurred_at: "2026-09-02T12:00:00.000Z",
+      metadata: {
+        period_key: finalWeekKey,
+        config_version: 2,
+        period_status: "closed",
+        eligible_days: 1,
+      },
+    };
+    assert.deepEqual(await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      earlyCalendarlessClose,
+      crypto.randomUUID(),
+    ), {
+      status: "rejected",
+      error: "premature_period_close",
+    });
+
+    const validCalendarlessClose = structuredClone(earlyCalendarlessClose);
+    validCalendarlessClose.occurred_at = "2026-10-09T12:00:00.000Z";
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      validCalendarlessClose,
+      crypto.randomUUID(),
+    )).status, "processed");
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 1);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("two learners receive the same persisted sequence for the same term boundary", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const learners = [`deterministic-a-${crypto.randomUUID()}`, `deterministic-b-${crypto.randomUUID()}`];
