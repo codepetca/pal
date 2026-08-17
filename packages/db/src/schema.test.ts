@@ -928,6 +928,35 @@ test(
       );
 
       await assert.rejects(
+        db.update(learnerFacts).set({
+          eventType: "learning_item.completed",
+        }).where(eq(learnerFacts.id, firstFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.update(learnerFacts).set({
+          periodKey: `story-schedule-mutated-period-${suffix}`,
+        }).where(eq(learnerFacts.id, firstFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.update(learnerFacts).set({
+          metadata: { ...calendar, week_index: 2 },
+        }).where(eq(learnerFacts.id, firstFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.update(learnerFacts).set({
+          createdAt: new Date(firstFact.createdAt.getTime() + 1),
+        }).where(eq(learnerFacts.id, firstFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.delete(learnerFacts).where(eq(learnerFacts.id, firstFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+
+      await assert.rejects(
         db.update(storyCollectibleSchedules).set({
           dueAt: new Date("2026-09-06T04:00:00.000Z"),
         }).where(eq(storyCollectibleSchedules.id, schedules[0]!.id)),
@@ -945,7 +974,194 @@ test(
         ),
         (error) => postgresViolation(error, "23514"),
       );
+
+      await db.delete(learners).where(eq(learners.id, learner.id));
+      assert.equal(
+        (await db.select().from(storyCollectibleSchedules).where(
+          eq(storyCollectibleSchedules.learnerId, learner.id),
+        )).length,
+        0,
+      );
     } finally {
+      await db.delete(integrations).where(eq(integrations.id, integration.id));
+    }
+  },
+);
+
+test(
+  "runtime story schedule guards ignore temporary relation shadowing",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const db = getDb();
+    const suffix = crypto.randomUUID();
+    const [integration] = await db.insert(integrations).values({
+      slug: `story-shadow-${suffix}`,
+      name: "Story Shadow",
+      secretHash: `story-shadow-secret-${suffix}`,
+      allowedEventTypes: [],
+    }).returning({ id: integrations.id });
+    const [learner] = await db.insert(learners).values({
+      integrationId: integration.id,
+      externalLearnerId: `story-shadow-learner-${suffix}`,
+    }).returning({ id: learners.id });
+    const [configurationEvent, nonConfigurationEvent] = await db.insert(events)
+      .values([
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-shadow-config-event-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date("2026-08-31T12:00:00.000Z"),
+          metadata: {},
+        },
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-shadow-item-event-${suffix}`,
+          eventType: "learning_item.completed",
+          occurredAt: new Date("2026-08-31T13:00:00.000Z"),
+          metadata: {},
+        },
+      ]).returning({ id: events.id });
+    const client = await getPool().connect();
+    const calendar = {
+      term_start_day: "2026-08-31",
+      term_end_day: "2026-10-09",
+      term_timezone: "America/Toronto",
+      term_week_count: 6,
+      week_start_day: "2026-08-31",
+      week_index: 1,
+    };
+    try {
+      await client.query(
+        `CREATE TEMP TABLE story_collectible_schedules
+           (LIKE public.story_collectible_schedules INCLUDING ALL);
+         CREATE TEMP TABLE pg_timezone_names (name text);`,
+      );
+
+      const validFact = await client.query(
+        `INSERT INTO public.learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata
+         ) VALUES ($1, $2, $3, 'daily_log_week.configured', $4, $5,
+           '2026-08-31T12:00:00Z', $6)
+         RETURNING id, created_at`,
+        [
+          integration.id,
+          learner.id,
+          configurationEvent!.id,
+          `story-shadow-config-fact-${suffix}`,
+          `story-shadow-period-${suffix}`,
+          calendar,
+        ],
+      );
+      assert.equal(
+        Number((await client.query(
+          `SELECT count(*) AS count
+           FROM public.story_collectible_schedules
+           WHERE learner_id = $1`,
+          [learner.id],
+        )).rows[0].count),
+        1,
+      );
+      assert.equal(
+        Number((await client.query(
+          `SELECT count(*) AS count FROM pg_temp.story_collectible_schedules`,
+        )).rows[0].count),
+        0,
+      );
+
+      const fakeChapterId = crypto.randomUUID();
+      await client.query(
+        `CREATE TEMP TABLE learners (id uuid);
+         CREATE TEMP TABLE story_plan_chapters (
+           id uuid, learner_id uuid, period_key text
+         );
+         CREATE TEMP TABLE learner_reward_grants (
+           story_plan_chapter_id uuid, kind text
+         );`,
+      );
+      await client.query(
+        `INSERT INTO pg_temp.story_plan_chapters (id, learner_id, period_key)
+         VALUES ($1, $2, $3)`,
+        [fakeChapterId, learner.id, `story-shadow-period-${suffix}`],
+      );
+      await client.query(
+        `INSERT INTO pg_temp.learner_reward_grants (story_plan_chapter_id, kind)
+         VALUES ($1, 'story_chapter')`,
+        [fakeChapterId],
+      );
+      await assert.rejects(
+        client.query(
+          `UPDATE public.story_collectible_schedules
+           SET reconciled_at = now()
+           WHERE learner_id = $1`,
+          [learner.id],
+        ),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        client.query(
+          `DELETE FROM public.story_collectible_schedules
+           WHERE learner_id = $1`,
+          [learner.id],
+        ),
+        (error) => postgresViolation(error, "23514"),
+      );
+
+      const nonConfigurationFact = await client.query(
+        `INSERT INTO public.learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata
+         ) VALUES ($1, $2, $3, 'learning_item.completed', $4, $5,
+           '2026-08-31T13:00:00Z', '{}')
+         RETURNING id, created_at`,
+        [
+          integration.id,
+          learner.id,
+          nonConfigurationEvent!.id,
+          `story-shadow-item-fact-${suffix}`,
+          `story-shadow-forged-period-${suffix}`,
+        ],
+      );
+      await client.query(
+        `CREATE TEMP TABLE learner_facts (
+           id uuid, learner_id uuid, event_type text, period_key text,
+           metadata jsonb, created_at timestamp with time zone
+         );`,
+      );
+      await client.query(
+        `INSERT INTO pg_temp.learner_facts (
+           id, learner_id, event_type, period_key, metadata, created_at
+         ) VALUES ($1, $2, 'daily_log_week.configured', $3, $4, $5)`,
+        [
+          nonConfigurationFact.rows[0].id,
+          learner.id,
+          `story-shadow-forged-period-${suffix}`,
+          calendar,
+          nonConfigurationFact.rows[0].created_at,
+        ],
+      );
+      await assert.rejects(
+        client.query(
+          `INSERT INTO public.story_collectible_schedules (
+             learner_id, period_key, source_fact_id, due_at, created_at
+           ) VALUES ($1, $2, $3, '2026-09-05T04:00:00Z', $4)`,
+          [
+            learner.id,
+            `story-shadow-forged-period-${suffix}`,
+            nonConfigurationFact.rows[0].id,
+            nonConfigurationFact.rows[0].created_at,
+          ],
+        ),
+        (error) => postgresViolation(error, "23514"),
+      );
+
+      assert.ok(validFact.rows[0].id);
+    } finally {
+      await client.query("DISCARD TEMP").catch(() => undefined);
+      client.release();
       await db.delete(integrations).where(eq(integrations.id, integration.id));
     }
   },

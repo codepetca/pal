@@ -1,4 +1,4 @@
-CREATE TABLE "story_collectible_schedules" (
+CREATE TABLE "public"."story_collectible_schedules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"learner_id" uuid NOT NULL,
 	"period_key" text NOT NULL,
@@ -11,11 +11,11 @@ CREATE TABLE "story_collectible_schedules" (
 	CONSTRAINT "story_collectible_schedules_period_nonempty" CHECK (length(btrim("story_collectible_schedules"."period_key")) > 0)
 );
 --> statement-breakpoint
-ALTER TABLE "story_collectible_schedules" ADD CONSTRAINT "story_collectible_schedules_source_owner_fk" FOREIGN KEY ("source_fact_id","learner_id") REFERENCES "public"."learner_facts"("id","learner_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "story_collectible_schedules_pending_due_idx" ON "story_collectible_schedules" USING btree ("due_at","id","created_at","learner_id","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;--> statement-breakpoint
-CREATE INDEX "story_collectible_schedules_pending_learner_idx" ON "story_collectible_schedules" USING btree ("learner_id","due_at","created_at","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;
+ALTER TABLE "public"."story_collectible_schedules" ADD CONSTRAINT "story_collectible_schedules_source_owner_fk" FOREIGN KEY ("source_fact_id","learner_id") REFERENCES "public"."learner_facts"("id","learner_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "story_collectible_schedules_pending_due_idx" ON "public"."story_collectible_schedules" USING btree ("due_at","id","created_at","learner_id","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "story_collectible_schedules_pending_learner_idx" ON "public"."story_collectible_schedules" USING btree ("learner_id","due_at","created_at","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;
 --> statement-breakpoint
-CREATE FUNCTION "calculate_story_collectible_due_at"("calendar_metadata" jsonb) RETURNS timestamp with time zone AS $$
+CREATE FUNCTION "public"."calculate_story_collectible_due_at"("calendar_metadata" jsonb) RETURNS timestamp with time zone AS $$
 DECLARE
 	"term_start" date;
 	"term_end" date;
@@ -43,7 +43,7 @@ BEGIN
 	"term_timezone_value" := "calendar_metadata"->>'term_timezone';
 
 	IF "term_start" > "term_end" OR "week_index_value" < 1 OR NOT EXISTS (
-		SELECT 1 FROM pg_timezone_names
+		SELECT 1 FROM "pg_catalog"."pg_timezone_names"
 		WHERE name = "term_timezone_value"
 	) THEN
 		RETURN NULL;
@@ -77,7 +77,7 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql STABLE;
 --> statement-breakpoint
-CREATE FUNCTION "enqueue_story_collectible_schedule"() RETURNS trigger AS $$
+CREATE FUNCTION "public"."enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
 BEGIN
@@ -93,14 +93,14 @@ BEGIN
 		RETURN NEW;
 	END IF;
 
-	"due_at_value" := "calculate_story_collectible_due_at"(NEW."metadata");
+	"due_at_value" := "public"."calculate_story_collectible_due_at"(NEW."metadata");
 	IF "due_at_value" IS NULL THEN
 		RAISE EXCEPTION 'weekly configuration fact has no valid story due boundary'
 			USING ERRCODE = '23514',
 				CONSTRAINT = 'story_collectible_schedule_calendar_valid';
 	END IF;
 
-	INSERT INTO "story_collectible_schedules" (
+	INSERT INTO "public"."story_collectible_schedules" (
 		"learner_id",
 		"period_key",
 		"source_fact_id",
@@ -119,10 +119,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
-CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
-AFTER INSERT ON "learner_facts"
-FOR EACH ROW EXECUTE FUNCTION "enqueue_story_collectible_schedule"();
-CREATE FUNCTION "protect_story_collectible_schedule"() RETURNS trigger AS $$
+CREATE FUNCTION "public"."protect_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"source_learner_id" uuid;
 	"source_event_type" text;
@@ -135,7 +132,7 @@ BEGIN
 			"learner_facts"."learner_id",
 			"learner_facts"."event_type",
 			"learner_facts"."period_key",
-			"calculate_story_collectible_due_at"("learner_facts"."metadata"),
+			"public"."calculate_story_collectible_due_at"("learner_facts"."metadata"),
 			"learner_facts"."created_at"
 		INTO
 			"source_learner_id",
@@ -143,7 +140,7 @@ BEGIN
 			"source_period_key",
 			"source_due_at",
 			"source_created_at"
-		FROM "learner_facts"
+		FROM "public"."learner_facts"
 		WHERE "learner_facts"."id" = NEW."source_fact_id";
 
 		-- Leave absent or cross-owner sources to the composite foreign key so
@@ -166,7 +163,7 @@ BEGIN
 	END IF;
 
 	IF TG_OP = 'DELETE' THEN
-		IF EXISTS (SELECT 1 FROM "learners" WHERE "id" = OLD."learner_id") THEN
+		IF EXISTS (SELECT 1 FROM "public"."learners" WHERE "id" = OLD."learner_id") THEN
 			RAISE EXCEPTION 'story collectible schedules are immutable'
 				USING ERRCODE = '23514',
 					CONSTRAINT = 'story_collectible_schedules_immutable';
@@ -199,8 +196,8 @@ BEGIN
 
 	IF OLD."reconciled_at" IS NULL AND NEW."reconciled_at" IS NOT NULL AND NOT EXISTS (
 		SELECT 1
-		FROM "story_plan_chapters"
-		INNER JOIN "learner_reward_grants"
+		FROM "public"."story_plan_chapters"
+		INNER JOIN "public"."learner_reward_grants"
 			ON "learner_reward_grants"."story_plan_chapter_id" = "story_plan_chapters"."id"
 			AND "learner_reward_grants"."kind" = 'story_chapter'
 		WHERE "story_plan_chapters"."learner_id" = NEW."learner_id"
@@ -216,29 +213,29 @@ END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE TRIGGER "story_collectible_schedules_protect"
-BEFORE INSERT OR UPDATE OR DELETE ON "story_collectible_schedules"
-FOR EACH ROW EXECUTE FUNCTION "protect_story_collectible_schedule"();
+BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_schedule"();
 --> statement-breakpoint
-INSERT INTO "story_collectible_schedules" (
-	"learner_id",
-	"period_key",
-	"source_fact_id",
-	"due_at",
-	"created_at"
-)
-SELECT DISTINCT ON ("learner_facts"."learner_id", "learner_facts"."period_key")
-	"learner_facts"."learner_id",
-	"learner_facts"."period_key",
-	"learner_facts"."id",
-	"calculate_story_collectible_due_at"("learner_facts"."metadata"),
-	"learner_facts"."created_at"
-FROM "learner_facts"
-WHERE "learner_facts"."event_type" = 'daily_log_week.configured'
-	AND "learner_facts"."period_key" IS NOT NULL
-	AND "calculate_story_collectible_due_at"("learner_facts"."metadata") IS NOT NULL
-ORDER BY
-	"learner_facts"."learner_id",
-	"learner_facts"."period_key",
-	"learner_facts"."created_at",
-	"learner_facts"."id"
-ON CONFLICT ("learner_id", "period_key") DO NOTHING;
+CREATE FUNCTION "public"."protect_story_collectible_source_fact"() RETURNS trigger AS $$
+BEGIN
+	IF NEW IS DISTINCT FROM OLD AND EXISTS (
+		SELECT 1
+		FROM "public"."story_collectible_schedules"
+		WHERE "story_collectible_schedules"."source_fact_id" = OLD."id"
+			AND "story_collectible_schedules"."learner_id" = OLD."learner_id"
+	) THEN
+		RAISE EXCEPTION 'story schedule source facts are immutable'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedule_source_fact_immutable';
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
+AFTER INSERT ON "public"."learner_facts"
+FOR EACH ROW EXECUTE FUNCTION "public"."enqueue_story_collectible_schedule"();
+--> statement-breakpoint
+CREATE TRIGGER "learner_facts_protect_story_collectible_source"
+BEFORE UPDATE ON "public"."learner_facts"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_source_fact"();
