@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron-auth";
 import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
+import { storyGrantCronOutcome } from "@/lib/story-grant-cron-result";
 import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +32,9 @@ export async function GET(request: NextRequest) {
   const result = await runStoryGrantWorker({
     rolloutEffectiveAt: STORY_SKETCH_REWARDS_EFFECTIVE_AT,
   });
-  if (result.failedLearners > 0) {
-    return response({ status: "partial_failure", ...result }, 500);
-  }
-  return response({ status: "processed", ...result }, 200);
+  const outcome = storyGrantCronOutcome(result);
+  return response(
+    { status: outcome.bodyStatus, ...result },
+    outcome.httpStatus,
+  );
 }

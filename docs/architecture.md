@@ -214,7 +214,9 @@ attempt limit during the same invocation. A short transaction-local lock timeout
 prevents a concurrent event from consuming the connection's full statement
 timeout; terminal learner failures remain isolated from the rest of the batch.
 Pending queue rows survive missed daily invocations and are consumed only after
-the ownership ledger contains the matching collectible.
+the ownership ledger contains the matching collectible. Reaching the bounded
+invocation cap returns an alertable incomplete response rather than ordinary
+success, while leaving the remaining rows for the next run.
 
 ### Future operator schedules
 
