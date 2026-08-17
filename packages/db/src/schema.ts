@@ -168,10 +168,10 @@ export const storyCollectibleSchedules = pgTable(
       name: "story_collectible_schedules_source_owner_fk",
     }).onDelete("cascade"),
     index("story_collectible_schedules_pending_due_idx")
-      .on(t.dueAt, t.id, t.learnerId)
+      .on(t.dueAt, t.createdAt, t.id, t.learnerId, t.periodKey)
       .where(sql`${t.reconciledAt} IS NULL`),
     index("story_collectible_schedules_pending_learner_idx")
-      .on(t.learnerId, t.dueAt)
+      .on(t.learnerId, t.dueAt, t.createdAt, t.periodKey)
       .where(sql`${t.reconciledAt} IS NULL`),
     check(
       "story_collectible_schedules_period_nonempty",
