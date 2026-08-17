@@ -3,13 +3,28 @@ import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 const migrationsDirectory = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "drizzle",
 );
+
+async function waitForLockWait(pool: Pool, processId: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query(
+      `SELECT wait_event_type
+       FROM pg_stat_activity
+       WHERE pid = $1`,
+      [processId],
+    );
+    if (result.rows[0]?.wait_event_type === "Lock") return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("migration did not wait for the concurrent learner-fact insert");
+}
 
 test(
   "upgrade backfills typed schedule metadata without granting historical rewards",
@@ -23,6 +38,9 @@ test(
     upgradeUrl.pathname = `/${databaseName}`;
     const admin = new Pool({ connectionString: adminUrl.toString() });
     let upgrade: Pool | undefined;
+    let ingestClient: PoolClient | undefined;
+    let migrationClient: PoolClient | undefined;
+    let migrationPromise: Promise<unknown> | undefined;
 
     try {
       await admin.query(`CREATE DATABASE "${databaseName}"`);
@@ -72,17 +90,56 @@ test(
         }],
       );
 
+      const cutoverEventId = crypto.randomUUID();
       await upgrade.query(
+        `INSERT INTO events (
+           id, integration_id, learner_id, idempotency_key, event_type, occurred_at
+         ) VALUES ($1, $2, $3, 'cutover-event',
+           'daily_log_week.configured', '2026-08-31T12:00:00Z')`,
+        [cutoverEventId, integrationId, learnerId],
+      );
+
+      ingestClient = await upgrade.connect();
+      migrationClient = await upgrade.connect();
+      const migrationProcessId = Number(
+        (await migrationClient.query("SELECT pg_backend_pid() AS pid")).rows[0].pid,
+      );
+      await ingestClient.query("BEGIN");
+      await ingestClient.query(
+        `INSERT INTO learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata, created_at
+         ) VALUES ($1, $2, $3, 'daily_log_week.configured', 'cutover-fact',
+           'cutover-period', '2026-08-31T12:00:00Z', $4, '2026-08-31T12:00:00Z')`,
+        [integrationId, learnerId, cutoverEventId, {
+          term_start_day: "2026-08-31",
+          term_end_day: "2026-10-09",
+          term_timezone: "America/Toronto",
+          week_index: 1,
+          week_start_day: "2026-08-31",
+        }],
+      );
+
+      migrationPromise = migrationClient.query(
         await readFile(
           join(migrationsDirectory, "0007_story_collectible_schedule.sql"),
           "utf8",
         ),
       );
+      await waitForLockWait(upgrade, migrationProcessId);
+      await ingestClient.query("COMMIT");
+      ingestClient.release();
+      ingestClient = undefined;
+      await migrationPromise;
+      migrationPromise = undefined;
+      migrationClient.release();
+      migrationClient = undefined;
+
       assert.equal(
         Number((await upgrade.query(
           `SELECT count(*) AS count FROM story_collectible_schedules`,
         )).rows[0].count),
-        1,
+        2,
       );
       assert.equal(
         Number((await upgrade.query(
@@ -118,15 +175,20 @@ test(
          FROM story_collectible_schedules
          ORDER BY period_key`,
       );
-      assert.equal(schedule.rowCount, 2);
+      assert.equal(schedule.rowCount, 3);
       assert.equal(schedule.rows[0].period_key, "current-period");
       assert.equal(
         new Date(schedule.rows[0].due_at).toISOString(),
         "2026-09-12T04:00:00.000Z",
       );
-      assert.equal(schedule.rows[1].period_key, "historical-period");
+      assert.equal(schedule.rows[1].period_key, "cutover-period");
       assert.equal(
         new Date(schedule.rows[1].due_at).toISOString(),
+        "2026-09-05T04:00:00.000Z",
+      );
+      assert.equal(schedule.rows[2].period_key, "historical-period");
+      assert.equal(
+        new Date(schedule.rows[2].due_at).toISOString(),
         "2025-09-06T04:00:00.000Z",
       );
       assert.equal(
@@ -136,6 +198,12 @@ test(
         0,
       );
     } finally {
+      if (ingestClient) {
+        await ingestClient.query("ROLLBACK").catch(() => undefined);
+        ingestClient.release();
+      }
+      await migrationPromise?.catch(() => undefined);
+      migrationClient?.release();
       await upgrade?.end();
       await admin.query(
         `SELECT pg_terminate_backend(pid)

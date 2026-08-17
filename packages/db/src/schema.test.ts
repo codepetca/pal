@@ -830,7 +830,10 @@ test(
         periodKey,
         occurredAt: new Date("2026-08-31T12:00:00.000Z"),
         metadata: calendar,
-      }).returning({ id: learnerFacts.id });
+      }).returning({
+        id: learnerFacts.id,
+        createdAt: learnerFacts.createdAt,
+      });
       await db.insert(learnerFacts).values({
         integrationId: integration.id,
         learnerId: learner.id,
@@ -849,6 +852,80 @@ test(
       assert.equal(schedules[0]!.sourceFactId, firstFact.id);
       assert.equal(schedules[0]!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
       assert.equal(schedules[0]!.reconciledAt, null);
+
+      const [nonConfigurationEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        idempotencyKey: `story-schedule-non-config-event-${suffix}`,
+        eventType: "learning_item.completed",
+        occurredAt: new Date("2026-08-31T13:00:00.000Z"),
+        metadata: {},
+      }).returning({ id: events.id });
+      const [nonConfigurationFact] = await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: nonConfigurationEvent.id,
+        eventType: "learning_item.completed",
+        semanticKey: `story-schedule-non-config-fact-${suffix}`,
+        periodKey: `story-schedule-non-config-period-${suffix}`,
+        occurredAt: new Date("2026-08-31T13:00:00.000Z"),
+        metadata: {},
+      }).returning({
+        id: learnerFacts.id,
+        createdAt: learnerFacts.createdAt,
+      });
+
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey: `story-schedule-non-config-period-${suffix}`,
+          sourceFactId: nonConfigurationFact.id,
+          dueAt: new Date("2026-09-05T04:00:00.000Z"),
+          createdAt: nonConfigurationFact.createdAt,
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey: `story-schedule-forged-period-${suffix}`,
+          sourceFactId: firstFact.id,
+          dueAt: new Date("2026-09-05T04:00:00.000Z"),
+          createdAt: firstFact.createdAt,
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey,
+          sourceFactId: firstFact.id,
+          dueAt: new Date("2026-09-06T04:00:00.000Z"),
+          createdAt: firstFact.createdAt,
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey,
+          sourceFactId: firstFact.id,
+          dueAt: new Date("2026-09-05T04:00:00.000Z"),
+          createdAt: new Date(firstFact.createdAt.getTime() + 1),
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey,
+          sourceFactId: firstFact.id,
+          dueAt: new Date("2026-09-05T04:00:00.000Z"),
+          createdAt: firstFact.createdAt,
+          reconciledAt: new Date("2026-09-06T04:00:00.000Z"),
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
 
       await assert.rejects(
         db.update(storyCollectibleSchedules).set({

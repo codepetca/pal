@@ -77,29 +77,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql STABLE;
 --> statement-breakpoint
-INSERT INTO "story_collectible_schedules" (
-	"learner_id",
-	"period_key",
-	"source_fact_id",
-	"due_at",
-	"created_at"
-)
-SELECT DISTINCT ON ("learner_facts"."learner_id", "learner_facts"."period_key")
-	"learner_facts"."learner_id",
-	"learner_facts"."period_key",
-	"learner_facts"."id",
-	"calculate_story_collectible_due_at"("learner_facts"."metadata"),
-	"learner_facts"."created_at"
-FROM "learner_facts"
-WHERE "learner_facts"."event_type" = 'daily_log_week.configured'
-	AND "learner_facts"."period_key" IS NOT NULL
-	AND "calculate_story_collectible_due_at"("learner_facts"."metadata") IS NOT NULL
-ORDER BY
-	"learner_facts"."learner_id",
-	"learner_facts"."period_key",
-	"learner_facts"."created_at",
-	"learner_facts"."id";
---> statement-breakpoint
 CREATE FUNCTION "enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
@@ -146,7 +123,48 @@ CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
 AFTER INSERT ON "learner_facts"
 FOR EACH ROW EXECUTE FUNCTION "enqueue_story_collectible_schedule"();
 CREATE FUNCTION "protect_story_collectible_schedule"() RETURNS trigger AS $$
+DECLARE
+	"source_learner_id" uuid;
+	"source_event_type" text;
+	"source_period_key" text;
+	"source_due_at" timestamp with time zone;
+	"source_created_at" timestamp with time zone;
 BEGIN
+	IF TG_OP = 'INSERT' THEN
+		SELECT
+			"learner_facts"."learner_id",
+			"learner_facts"."event_type",
+			"learner_facts"."period_key",
+			"calculate_story_collectible_due_at"("learner_facts"."metadata"),
+			"learner_facts"."created_at"
+		INTO
+			"source_learner_id",
+			"source_event_type",
+			"source_period_key",
+			"source_due_at",
+			"source_created_at"
+		FROM "learner_facts"
+		WHERE "learner_facts"."id" = NEW."source_fact_id";
+
+		-- Leave absent or cross-owner sources to the composite foreign key so
+		-- callers retain the precise referential-integrity failure.
+		IF NOT FOUND OR "source_learner_id" IS DISTINCT FROM NEW."learner_id" THEN
+			RETURN NEW;
+		END IF;
+
+		IF NEW."reconciled_at" IS NOT NULL
+			OR "source_event_type" IS DISTINCT FROM 'daily_log_week.configured'
+			OR "source_period_key" IS DISTINCT FROM NEW."period_key"
+			OR "source_due_at" IS DISTINCT FROM NEW."due_at"
+			OR "source_created_at" IS DISTINCT FROM NEW."created_at"
+		THEN
+			RAISE EXCEPTION 'story schedule must match its configuration fact'
+				USING ERRCODE = '23514',
+					CONSTRAINT = 'story_collectible_schedules_source_valid';
+		END IF;
+		RETURN NEW;
+	END IF;
+
 	IF TG_OP = 'DELETE' THEN
 		IF EXISTS (SELECT 1 FROM "learners" WHERE "id" = OLD."learner_id") THEN
 			RAISE EXCEPTION 'story collectible schedules are immutable'
@@ -198,5 +216,29 @@ END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE TRIGGER "story_collectible_schedules_protect"
-BEFORE UPDATE OR DELETE ON "story_collectible_schedules"
+BEFORE INSERT OR UPDATE OR DELETE ON "story_collectible_schedules"
 FOR EACH ROW EXECUTE FUNCTION "protect_story_collectible_schedule"();
+--> statement-breakpoint
+INSERT INTO "story_collectible_schedules" (
+	"learner_id",
+	"period_key",
+	"source_fact_id",
+	"due_at",
+	"created_at"
+)
+SELECT DISTINCT ON ("learner_facts"."learner_id", "learner_facts"."period_key")
+	"learner_facts"."learner_id",
+	"learner_facts"."period_key",
+	"learner_facts"."id",
+	"calculate_story_collectible_due_at"("learner_facts"."metadata"),
+	"learner_facts"."created_at"
+FROM "learner_facts"
+WHERE "learner_facts"."event_type" = 'daily_log_week.configured'
+	AND "learner_facts"."period_key" IS NOT NULL
+	AND "calculate_story_collectible_due_at"("learner_facts"."metadata") IS NOT NULL
+ORDER BY
+	"learner_facts"."learner_id",
+	"learner_facts"."period_key",
+	"learner_facts"."created_at",
+	"learner_facts"."id"
+ON CONFLICT ("learner_id", "period_key") DO NOTHING;
