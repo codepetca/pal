@@ -70,7 +70,7 @@ For manual/local-Docker configuration, set:
 | `PAL_SANDBOX_MODE` | `fixture` (default) or `persisted` | Selecting the local sandbox source; previews always force `fixture` |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
-| `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` | ISO timestamp for the guaranteed-sketch rollout boundary; leave unset to disable schedule grants | Enabling guaranteed sketches without backfilling older configurations |
+| `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` | RFC 3339 instant with `Z` or an explicit offset for the guaranteed-sketch rollout boundary; leave unset to disable schedule grants | Enabling guaranteed sketches without backfilling older configurations |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.

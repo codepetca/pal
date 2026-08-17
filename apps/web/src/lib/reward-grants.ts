@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   learnerFacts,
   learnerRewardGrants,
@@ -7,6 +7,7 @@ import {
   type Db,
 } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
+import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 
 export const BEHAVIOR_TITLES = Object.freeze({
   rhythmBuilder: Object.freeze({ id: "rhythm-builder", label: "Rhythm Builder", description: "Show up three days in a row.", revealCopy: "A steady rhythm becomes a strength you can keep." }),
@@ -19,16 +20,6 @@ const behaviorById = new Map(Object.values(BEHAVIOR_TITLES).map((title) => [titl
 
 export function resolveBehaviorTitle(titleId: string) {
   return behaviorById.get(titleId as BehaviorTitleId);
-}
-
-function storySketchRewardsEffectiveAt(): Date | undefined {
-  const raw = process.env.PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT?.trim();
-  if (!raw) return undefined;
-  const effectiveAt = new Date(raw);
-  if (Number.isNaN(effectiveAt.getTime())) {
-    throw new Error("PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT must be an ISO timestamp");
-  }
-  return effectiveAt;
 }
 
 export async function grantBehaviorTitle(
@@ -71,10 +62,10 @@ export async function grantStoryChapterForPeriod(
 
 /**
  * Guarantees the story without manufacturing achievement credit. Each accepted
- * learner event reconciles every feature-eligible chapter whose following week
- * has started. Closing the final week additionally grants that week's chapter.
- * Weekly Rhythm may have granted an assignment earlier, and the ownership
- * constraint makes reconciliation idempotent.
+ * period-bearing event reconciles every feature-eligible chapter in its plan
+ * whose following week has started. Closing the final week additionally grants
+ * that week's chapter. Weekly Rhythm may have granted an assignment earlier,
+ * and the ownership constraint makes reconciliation idempotent.
  */
 export async function grantStoryChapterForScheduleAdvance(
   db: Db,
@@ -85,7 +76,7 @@ export async function grantStoryChapterForScheduleAdvance(
     configurationAdvances: boolean;
   },
 ): Promise<void> {
-  const effectiveAt = storySketchRewardsEffectiveAt();
+  const effectiveAt = STORY_SKETCH_REWARDS_EFFECTIVE_AT;
   if (!effectiveAt) return;
   const periodKey = input.event.metadata.period_key;
   if (typeof periodKey !== "string") return;
@@ -114,12 +105,6 @@ export async function grantStoryChapterForScheduleAdvance(
     input.configurationAdvances &&
     input.event.metadata.period_status === "closed" &&
     currentAssignment.periodNumber === currentAssignment.totalPeriods;
-  if (
-    input.event.event_type === "daily_log_week.configured" &&
-    !input.configurationAdvances &&
-    !finalPeriodClosed
-  ) return;
-
   const assignments = await db
     .select({
       periodKey: storyPlanChapters.periodKey,
@@ -131,7 +116,6 @@ export async function grantStoryChapterForScheduleAdvance(
     .where(and(
       eq(storyPlanChapters.learnerId, input.learnerId),
       eq(storyPlanChapters.storyPlanId, currentAssignment.storyPlanId),
-      lte(storyPlanChapters.periodNumber, currentAssignment.periodNumber),
       isNotNull(storyPlanChapters.periodKey),
     ))
     .orderBy(asc(storyPlanChapters.periodNumber));

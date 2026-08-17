@@ -40,7 +40,6 @@ import {
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
-process.env.PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT = "2026-01-01T00:00:00.000Z";
 
 test("client dependency graphs cannot reach server story authority", () => {
   const sourceRoot = path.resolve(process.cwd(), "src");
@@ -537,6 +536,117 @@ test("a later learner event reconciles every due preconfigured sketch exactly on
       grantedAssignments.map((assignment) => assignment.periodNumber).sort((a, b) => a - b),
       [1, 2],
     );
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a late intermediate configuration reconciles through an already-started later boundary", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `late-intermediate-${crypto.randomUUID()}`;
+  const termKey = `late-intermediate-term-${crypto.randomUUID()}`;
+  const periodKeys = Array.from({ length: 3 }, () => `late-intermediate-${crypto.randomUUID()}`);
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(periodKeys[0]!, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    const weekThree = configuredWeek(periodKeys[2]!, termKey);
+    weekThree.occurred_at = "2026-09-01T12:00:00.000Z";
+    weekThree.metadata.week_index = 3;
+    weekThree.metadata.week_start_day = "2026-09-14";
+    weekThree.metadata.eligible_days = 5;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      weekThree,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const weekTwo = configuredWeek(periodKeys[1]!, termKey);
+    weekTwo.occurred_at = "2026-09-15T12:00:00.000Z";
+    weekTwo.metadata.week_index = 2;
+    weekTwo.metadata.week_start_day = "2026-09-07";
+    weekTwo.metadata.eligible_days = 5;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      weekTwo,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const grants = await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ));
+    assert.equal(grants.length, 2);
+    const grantedAssignments = await getDb().select().from(storyPlanChapters).where(and(
+      eq(storyPlanChapters.learnerId, learnerId),
+      inArray(storyPlanChapters.id, grants.flatMap((grant) =>
+        grant.storyPlanChapterId ? [grant.storyPlanChapterId] : []
+      )),
+    ));
+    assert.deepEqual(
+      grantedAssignments.map((assignment) => assignment.periodNumber).sort((a, b) => a - b),
+      [1, 2],
+    );
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("an accepted stale configuration still reconciles a started boundary", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `stale-boundary-${crypto.randomUUID()}`;
+  const termKey = `stale-boundary-term-${crypto.randomUUID()}`;
+  const weekOneKey = `stale-boundary-one-${crypto.randomUUID()}`;
+  const weekTwoKey = `stale-boundary-two-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(weekOneKey, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    const higherConfiguration = configuredWeek(weekTwoKey, termKey);
+    higherConfiguration.occurred_at = "2026-09-01T12:00:00.000Z";
+    higherConfiguration.metadata.config_version = 2;
+    higherConfiguration.metadata.week_index = 2;
+    higherConfiguration.metadata.week_start_day = "2026-09-07";
+    higherConfiguration.metadata.eligible_days = 5;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      higherConfiguration,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const staleConfiguration = structuredClone(higherConfiguration);
+    staleConfiguration.occurred_at = "2026-09-08T12:00:00.000Z";
+    staleConfiguration.metadata.config_version = 1;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      staleConfiguration,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 1);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
