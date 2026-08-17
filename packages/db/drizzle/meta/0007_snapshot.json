@@ -1,0 +1,1848 @@
+{
+  "id": "d9614776-1929-4e57-8a90-b4cf26086712",
+  "prevId": "cd9d9b05-e8d0-47ee-b908-531c5f271e43",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.achievement_instances": {
+      "name": "achievement_instances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "achievement_key": {
+          "name": "achievement_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "progress_current": {
+          "name": "progress_current",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "progress_target": {
+          "name": "progress_target",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "earned_at": {
+          "name": "earned_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_fact_id": {
+          "name": "source_fact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "achievement_instances_period_idx": {
+          "name": "achievement_instances_period_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "achievement_instances_learner_id_learners_id_fk": {
+          "name": "achievement_instances_learner_id_learners_id_fk",
+          "tableFrom": "achievement_instances",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "achievement_instances_source_owner_fk": {
+          "name": "achievement_instances_source_owner_fk",
+          "tableFrom": "achievement_instances",
+          "tableTo": "learner_facts",
+          "columnsFrom": [
+            "source_fact_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "achievement_instances_period_owner_fk": {
+          "name": "achievement_instances_period_owner_fk",
+          "tableFrom": "achievement_instances",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "achievement_instances_scope_uq": {
+          "name": "achievement_instances_scope_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "achievement_key",
+            "scope_key"
+          ]
+        },
+        "achievement_instances_id_learner_uq": {
+          "name": "achievement_instances_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "achievement_instances_status_valid": {
+          "name": "achievement_instances_status_valid",
+          "value": "\"achievement_instances\".\"status\" IN ('earned', 'in-progress', 'incomplete')"
+        },
+        "achievement_instances_progress_non_negative": {
+          "name": "achievement_instances_progress_non_negative",
+          "value": "\"achievement_instances\".\"progress_current\" IS NULL OR \"achievement_instances\".\"progress_current\" >= 0"
+        },
+        "achievement_instances_target_positive": {
+          "name": "achievement_instances_target_positive",
+          "value": "\"achievement_instances\".\"progress_target\" IS NULL OR \"achievement_instances\".\"progress_target\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.achievement_periods": {
+      "name": "achievement_periods",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "anchor_at": {
+          "name": "anchor_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "achievement_periods_learner_id_learners_id_fk": {
+          "name": "achievement_periods_learner_id_learners_id_fk",
+          "tableFrom": "achievement_periods",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "achievement_periods_learner_period_uq": {
+          "name": "achievement_periods_learner_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "period_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.economy": {
+      "name": "economy",
+      "schema": "",
+      "columns": {
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "xp": {
+          "name": "xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "xp_lifetime": {
+          "name": "xp_lifetime",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "streak_current": {
+          "name": "streak_current",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "streak_last_day": {
+          "name": "streak_last_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_event_at": {
+          "name": "last_event_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "economy_learner_id_learners_id_fk": {
+          "name": "economy_learner_id_learners_id_fk",
+          "tableFrom": "economy",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "economy_xp_non_negative": {
+          "name": "economy_xp_non_negative",
+          "value": "\"economy\".\"xp\" >= 0"
+        },
+        "economy_level_positive": {
+          "name": "economy_level_positive",
+          "value": "\"economy\".\"level\" >= 1"
+        },
+        "economy_streak_non_negative": {
+          "name": "economy_streak_non_negative",
+          "value": "\"economy\".\"streak_current\" >= 0"
+        },
+        "economy_xp_lifetime_gte_xp": {
+          "name": "economy_xp_lifetime_gte_xp",
+          "value": "\"economy\".\"xp_lifetime\" >= \"economy\".\"xp\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.events": {
+      "name": "events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "integration_id": {
+          "name": "integration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        }
+      },
+      "indexes": {
+        "events_learner_occurred_idx": {
+          "name": "events_learner_occurred_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "events_integration_id_integrations_id_fk": {
+          "name": "events_integration_id_integrations_id_fk",
+          "tableFrom": "events",
+          "tableTo": "integrations",
+          "columnsFrom": [
+            "integration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "events_learner_id_learners_id_fk": {
+          "name": "events_learner_id_learners_id_fk",
+          "tableFrom": "events",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "events_learner_integration_owner_fk": {
+          "name": "events_learner_integration_owner_fk",
+          "tableFrom": "events",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id",
+            "integration_id"
+          ],
+          "columnsTo": [
+            "id",
+            "integration_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "events_integration_idempotency_uq": {
+          "name": "events_integration_idempotency_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "integration_id",
+            "idempotency_key"
+          ]
+        },
+        "events_id_learner_integration_uq": {
+          "name": "events_id_learner_integration_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id",
+            "integration_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.integrations": {
+      "name": "integrations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret_hash": {
+          "name": "secret_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_event_types": {
+          "name": "allowed_event_types",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "rule_pack_id": {
+          "name": "rule_pack_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'default-v1'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "integrations_slug_unique": {
+          "name": "integrations_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        },
+        "integrations_secret_hash_unique": {
+          "name": "integrations_secret_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "secret_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.learner_facts": {
+      "name": "learner_facts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "integration_id": {
+          "name": "integration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_event_id": {
+          "name": "source_event_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "semantic_key": {
+          "name": "semantic_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "learner_facts_period_idx": {
+          "name": "learner_facts_period_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learner_facts_event_period_idx": {
+          "name": "learner_facts_event_period_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "learner_facts_source_owner_fk": {
+          "name": "learner_facts_source_owner_fk",
+          "tableFrom": "learner_facts",
+          "tableTo": "events",
+          "columnsFrom": [
+            "source_event_id",
+            "learner_id",
+            "integration_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id",
+            "integration_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "learner_facts_semantic_uq": {
+          "name": "learner_facts_semantic_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "event_type",
+            "semantic_key"
+          ]
+        },
+        "learner_facts_id_learner_uq": {
+          "name": "learner_facts_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.learner_reward_grants": {
+      "name": "learner_reward_grants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "grant_order": {
+          "name": "grant_order",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "learner_reward_grants_grant_order_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_fact_id": {
+          "name": "source_fact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "story_plan_id": {
+          "name": "story_plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "story_plan_chapter_id": {
+          "name": "story_plan_chapter_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "behavior_title_id": {
+          "name": "behavior_title_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "learner_reward_grants_story_slot_uq": {
+          "name": "learner_reward_grants_story_slot_uq",
+          "columns": [
+            {
+              "expression": "story_plan_chapter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"learner_reward_grants\".\"kind\" = 'story_chapter'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learner_reward_grants_story_source_uq": {
+          "name": "learner_reward_grants_story_source_uq",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_fact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"learner_reward_grants\".\"kind\" = 'story_chapter'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learner_reward_grants_behavior_title_uq": {
+          "name": "learner_reward_grants_behavior_title_uq",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "behavior_title_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"learner_reward_grants\".\"kind\" = 'behavior_title'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learner_reward_grants_projection_idx": {
+          "name": "learner_reward_grants_projection_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "grant_order",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learner_reward_grants_unseen_idx": {
+          "name": "learner_reward_grants_unseen_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "learner_reward_grants_source_owner_fk": {
+          "name": "learner_reward_grants_source_owner_fk",
+          "tableFrom": "learner_reward_grants",
+          "tableTo": "learner_facts",
+          "columnsFrom": [
+            "source_fact_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "learner_reward_grants_plan_owner_fk": {
+          "name": "learner_reward_grants_plan_owner_fk",
+          "tableFrom": "learner_reward_grants",
+          "tableTo": "story_plans",
+          "columnsFrom": [
+            "story_plan_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "learner_reward_grants_chapter_owner_fk": {
+          "name": "learner_reward_grants_chapter_owner_fk",
+          "tableFrom": "learner_reward_grants",
+          "tableTo": "story_plan_chapters",
+          "columnsFrom": [
+            "story_plan_chapter_id",
+            "story_plan_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "story_plan_id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "learner_reward_grants_order_uq": {
+          "name": "learner_reward_grants_order_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "grant_order"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "learner_reward_grants_kind_payload": {
+          "name": "learner_reward_grants_kind_payload",
+          "value": "(\n        \"learner_reward_grants\".\"kind\" = 'story_chapter'\n        AND \"learner_reward_grants\".\"story_plan_id\" IS NOT NULL\n        AND \"learner_reward_grants\".\"story_plan_chapter_id\" IS NOT NULL\n        AND \"learner_reward_grants\".\"behavior_title_id\" IS NULL\n      ) OR (\n        \"learner_reward_grants\".\"kind\" = 'behavior_title'\n        AND \"learner_reward_grants\".\"story_plan_id\" IS NULL\n        AND \"learner_reward_grants\".\"story_plan_chapter_id\" IS NULL\n        AND length(btrim(\"learner_reward_grants\".\"behavior_title_id\")) > 0\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.learners": {
+      "name": "learners",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "integration_id": {
+          "name": "integration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_learner_id": {
+          "name": "external_learner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "learners_integration_id_integrations_id_fk": {
+          "name": "learners_integration_id_integrations_id_fk",
+          "tableFrom": "learners",
+          "tableTo": "integrations",
+          "columnsFrom": [
+            "integration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "learners_integration_external_uq": {
+          "name": "learners_integration_external_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "integration_id",
+            "external_learner_id"
+          ]
+        },
+        "learners_id_integration_uq": {
+          "name": "learners_id_integration_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "integration_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pet_state": {
+      "name": "pet_state",
+      "schema": "",
+      "columns": {
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mood": {
+          "name": "mood",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'neutral'"
+        },
+        "mood_expires_at": {
+          "name": "mood_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "animation_state": {
+          "name": "animation_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'idle'"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "pet_state_learner_id_learners_id_fk": {
+          "name": "pet_state_learner_id_learners_id_fk",
+          "tableFrom": "pet_state",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.reward_notices": {
+      "name": "reward_notices",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "achievement_instance_id": {
+          "name": "achievement_instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reward_key": {
+          "name": "reward_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "icon": {
+          "name": "icon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "reward_notices_unseen_idx": {
+          "name": "reward_notices_unseen_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "reward_notices_achievement_owner_fk": {
+          "name": "reward_notices_achievement_owner_fk",
+          "tableFrom": "reward_notices",
+          "tableTo": "achievement_instances",
+          "columnsFrom": [
+            "achievement_instance_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "reward_notices_achievement_uq": {
+          "name": "reward_notices_achievement_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "achievement_instance_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.story_collectible_schedules": {
+      "name": "story_collectible_schedules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_fact_id": {
+          "name": "source_fact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_at": {
+          "name": "due_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reconciled_at": {
+          "name": "reconciled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "story_collectible_schedules_pending_due_idx": {
+          "name": "story_collectible_schedules_pending_due_idx",
+          "columns": [
+            {
+              "expression": "due_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"story_collectible_schedules\".\"reconciled_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "story_collectible_schedules_pending_learner_idx": {
+          "name": "story_collectible_schedules_pending_learner_idx",
+          "columns": [
+            {
+              "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "due_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"story_collectible_schedules\".\"reconciled_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "story_collectible_schedules_source_owner_fk": {
+          "name": "story_collectible_schedules_source_owner_fk",
+          "tableFrom": "story_collectible_schedules",
+          "tableTo": "learner_facts",
+          "columnsFrom": [
+            "source_fact_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "story_collectible_schedules_learner_period_uq": {
+          "name": "story_collectible_schedules_learner_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "period_key"
+          ]
+        },
+        "story_collectible_schedules_source_fact_uq": {
+          "name": "story_collectible_schedules_source_fact_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "source_fact_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "story_collectible_schedules_period_nonempty": {
+          "name": "story_collectible_schedules_period_nonempty",
+          "value": "length(btrim(\"story_collectible_schedules\".\"period_key\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.story_plan_chapters": {
+      "name": "story_plan_chapters",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "story_plan_id": {
+          "name": "story_plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_number": {
+          "name": "period_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chapter_id": {
+          "name": "chapter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "story_plan_chapters_plan_owner_fk": {
+          "name": "story_plan_chapters_plan_owner_fk",
+          "tableFrom": "story_plan_chapters",
+          "tableTo": "story_plans",
+          "columnsFrom": [
+            "story_plan_id",
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id",
+            "learner_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "story_plan_chapters_period_owner_fk": {
+          "name": "story_plan_chapters_period_owner_fk",
+          "tableFrom": "story_plan_chapters",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "story_plan_chapters_plan_period_number_uq": {
+          "name": "story_plan_chapters_plan_period_number_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "period_number"
+          ]
+        },
+        "story_plan_chapters_plan_period_key_uq": {
+          "name": "story_plan_chapters_plan_period_key_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "period_key"
+          ]
+        },
+        "story_plan_chapters_plan_chapter_uq": {
+          "name": "story_plan_chapters_plan_chapter_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "story_plan_id",
+            "chapter_id"
+          ]
+        },
+        "story_plan_chapters_learner_period_uq": {
+          "name": "story_plan_chapters_learner_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "period_key"
+          ]
+        },
+        "story_plan_chapters_id_plan_learner_uq": {
+          "name": "story_plan_chapters_id_plan_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "story_plan_id",
+            "learner_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "story_plan_chapters_period_number_range": {
+          "name": "story_plan_chapters_period_number_range",
+          "value": "\"story_plan_chapters\".\"period_number\" >= 1 AND \"story_plan_chapters\".\"period_number\" <= 24"
+        },
+        "story_plan_chapters_chapter_id_nonempty": {
+          "name": "story_plan_chapters_chapter_id_nonempty",
+          "value": "length(btrim(\"story_plan_chapters\".\"chapter_id\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.story_plans": {
+      "name": "story_plans",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_key": {
+          "name": "term_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "term_start_day": {
+          "name": "term_start_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "story_id": {
+          "name": "story_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "story_version": {
+          "name": "story_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_periods": {
+          "name": "total_periods",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "story_plans_learner_id_learners_id_fk": {
+          "name": "story_plans_learner_id_learners_id_fk",
+          "tableFrom": "story_plans",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "story_plans_learner_term_uq": {
+          "name": "story_plans_learner_term_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "term_key"
+          ]
+        },
+        "story_plans_id_learner_uq": {
+          "name": "story_plans_id_learner_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "learner_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "story_plans_term_key_nonempty": {
+          "name": "story_plans_term_key_nonempty",
+          "value": "length(btrim(\"story_plans\".\"term_key\")) > 0"
+        },
+        "story_plans_story_id_nonempty": {
+          "name": "story_plans_story_id_nonempty",
+          "value": "length(btrim(\"story_plans\".\"story_id\")) > 0"
+        },
+        "story_plans_version_positive": {
+          "name": "story_plans_version_positive",
+          "value": "\"story_plans\".\"story_version\" >= 1"
+        },
+        "story_plans_period_count_range": {
+          "name": "story_plans_period_count_range",
+          "value": "\"story_plans\".\"total_periods\" >= 6 AND \"story_plans\".\"total_periods\" <= 24"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.weekly_rhythm_configs": {
+      "name": "weekly_rhythm_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_version": {
+          "name": "config_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_status": {
+          "name": "period_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "eligible_days": {
+          "name": "eligible_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reconciliation_required": {
+          "name": "reconciliation_required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "configured_at": {
+          "name": "configured_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "weekly_rhythm_configs_learner_id_learners_id_fk": {
+          "name": "weekly_rhythm_configs_learner_id_learners_id_fk",
+          "tableFrom": "weekly_rhythm_configs",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "weekly_rhythm_configs_period_owner_fk": {
+          "name": "weekly_rhythm_configs_period_owner_fk",
+          "tableFrom": "weekly_rhythm_configs",
+          "tableTo": "achievement_periods",
+          "columnsFrom": [
+            "learner_id",
+            "period_key"
+          ],
+          "columnsTo": [
+            "learner_id",
+            "period_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "weekly_rhythm_configs_learner_period_uq": {
+          "name": "weekly_rhythm_configs_learner_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "learner_id",
+            "period_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "weekly_rhythm_configs_version_positive": {
+          "name": "weekly_rhythm_configs_version_positive",
+          "value": "\"weekly_rhythm_configs\".\"config_version\" >= 1"
+        },
+        "weekly_rhythm_configs_eligible_days_range": {
+          "name": "weekly_rhythm_configs_eligible_days_range",
+          "value": "\"weekly_rhythm_configs\".\"eligible_days\" >= 0 AND \"weekly_rhythm_configs\".\"eligible_days\" <= 5"
+        },
+        "weekly_rhythm_configs_status_valid": {
+          "name": "weekly_rhythm_configs_status_valid",
+          "value": "\"weekly_rhythm_configs\".\"period_status\" IN ('open', 'closed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.world_state": {
+      "name": "world_state",
+      "schema": "",
+      "columns": {
+        "learner_id": {
+          "name": "learner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "stage": {
+          "name": "stage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "unlocked_object_ids": {
+          "name": "unlocked_object_ids",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "world_state_learner_id_learners_id_fk": {
+          "name": "world_state_learner_id_learners_id_fk",
+          "tableFrom": "world_state",
+          "tableTo": "learners",
+          "columnsFrom": [
+            "learner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "world_state_stage_non_negative": {
+          "name": "world_state_stage_non_negative",
+          "value": "\"world_state\".\"stage\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
