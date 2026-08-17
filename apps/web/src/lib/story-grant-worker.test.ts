@@ -24,7 +24,10 @@ import {
   reconcileDueStoryGrantsForLearner,
   runStoryGrantWorker,
 } from "@/lib/story-grant-worker";
-import { storyGrantCronOutcome } from "@/lib/story-grant-cron-result";
+import {
+  storyGrantCronOutcome,
+  storyGrantCronResponse,
+} from "@/lib/story-grant-cron-result";
 
 const secret = "story-worker-test-secret-at-least-32-characters";
 const cronSecret = "story_worker_cron_secret_1234567890";
@@ -903,5 +906,26 @@ test("cron reports bounded-cap backlog as incomplete", () => {
   assert.deepEqual(outcome, {
     bodyStatus: "incomplete",
     httpStatus: 503,
+  });
+});
+
+test("cron response preserves failures when bounded-cap backlog remains", async () => {
+  const response = storyGrantCronResponse({
+    batches: 20,
+    learners: 500,
+    failedLearners: 2,
+    grants: 498,
+    retries: 6,
+    batchLimitReached: true,
+  });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    status: "partial_failure_incomplete",
+    batches: 20,
+    learners: 500,
+    failedLearners: 2,
+    grants: 498,
+    retries: 6,
+    batchLimitReached: true,
   });
 });
