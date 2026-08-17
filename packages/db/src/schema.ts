@@ -140,6 +140,46 @@ export const learnerFacts = pgTable(
   ],
 );
 
+// Durable, typed work queue for guaranteed story ownership. The source weekly
+// configuration fact remains the provenance authority; due_at is its validated
+// local calendar boundary materialized as an instant so the daily worker never
+// has to scan or cast historical JSON. reconciled_at records queue consumption,
+// not ownership—the append-only learner_reward_grants ledger remains canonical.
+export const storyCollectibleSchedules = pgTable(
+  "story_collectible_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id").notNull(),
+    periodKey: text("period_key").notNull(),
+    sourceFactId: uuid("source_fact_id").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_collectible_schedules_learner_period_uq").on(
+      t.learnerId,
+      t.periodKey,
+    ),
+    unique("story_collectible_schedules_source_fact_uq").on(t.sourceFactId),
+    foreignKey({
+      columns: [t.sourceFactId, t.learnerId],
+      foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
+      name: "story_collectible_schedules_source_owner_fk",
+    }).onDelete("cascade"),
+    index("story_collectible_schedules_pending_due_idx")
+      .on(t.dueAt, t.id, t.learnerId)
+      .where(sql`${t.reconciledAt} IS NULL`),
+    index("story_collectible_schedules_pending_learner_idx")
+      .on(t.learnerId, t.dueAt)
+      .where(sql`${t.reconciledAt} IS NULL`),
+    check(
+      "story_collectible_schedules_period_nonempty",
+      sql`length(btrim(${t.periodKey})) > 0`,
+    ),
+  ],
+);
+
 // Stable roadmap placement for opaque academic periods. Period keys remain
 // integration-owned and are never exposed in learner snapshots.
 export const achievementPeriods = pgTable(
@@ -533,6 +573,7 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   }),
   events: many(events),
   facts: many(learnerFacts),
+  storyCollectibleSchedules: many(storyCollectibleSchedules),
   periods: many(achievementPeriods),
   storyPlans: many(storyPlans),
   rewardGrants: many(learnerRewardGrants),
@@ -566,6 +607,23 @@ export const learnerFactsRelations = relations(learnerFacts, ({ one }) => ({
     references: [events.id],
   }),
 }));
+
+export const storyCollectibleSchedulesRelations = relations(
+  storyCollectibleSchedules,
+  ({ one }) => ({
+    learner: one(learners, {
+      fields: [storyCollectibleSchedules.learnerId],
+      references: [learners.id],
+    }),
+    sourceFact: one(learnerFacts, {
+      fields: [
+        storyCollectibleSchedules.sourceFactId,
+        storyCollectibleSchedules.learnerId,
+      ],
+      references: [learnerFacts.id, learnerFacts.learnerId],
+    }),
+  }),
+);
 
 export const achievementPeriodsRelations = relations(
   achievementPeriods,
@@ -686,6 +744,8 @@ export type Economy = typeof economy.$inferSelect;
 export type PetState = typeof petState.$inferSelect;
 export type WorldState = typeof worldState.$inferSelect;
 export type LearnerFact = typeof learnerFacts.$inferSelect;
+export type StoryCollectibleSchedule =
+  typeof storyCollectibleSchedules.$inferSelect;
 export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
 export type StoryPlan = typeof storyPlans.$inferSelect;
 export type StoryPlanChapter = typeof storyPlanChapters.$inferSelect;
