@@ -216,7 +216,9 @@ timeout; terminal learner failures remain isolated from the rest of the batch.
 Pending queue rows survive missed daily invocations and are consumed only after
 the ownership ledger contains the matching collectible. Reaching the bounded
 invocation cap returns an alertable incomplete response rather than ordinary
-success, while leaving the remaining rows for the next run.
+success, while leaving the remaining rows for the next run. The production
+default admits up to 10,000 learners per five-minute invocation; deployment must
+remain within that explicit cohort bound unless capacity or frequency is raised.
 
 ### Future operator schedules
 

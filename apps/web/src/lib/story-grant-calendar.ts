@@ -101,6 +101,23 @@ export function storyWeekCalendar(
   };
 }
 
+/** Returns the last instructional day in this Monday-Friday story week. */
+export function storyInstructionalEndDay(
+  metadata: Record<string, unknown>,
+): string | null {
+  const calendar = storyWeekCalendar(metadata);
+  if (!calendar) return null;
+  const start = new Date(`${calendar.weekStartDay}T00:00:00.000Z`);
+  const isoWeekday = start.getUTCDay() === 0 ? 7 : start.getUTCDay();
+  const daysUntilFriday = (5 - isoWeekday + 7) % 7;
+  const friday = addCalendarDays(calendar.weekStartDay, daysUntilFriday);
+  if (!friday) return null;
+  const instructionalEnd = calendar.termEndDay < friday
+    ? calendar.termEndDay
+    : friday;
+  return instructionalEnd < calendar.weekStartDay ? null : instructionalEnd;
+}
+
 /**
  * The instructional week ends on its own Friday, clamped to the authoritative
  * term end. It deliberately does not inspect the next instructional week,
@@ -110,21 +127,8 @@ export function storyWeekCalendar(
 export function storyCollectibleDueDay(
   metadata: Record<string, unknown>,
 ): string | null {
-  const calendar = storyWeekCalendar(metadata);
-  if (!calendar) return null;
-  const start = new Date(`${calendar.weekStartDay}T00:00:00.000Z`);
-  const isoWeekday = start.getUTCDay() === 0 ? 7 : start.getUTCDay();
-  // The Pika event contract accepts every real in-term calendar day. Although
-  // instructional weeks are Monday-Friday, defensively interpret a weekend
-  // start as the week containing the following Monday-Friday rather than
-  // creating a contract-valid assignment that can never become collectible.
-  const daysUntilFriday = (5 - isoWeekday + 7) % 7;
-  const friday = addCalendarDays(calendar.weekStartDay, daysUntilFriday);
-  if (!friday) return null;
-  const instructionalEnd = calendar.termEndDay < friday
-    ? calendar.termEndDay
-    : friday;
-  if (instructionalEnd < calendar.weekStartDay) return null;
+  const instructionalEnd = storyInstructionalEndDay(metadata);
+  if (!instructionalEnd) return null;
   return addCalendarDays(instructionalEnd, 1);
 }
 

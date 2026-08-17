@@ -91,10 +91,17 @@ cron endpoint fails closed if either value is absent or malformed. The rollout
 timestamp independently controls grant eligibility for both the daily worker
 and accepted-event recovery path; when it is absent or malformed, neither path
 grants scheduled collectibles. Choose the instant deliberately: a grant
-requires both a configuration fact stored on or after that instant and a
-due-day instant on or after it, preventing historical backfill. `CRON_SECRET`
+requires the week's due-day instant to be on or after it, preventing historical
+reward backfill while preserving future work from a configuration stored before
+deployment. `CRON_SECRET`
 authenticates only the cron route—it is not an eligibility input. Preview
 deployments do not execute Vercel cron jobs.
+
+One invocation is intentionally bounded at 10,000 learners (100 batches of 100,
+with at most 10 learner transactions active at once) inside the route's
+five-minute limit. Do not enable this rollout for a cohort above that operational
+bound without increasing capacity or frequency first. Hitting the cap returns an
+alertable `503` and leaves the remaining queue rows intact.
 
 The Pika-like host preview should show the 16-week Pal roadmap, companion, and
 collapsible semester controls. Configure a week, complete daily logs, or finish an item on

@@ -7,6 +7,7 @@ import {
   learnerFacts,
   learnerRewardGrants,
   storyCollectibleSchedules,
+  type Db,
 } from "@pal/db";
 import { GET as runCronRoute } from "@/app/api/cron/story-collectibles/route";
 import {
@@ -22,6 +23,7 @@ import {
 import {
   findLearnersWithDueStoryGrants,
   reconcileDueStoryGrantsForLearner,
+  STORY_GRANT_MAX_LEARNERS_PER_RUN,
   runStoryGrantWorker,
 } from "@/lib/story-grant-worker";
 import {
@@ -813,7 +815,7 @@ test(
 );
 
 test(
-  "rollout cutoff blocks pre-rollout provenance and already-due history",
+  "rollout cutoff keeps future due work even when configuration predates rollout",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const integration = await resolveIntegration({
@@ -841,24 +843,58 @@ test(
       const [schedule] = await getDb().select().from(storyCollectibleSchedules)
         .where(eq(storyCollectibleSchedules.learnerId, learnerId));
       assert.ok(schedule);
-      const provenanceCutoff = await runStoryGrantWorker({
-        asOf: new Date("2026-09-20T12:00:00.000Z"),
-        rolloutEffectiveAt: new Date(schedule.createdAt.getTime() + 1),
-        onlyLearnerIds: [learnerId],
-      });
-      assert.equal(provenanceCutoff.grants, 0);
-
       const dueCutoff = await runStoryGrantWorker({
         asOf: new Date("2026-09-20T12:00:00.000Z"),
         rolloutEffectiveAt: new Date(schedule.dueAt.getTime() + 1),
         onlyLearnerIds: [learnerId],
       });
       assert.equal(dueCutoff.grants, 0);
+
+      const provenanceCutoff = await runStoryGrantWorker({
+        asOf: new Date("2026-09-20T12:00:00.000Z"),
+        rolloutEffectiveAt: new Date(schedule.createdAt.getTime() + 1),
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(provenanceCutoff.grants, 1);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },
 );
+
+test("default daily capacity drains a cohort larger than the former 500-learner cap", async () => {
+  assert.equal(STORY_GRANT_MAX_LEARNERS_PER_RUN, 10_000);
+  const learnerIds = Array.from(
+    { length: 501 },
+    (_, index) => `learner-${String(index).padStart(3, "0")}`,
+  );
+  let offset = 0;
+  const result = await runStoryGrantWorker({
+    db: {} as Db,
+    rolloutEffectiveAt: rollout,
+    retryBaseDelayMs: 0,
+    findLearners: async (_db, input) => {
+      const page = learnerIds.slice(offset, offset + input.limit);
+      offset += page.length;
+      return {
+        learnerIds: page,
+        scannedRows: page.length,
+        cursor: page.length > 0
+          ? { dueAt: new Date("2026-09-05T04:00:00.000Z"), id: page.at(-1)! }
+          : undefined,
+      };
+    },
+    reconcileLearner: async () => ({ candidates: 1, due: 1, granted: 1 }),
+  });
+  assert.deepEqual(result, {
+    batches: 6,
+    learners: 501,
+    failedLearners: 0,
+    grants: 501,
+    retries: 0,
+    batchLimitReached: false,
+  });
+});
 
 test(
   "cron route rejects invalid deployment/auth configuration and runs when valid",

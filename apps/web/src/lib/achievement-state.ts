@@ -16,6 +16,7 @@ import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
 } from "@/lib/reward-grants";
+import { storyInstructionalEndDay } from "@/lib/story-grant-calendar";
 
 export const ACHIEVEMENT_KEYS = PAL_ACHIEVEMENT_KEYS;
 export const ACHIEVEMENT_NOTICE_KEY = "achievement-earned-v1";
@@ -253,11 +254,9 @@ function periodCalendarFromMetadata(
       : termStartDay && Number.isInteger(weekIndex)
         ? offsetCalendarDay(termStartDay, ((weekIndex as number) - 1) * 7)
         : null;
-  const nominalEndDay = startDay ? offsetCalendarDay(startDay, 6) : null;
-  const endDay =
-    nominalEndDay && termEndDay && termEndDay < nominalEndDay
-      ? termEndDay
-      : nominalEndDay;
+  const endDay = startDay && termEndDay
+    ? storyInstructionalEndDay(metadata ?? {})
+    : null;
   return { timeZone, startDay, endDay };
 }
 
