@@ -20,7 +20,9 @@ DECLARE
 	"term_start" date;
 	"term_end" date;
 	"week_start" date;
+	"week_index_numeric" numeric;
 	"week_index_value" integer;
+	"term_week_count_numeric" numeric;
 	"term_week_count_value" integer;
 	"term_timezone_value" text;
 	"earliest_week_start" date;
@@ -39,14 +41,17 @@ BEGIN
 		OR jsonb_typeof("calendar_metadata"->'week_index') IS DISTINCT FROM 'number'
 		OR ("calendar_metadata"->>'term_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 		OR ("calendar_metadata"->>'term_end_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-		OR ("calendar_metadata"->>'week_index') !~ '^[0-9]{1,2}$'
 	THEN
 		RETURN NULL;
 	END IF;
 
 	"term_start" := ("calendar_metadata"->>'term_start_day')::date;
 	"term_end" := ("calendar_metadata"->>'term_end_day')::date;
-	"week_index_value" := ("calendar_metadata"->>'week_index')::integer;
+	"week_index_numeric" := ("calendar_metadata"->>'week_index')::numeric;
+	IF "week_index_numeric" <> trunc("week_index_numeric") THEN
+		RETURN NULL;
+	END IF;
+	"week_index_value" := "week_index_numeric"::integer;
 	"term_timezone_value" := "calendar_metadata"->>'term_timezone';
 
 	IF ("calendar_metadata" ? 'term_week_count') <> ("calendar_metadata" ? 'week_start_day') THEN
@@ -55,13 +60,16 @@ BEGIN
 
 	IF "calendar_metadata" ? 'term_week_count' THEN
 		IF jsonb_typeof("calendar_metadata"->'term_week_count') IS DISTINCT FROM 'number'
-			OR ("calendar_metadata"->>'term_week_count') !~ '^[0-9]{1,2}$'
 			OR jsonb_typeof("calendar_metadata"->'week_start_day') IS DISTINCT FROM 'string'
 			OR ("calendar_metadata"->>'week_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 		THEN
 			RETURN NULL;
 		END IF;
-		"term_week_count_value" := ("calendar_metadata"->>'term_week_count')::integer;
+		"term_week_count_numeric" := ("calendar_metadata"->>'term_week_count')::numeric;
+		IF "term_week_count_numeric" <> trunc("term_week_count_numeric") THEN
+			RETURN NULL;
+		END IF;
+		"term_week_count_value" := "term_week_count_numeric"::integer;
 		"week_start" := ("calendar_metadata"->>'week_start_day')::date;
 	ELSE
 		"term_week_count_value" := 16;

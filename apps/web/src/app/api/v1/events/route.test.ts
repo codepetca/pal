@@ -6,8 +6,10 @@ import {
   getDb,
   getPool,
   integrations,
+  learnerFacts,
   learnerRewardGrants,
   learners,
+  storyCollectibleSchedules,
   storyPlans,
 } from "@pal/db";
 import { v1 } from "@pal/contract";
@@ -174,6 +176,32 @@ test("permits legitimate UTC-12 and UTC+14 local-date boundaries", () => {
   );
 });
 
+test("rejects year-zero term dates before opening the database", async () => {
+  const response = await POST(request({
+    schema_version: 1,
+    idempotency_key: `year-zero-${crypto.randomUUID()}`,
+    learner_id: `sandbox-${crypto.randomUUID()}`,
+    event_type: "daily_log_week.configured",
+    occurred_at: new Date().toISOString(),
+    metadata: {
+      period_key: `year-zero-period-${crypto.randomUUID()}`,
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "year-zero-term",
+      term_start_day: "0000-01-03",
+      term_end_day: "0000-02-11",
+      term_timezone: "America/Toronto",
+      term_week_count: 6,
+      week_start_day: "0000-01-03",
+      week_index: 1,
+    },
+  }));
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).error, "invalid_metadata");
+  assert.equal(openedDatabase, false);
+});
+
 test(
   "rejects a story week ordinal that cannot fit its term range",
   { skip: !process.env.DATABASE_URL },
@@ -230,6 +258,73 @@ test(
       assert.equal(raw.includes("/assets/pets/lumi-v1.png"), false);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "canonicalizes contract-valid timezone aliases before scheduling",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveSandboxIntegration();
+    const db = getDb();
+    for (const [sourceTimeZone, canonicalTimeZone] of [
+      ["america/toronto", "America/Toronto"],
+      ["US/Eastern", "America/New_York"],
+    ] as const) {
+      const externalLearnerId = `timezone-alias-${crypto.randomUUID()}`;
+      try {
+        const response = await POST(request({
+          schema_version: 1,
+          idempotency_key: `timezone-alias-${crypto.randomUUID()}`,
+          learner_id: externalLearnerId,
+          event_type: "daily_log_week.configured",
+          occurred_at: new Date().toISOString(),
+          metadata: {
+            period_key: `timezone-period-${crypto.randomUUID()}`,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 5,
+            term_token: `timezone-term-${crypto.randomUUID()}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: sourceTimeZone,
+            term_week_count: 6,
+            week_start_day: "2026-08-31",
+            week_index: 1,
+          },
+        }));
+        assert.equal(response.status, 200);
+        assert.equal((await response.json()).status, "processed");
+
+        const [learner] = await db.select({ id: learners.id }).from(learners)
+          .where(and(
+            eq(learners.integrationId, integration.id),
+            eq(learners.externalLearnerId, externalLearnerId),
+          ))
+          .limit(1);
+        assert.ok(learner);
+        const [fact] = await db.select({ metadata: learnerFacts.metadata })
+          .from(learnerFacts)
+          .where(and(
+            eq(learnerFacts.learnerId, learner.id),
+            eq(learnerFacts.eventType, "daily_log_week.configured"),
+          ))
+          .limit(1);
+        assert.equal(
+          (fact?.metadata as Record<string, unknown>).term_timezone,
+          canonicalTimeZone,
+        );
+        assert.equal(
+          (await db.select().from(storyCollectibleSchedules).where(
+            eq(storyCollectibleSchedules.learnerId, learner.id),
+          )).length,
+          1,
+        );
+      } finally {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
     }
   },
 );

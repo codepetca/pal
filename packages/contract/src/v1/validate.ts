@@ -70,6 +70,9 @@ function isToken(value: unknown, maxLength: number): value is string {
 // rather than silently storing.
 function isCalendarDay(value: unknown): value is string {
   if (typeof value !== "string" || !CALENDAR_DAY.test(value)) return false;
+  // PostgreSQL's date type has no year zero. Reject it at the shared public
+  // boundary so an accepted event can never fail later during persistence.
+  if (value.startsWith("0000-")) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }

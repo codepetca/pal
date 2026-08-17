@@ -1273,6 +1273,45 @@ test(
         assert.equal(schedule!.dueAt.toISOString(), scenario.expected);
       }
 
+      const [decimalLearner] = await db.insert(learners).values({
+        integrationId: integration.id,
+        externalLearnerId: `story-calendar-integral-decimal-${suffix}`,
+      }).returning({ id: learners.id });
+      const [decimalEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: decimalLearner.id,
+        idempotencyKey: `story-calendar-integral-decimal-${suffix}`,
+        eventType: "daily_log_week.configured",
+        occurredAt: new Date(),
+        metadata: {},
+      }).returning({ id: events.id });
+      const decimalMetadata = `{
+        "term_token": ${JSON.stringify(`integral-decimal-${suffix}`)},
+        "term_start_day": "2026-08-31",
+        "term_end_day": "2026-10-09",
+        "term_timezone": "America/Toronto",
+        "term_week_count": 6.0,
+        "week_start_day": "2026-08-31",
+        "week_index": 1.0
+      }`;
+      await db.execute(sql`
+        INSERT INTO public.learner_facts (
+          integration_id, learner_id, source_event_id, event_type, semantic_key,
+          period_key, occurred_at, metadata
+        ) VALUES (
+          ${integration.id}, ${decimalLearner.id}, ${decimalEvent.id},
+          'daily_log_week.configured', ${`story-calendar-integral-decimal-${suffix}:1`},
+          ${`story-calendar-integral-decimal-${suffix}`}, now(),
+          ${decimalMetadata}::jsonb
+        )
+      `);
+      const [decimalSchedule] = await db.select().from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.learnerId, decimalLearner.id));
+      assert.equal(
+        decimalSchedule?.dueAt.toISOString(),
+        "2026-09-05T04:00:00.000Z",
+      );
+
       const invalidScenarios = [
         {
           name: "malformed-date-and-timezone",
@@ -1338,6 +1377,30 @@ test(
             term_week_count: 6,
             week_start_day: "2026-08-31",
             week_index: 6,
+          },
+        },
+        {
+          name: "fractional-week-index",
+          metadata: {
+            term_token: `fractional-index-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-08-31",
+            week_index: 1.5,
+          },
+        },
+        {
+          name: "fractional-week-count",
+          metadata: {
+            term_token: `fractional-count-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6.5,
+            week_start_day: "2026-08-31",
+            week_index: 1,
           },
         },
       ] as const;

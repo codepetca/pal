@@ -136,6 +136,10 @@ type TermCalendarMetadata = {
   week_index: number;
 };
 
+function canonicalTimeZone(timeZone: string): string {
+  return new Intl.DateTimeFormat("en", { timeZone }).resolvedOptions().timeZone;
+}
+
 function termCalendarMetadata(
   event: IncomingEvent,
 ): TermCalendarMetadata | null {
@@ -145,7 +149,7 @@ function termCalendarMetadata(
     term_token: metadataString(event, "term_token"),
     term_start_day: metadataString(event, "term_start_day"),
     term_end_day: metadataString(event, "term_end_day"),
-    term_timezone: metadataString(event, "term_timezone"),
+    term_timezone: canonicalTimeZone(metadataString(event, "term_timezone")),
     ...(event.metadata.term_week_count === undefined
       ? {}
       : {
@@ -471,6 +475,16 @@ export async function weeklyConfigurationRejection(
       calendar.week_index > totalWeeks ||
       !hasValidStoryWeekPosition(calendar)
     ) {
+      return "invalid_term_story_schedule";
+    }
+    const timeZoneSupport = await db.execute<{ supported: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "pg_catalog"."pg_timezone_names"
+        WHERE "name" = ${calendar.term_timezone}
+      ) AS "supported"
+    `);
+    if (timeZoneSupport.rows[0]?.supported !== true) {
       return "invalid_term_story_schedule";
     }
   }
@@ -958,6 +972,7 @@ export async function recordSemanticFact(
   },
 ): Promise<RecordedFact | null> {
   const identity = factIdentity(input.event, input.idempotencyKey);
+  const calendar = termCalendarMetadata(input.event);
   const [fact] = await db
     .insert(learnerFacts)
     .values({
@@ -968,7 +983,9 @@ export async function recordSemanticFact(
       semanticKey: identity.semanticKey,
       periodKey: identity.periodKey,
       occurredAt: new Date(input.event.occurred_at),
-      metadata: input.event.metadata,
+      metadata: calendar
+        ? { ...input.event.metadata, term_timezone: calendar.term_timezone }
+        : input.event.metadata,
     })
     .onConflictDoNothing()
     .returning({ id: learnerFacts.id });
