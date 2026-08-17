@@ -720,6 +720,9 @@ export function createFixturePalClient(
         }
         return "platform.session.started applied to fixture state";
       }
+      if (action === "reward-earned") {
+        return "Deprecated fixture reward action ignored; use a concrete achievement action";
+      }
 
       return "No fixture action applied";
     },
