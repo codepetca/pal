@@ -12,7 +12,7 @@ const migrationsDirectory = join(
 );
 
 test(
-  "upgrade scheduling ignores historical facts and enqueues the next fact",
+  "upgrade backfills typed schedule metadata without granting historical rewards",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const sourceUrl = new URL(process.env.DATABASE_URL!);
@@ -82,6 +82,12 @@ test(
         Number((await upgrade.query(
           `SELECT count(*) AS count FROM story_collectible_schedules`,
         )).rows[0].count),
+        1,
+      );
+      assert.equal(
+        Number((await upgrade.query(
+          `SELECT count(*) AS count FROM learner_reward_grants`,
+        )).rows[0].count),
         0,
       );
 
@@ -108,13 +114,26 @@ test(
         }],
       );
       const schedule = await upgrade.query(
-        `SELECT period_key, due_at FROM story_collectible_schedules`,
+        `SELECT period_key, due_at
+         FROM story_collectible_schedules
+         ORDER BY period_key`,
       );
-      assert.equal(schedule.rowCount, 1);
+      assert.equal(schedule.rowCount, 2);
       assert.equal(schedule.rows[0].period_key, "current-period");
       assert.equal(
         new Date(schedule.rows[0].due_at).toISOString(),
         "2026-09-12T04:00:00.000Z",
+      );
+      assert.equal(schedule.rows[1].period_key, "historical-period");
+      assert.equal(
+        new Date(schedule.rows[1].due_at).toISOString(),
+        "2025-09-06T04:00:00.000Z",
+      );
+      assert.equal(
+        Number((await upgrade.query(
+          `SELECT count(*) AS count FROM learner_reward_grants`,
+        )).rows[0].count),
+        0,
       );
     } finally {
       await upgrade?.end();

@@ -140,11 +140,11 @@ export const learnerFacts = pgTable(
   ],
 );
 
-// Durable, typed work queue for guaranteed story ownership. The source weekly
-// configuration fact remains the provenance authority; due_at is its validated
-// local calendar boundary materialized as an instant so the daily worker never
-// has to scan or cast historical JSON. reconciled_at records queue consumption,
-// not ownership—the append-only learner_reward_grants ledger remains canonical.
+// Durable, typed work queue for guaranteed story ownership. Migration may
+// materialize valid historical configuration metadata, but that never creates
+// ownership: due_at and the rollout boundary decide eligibility, while the
+// append-only learner_reward_grants ledger remains canonical. reconciled_at
+// records queue consumption only after that ledger proves ownership.
 export const storyCollectibleSchedules = pgTable(
   "story_collectible_schedules",
   {

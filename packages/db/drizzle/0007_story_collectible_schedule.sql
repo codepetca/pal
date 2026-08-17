@@ -77,6 +77,29 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql STABLE;
 --> statement-breakpoint
+INSERT INTO "story_collectible_schedules" (
+	"learner_id",
+	"period_key",
+	"source_fact_id",
+	"due_at",
+	"created_at"
+)
+SELECT DISTINCT ON ("learner_facts"."learner_id", "learner_facts"."period_key")
+	"learner_facts"."learner_id",
+	"learner_facts"."period_key",
+	"learner_facts"."id",
+	"calculate_story_collectible_due_at"("learner_facts"."metadata"),
+	"learner_facts"."created_at"
+FROM "learner_facts"
+WHERE "learner_facts"."event_type" = 'daily_log_week.configured'
+	AND "learner_facts"."period_key" IS NOT NULL
+	AND "calculate_story_collectible_due_at"("learner_facts"."metadata") IS NOT NULL
+ORDER BY
+	"learner_facts"."learner_id",
+	"learner_facts"."period_key",
+	"learner_facts"."created_at",
+	"learner_facts"."id";
+--> statement-breakpoint
 CREATE FUNCTION "enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
