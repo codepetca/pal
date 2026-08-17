@@ -8,18 +8,6 @@ import type { LearnerRewardGrant } from "@pal/db";
 import { resolveBehaviorTitle } from "@/lib/reward-grants";
 import type { PersistedStoryPlan } from "@/lib/story-plan";
 
-export interface StoryProjectionOptions {
-  /** Assignment IDs whose Weekly Rhythm was earned; all other owned chapters render as sketches. */
-  colorChapterAssignmentIds?: ReadonlySet<string>;
-}
-
-function collectibleFinish(
-  assignmentId: string,
-  options: StoryProjectionOptions,
-): "sketch" | "color" {
-  return options.colorChapterAssignmentIds?.has(assignmentId) ? "color" : "sketch";
-}
-
 export type ProjectableRewardGrant = Pick<
   LearnerRewardGrant,
   | "id"
@@ -90,7 +78,6 @@ export function projectStoryProgression(
   plan: PersistedStoryPlan,
   grants: readonly ProjectableRewardGrant[],
   plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map([[plan.id, plan]]),
-  options: StoryProjectionOptions = {},
 ): PalProgressionState {
   const storyGrants = new Map(
     grants.flatMap((grant) =>
@@ -105,15 +92,12 @@ export function projectStoryProgression(
   const collectibles: PalCollectibleUnlock[] = plan.chapters.map((chapter) => {
     const earned = storyGrants.has(chapter.assignmentId);
     if (earned) {
-      const finish = collectibleFinish(chapter.assignmentId, options);
       return {
         id: chapter.collectible.id,
         chapterId: chapter.id,
         roadmapWeek: chapter.roadmapWeek,
         status: "earned",
-        statusLabel: finish === "color"
-          ? `Brought to life in Week ${chapter.roadmapWeek}`
-          : `Story sketch from Week ${chapter.roadmapWeek}`,
+        statusLabel: `Earned in Week ${chapter.roadmapWeek}`,
         title: chapter.collectible.title,
         description: chapter.storyCopy,
         revealHeadline: chapter.revealHeadline,
@@ -122,7 +106,6 @@ export function projectStoryProgression(
           ? { titleAward: chapter.title.label, titleRevealCopy: chapter.title.revealCopy }
           : {}),
         kind: chapter.collectible.kind,
-        finish,
         assetUrl: chapter.collectible.assetUrl,
       };
     }
@@ -132,7 +115,7 @@ export function projectStoryProgression(
       id: `story-slot-${chapter.roadmapWeek}`,
       roadmapWeek: chapter.roadmapWeek,
       status,
-      statusLabel: status === "next" ? "Reveals when this week ends" : "Locked",
+      statusLabel: status === "next" ? "Next Weekly Rhythm reward" : "Locked",
     };
   });
 
@@ -169,7 +152,6 @@ export function projectStoryProgression(
 export function projectUnseenGrantRewards(
   grants: readonly ProjectableRewardGrant[],
   plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map(),
-  options: StoryProjectionOptions = {},
 ): PalRewardNotice[] {
   return grants
     .filter((grant) => grant.seenAt === null)
@@ -206,7 +188,6 @@ export function projectUnseenGrantRewards(
             description: chapter.storyCopy,
             kind: "story" as const,
             collectibleTitle: chapter.collectible.title,
-            collectibleFinish: collectibleFinish(chapter.assignmentId, options),
             assetUrl: chapter.collectible.assetUrl,
             ...(chapter.title
               ? { titleAward: chapter.title.label, titleRevealCopy: chapter.title.revealCopy }

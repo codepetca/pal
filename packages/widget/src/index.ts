@@ -37,7 +37,6 @@ export type {
   PalCompanionState,
   PalCollectionItem,
   PalCollectionState,
-  PalCollectibleFinish,
   PalCollectibleKind,
   PalCollectibleUnlock,
   PalDensity,

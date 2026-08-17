@@ -379,6 +379,9 @@ export async function loadLearnerSnapshot(
       if (persistedStoryPlan) {
         storyPlansById.set(persistedStoryPlan.id, persistedStoryPlan);
       }
+      const progression = persistedStoryPlan
+        ? projectStoryProgression(persistedStoryPlan, grantRows, storyPlansById)
+        : undefined;
       const authoritativeWeekNumbers = new Map<string, number>();
       const authoritativeWeekStarts = new Map<string, string>();
       for (const fact of calendarFacts) {
@@ -588,34 +591,6 @@ export async function loadLearnerSnapshot(
         week.achievements = week.achievements.slice(0, 100);
       }
 
-      const earnedRhythmPeriodKeys = new Set(
-        instances.flatMap((instance) =>
-          instance.achievementKey === ACHIEVEMENT_KEYS.weeklyRhythm &&
-          instance.status === "earned" &&
-          instance.periodKey
-            ? [instance.periodKey]
-            : [],
-        ),
-      );
-      const colorChapterAssignmentIds = new Set(
-        [...storyPlansById.values()].flatMap((plan) =>
-          plan.chapters.flatMap((chapter) =>
-            chapter.periodKey && earnedRhythmPeriodKeys.has(chapter.periodKey)
-              ? [chapter.assignmentId]
-              : [],
-          ),
-        ),
-      );
-      const storyProjectionOptions = { colorChapterAssignmentIds };
-      const progression = persistedStoryPlan
-        ? projectStoryProgression(
-            persistedStoryPlan,
-            grantRows,
-            storyPlansById,
-            storyProjectionOptions,
-          )
-        : undefined;
-
       const eco = economyRows[0];
       const pet = petRows[0];
       const mood = companionMood(
@@ -654,11 +629,7 @@ export async function loadLearnerSnapshot(
           ),
         },
         rewards: [
-          ...projectUnseenGrantRewards(
-            grantRows,
-            storyPlansById,
-            storyProjectionOptions,
-          ),
+          ...projectUnseenGrantRewards(grantRows, storyPlansById),
           ...achievementRewards.flatMap((reward) => {
             const projected = achievementCelebration(reward);
             return projected ? [projected] : [];

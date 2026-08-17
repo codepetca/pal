@@ -216,9 +216,7 @@ story pack rather than forcing them into this arc.
 
 ## Reveal behavior
 
-When a week ends, reveal its guaranteed sketch chapter in this order. If the
-learner earns Weekly Rhythm first, use the same sequence with the full-color
-artwork instead:
+When a chapter is earned, reveal it in this order:
 
 1. Show the reveal headline.
 2. Reveal the collectible artwork and name together.
@@ -226,10 +224,9 @@ artwork instead:
 4. If the chapter grants a title, reveal the title last and make it the new
    displayed title.
 
-The roadmap card then keeps the artwork and collectible name visible for that
-period. A sketch becomes full color when Weekly Rhythm is earned; it is never a
-separate collectible. A locked card continues to show only the lock treatment.
-The next scheduled collectible is not previewed.
+The roadmap card then keeps the earned artwork and collectible name visible for
+that period. A locked card continues to show only the lock treatment. The next
+scheduled collectible is not previewed.
 
 Pal derives this display state at the authenticated snapshot boundary from the
 learner's pinned story plan and durable awards. That canonical projector removes

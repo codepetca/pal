@@ -43,7 +43,7 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
-6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. The weekly story always continues as a sketch keepsake; earning Weekly Rhythm brings that keepsake to life in color.
+6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. Earning a Weekly Rhythm also advances the durable collection.
 
 That's the full loop. Each domain owns one step.
 
