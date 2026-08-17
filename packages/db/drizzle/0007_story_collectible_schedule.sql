@@ -122,56 +122,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
 AFTER INSERT ON "learner_facts"
 FOR EACH ROW EXECUTE FUNCTION "enqueue_story_collectible_schedule"();
---> statement-breakpoint
-WITH "candidate_facts" AS MATERIALIZED (
-	SELECT
-		"learner_facts"."id" AS "source_fact_id",
-		"learner_facts"."learner_id",
-		"learner_facts"."period_key",
-		"learner_facts"."created_at",
-		"calculate_story_collectible_due_at"("learner_facts"."metadata") AS "due_at"
-	FROM "learner_facts"
-	WHERE "learner_facts"."event_type" = 'daily_log_week.configured'
-		AND "learner_facts"."period_key" IS NOT NULL
-),
-"first_valid_facts" AS (
-	SELECT DISTINCT ON (
-		"candidate_facts"."learner_id",
-		"candidate_facts"."period_key"
-	)
-		"candidate_facts".*
-	FROM "candidate_facts"
-	WHERE "candidate_facts"."due_at" IS NOT NULL
-	ORDER BY
-		"candidate_facts"."learner_id",
-		"candidate_facts"."period_key",
-		"candidate_facts"."created_at",
-		"candidate_facts"."source_fact_id"
-)
-INSERT INTO "story_collectible_schedules" (
-	"learner_id",
-	"period_key",
-	"source_fact_id",
-	"due_at",
-	"reconciled_at",
-	"created_at"
-)
-SELECT
-	"first_valid_facts"."learner_id",
-	"first_valid_facts"."period_key",
-	"first_valid_facts"."source_fact_id",
-	"first_valid_facts"."due_at",
-	"learner_reward_grants"."created_at",
-	"first_valid_facts"."created_at"
-FROM "first_valid_facts"
-LEFT JOIN "story_plan_chapters"
-	ON "story_plan_chapters"."learner_id" = "first_valid_facts"."learner_id"
-	AND "story_plan_chapters"."period_key" = "first_valid_facts"."period_key"
-LEFT JOIN "learner_reward_grants"
-	ON "learner_reward_grants"."story_plan_chapter_id" = "story_plan_chapters"."id"
-	AND "learner_reward_grants"."kind" = 'story_chapter'
-ON CONFLICT ("learner_id", "period_key") DO NOTHING;
---> statement-breakpoint
 CREATE FUNCTION "protect_story_collectible_schedule"() RETURNS trigger AS $$
 BEGIN
 	IF TG_OP = 'DELETE' THEN
