@@ -115,12 +115,7 @@ export interface PalGrantRewardNotice extends PalRewardNotice {
 export interface PalAchievementCelebrationNotice extends PalRewardNotice {
   /** Transient acknowledgement identity. */
   id: string;
-  /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
-  kind: "standard";
-  title: string;
-  description: string;
-  assetUrl?: string;
-  icon?: string;
+  kind: "achievement";
   /** Presentation-safe identity selected by the authenticated Pal server. */
   achievement: PalAchievementPresentation & {
     /** Stable earned achievement-instance identity used by the roadmap. */
@@ -251,8 +246,6 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
-  /** @deprecated Use a concrete achievement action so the celebration has canonical identity. */
-  | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";

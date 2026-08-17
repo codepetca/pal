@@ -67,8 +67,10 @@ export function PalRewardCelebration({
 
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
-  const achievement = reward.achievement;
-  const grantReward = achievement ? undefined : reward;
+  const achievement = reward.kind === "achievement"
+    ? reward.achievement
+    : undefined;
+  const grantReward = reward.kind === "achievement" ? undefined : reward;
   const storyReward = grantReward?.kind === "story";
   const title = achievement?.title ?? grantReward?.title ?? "";
   const description = achievement?.description ?? grantReward?.description ?? "";
@@ -125,13 +127,6 @@ export function PalRewardCelebration({
         <strong className="pal-celebration-collectible">
           {grantReward.collectibleTitle}
         </strong>
-      ) : null}
-      {storyReward && grantReward.collectibleFinish ? (
-        <span className="pal-celebration-finish">
-          {grantReward.collectibleFinish === "sketch"
-            ? "Storybook sketch"
-            : "Brought to life in full color"}
-        </span>
       ) : null}
       <p id={descriptionId}>{description}</p>
       {grantReward?.titleAward ? (

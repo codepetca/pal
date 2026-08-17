@@ -429,15 +429,9 @@ function SandboxControls({
                 type="button"
                 onClick={() => void advanceWeek()}
                 disabled={busy || !canAddWeek}
-                aria-label={
-                  fixture && currentSemesterWeek === totalSemesterWeeks
-                    ? "Finish semester story"
-                    : "Add 1 week and configure it"
-                }
+                aria-label="Add 1 week and configure it"
               >
-                {fixture && currentSemesterWeek === totalSemesterWeeks
-                  ? "Finish story"
-                  : "+1 week"}
+                +1 week
               </button>
             </div>
             {fixture ? (
@@ -644,10 +638,8 @@ function SandboxExperience({
     isTodayOrEarlier(nextDay) &&
     semesterWeekForDate(nextDay) <= termWeeks &&
     (fixture || isInsideFictionalSemester(nextDay));
-  const simulatedSemesterWeek = semesterWeekForDate(simulatedDate);
   const canAddWeek =
-    (simulatedSemesterWeek < termWeeks ||
-      (fixture && simulatedSemesterWeek === termWeeks)) &&
+    semesterWeekForDate(simulatedDate) < termWeeks &&
     isTodayOrEarlier(nextWeek) &&
     (fixture || isInsideFictionalSemester(nextWeek));
 

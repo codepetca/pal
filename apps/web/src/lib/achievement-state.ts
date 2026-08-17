@@ -123,7 +123,6 @@ export type WeeklyConfigurationError =
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
   | "invalid_term_story_schedule"
-  | "premature_period_close"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -496,21 +495,6 @@ export async function weeklyConfigurationRejection(
     !existing || (existingCalendar?.startDay === null && calendar)
       ? periodCalendarFromMetadata(calendar)
       : undefined;
-  const closureCalendar =
-    existingCalendar?.startDay === null || !existingCalendar
-      ? firstConfigurationCalendarOverride
-      : existingCalendar;
-  if (
-    periodStatus === "closed" &&
-    closureCalendar?.timeZone &&
-    closureCalendar.startDay &&
-    calendarDayInTimeZone(
-      new Date(event.occurred_at),
-      closureCalendar.timeZone,
-    ) < closureCalendar.startDay
-  ) {
-    return "premature_period_close";
-  }
   if (
     periodStatus === "closed" &&
     eligibleDays <

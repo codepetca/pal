@@ -384,23 +384,14 @@ function parseReward(
   const source = record(value, path);
   const id = uniqueId(text(source.id, `${path}.id`), ids, `${path}.id`);
   if (source.kind === "achievement") {
-    const achievement = parseAchievementPresentation(
-      source.achievement,
-      `${path}.achievement`,
-      assetPolicy,
-    );
     return {
       id,
-      kind: "standard",
-      title: achievement.title,
-      description: achievement.description,
-      ...(achievement.badge.assetUrl === undefined
-        ? {}
-        : { assetUrl: achievement.badge.assetUrl }),
-      ...(achievement.badge.icon === undefined
-        ? {}
-        : { icon: achievement.badge.icon }),
-      achievement,
+      kind: "achievement",
+      achievement: parseAchievementPresentation(
+        source.achievement,
+        `${path}.achievement`,
+        assetPolicy,
+      ),
     };
   }
   const icon = optionalText(source.icon, `${path}.icon`);
@@ -412,13 +403,6 @@ function parseReward(
   const kind = source.kind === undefined
     ? undefined
     : member(source.kind, `${path}.kind`, ["standard", "story"] as const);
-  const achievement = source.achievement === undefined
-    ? undefined
-    : parseAchievementPresentation(
-        source.achievement,
-        `${path}.achievement`,
-        assetPolicy,
-      );
   const collectibleTitle = optionalText(
     source.collectibleTitle,
     `${path}.collectibleTitle`,
@@ -435,7 +419,7 @@ function parseReward(
     source.titleRevealCopy,
     `${path}.titleRevealCopy`,
   );
-  const reward = {
+  return {
     id,
     title: text(source.title, `${path}.title`),
     description: text(source.description, `${path}.description`),
@@ -447,13 +431,6 @@ function parseReward(
     ...(icon === undefined ? {} : { icon }),
     ...(assetUrl === undefined ? {} : { assetUrl }),
   };
-  return achievement === undefined
-    ? reward
-    : {
-        ...reward,
-        kind: "standard",
-        achievement,
-      };
 }
 
 function parseCollectionItem(

@@ -238,13 +238,6 @@ emits one companion reveal decision. Fixtures call the same projector. The
 widget validates the resulting transport shape and renders it without
 re-evaluating chapter eligibility.
 
-Guaranteed schedule grants are enabled by an explicit deployment cutoff. Pal
-reconciles all eligible ungranted chapters in a period-bearing event's plan
-through the latest observed started week, but it never turns configurations
-stored before that cutoff into story ownership. A later scheduled boundary
-worker can write to the same idempotent grant ledger under the same eligibility
-rules without changing this contract.
-
 Reduced-motion mode should replace scale, bounce, or sparkle sequences with a
 short opacity transition. The full reveal must remain understandable with no
 animation and no sound.

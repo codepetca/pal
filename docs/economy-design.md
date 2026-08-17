@@ -118,17 +118,6 @@ older widget/API pair.
   when the next configured week begins (or when the final period closes), so an
   absence never removes part of Pip's story. Earning that period's durable
   Weekly Rhythm reveals the same collectible immediately in full color. The
-  configured-week boundary uses its authoritative local start day: a future
-  preconfiguration cannot reveal the prior chapter early, and a non-final
-  close cannot reveal its own chapter. Pal rejects a closed configuration before
-  that period's authoritative local start, including calendarless revisions of
-  an already configured period. If Pika preconfigures a week early, the
-  first accepted period-bearing learner event after its local start reconciles
-  every eligible due sketch in that term, including intervening weeks with no
-  learner activity. Schedule
-  grants are fail-closed until `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is set;
-  only calendar configurations persisted at or after that rollout boundary are
-  eligible, so deploying the feature never backfills older terms. The
   append-only chapter grant stays singular and exact-once; color is a
   presentation tier derived from the durable weekly achievement, not a second
   inventory item. Level, streak, and assignment milestones may award titles or

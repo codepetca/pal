@@ -15,7 +15,6 @@ const FIXTURE_ACTIONS = new Set<Exclude<PalFixtureAction, "reset">>([
   "late-finish",
   "short-week-configured",
   "week-configured",
-  "reward-earned",
   "duplicate-replayed",
   "session-started",
 ]);

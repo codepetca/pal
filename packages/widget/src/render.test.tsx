@@ -48,7 +48,7 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.ok(
     snapshot.rewards.some(
       (reward) =>
-        reward.achievement !== undefined &&
+        reward.kind === "achievement" &&
         reward.achievement.key === "weekly-rhythm",
     ),
   );
@@ -166,26 +166,6 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Quest Keeper/);
   assert.doesNotMatch(html, /Level Leader/);
   assert.doesNotMatch(html, /Semester Legend/);
-});
-
-test("story celebration names the sketch finish without relying on color", () => {
-  const snapshot = createFixtureSnapshot(1, 6);
-  snapshot.rewards = [{
-    id: "story-sketch",
-    kind: "story",
-    title: "A new chapter",
-    description: "The egg waits beside the lamp.",
-    collectibleTitle: "Mystery Egg",
-    collectibleFinish: "sketch",
-    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
-  }];
-  const client = createFixturePalClient(snapshot);
-  const html = renderToStaticMarkup(
-    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="sketch-reward">
-      <PalRewardCelebration />
-    </PalProvider>,
-  );
-  assert.match(html, />Storybook sketch</);
 });
 
 test("roadmap omits the title chip until the learner earns a title", () => {
