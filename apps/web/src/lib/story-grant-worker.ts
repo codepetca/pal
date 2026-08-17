@@ -182,6 +182,10 @@ export async function reconcileDueStoryGrantsForLearner(
       .where(eq(learners.id, learnerId))
       .limit(1);
     if (!learner) return { candidates: 0, due: 0, granted: 0 };
+    // Do not spend the connection's full statement timeout waiting behind an
+    // accepted event or concurrent cron. lock_timeout produces 55P03, which the
+    // bounded worker retry loop can recover within this invocation.
+    await tx.execute(sql`SET LOCAL lock_timeout = '1500ms'`);
     await tx.execute(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`,
     );
@@ -266,7 +270,7 @@ export async function runStoryGrantWorker(
           retries: attempt - 1,
         };
       } catch (error) {
-        const retryable = isRetryableStoryGrantFailure(error);
+        const retryable = isRetryableStoryGrantFailure(error, input.scope);
         const finalAttempt = !retryable || attempt === maxAttempts;
         const details = {
           scope: input.scope,
@@ -361,9 +365,13 @@ function sanitizedFailureCode(error: unknown): string {
   return "unknown";
 }
 
-function isRetryableStoryGrantFailure(error: unknown): boolean {
+function isRetryableStoryGrantFailure(
+  error: unknown,
+  scope: "discovery" | "learner",
+): boolean {
   const code = sanitizedFailureCode(error);
-  return code.startsWith("08") || new Set([
+  return (scope === "learner" && code === "57014") ||
+    code.startsWith("08") || new Set([
     "40001", // serialization_failure
     "40P01", // deadlock_detected
     "53300", // too_many_connections
