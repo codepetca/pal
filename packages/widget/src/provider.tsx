@@ -340,6 +340,7 @@ export function PalProvider({
               }
             : current,
         );
+        void refresh();
       } catch (cause) {
         if (isAbortError(cause, signal)) {
           return;
@@ -380,7 +381,7 @@ export function PalProvider({
         }
       }
     },
-    [client, scopeKey],
+    [client, refresh, scopeKey],
   );
 
   const isRewardPending = useCallback(

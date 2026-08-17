@@ -141,6 +141,60 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(renderer.toJSON(), null);
 });
 
+test("successful acknowledgement refills the bounded reward page", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First reward",
+    description: "The first bounded-page reward.",
+  }];
+  const secondPage = structuredClone(firstPage);
+  secondPage.rewards = [{
+    id: "reward-2",
+    title: "Next reward",
+    description: "The next reward loaded after acknowledgement.",
+  }];
+  let acknowledged = false;
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      return acknowledged ? secondPage : firstPage;
+    },
+    async markRewardSeen() {
+      acknowledged = true;
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={firstPage}
+        scopeKey="fixture-refill"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  await act(async () => {
+    await widget.dismissReward("reward-1");
+  });
+
+  assert.ok(snapshotCalls >= 2);
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["reward-2"],
+  );
+});
+
 test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
@@ -284,9 +338,9 @@ test("an older snapshot refresh cannot resurrect an acknowledged reward", async 
   const client: PalClient = {
     getSnapshot() {
       snapshotCalls += 1;
-      return snapshotCalls === 1
-        ? Promise.resolve(snapshot)
-        : staleRefresh.promise;
+      return snapshotCalls === 2
+        ? staleRefresh.promise
+        : Promise.resolve(snapshot);
     },
     async markRewardSeen() {
       acknowledgementCalls += 1;

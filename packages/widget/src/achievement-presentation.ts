@@ -64,6 +64,9 @@ const ACHIEVEMENT_PRESENTATIONS: Readonly<
 export function resolvePalAchievementPresentation(
   key: string,
 ): PalAchievementPresentation | undefined {
+  if (!Object.prototype.hasOwnProperty.call(ACHIEVEMENT_PRESENTATIONS, key)) {
+    return undefined;
+  }
   const presentation = ACHIEVEMENT_PRESENTATIONS[key as PalAchievementKey];
   return presentation
     ? { ...presentation, badge: { ...presentation.badge } }

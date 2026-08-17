@@ -35,6 +35,7 @@ import { resolveIntegration } from "@/lib/integration-auth";
 import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
+  mergePendingRewardQueues,
 } from "@/lib/learner-snapshot";
 
 const secret = "story-system-test-secret-at-least-32-characters";
@@ -150,6 +151,38 @@ test("all supported plans are deterministic, complete, and deeply immutable", ()
   assert.throws(() => {
     (catalog.chapters[0] as { id: string }).id = "changed";
   }, TypeError);
+});
+
+test("bounded reward pages cannot starve either pending queue", () => {
+  const grantRewards: PalRewardNotice[] = Array.from(
+    { length: 100 },
+    (_, index) => ({
+      id: `grant-${index + 1}`,
+      title: `Grant ${index + 1}`,
+      description: "An unseen story or title grant.",
+    }),
+  );
+  const achievementRewards: PalRewardNotice[] = [{
+    id: "achievement-1",
+    title: "Achievement earned",
+    description: "A newly earned achievement.",
+  }];
+
+  const page = mergePendingRewardQueues(grantRewards, achievementRewards);
+  assert.equal(page.length, 100);
+  assert.equal(page[0]?.id, "achievement-1");
+  assert.equal(page.some((reward) => reward.id.startsWith("grant-")), true);
+
+  const inversePage = mergePendingRewardQueues(
+    grantRewards.slice(0, 1),
+    Array.from({ length: 100 }, (_, index) => ({
+      id: `achievement-${index + 1}`,
+      title: `Achievement ${index + 1}`,
+      description: "An unseen achievement notice.",
+    })),
+  );
+  assert.equal(inversePage.length, 100);
+  assert.equal(inversePage.some((reward) => reward.id === "grant-1"), true);
 });
 
 test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
