@@ -34,6 +34,11 @@ and non-PII correlation identifier, continues the bounded batch, and returns
 `500` with `status: "partial_failure"`. A later daily run rediscovers every
 still-ungranted week.
 
+If the bounded run reaches its batch cap while more due work may remain, it
+returns `503` with `status: "incomplete"` and `batchLimitReached: true`. This
+makes backlog exhaustion alertable instead of presenting a partially drained
+queue as an ordinary successful cron run; pending rows remain recoverable.
+
 The route does not accept a learner, period, date, or event payload. It derives
 eligibility only from typed, indexed due-work materialized from validated stored
 calendar configuration and immutable story-plan assignments. It creates no Pika
