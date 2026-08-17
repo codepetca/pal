@@ -124,9 +124,11 @@ test("every newly earned fixture achievement queues one canonical celebration", 
   );
   assert.equal(celebrations.length, 5);
   for (const celebration of celebrations) {
+    assert.ok(celebration.achievement);
+    const celebratedAchievement = celebration.achievement;
     const mapped = earned.roadmap.weeks
       .flatMap((week) => week.achievements)
-      .find((achievement) => achievement.id === celebration.achievement.id);
+      .find((achievement) => achievement.id === celebratedAchievement.id);
     assert.ok(mapped);
     assert.equal(mapped.status, "earned");
     assert.deepEqual(celebration.achievement, {
@@ -146,6 +148,8 @@ test("every newly earned fixture achievement queues one canonical celebration", 
   assert.equal(client.peek().rewards.length, 5);
 
   const acknowledged = celebrations[0]!;
+  assert.ok(acknowledged.achievement);
+  const acknowledgedAchievement = acknowledged.achievement;
   await client.markRewardSeen(acknowledged.id);
   const afterAcknowledgement = client.peek();
   assert.equal(
@@ -159,7 +163,7 @@ test("every newly earned fixture achievement queues one canonical celebration", 
       .flatMap((week) => week.achievements)
       .some(
         (achievement) =>
-          achievement.id === acknowledged.achievement.id &&
+          achievement.id === acknowledgedAchievement.id &&
           achievement.status === "earned",
       ),
   );

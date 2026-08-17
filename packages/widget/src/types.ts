@@ -85,7 +85,12 @@ export interface PalCompanionState {
   assetUrl?: string;
 }
 
-export interface PalGrantRewardNotice {
+/**
+ * Backward-compatible schema-v1 reward surface. Hosts may continue reading the
+ * original optional grant fields without first narrowing a newer achievement
+ * celebration variant.
+ */
+export interface PalRewardNotice {
   id: string;
   title: string;
   description: string;
@@ -97,10 +102,17 @@ export interface PalGrantRewardNotice {
   titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
+  achievement?: PalAchievementPresentation & {
+    /** Stable earned achievement-instance identity used by the roadmap. */
+    id: string;
+  };
+}
+
+export interface PalGrantRewardNotice extends PalRewardNotice {
   achievement?: never;
 }
 
-export interface PalAchievementCelebrationNotice {
+export interface PalAchievementCelebrationNotice extends PalRewardNotice {
   /** Transient acknowledgement identity. */
   id: string;
   /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
@@ -115,10 +127,6 @@ export interface PalAchievementCelebrationNotice {
     id: string;
   };
 }
-
-export type PalRewardNotice =
-  | PalGrantRewardNotice
-  | PalAchievementCelebrationNotice;
 
 export interface PalCollectionItem {
   id: string;
