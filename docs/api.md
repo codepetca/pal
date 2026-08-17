@@ -27,10 +27,12 @@ learner routes.
 Vercel invokes `GET /api/cron/story-collectibles` with
 `Authorization: Bearer <CRON_SECRET>`. Missing or malformed deployment
 configuration returns `503`; an invalid bearer returns `401`. Successful runs
-return `200` with batch, learner, and grant counts. If an individual learner
-transaction fails, the worker continues the bounded batch and returns `500`
-with `status: "partial_failure"`, allowing monitoring to surface the incident
-while a later daily run rediscovers all still-ungranted weeks.
+return `200` with batch, learner, retry, and grant counts. Discovery and each
+learner transaction use bounded in-invocation retries. If an individual learner
+still fails, the worker records only a sanitized failure code, attempt count,
+and non-PII correlation identifier, continues the bounded batch, and returns
+`500` with `status: "partial_failure"`. A later daily run rediscovers every
+still-ungranted week.
 
 The route does not accept a learner, period, date, or event payload. It derives
 eligibility only from validated stored calendar configuration and immutable

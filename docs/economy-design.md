@@ -119,7 +119,9 @@ older widget/API pair.
   day when the authoritative term ends midweek. The first partial week begins on
   `term_start_day`; later normal weeks begin Monday. A later instructional week,
   holiday, or break never moves the current period's due day. Boundaries use the
-  term's authoritative IANA timezone.
+  term's authoritative IANA timezone. For defensive compatibility with the
+  existing Pika contract, a contract-valid weekend start uses the following
+  Monday-Friday instructional span and becomes due that Saturday.
 - A version-controlled Vercel cron wakes the worker daily. It pages through
   learners with ungranted overdue assignments, takes the same per-learner row
   lock as event ingest, and reconciles every overdue week for that learner in one
@@ -132,11 +134,13 @@ older widget/API pair.
   and color when it is earned. An achievement earned before the due day does not
   create early ownership; a delayed valid achievement upgrades the existing
   collectible's presentation without inserting another grant.
-- Schedule grants are fail-closed until both the cron secret and
-  `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` are configured. Both the provenance
+- Schedule-grant eligibility is fail-closed until
+  `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is configured. Both the provenance
   fact and due instant must be at or after that boundary, so deploying the
-  feature never backfills older weeks. Level, streak, and assignment milestones
-  may award titles or ordinary rewards, but never color story props.
+  feature never backfills older weeks. `CRON_SECRET` separately authenticates
+  the daily cron route and is not an eligibility input for accepted-event
+  recovery. Level, streak, and assignment milestones may award titles or
+  ordinary rewards, but never color story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready
