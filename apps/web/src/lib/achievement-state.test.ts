@@ -398,8 +398,10 @@ test(
         (week) => week.achievements,
       );
       for (const celebration of achievementCelebrations) {
+        assert.ok(celebration.achievement);
+        const celebratedAchievement = celebration.achievement;
         const mapped = roadmapAchievements.find(
-          (achievement) => achievement.id === celebration.achievement.id,
+          (achievement) => achievement.id === celebratedAchievement.id,
         );
         assert.ok(mapped);
         assert.equal(mapped.status, "earned");
