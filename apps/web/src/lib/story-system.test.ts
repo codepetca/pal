@@ -35,8 +35,8 @@ import { resolveIntegration } from "@/lib/integration-auth";
 import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
-  mergePendingRewardQueues,
 } from "@/lib/learner-snapshot";
+import { mergePendingRewardQueues } from "@/lib/reward-queue";
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;

@@ -33,21 +33,50 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
   const storyReward = earned.rewards.find((reward) => reward.kind === "story");
   assert.ok(storyReward);
   assert.deepEqual(
-    earned.rewards.map((reward) => reward.kind ?? "standard"),
-    ["standard", "story", "standard"],
+    earned.rewards.map((reward) => ({
+      id: reward.id,
+      kind: reward.kind ?? "standard",
+      achievement: reward.achievement?.key,
+      titleAward: reward.titleAward,
+    })),
+    [
+      {
+        id: "fixture-achievement-weekly-rhythm-1",
+        kind: "standard",
+        achievement: "weekly-rhythm",
+        titleAward: undefined,
+      },
+      {
+        id: "fixture-grant-1",
+        kind: "standard",
+        achievement: undefined,
+        titleAward: "Rhythm Builder",
+      },
+      {
+        id: "fixture-grant-2",
+        kind: "story",
+        achievement: undefined,
+        titleAward: undefined,
+      },
+    ],
   );
   assert.equal(
     earned.rewards.some((reward) => reward.achievement !== undefined),
     true,
   );
 
-  await client.markRewardSeen(storyReward.id);
-  const acknowledged = await client.getSnapshot();
-  assert.equal(
-    acknowledged.rewards.some((reward) => reward.id === storyReward.id),
-    false,
-  );
-  assert.equal(acknowledged.progression?.collectibles[0]?.status, "earned");
+  let acknowledged = earned;
+  for (const rewardId of earned.rewards.map((reward) => reward.id)) {
+    assert.equal(acknowledged.rewards[0]?.id, rewardId);
+    await client.markRewardSeen(rewardId);
+    acknowledged = await client.getSnapshot();
+    assert.equal(
+      acknowledged.rewards.some((reward) => reward.id === rewardId),
+      false,
+    );
+    assert.equal(acknowledged.progression?.collectibles[0]?.status, "earned");
+  }
+  assert.deepEqual(acknowledged.rewards, []);
 });
 
 test("fixture story request rejects private or unbounded commands", () => {

@@ -42,34 +42,13 @@ import {
   loadPersistedStoryPlan,
   loadPersistedStoryPlansByIds,
 } from "@/lib/story-plan";
+import { mergePendingRewardQueues } from "@/lib/reward-queue";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
 } from "@/lib/story-projector";
 
 const LEGACY_SEMESTER_WEEKS = 16;
-const MAX_PENDING_REWARDS = 100;
-
-/**
- * Fairly merges the two independently ordered notice queues. Alternation keeps
- * either queue from consuming the entire bounded snapshot page.
- */
-export function mergePendingRewardQueues(
-  grantRewards: readonly PalWidgetSnapshot["rewards"][number][],
-  achievementRewards: readonly PalWidgetSnapshot["rewards"][number][],
-  limit = MAX_PENDING_REWARDS,
-): PalWidgetSnapshot["rewards"] {
-  const merged: PalWidgetSnapshot["rewards"] = [];
-  const length = Math.max(grantRewards.length, achievementRewards.length);
-  for (let index = 0; index < length && merged.length < limit; index += 1) {
-    const achievement = achievementRewards[index];
-    if (achievement) merged.push(achievement);
-    if (merged.length >= limit) break;
-    const grant = grantRewards[index];
-    if (grant) merged.push(grant);
-  }
-  return merged;
-}
 
 const COLLECTION_ITEMS = new Map<string, PalCollectionItem>(
   PROGRESSION_POLICY.collectionMilestones.map((milestone) => [
