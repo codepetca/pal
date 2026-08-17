@@ -10,6 +10,7 @@ import {
   learnerRewardGrants,
   learners,
   rewardNotices,
+  storyCollectibleSchedules,
   storyPlanChapters,
   storyPlans,
   weeklyRhythmConfigs,
@@ -419,6 +420,16 @@ test(
         })
         .returning({ id: learnerFacts.id });
 
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learnerB.id,
+          periodKey: `cross-owner-schedule-${suffix}`,
+          sourceFactId: factA.id,
+          dueAt: new Date(),
+        }),
+        foreignKeyViolation,
+      );
+
       const [secondChapter] = await db
         .select({ id: storyPlanChapters.id })
         .from(storyPlanChapters)
@@ -758,6 +769,228 @@ test(
         ),
       );
       assert.equal(nodes.some((node) => node["Node Type"] === "Sort"), false);
+    } finally {
+      await db.delete(integrations).where(eq(integrations.id, integration.id));
+    }
+  },
+);
+
+test(
+  "materializes one immutable typed story schedule from the first valid weekly fact",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const db = getDb();
+    const suffix = crypto.randomUUID();
+    const [integration] = await db.insert(integrations).values({
+      slug: `story-schedule-${suffix}`,
+      name: "Story Schedule",
+      secretHash: `story-schedule-secret-${suffix}`,
+      allowedEventTypes: [],
+    }).returning({ id: integrations.id });
+    try {
+      const [learner] = await db.insert(learners).values({
+        integrationId: integration.id,
+        externalLearnerId: `story-schedule-learner-${suffix}`,
+      }).returning({ id: learners.id });
+      const periodKey = `story-schedule-period-${suffix}`;
+      const sourceEvents = await db.insert(events).values([
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-schedule-event-1-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date("2026-08-31T12:00:00.000Z"),
+          metadata: {},
+        },
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-schedule-event-2-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date("2026-09-01T12:00:00.000Z"),
+          metadata: {},
+        },
+      ]).returning({ id: events.id });
+
+      const calendar = {
+        term_start_day: "2026-08-31",
+        term_end_day: "2026-10-09",
+        term_timezone: "America/Toronto",
+        term_week_count: 6,
+        week_start_day: "2026-08-31",
+        week_index: 1,
+      };
+      const [firstFact] = await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: sourceEvents[0]!.id,
+        eventType: "daily_log_week.configured",
+        semanticKey: `${periodKey}:1`,
+        periodKey,
+        occurredAt: new Date("2026-08-31T12:00:00.000Z"),
+        metadata: calendar,
+      }).returning({ id: learnerFacts.id });
+      await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: sourceEvents[1]!.id,
+        eventType: "daily_log_week.configured",
+        semanticKey: `${periodKey}:2`,
+        periodKey,
+        occurredAt: new Date("2026-09-01T12:00:00.000Z"),
+        metadata: calendar,
+      });
+
+      const schedules = await db.select().from(storyCollectibleSchedules).where(
+        eq(storyCollectibleSchedules.learnerId, learner.id),
+      );
+      assert.equal(schedules.length, 1);
+      assert.equal(schedules[0]!.sourceFactId, firstFact.id);
+      assert.equal(schedules[0]!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
+      assert.equal(schedules[0]!.reconciledAt, null);
+
+      await assert.rejects(
+        db.update(storyCollectibleSchedules).set({
+          dueAt: new Date("2026-09-06T04:00:00.000Z"),
+        }).where(eq(storyCollectibleSchedules.id, schedules[0]!.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.update(storyCollectibleSchedules).set({
+          reconciledAt: new Date(),
+        }).where(eq(storyCollectibleSchedules.id, schedules[0]!.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.delete(storyCollectibleSchedules).where(
+          eq(storyCollectibleSchedules.id, schedules[0]!.id),
+        ),
+        (error) => postgresViolation(error, "23514"),
+      );
+    } finally {
+      await db.delete(integrations).where(eq(integrations.id, integration.id));
+    }
+  },
+);
+
+test(
+  "typed story scheduling is timezone-safe and rejects malformed calendar facts",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const db = getDb();
+    const suffix = crypto.randomUUID();
+    const [integration] = await db.insert(integrations).values({
+      slug: `story-calendar-${suffix}`,
+      name: "Story Calendar",
+      secretHash: `story-calendar-secret-${suffix}`,
+      allowedEventTypes: [],
+    }).returning({ id: integrations.id });
+    try {
+      const scenarios = [
+        {
+          name: "legacy-midweek-start",
+          metadata: {
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            week_index: 1,
+          },
+          expected: "2026-09-05T04:00:00.000Z",
+        },
+        {
+          name: "weekend",
+          metadata: {
+            term_start_day: "2026-09-06",
+            term_end_day: "2026-10-16",
+            term_timezone: "America/Toronto",
+            week_start_day: "2026-09-06",
+            week_index: 1,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "dst",
+          metadata: {
+            term_start_day: "2026-03-02",
+            term_end_day: "2026-06-19",
+            term_timezone: "America/New_York",
+            week_start_day: "2026-03-09",
+            week_index: 2,
+          },
+          expected: "2026-03-14T04:00:00.000Z",
+        },
+        {
+          name: "midweek-end",
+          metadata: {
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-10-07",
+            term_timezone: "Pacific/Kiritimati",
+            week_start_day: "2026-10-05",
+            week_index: 6,
+          },
+          expected: "2026-10-07T10:00:00.000Z",
+        },
+      ] as const;
+      for (const scenario of scenarios) {
+        const [learner] = await db.insert(learners).values({
+          integrationId: integration.id,
+          externalLearnerId: `story-calendar-${scenario.name}-${suffix}`,
+        }).returning({ id: learners.id });
+        const [sourceEvent] = await db.insert(events).values({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-calendar-${scenario.name}-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date("2026-03-01T12:00:00.000Z"),
+          metadata: {},
+        }).returning({ id: events.id });
+        await db.insert(learnerFacts).values({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          sourceEventId: sourceEvent.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `story-calendar-${scenario.name}-${suffix}:1`,
+          periodKey: `story-calendar-${scenario.name}-${suffix}`,
+          occurredAt: new Date("2026-03-01T12:00:00.000Z"),
+          metadata: scenario.metadata,
+        });
+        const [schedule] = await db.select().from(storyCollectibleSchedules)
+          .where(eq(storyCollectibleSchedules.learnerId, learner.id));
+        assert.equal(schedule!.dueAt.toISOString(), scenario.expected);
+      }
+
+      const [invalidLearner] = await db.insert(learners).values({
+        integrationId: integration.id,
+        externalLearnerId: `story-calendar-invalid-${suffix}`,
+      }).returning({ id: learners.id });
+      const [invalidEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: invalidLearner.id,
+        idempotencyKey: `story-calendar-invalid-${suffix}`,
+        eventType: "daily_log_week.configured",
+        occurredAt: new Date(),
+        metadata: {},
+      }).returning({ id: events.id });
+      await assert.rejects(
+        db.insert(learnerFacts).values({
+          integrationId: integration.id,
+          learnerId: invalidLearner.id,
+          sourceEventId: invalidEvent.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `story-calendar-invalid-${suffix}:1`,
+          periodKey: `story-calendar-invalid-${suffix}`,
+          occurredAt: new Date(),
+          metadata: {
+            term_start_day: "2026-99-99",
+            term_end_day: "2026-10-09",
+            term_timezone: "Not/A_Timezone",
+            week_index: 1,
+          },
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
     } finally {
       await db.delete(integrations).where(eq(integrations.id, integration.id));
     }
