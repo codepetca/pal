@@ -346,6 +346,10 @@ export async function loadLearnerSnapshot(
           id: rewardNotices.id,
           achievementInstanceId: achievementInstances.id,
           achievementKey: achievementInstances.achievementKey,
+          rewardKey: rewardNotices.rewardKey,
+          title: rewardNotices.title,
+          description: rewardNotices.description,
+          icon: rewardNotices.icon,
         })
         .from(rewardNotices)
         .innerJoin(
@@ -362,7 +366,6 @@ export async function loadLearnerSnapshot(
           and(
             eq(rewardNotices.learnerId, learnerId),
             isNull(rewardNotices.seenAt),
-            eq(rewardNotices.rewardKey, ACHIEVEMENT_NOTICE_KEY),
             eq(achievementInstances.status, "earned"),
           ),
         )
@@ -661,8 +664,19 @@ export async function loadLearnerSnapshot(
         rewards: mergePendingRewardQueues(
           projectUnseenGrantRewards(grantRows, storyPlansById),
           achievementRewards.flatMap((reward) => {
-            const projected = achievementCelebration(reward);
-            return projected ? [projected] : [];
+            if (reward.rewardKey === ACHIEVEMENT_NOTICE_KEY) {
+              const projected = achievementCelebration(reward);
+              return projected ? [projected] : [];
+            }
+            return [{
+              id: reward.id,
+              title:
+                !companionRevealed && reward.rewardKey === "fish-snack-v1"
+                  ? "A treat for your companion!"
+                  : reward.title,
+              description: reward.description,
+              ...(reward.icon ? { icon: reward.icon } : {}),
+            }];
           }),
         ),
         ...(progression ? { progression } : {}),

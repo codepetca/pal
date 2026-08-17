@@ -195,6 +195,100 @@ test("successful acknowledgement refills the bounded reward page", async () => {
   );
 });
 
+test("acknowledgement drains the visible reward page before refilling", async () => {
+  const snapshot = createFixtureSnapshot();
+  const pendingRewards = [
+    {
+      id: "achievement-1",
+      title: "Achievement 1",
+      description: "First achievement notice.",
+    },
+    {
+      id: "grant-1",
+      title: "Grant 1",
+      description: "First story or title grant.",
+    },
+    {
+      id: "achievement-2",
+      title: "Achievement 2",
+      description: "Second achievement notice.",
+    },
+    {
+      id: "grant-2",
+      title: "Grant 2",
+      description: "Second story or title grant.",
+    },
+  ];
+  snapshot.rewards = pendingRewards;
+  const acknowledged = new Set<string>();
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      const next = structuredClone(snapshot);
+      const achievements = pendingRewards.filter(
+        (reward) =>
+          reward.id.startsWith("achievement-") &&
+          !acknowledged.has(reward.id),
+      );
+      const grants = pendingRewards.filter(
+        (reward) =>
+          reward.id.startsWith("grant-") &&
+          !acknowledged.has(reward.id),
+      );
+      next.rewards = Array.from(
+        { length: Math.max(achievements.length, grants.length) },
+        (_, index) => [achievements[index], grants[index]],
+      ).flatMap((rewards) => rewards.filter((reward) => reward !== undefined));
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledged.add(rewardId);
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-stable-page"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  const consumed: string[] = [];
+  const expectedOrder = pendingRewards.map((reward) => reward.id);
+  for (const [index, expectedId] of expectedOrder.entries()) {
+    assert.equal(widget.snapshot?.rewards[0]?.id, expectedId);
+    consumed.push(expectedId);
+    await act(async () => {
+      await widget.dismissReward(expectedId);
+    });
+    if (index < expectedOrder.length - 1) {
+      await act(async () => {
+        await widget.refresh();
+      });
+    }
+  }
+
+  assert.deepEqual(consumed, [
+    "achievement-1",
+    "grant-1",
+    "achievement-2",
+    "grant-2",
+  ]);
+  assert.ok(snapshotCalls >= 2);
+});
+
 test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

@@ -470,6 +470,92 @@ test(
 );
 
 test(
+  "keeps an unread legacy reward visible and acknowledgeable after upgrade",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `legacy-notice-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `legacy-period-${crypto.randomUUID()}`;
+
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 5,
+        }),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("learning_item.completed", {
+          item_token: "legacy-notice-item",
+          kind: "assignment",
+          period_key: periodKey,
+          timing: "on_time",
+        }),
+        key(),
+      );
+      const internalLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const [notice] = await getDb()
+        .update(rewardNotices)
+        .set({
+          rewardKey: "fish-snack-v1",
+          title: "A treat for your companion!",
+          description: "Your on-time work earned a fish snack.",
+          icon: "🐟",
+        })
+        .where(eq(rewardNotices.learnerId, internalLearnerId))
+        .returning({ id: rewardNotices.id });
+      assert.ok(notice);
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+      const legacyReward = snapshot.rewards.find(
+        (reward) => reward.id === notice.id,
+      );
+      assert.deepEqual(legacyReward, {
+        id: notice.id,
+        title: "A treat for your companion!",
+        description: "Your on-time work earned a fish snack.",
+        icon: "🐟",
+      });
+
+      await acknowledgeLearnerReward(
+        integration.id,
+        internalLearnerId,
+        notice.id,
+      );
+      const acknowledged = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+      assert.equal(
+        acknowledged.rewards.some((reward) => reward.id === notice.id),
+        false,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "persists Weekly Rhythm XP and collection milestones exactly once",
   { skip: !process.env.DATABASE_URL },
   async () => {

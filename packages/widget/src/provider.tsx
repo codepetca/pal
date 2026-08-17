@@ -15,6 +15,7 @@ import type {
   PalDensity,
   PalMotion,
   PalProviderProps,
+  PalRewardNotice,
   PalTheme,
   PalViewport,
   PalWidgetSnapshot,
@@ -57,6 +58,27 @@ interface PalRequestScope {
   scopeKey: string;
 }
 
+interface PalVisibleRewardQueue {
+  rewards: PalRewardNotice[];
+  scopeKey: string;
+}
+
+const MAX_VISIBLE_REWARDS = 100;
+
+function reconcileVisibleRewards(
+  current: readonly PalRewardNotice[],
+  next: readonly PalRewardNotice[],
+): PalRewardNotice[] {
+  const nextById = new Map(next.map((reward) => [reward.id, reward]));
+  const preserved = current.flatMap((reward) => {
+    const updated = nextById.get(reward.id);
+    if (!updated) return [];
+    nextById.delete(reward.id);
+    return [updated];
+  });
+  return [...preserved, ...nextById.values()].slice(0, MAX_VISIBLE_REWARDS);
+}
+
 function isAbortError(cause: unknown, signal: AbortSignal): boolean {
   return (
     signal.aborted ||
@@ -96,6 +118,10 @@ export function PalProvider({
     ids: new Set<string>(),
     scopeKey,
   });
+  const visibleRewardQueueRef = useRef<PalVisibleRewardQueue>({
+    rewards: initialSnapshot?.rewards ?? [],
+    scopeKey,
+  });
   const requestSequence = useRef(0);
   const onErrorRef = useRef(onError);
   const activeScopeRef = useRef(scopeKey);
@@ -126,6 +152,10 @@ export function PalProvider({
       };
       acknowledgedRewardIdsRef.current = {
         ids: new Set(),
+        scopeKey,
+      };
+      visibleRewardQueueRef.current = {
+        rewards: [],
         scopeKey,
       };
       setResource({
@@ -217,11 +247,23 @@ export function PalProvider({
       ) {
         return;
       }
+      const serverRewards = nextSnapshot.rewards.filter(
+        (reward) => !acknowledgedRewardIdsRef.current.ids.has(reward.id),
+      );
+      const visibleRewards =
+        visibleRewardQueueRef.current.scopeKey === scopeKey
+          ? reconcileVisibleRewards(
+              visibleRewardQueueRef.current.rewards,
+              serverRewards,
+            )
+          : serverRewards;
+      visibleRewardQueueRef.current = {
+        rewards: visibleRewards,
+        scopeKey,
+      };
       const visibleSnapshot = {
         ...nextSnapshot,
-        rewards: nextSnapshot.rewards.filter(
-          (reward) => !acknowledgedRewardIdsRef.current.ids.has(reward.id),
-        ),
+        rewards: visibleRewards,
       };
       setResource({
         error: null,
@@ -327,6 +369,12 @@ export function PalProvider({
           return;
         }
         acknowledgedRewardIdsRef.current.ids.add(rewardId);
+        if (visibleRewardQueueRef.current.scopeKey === scopeKey) {
+          visibleRewardQueueRef.current.rewards =
+            visibleRewardQueueRef.current.rewards.filter(
+              (reward) => reward.id !== rewardId,
+            );
+        }
         setResource((current) =>
           current.scopeKey === scopeKey && current.snapshot
             ? {
@@ -340,7 +388,12 @@ export function PalProvider({
               }
             : current,
         );
-        void refresh();
+        if (
+          visibleRewardQueueRef.current.scopeKey === scopeKey &&
+          visibleRewardQueueRef.current.rewards.length === 0
+        ) {
+          void refresh();
+        }
       } catch (cause) {
         if (isAbortError(cause, signal)) {
           return;
