@@ -87,10 +87,14 @@ inventing activity or relying on Vercel retries.
 
 Before enabling the rollout in production, configure both `CRON_SECRET` and
 `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` in the Production environment. The
-endpoint fails closed if either value is absent or malformed. Choose the rollout
-instant deliberately: a grant requires both a configuration fact stored on or
-after that instant and a due-day instant on or after it, preventing historical
-backfill. Preview deployments do not execute Vercel cron jobs.
+cron endpoint fails closed if either value is absent or malformed. The rollout
+timestamp independently controls grant eligibility for both the daily worker
+and accepted-event recovery path; when it is absent or malformed, neither path
+grants scheduled collectibles. Choose the instant deliberately: a grant
+requires both a configuration fact stored on or after that instant and a
+due-day instant on or after it, preventing historical backfill. `CRON_SECRET`
+authenticates only the cron route—it is not an eligibility input. Preview
+deployments do not execute Vercel cron jobs.
 
 The Pika-like host preview should show the 16-week Pal roadmap, companion, and
 collapsible semester controls. Configure a week, complete daily logs, or finish an item on

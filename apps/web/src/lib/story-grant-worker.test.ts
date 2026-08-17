@@ -18,7 +18,11 @@ import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
 } from "@/lib/learner-snapshot";
-import { runStoryGrantWorker } from "@/lib/story-grant-worker";
+import {
+  findLearnersWithDueStoryGrants,
+  reconcileDueStoryGrantsForLearner,
+  runStoryGrantWorker,
+} from "@/lib/story-grant-worker";
 
 const secret = "story-worker-test-secret-at-least-32-characters";
 const cronSecret = "story_worker_cron_secret_1234567890";
@@ -144,6 +148,61 @@ test(
       );
       const first = snapshot.progression?.collectibles[0];
       assert.equal(first?.status === "earned" ? first.finish : undefined, "color");
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "an accepted event repairs an overdue grant through the shared reconciler",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-event-recovery-${crypto.randomUUID()}`;
+    const periodKey = `worker-event-recovery-period-${crypto.randomUUID()}`;
+    try {
+      await configure(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(
+          periodKey,
+          `worker-event-recovery-term-${crypto.randomUUID()}`,
+          1,
+          "2026-08-31",
+        ),
+      );
+
+      const recovered = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLog(periodKey, "2026-08-31"),
+        crypto.randomUUID(),
+        { storyGrantAsOf: new Date("2026-09-05T12:00:00.000Z") },
+      );
+      assert.equal(recovered.status, "processed");
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const grants = await getDb().select().from(learnerRewardGrants).where(and(
+        eq(learnerRewardGrants.learnerId, learnerId),
+        eq(learnerRewardGrants.kind, "story_chapter"),
+      ));
+      assert.equal(grants.length, 1);
+
+      const retry = await runStoryGrantWorker({
+        asOf: new Date("2026-09-05T12:00:00.000Z"),
+        rolloutEffectiveAt: rollout,
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(retry.grants, 0);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -380,6 +439,261 @@ test(
       for (const externalLearnerId of learnerIds) {
         await resetLearnerInDb(integration.id, externalLearnerId);
       }
+    }
+  },
+);
+
+test(
+  "transient discovery and learner failures retry within the same run",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-retry-${crypto.randomUUID()}`;
+    try {
+      await configure(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(
+          `worker-retry-period-${crypto.randomUUID()}`,
+          `worker-retry-term-${crypto.randomUUID()}`,
+          1,
+          "2026-08-31",
+        ),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      let discoveryAttempts = 0;
+      let learnerAttempts = 0;
+      const warnings: unknown[][] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => warnings.push(args);
+      try {
+        const result = await runStoryGrantWorker({
+          asOf: new Date("2026-09-05T12:00:00.000Z"),
+          rolloutEffectiveAt: rollout,
+          onlyLearnerIds: [learnerId],
+          retryBaseDelayMs: 0,
+          findLearners: async (...args) => {
+            discoveryAttempts += 1;
+            if (discoveryAttempts === 1) {
+              throw Object.assign(new Error("must not be logged"), {
+                code: "40001",
+              });
+            }
+            return findLearnersWithDueStoryGrants(...args);
+          },
+          reconcileLearner: async (...args) => {
+            learnerAttempts += 1;
+            if (learnerAttempts === 1) {
+              throw Object.assign(new Error(externalLearnerId), {
+                code: "57P03",
+              });
+            }
+            return reconcileDueStoryGrantsForLearner(...args);
+          },
+        });
+        assert.equal(result.grants, 1);
+        assert.equal(result.failedLearners, 0);
+        assert.equal(result.retries, 2);
+        // One retried first page plus the normal empty-page termination query.
+        assert.equal(discoveryAttempts, 3);
+        assert.equal(learnerAttempts, 2);
+        assert.equal(warnings.length, 2);
+        assert.equal(JSON.stringify(warnings).includes(externalLearnerId), false);
+        assert.equal(JSON.stringify(warnings).includes("must not be logged"), false);
+      } finally {
+        console.warn = originalWarn;
+      }
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "malformed historical calendar JSON is quarantined without blocking valid learners",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const validLearner = `worker-valid-json-${crypto.randomUUID()}`;
+    const malformedLearner = `worker-malformed-json-${crypto.randomUUID()}`;
+    try {
+      for (const externalLearnerId of [validLearner, malformedLearner]) {
+        await configure(
+          integration.id,
+          externalLearnerId,
+          configuredWeek(
+            `worker-json-period-${crypto.randomUUID()}`,
+            `worker-json-term-${crypto.randomUUID()}`,
+            1,
+            "2026-08-31",
+          ),
+        );
+      }
+      const validLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        validLearner,
+      );
+      const malformedLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        malformedLearner,
+      );
+      await getDb().update(learnerFacts).set({
+        metadata: {
+          term_start_day: "2026-99-99",
+          term_end_day: "not-a-day",
+          term_timezone: "Not/A_Timezone",
+          week_index: 1,
+          week_start_day: "also-not-a-day",
+        },
+      }).where(and(
+        eq(learnerFacts.learnerId, malformedLearnerId),
+        eq(learnerFacts.eventType, "daily_log_week.configured"),
+      ));
+
+      const result = await runStoryGrantWorker({
+        asOf: new Date("2026-09-05T12:00:00.000Z"),
+        rolloutEffectiveAt: rollout,
+        onlyLearnerIds: [validLearnerId, malformedLearnerId],
+      });
+      assert.equal(result.grants, 1);
+      assert.equal(result.failedLearners, 0);
+      assert.equal(
+        (await getDb().select().from(learnerRewardGrants).where(
+          eq(learnerRewardGrants.learnerId, malformedLearnerId),
+        )).length,
+        0,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, validLearner);
+      await resetLearnerInDb(integration.id, malformedLearner);
+    }
+  },
+);
+
+test(
+  "a terminal learner failure is sanitized and isolated from its batch",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearners = [
+      `worker-terminal-${crypto.randomUUID()}`,
+      `worker-terminal-${crypto.randomUUID()}`,
+    ];
+    try {
+      const learnerIds: string[] = [];
+      for (const externalLearnerId of externalLearners) {
+        await configure(
+          integration.id,
+          externalLearnerId,
+          configuredWeek(
+            `worker-terminal-period-${crypto.randomUUID()}`,
+            `worker-terminal-term-${crypto.randomUUID()}`,
+            1,
+            "2026-08-31",
+          ),
+        );
+        learnerIds.push(await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        ));
+      }
+      const terminalLearnerId = learnerIds[0]!;
+      let terminalAttempts = 0;
+      const errors: unknown[][] = [];
+      const originalError = console.error;
+      console.error = (...args: unknown[]) => errors.push(args);
+      try {
+        const result = await runStoryGrantWorker({
+          asOf: new Date("2026-09-05T12:00:00.000Z"),
+          rolloutEffectiveAt: rollout,
+          onlyLearnerIds: learnerIds,
+          retryBaseDelayMs: 0,
+          reconcileLearner: async (learnerId, input) => {
+            if (learnerId === terminalLearnerId) {
+              terminalAttempts += 1;
+              throw Object.assign(new Error(externalLearners[0]!), {
+                code: "22000",
+              });
+            }
+            return reconcileDueStoryGrantsForLearner(learnerId, input);
+          },
+        });
+        assert.equal(result.grants, 1);
+        assert.equal(result.failedLearners, 1);
+        assert.equal(result.retries, 0);
+        assert.equal(terminalAttempts, 1);
+        assert.equal(errors.length, 1);
+        assert.equal(JSON.stringify(errors).includes(externalLearners[0]!), false);
+      } finally {
+        console.error = originalError;
+      }
+    } finally {
+      for (const externalLearnerId of externalLearners) {
+        await resetLearnerInDb(integration.id, externalLearnerId);
+      }
+    }
+  },
+);
+
+test(
+  "a contract-valid weekend term start is granted after the following Friday",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-weekend-${crypto.randomUUID()}`;
+    try {
+      await configure(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(
+          `worker-weekend-period-${crypto.randomUUID()}`,
+          `worker-weekend-term-${crypto.randomUUID()}`,
+          1,
+          "2026-09-06",
+          {
+            termStartDay: "2026-09-06",
+            termEndDay: "2026-10-16",
+            timeZone: "America/Toronto",
+            totalWeeks: 6,
+          },
+        ),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const result = await runStoryGrantWorker({
+        asOf: new Date("2026-09-12T12:00:00.000Z"),
+        rolloutEffectiveAt: rollout,
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(result.grants, 1);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },
 );

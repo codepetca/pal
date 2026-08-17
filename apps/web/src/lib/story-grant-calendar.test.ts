@@ -79,6 +79,23 @@ test("a later instructional break does not delay the current week's due day", ()
   assert.equal(storyCollectibleDueDay(afterBreak), "2026-10-31");
 });
 
+test("contract-valid weekend starts use the following instructional Friday", () => {
+  assert.equal(
+    storyCollectibleDueDay(calendar({
+      term_start_day: "2026-09-05",
+      week_start_day: "2026-09-05",
+    })),
+    "2026-09-12",
+  );
+  assert.equal(
+    storyCollectibleDueDay(calendar({
+      term_start_day: "2026-09-06",
+      week_start_day: "2026-09-06",
+    })),
+    "2026-09-12",
+  );
+});
+
 test("local calendar comparison remains stable across DST boundaries", () => {
   const metadata = calendar({
     term_start_day: "2026-03-02",
@@ -131,8 +148,5 @@ test("rollout blocks historical due days and malformed calendars fail closed", (
     storyCollectibleDueDay(calendar({ term_timezone: "Not/A_Timezone" })),
     null,
   );
-  assert.equal(
-    storyCollectibleDueDay(calendar({ week_start_day: "2026-09-06" })),
-    null,
-  );
+  assert.equal(storyCollectibleDueDay(calendar({ week_start_day: "nope" })), null);
 });

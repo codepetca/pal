@@ -114,8 +114,12 @@ export function storyCollectibleDueDay(
   if (!calendar) return null;
   const start = new Date(`${calendar.weekStartDay}T00:00:00.000Z`);
   const isoWeekday = start.getUTCDay() === 0 ? 7 : start.getUTCDay();
-  if (isoWeekday > 5) return null;
-  const friday = addCalendarDays(calendar.weekStartDay, 5 - isoWeekday);
+  // The Pika event contract accepts every real in-term calendar day. Although
+  // instructional weeks are Monday-Friday, defensively interpret a weekend
+  // start as the week containing the following Monday-Friday rather than
+  // creating a contract-valid assignment that can never become collectible.
+  const daysUntilFriday = (5 - isoWeekday + 7) % 7;
+  const friday = addCalendarDays(calendar.weekStartDay, daysUntilFriday);
   if (!friday) return null;
   const instructionalEnd = calendar.termEndDay < friday
     ? calendar.termEndDay

@@ -1,4 +1,15 @@
-import { and, asc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import {
   getDb,
   learnerFacts,
@@ -16,26 +27,81 @@ import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 export const STORY_GRANT_BATCH_SIZE = 25;
 export const STORY_GRANT_MAX_BATCHES = 20;
 export const STORY_GRANT_CONCURRENCY = 5;
+export const STORY_GRANT_MAX_ATTEMPTS = 3;
+export const STORY_GRANT_RETRY_BASE_DELAY_MS = 100;
 
 export type StoryGrantWorkerResult = {
   batches: number;
   learners: number;
   failedLearners: number;
   grants: number;
+  retries: number;
   batchLimitReached: boolean;
 };
 
+const termStartDayText = sql`(${learnerFacts.metadata}->>'term_start_day')`;
+const termEndDayText = sql`(${learnerFacts.metadata}->>'term_end_day')`;
+const timeZoneText = sql`(${learnerFacts.metadata}->>'term_timezone')`;
+const weekIndexText = sql`(${learnerFacts.metadata}->>'week_index')`;
+const weekStartDayText = sql`(${learnerFacts.metadata}->>'week_start_day')`;
 const weekStartDay = sql`coalesce(
-  nullif(${learnerFacts.metadata}->>'week_start_day', '')::date,
+  nullif(${weekStartDayText}, '')::date,
   (${learnerFacts.metadata}->>'term_start_day')::date
     + ((((${learnerFacts.metadata}->>'week_index')::int) - 1) * 7)
 )`;
 const friday = sql`(${weekStartDay}
-  + (5 - extract(isodow from ${weekStartDay})::int))`;
+  + ((5 - extract(isodow from ${weekStartDay})::int + 7) % 7))`;
 const dueDay = sql`(least(
   ${friday},
   (${learnerFacts.metadata}->>'term_end_day')::date
 ) + 1)`;
+
+function safeIsoCalendarDay(dayText: SQL): SQL {
+  return sql`CASE
+    WHEN ${dayText} ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (
+      substring(${dayText} from 1 for 4)::int between 1 and 9999
+      AND substring(${dayText} from 6 for 2)::int between 1 and 12
+      AND substring(${dayText} from 9 for 2)::int between 1 AND CASE
+        WHEN substring(${dayText} from 6 for 2)::int in (4, 6, 9, 11) THEN 30
+        WHEN substring(${dayText} from 6 for 2)::int = 2 THEN CASE
+          WHEN substring(${dayText} from 1 for 4)::int % 400 = 0
+            OR (
+              substring(${dayText} from 1 for 4)::int % 4 = 0
+              AND substring(${dayText} from 1 for 4)::int % 100 <> 0
+            ) THEN 29
+          ELSE 28
+        END
+        ELSE 31
+      END
+    )
+    ELSE false
+  END`;
+}
+
+// All casts and timezone evaluation stay inside the true arm of this CASE.
+// Historical JSON predating today's contract can therefore be quarantined by
+// the query instead of aborting the entire cron invocation.
+const safeCalendarMetadata = sql`(
+  jsonb_typeof(${learnerFacts.metadata}->'term_start_day') = 'string'
+  AND ${safeIsoCalendarDay(termStartDayText)}
+  AND jsonb_typeof(${learnerFacts.metadata}->'term_end_day') = 'string'
+  AND ${safeIsoCalendarDay(termEndDayText)}
+  AND jsonb_typeof(${learnerFacts.metadata}->'term_timezone') = 'string'
+  AND EXISTS (
+    SELECT 1 FROM pg_timezone_names
+    WHERE name = ${timeZoneText}
+  )
+  AND jsonb_typeof(${learnerFacts.metadata}->'week_index') = 'number'
+  AND ${weekIndexText} ~ '^[0-9]+$'
+  AND length(${weekIndexText}) <= 2
+  AND (
+    NOT (${learnerFacts.metadata} ? 'week_start_day')
+    OR (
+      jsonb_typeof(${learnerFacts.metadata}->'week_start_day') = 'string'
+      AND ${safeIsoCalendarDay(weekStartDayText)}
+    )
+  )
+)`;
 
 /** Returns one bounded, stable page of learners with at least one overdue slot. */
 export async function findLearnersWithDueStoryGrants(
@@ -79,9 +145,12 @@ export async function findLearnersWithDueStoryGrants(
           'term_timezone',
           'week_index'
         ]`,
-        sql`extract(isodow from ${weekStartDay}) between 1 and 5`,
-        sql`(${input.asOf} at time zone (${learnerFacts.metadata}->>'term_timezone'))::date >= ${dueDay}`,
-        sql`${dueDay}::timestamp at time zone (${learnerFacts.metadata}->>'term_timezone') >= ${input.rolloutEffectiveAt}`,
+        sql`CASE WHEN ${safeCalendarMetadata} THEN (
+          ${weekStartDay} >= (${termStartDayText})::date
+          AND ${weekStartDay} <= (${termEndDayText})::date
+          AND (${input.asOf} at time zone ${timeZoneText})::date >= ${dueDay}
+          AND ${dueDay}::timestamp at time zone ${timeZoneText} >= ${input.rolloutEffectiveAt}
+        ) ELSE false END`,
         isNull(learnerRewardGrants.id),
         ...(input.onlyLearnerIds
           ? [inArray(storyPlanChapters.learnerId, input.onlyLearnerIds)]
@@ -131,9 +200,13 @@ export async function runStoryGrantWorker(
     batchSize?: number;
     maxBatches?: number;
     concurrency?: number;
+    maxAttempts?: number;
+    retryBaseDelayMs?: number;
     // Deterministic integration-test seam; production always leaves this unset.
     onlyLearnerIds?: readonly string[];
     db?: Db;
+    findLearners?: typeof findLearnersWithDueStoryGrants;
+    reconcileLearner?: typeof reconcileDueStoryGrantsForLearner;
   } = {},
 ): Promise<StoryGrantWorkerResult> {
   const effectiveAt = options.rolloutEffectiveAt ??
@@ -155,43 +228,107 @@ export async function runStoryGrantWorker(
     1,
     Math.min(options.concurrency ?? STORY_GRANT_CONCURRENCY, batchSize),
   );
+  const maxAttempts = Math.max(
+    1,
+    Math.min(options.maxAttempts ?? STORY_GRANT_MAX_ATTEMPTS, 5),
+  );
+  const retryBaseDelayMs = Math.max(
+    0,
+    Math.min(
+      options.retryBaseDelayMs ?? STORY_GRANT_RETRY_BASE_DELAY_MS,
+      2_000,
+    ),
+  );
+  const findLearners = options.findLearners ?? findLearnersWithDueStoryGrants;
+  const reconcileLearner = options.reconcileLearner ??
+    reconcileDueStoryGrantsForLearner;
   let batches = 0;
   let learnersProcessed = 0;
   let failedLearners = 0;
   let grants = 0;
+  let retries = 0;
   let afterLearnerId: string | undefined;
   let lastBatchWasFull = false;
 
+  const retry = async <T>(input: {
+    scope: "discovery" | "learner";
+    correlationId: string;
+    operation: () => Promise<T>;
+  }): Promise<
+    | { ok: true; value: T; retries: number }
+    | { ok: false; retries: number }
+  > => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return {
+          ok: true,
+          value: await input.operation(),
+          retries: attempt - 1,
+        };
+      } catch (error) {
+        const retryable = isRetryableStoryGrantFailure(error);
+        const finalAttempt = !retryable || attempt === maxAttempts;
+        const details = {
+          scope: input.scope,
+          correlationId: input.correlationId,
+          attempt,
+          maxAttempts,
+          retryable,
+          code: sanitizedFailureCode(error),
+        };
+        if (finalAttempt) {
+          console.error("[pal] scheduled story grant operation failed", details);
+          return { ok: false, retries: attempt - 1 };
+        }
+        console.warn("[pal] retrying scheduled story grant operation", details);
+        await waitForRetry(retryBaseDelayMs * 2 ** (attempt - 1));
+      }
+    }
+    throw new Error("unreachable story grant retry state");
+  };
+
   while (batches < maxBatches) {
-    const learnerIds = await findLearnersWithDueStoryGrants(db, {
-      asOf,
-      rolloutEffectiveAt: effectiveAt,
-      afterLearnerId,
-      onlyLearnerIds: options.onlyLearnerIds,
-      limit: batchSize,
+    const discovery = await retry({
+      scope: "discovery",
+      correlationId: `batch-${batches + 1}`,
+      operation: () => findLearners(db, {
+        asOf,
+        rolloutEffectiveAt: effectiveAt,
+        afterLearnerId,
+        onlyLearnerIds: options.onlyLearnerIds,
+        limit: batchSize,
+      }),
     });
+    retries += discovery.retries;
+    if (!discovery.ok) {
+      throw new Error("scheduled story grant discovery failed after retries");
+    }
+    const learnerIds = discovery.value;
     if (learnerIds.length === 0) break;
     batches += 1;
     lastBatchWasFull = learnerIds.length === batchSize;
     afterLearnerId = learnerIds.at(-1);
 
     for (let offset = 0; offset < learnerIds.length; offset += concurrency) {
-      const results = await Promise.allSettled(
-        learnerIds.slice(offset, offset + concurrency).map((learnerId) =>
-          reconcileDueStoryGrantsForLearner(learnerId, {
+      const results = await Promise.all(
+        learnerIds.slice(offset, offset + concurrency).map((learnerId) => retry({
+          scope: "learner",
+          correlationId: learnerCorrelationId(learnerId),
+          operation: () => reconcileLearner(learnerId, {
             asOf,
             rolloutEffectiveAt: effectiveAt,
             db,
           }),
-        ),
+        })),
       );
       for (const result of results) {
         learnersProcessed += 1;
-        if (result.status === "fulfilled") {
+        retries += result.retries;
+        if (result.ok) {
           grants += result.value.granted;
         } else {
           failedLearners += 1;
-          console.error("[pal] scheduled story grant reconciliation failed");
+          // The retry helper already emitted one sanitized terminal record.
         }
       }
     }
@@ -202,6 +339,44 @@ export async function runStoryGrantWorker(
     learners: learnersProcessed,
     failedLearners,
     grants,
+    retries,
     batchLimitReached: batches === maxBatches && lastBatchWasFull,
   };
+}
+
+function learnerCorrelationId(learnerId: string): string {
+  return createHash("sha256").update(learnerId).digest("hex").slice(0, 16);
+}
+
+function sanitizedFailureCode(error: unknown): string {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code)) {
+      return code;
+    }
+  }
+  if (error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,31}$/.test(error.name)) {
+    return error.name;
+  }
+  return "unknown";
+}
+
+function isRetryableStoryGrantFailure(error: unknown): boolean {
+  const code = sanitizedFailureCode(error);
+  return code.startsWith("08") || new Set([
+    "40001", // serialization_failure
+    "40P01", // deadlock_detected
+    "53300", // too_many_connections
+    "55P03", // lock_not_available
+    "57P03", // cannot_connect_now
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "EPIPE",
+    "ETIMEDOUT",
+  ]).has(code);
+}
+
+async function waitForRetry(delayMs: number): Promise<void> {
+  if (delayMs === 0) return;
+  await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 }
