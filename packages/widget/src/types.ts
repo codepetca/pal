@@ -243,6 +243,8 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
+  /** @deprecated Use a concrete achievement action so the celebration has canonical identity. */
+  | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";

@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import {
   learnerFacts,
   learnerRewardGrants,
@@ -19,6 +19,16 @@ const behaviorById = new Map(Object.values(BEHAVIOR_TITLES).map((title) => [titl
 
 export function resolveBehaviorTitle(titleId: string) {
   return behaviorById.get(titleId as BehaviorTitleId);
+}
+
+function storySketchRewardsEffectiveAt(): Date | undefined {
+  const raw = process.env.PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT?.trim();
+  if (!raw) return undefined;
+  const effectiveAt = new Date(raw);
+  if (Number.isNaN(effectiveAt.getTime())) {
+    throw new Error("PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT must be an ISO timestamp");
+  }
+  return effectiveAt;
 }
 
 export async function grantBehaviorTitle(
@@ -60,12 +70,11 @@ export async function grantStoryChapterForPeriod(
 }
 
 /**
- * Guarantees the story without manufacturing achievement credit. A started
- * configured week—or its first later accepted learner event—grants the
- * immediately preceding bound chapter as a sketch; closing the final week
- * grants that week's chapter. Weekly Rhythm may have granted the same
- * assignment earlier, and the ownership constraint makes reconciliation
- * idempotent.
+ * Guarantees the story without manufacturing achievement credit. Each accepted
+ * learner event reconciles every feature-eligible chapter whose following week
+ * has started. Closing the final week additionally grants that week's chapter.
+ * Weekly Rhythm may have granted an assignment earlier, and the ownership
+ * constraint makes reconciliation idempotent.
  */
 export async function grantStoryChapterForScheduleAdvance(
   db: Db,
@@ -76,6 +85,8 @@ export async function grantStoryChapterForScheduleAdvance(
     configurationAdvances: boolean;
   },
 ): Promise<void> {
+  const effectiveAt = storySketchRewardsEffectiveAt();
+  if (!effectiveAt) return;
   const periodKey = input.event.metadata.period_key;
   if (typeof periodKey !== "string") return;
   const [currentAssignment] = await db
@@ -103,78 +114,92 @@ export async function grantStoryChapterForScheduleAdvance(
     input.configurationAdvances &&
     input.event.metadata.period_status === "closed" &&
     currentAssignment.periodNumber === currentAssignment.totalPeriods;
-  if (finalPeriodClosed) {
+  if (
+    input.event.event_type === "daily_log_week.configured" &&
+    !input.configurationAdvances &&
+    !finalPeriodClosed
+  ) return;
+
+  const assignments = await db
+    .select({
+      periodKey: storyPlanChapters.periodKey,
+      storyPlanId: storyPlanChapters.storyPlanId,
+      storyPlanChapterId: storyPlanChapters.id,
+      periodNumber: storyPlanChapters.periodNumber,
+    })
+    .from(storyPlanChapters)
+    .where(and(
+      eq(storyPlanChapters.learnerId, input.learnerId),
+      eq(storyPlanChapters.storyPlanId, currentAssignment.storyPlanId),
+      lte(storyPlanChapters.periodNumber, currentAssignment.periodNumber),
+      isNotNull(storyPlanChapters.periodKey),
+    ))
+    .orderBy(asc(storyPlanChapters.periodNumber));
+  const assignmentPeriodKeys = assignments.flatMap((assignment) =>
+    assignment.periodKey ? [assignment.periodKey] : []
+  );
+  if (assignmentPeriodKeys.length === 0) return;
+  const configurations = await db
+    .select({
+      id: learnerFacts.id,
+      periodKey: learnerFacts.periodKey,
+      metadata: learnerFacts.metadata,
+    })
+    .from(learnerFacts)
+    .where(and(
+      eq(learnerFacts.learnerId, input.learnerId),
+      eq(learnerFacts.eventType, "daily_log_week.configured"),
+      inArray(learnerFacts.periodKey, assignmentPeriodKeys),
+      gte(learnerFacts.createdAt, effectiveAt),
+      sql`${learnerFacts.metadata} ? 'term_timezone'`,
+    ))
+    .orderBy(asc(learnerFacts.createdAt));
+  const firstEligibleConfiguration = new Map<
+    string,
+    { id: string; metadata: Record<string, unknown> }
+  >();
+  for (const configuration of configurations) {
+    if (
+      !configuration.periodKey ||
+      firstEligibleConfiguration.has(configuration.periodKey) ||
+      !configuration.metadata ||
+      typeof configuration.metadata !== "object" ||
+      Array.isArray(configuration.metadata)
+    ) continue;
+    firstEligibleConfiguration.set(configuration.periodKey, {
+      id: configuration.id,
+      metadata: configuration.metadata as Record<string, unknown>,
+    });
+  }
+
+  const eventTime = new Date(input.event.occurred_at);
+  for (let index = 0; index < assignments.length - 1; index += 1) {
+    const assignment = assignments[index]!;
+    const boundaryAssignment = assignments[index + 1]!;
+    if (boundaryAssignment.periodNumber !== assignment.periodNumber + 1) continue;
+    const sourceConfiguration = firstEligibleConfiguration.get(assignment.periodKey!);
+    const boundaryConfiguration = firstEligibleConfiguration.get(boundaryAssignment.periodKey!);
+    if (
+      !sourceConfiguration ||
+      !boundaryConfiguration ||
+      !configuredWeekHasStarted(boundaryConfiguration.metadata, eventTime)
+    ) continue;
+    await insertStoryChapterGrant(db, {
+      learnerId: input.learnerId,
+      sourceFactId: sourceConfiguration.id,
+      storyPlanId: assignment.storyPlanId,
+      storyPlanChapterId: assignment.storyPlanChapterId,
+    });
+  }
+
+  if (finalPeriodClosed && firstEligibleConfiguration.has(periodKey)) {
     await insertStoryChapterGrant(db, {
       learnerId: input.learnerId,
       sourceFactId: input.sourceFactId,
       storyPlanId: currentAssignment.storyPlanId,
       storyPlanChapterId: currentAssignment.storyPlanChapterId,
     });
-    return;
   }
-  if (
-    input.event.event_type === "daily_log_week.configured" &&
-    !input.configurationAdvances
-  ) return;
-  if (currentAssignment.periodNumber <= 1) return;
-
-  const [currentPeriodConfiguration] = await db
-    .select({ metadata: learnerFacts.metadata })
-    .from(learnerFacts)
-    .where(and(
-      eq(learnerFacts.learnerId, input.learnerId),
-      eq(learnerFacts.eventType, "daily_log_week.configured"),
-      eq(learnerFacts.periodKey, periodKey),
-      sql`${learnerFacts.metadata} ? 'term_timezone'`,
-    ))
-    .orderBy(sql`(${learnerFacts.metadata}->>'config_version')::int asc`)
-    .limit(1);
-  const currentPeriodMetadata = currentPeriodConfiguration?.metadata;
-  if (
-    !currentPeriodMetadata ||
-    typeof currentPeriodMetadata !== "object" ||
-    Array.isArray(currentPeriodMetadata) ||
-    !configuredWeekHasStarted(
-      currentPeriodMetadata as Record<string, unknown>,
-      new Date(input.event.occurred_at),
-    )
-  ) return;
-
-  const [priorAssignment] = await db
-    .select({
-      periodKey: storyPlanChapters.periodKey,
-      storyPlanId: storyPlanChapters.storyPlanId,
-      storyPlanChapterId: storyPlanChapters.id,
-    })
-    .from(storyPlanChapters)
-    .where(and(
-      eq(storyPlanChapters.learnerId, input.learnerId),
-      eq(storyPlanChapters.storyPlanId, currentAssignment.storyPlanId),
-      eq(
-        storyPlanChapters.periodNumber,
-        currentAssignment.periodNumber - 1,
-      ),
-      isNotNull(storyPlanChapters.periodKey),
-    ))
-    .limit(1);
-  if (!priorAssignment) return;
-  const [priorPeriodConfiguration] = await db
-      .select({ id: learnerFacts.id })
-      .from(learnerFacts)
-      .where(and(
-        eq(learnerFacts.learnerId, input.learnerId),
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-        eq(learnerFacts.periodKey, priorAssignment.periodKey!),
-      ))
-      .orderBy(asc(learnerFacts.createdAt))
-      .limit(1);
-  if (!priorPeriodConfiguration) return;
-  await insertStoryChapterGrant(db, {
-    learnerId: input.learnerId,
-    sourceFactId: priorPeriodConfiguration.id,
-    storyPlanId: priorAssignment.storyPlanId,
-    storyPlanChapterId: priorAssignment.storyPlanChapterId,
-  });
 }
 
 async function insertStoryChapterGrant(

@@ -78,6 +78,14 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   assert.deepEqual(afterDuplicate, beforeDuplicate);
 });
 
+test("deprecated reward-earned fixture action remains a compatible no-op", () => {
+  const client = createFixturePalClient();
+  const before = client.peek();
+
+  assert.match(client.dispatch("reward-earned"), /deprecated/i);
+  assert.deepEqual(client.peek(), before);
+});
+
 test("fixture achievement celebration can be acknowledged exactly once", async () => {
   const client = createFixturePalClient();
 

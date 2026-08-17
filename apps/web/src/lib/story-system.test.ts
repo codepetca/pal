@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { PalRewardNotice } from "@codepet/pal-widget";
 import {
   achievementInstances,
   economy,
   getDb,
+  learnerFacts,
   learnerRewardGrants,
   storyPlanChapters,
   storyPlans,
@@ -39,6 +40,7 @@ import {
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
+process.env.PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT = "2026-01-01T00:00:00.000Z";
 
 test("client dependency graphs cannot reach server story authority", () => {
   const sourceRoot = path.resolve(process.cwd(), "src");
@@ -482,6 +484,116 @@ test("a future week does not open the prior sketch until its local start", { ski
   }
 });
 
+test("a later learner event reconciles every due preconfigured sketch exactly once", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `multi-boundary-${crypto.randomUUID()}`;
+  const termKey = `multi-boundary-term-${crypto.randomUUID()}`;
+  const periodKeys = Array.from({ length: 3 }, () => `multi-boundary-${crypto.randomUUID()}`);
+  try {
+    for (let index = 0; index < periodKeys.length; index += 1) {
+      const configuration = configuredWeek(periodKeys[index]!, termKey);
+      configuration.occurred_at = "2026-09-01T12:00:00.000Z";
+      configuration.metadata.week_index = index + 1;
+      configuration.metadata.week_start_day = `2026-09-${String(1 + index * 7).padStart(2, "0")}`;
+      configuration.metadata.eligible_days = 5;
+      assert.equal((await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuration,
+        crypto.randomUUID(),
+      )).status, "processed");
+    }
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 0);
+
+    for (const activityDay of ["2026-09-15", "2026-09-16"]) {
+      assert.equal((await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLogOn(periodKeys[2]!, activityDay),
+        crypto.randomUUID(),
+      )).status, "processed");
+    }
+    const grants = await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ));
+    assert.equal(grants.length, 2);
+    const grantedAssignments = await getDb().select().from(storyPlanChapters).where(and(
+      eq(storyPlanChapters.learnerId, learnerId),
+      inArray(storyPlanChapters.id, grants.flatMap((grant) =>
+        grant.storyPlanChapterId ? [grant.storyPlanChapterId] : []
+      )),
+    ));
+    assert.deepEqual(
+      grantedAssignments.map((assignment) => assignment.periodNumber).sort((a, b) => a - b),
+      [1, 2],
+    );
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("pre-rollout calendar history is not granted by later learner activity", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `pre-rollout-${crypto.randomUUID()}`;
+  const termKey = `pre-rollout-term-${crypto.randomUUID()}`;
+  const weekOneKey = `pre-rollout-one-${crypto.randomUUID()}`;
+  const weekTwoKey = `pre-rollout-two-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuredWeek(weekOneKey, termKey),
+      crypto.randomUUID(),
+    )).status, "processed");
+    const weekTwo = configuredWeek(weekTwoKey, termKey);
+    weekTwo.occurred_at = "2026-09-01T12:00:00.000Z";
+    weekTwo.metadata.week_index = 2;
+    weekTwo.metadata.week_start_day = "2026-09-07";
+    weekTwo.metadata.eligible_days = 5;
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      weekTwo,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    await getDb().update(learnerFacts)
+      .set({ createdAt: new Date("2025-12-31T23:59:59.000Z") })
+      .where(and(
+        eq(learnerFacts.learnerId, learnerId),
+        eq(learnerFacts.eventType, "daily_log_week.configured"),
+      ));
+
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLogOn(weekTwoKey, "2026-09-08"),
+      crypto.randomUUID(),
+    )).status, "processed");
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 0);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("a later calendar-bearing revision reconciles a calendarless started week", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `calendar-upgrade-boundary-${crypto.randomUUID()}`;
@@ -622,6 +734,52 @@ test("only the final period close grants its own guaranteed sketch", { skip: !pr
       eq(storyPlanChapters.periodNumber, 6),
     ));
     assert.equal(grants[0]?.storyPlanChapterId, finalAssignment[0]?.id);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("a first-seen closed final week also reconciles every earlier due chapter", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `closed-final-reconcile-${crypto.randomUUID()}`;
+  const termKey = `closed-final-reconcile-term-${crypto.randomUUID()}`;
+  const periodKeys = Array.from({ length: 6 }, () => `closed-final-${crypto.randomUUID()}`);
+  try {
+    for (let index = 0; index < periodKeys.length - 1; index += 1) {
+      const configuration = configuredWeek(periodKeys[index]!, termKey);
+      configuration.occurred_at = "2026-09-01T12:00:00.000Z";
+      configuration.metadata.week_index = index + 1;
+      configuration.metadata.week_start_day = new Date(Date.UTC(2026, 7, 31 + index * 7))
+        .toISOString()
+        .slice(0, 10);
+      assert.equal((await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        configuration,
+        crypto.randomUUID(),
+      )).status, "processed");
+    }
+    const finalConfiguration = configuredWeek(periodKeys[5]!, termKey);
+    finalConfiguration.occurred_at = "2026-10-09T12:00:00.000Z";
+    finalConfiguration.metadata.week_index = 6;
+    finalConfiguration.metadata.week_start_day = "2026-10-05";
+    finalConfiguration.metadata.period_status = "closed";
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      finalConfiguration,
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(and(
+      eq(learnerRewardGrants.learnerId, learnerId),
+      eq(learnerRewardGrants.kind, "story_chapter"),
+    ))).length, 6);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
