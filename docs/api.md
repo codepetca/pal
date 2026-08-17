@@ -1,7 +1,7 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-08-01
+> Last updated: 2026-08-16
 
 ---
 
@@ -13,6 +13,7 @@
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
 | GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
+| GET | `/api/cron/story-collectibles` | Vercel Cron | Reconcile overdue post-rollout story ownership in bounded learner batches |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
@@ -20,6 +21,20 @@ The read-token, authenticated learner-snapshot, and reward acknowledgement route
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
 and public PR previews; production and optional local persisted clients use these
 learner routes.
+
+### Scheduled story reconciliation
+
+Vercel invokes `GET /api/cron/story-collectibles` with
+`Authorization: Bearer <CRON_SECRET>`. Missing or malformed deployment
+configuration returns `503`; an invalid bearer returns `401`. Successful runs
+return `200` with batch, learner, and grant counts. If an individual learner
+transaction fails, the worker continues the bounded batch and returns `500`
+with `status: "partial_failure"`, allowing monitoring to surface the incident
+while a later daily run rediscovers all still-ungranted weeks.
+
+The route does not accept a learner, period, date, or event payload. It derives
+eligibility only from validated stored calendar configuration and immutable
+story-plan assignments. It creates no Pika event, XP, activity, or achievement.
 
 ### Read-token request
 

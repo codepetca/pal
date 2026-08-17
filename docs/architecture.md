@@ -1,7 +1,7 @@
 # Architecture Overview
 
 > Living document. Update this as decisions are made and designs evolve.
-> Last updated: 2026-07-14
+> Last updated: 2026-08-16
 
 ---
 
@@ -43,7 +43,11 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
-6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. The weekly story always continues as a sketch keepsake; earning Weekly Rhythm brings that keepsake to life in color.
+6. **Daily story reconciliation** — Vercel wakes Pal's authenticated worker. It
+   takes the learner lock and inserts the one due story-ownership ledger row
+   without creating a learning event or gameplay mutation.
+
+7. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. The due weekly story is a sketch keepsake unless that week's durable Weekly Rhythm brings the same item to life in color.
 
 That's the full loop. Each domain owns one step.
 
@@ -59,7 +63,10 @@ Everything in Pal is driven by one of three trigger types:
 | **Time-elapsed** | Pal internally | Student active for 30 days → plants grow in world |
 | **Scheduled** | Operator configures once | Semester month ends → new world region unlocks for all learners |
 
-All three routes pass through the same rule engine. From the engine's perspective they are identical — just events with different sources.
+Gameplay changes from all three trigger types pass through the same rule engine.
+The story scheduler is narrower: it reconciles an already-selected ownership
+ledger under the same learner lock and deliberately emits no synthetic activity,
+achievement, or XP event.
 
 ---
 
@@ -186,6 +193,20 @@ achievement transition. Neither is accepted from an integration.
 ---
 
 ## Schedules
+
+### Guaranteed weekly story collectible
+
+`apps/web/vercel.json` declares a daily UTC wake-up for the authenticated
+`/api/cron/story-collectibles` route. The worker computes each due boundary from
+the stored term calendar and authoritative IANA timezone: Friday-ending weeks
+become due Saturday, while a midweek final week becomes due the following day.
+It never waits for the next instructional week, so holidays and breaks cannot
+delay ownership. Stable learner pages, per-learner transactions, row locks, and
+the reward ledger's uniqueness constraint make retries and concurrent event/cron
+runs safe. Each selected learner reconciles all overdue post-rollout weeks, which
+also repairs missed daily invocations.
+
+### Future operator schedules
 
 Operators define a calendar of future events once during integration setup:
 

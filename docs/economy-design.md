@@ -114,25 +114,29 @@ older widget/API pair.
   reference is used only for new plans; persisted plans and reward notices
   continue resolving through their assigned version, so a new story or Pip v2
   does not require a database or learning-event contract change.
-- Every period grants its story chapter and collectible as a grayscale sketch
-  when the next configured week begins (or when the final period closes), so an
-  absence never removes part of Pip's story. Earning that period's durable
-  Weekly Rhythm reveals the same collectible immediately in full color. The
-  configured-week boundary uses its authoritative local start day: a future
-  preconfiguration cannot reveal the prior chapter early, and a non-final
-  close cannot reveal its own chapter. Pal rejects a closed configuration before
-  that period's authoritative local start, including calendarless revisions of
-  an already configured period. If Pika preconfigures a week early, the
-  first accepted period-bearing learner event after its local start reconciles
-  every eligible due sketch in that term, including intervening weeks with no
-  learner activity. Schedule
-  grants are fail-closed until `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is set;
-  only calendar configurations persisted at or after that rollout boundary are
-  eligible, so deploying the feature never backfills older terms. The
-  append-only chapter grant stays singular and exact-once; color is a
-  presentation tier derived from the durable weekly achievement, not a second
-  inventory item. Level, streak, and assignment milestones may award titles or
-  ordinary rewards, but never color story props.
+- Every configured instructional period becomes due on the local calendar day
+  after its own instructional end: Saturday after a normal Friday, or the next
+  day when the authoritative term ends midweek. The first partial week begins on
+  `term_start_day`; later normal weeks begin Monday. A later instructional week,
+  holiday, or break never moves the current period's due day. Boundaries use the
+  term's authoritative IANA timezone.
+- A version-controlled Vercel cron wakes the worker daily. It pages through
+  learners with ungranted overdue assignments, takes the same per-learner row
+  lock as event ingest, and reconciles every overdue week for that learner in one
+  transaction. Accepted events call the same idempotent reconciler, but learner
+  activity is not required: missed cron runs recover on a later daily run.
+- The reconciler writes one append-only `story_chapter` ownership grant using a
+  stored post-rollout weekly configuration fact as provenance. It never writes
+  XP, achievement events, student activity, or a finish. The authenticated
+  snapshot projects sketch when that week's durable Weekly Rhythm is not earned
+  and color when it is earned. An achievement earned before the due day does not
+  create early ownership; a delayed valid achievement upgrades the existing
+  collectible's presentation without inserting another grant.
+- Schedule grants are fail-closed until both the cron secret and
+  `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` are configured. Both the provenance
+  fact and due instant must be at or after that boundary, so deploying the
+  feature never backfills older weeks. Level, streak, and assignment milestones
+  may award titles or ordinary rewards, but never color story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready

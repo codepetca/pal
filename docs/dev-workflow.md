@@ -1,7 +1,7 @@
 # Development Workflow
 
 > Living document. Update this as the team evolves.
-> Last updated: 2026-08-12
+> Last updated: 2026-08-16
 
 ---
 
@@ -71,9 +71,26 @@ For manual/local-Docker configuration, set:
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
 | `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` | RFC 3339 instant with `Z` or an explicit offset for the guaranteed-sketch rollout boundary; leave unset to disable schedule grants | Enabling guaranteed sketches without backfilling older configurations |
+| `CRON_SECRET` | A URL-safe 32-256 character secret generated with `openssl rand -base64 48 | tr -d '=+/'` | Authenticating Vercel's daily story-collectible worker |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 
 `.env.local` is gitignored — never commit it, never paste its contents into chat/issues/PRs.
+
+### Story-collectible scheduler activation
+
+The production Vercel project runs `GET /api/cron/story-collectibles` daily at
+`00:00 UTC`, as declared in `apps/web/vercel.json`. Vercel's UTC trigger is only
+a wake-up: each candidate is evaluated against the term's authoritative IANA
+timezone and local due day. The query finds every still-ungranted overdue week,
+so a missed invocation is repaired on the next successful run rather than by
+inventing activity or relying on Vercel retries.
+
+Before enabling the rollout in production, configure both `CRON_SECRET` and
+`PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` in the Production environment. The
+endpoint fails closed if either value is absent or malformed. Choose the rollout
+instant deliberately: a grant requires both a configuration fact stored on or
+after that instant and a due-day instant on or after it, preventing historical
+backfill. Preview deployments do not execute Vercel cron jobs.
 
 The Pika-like host preview should show the 16-week Pal roadmap, companion, and
 collapsible semester controls. Configure a week, complete daily logs, or finish an item on

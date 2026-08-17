@@ -24,6 +24,11 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
   ]) {
     client.dispatch("daily-log-completed", { activityDay });
   }
+  const beforeDue = await client.getSnapshot();
+  assert.equal(beforeDue.progression?.collectibles[0]?.status, "next");
+  assert.equal(beforeDue.rewards.some((reward) => reward.kind === "story"), false);
+
+  client.dispatch("advance-week");
   const earned = await client.getSnapshot();
   assert.equal(earned.progression?.collectibles[0]?.status, "earned");
   assert.equal(

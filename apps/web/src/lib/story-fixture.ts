@@ -62,6 +62,13 @@ export class StoryFixtureLedger {
     });
   }
 
+  markStoryChapterColor(assignmentId: string): void {
+    if (!this.#plan.chapters.some((chapter) => chapter.assignmentId === assignmentId)) {
+      throw new Error("Fixture story color must reference its current plan");
+    }
+    this.#colorChapterAssignmentIds.add(assignmentId);
+  }
+
   grantBehaviorTitle(titleId: BehaviorTitleId, sourceFactId: string): void {
     if (this.#grants.some((grant) => grant.behaviorTitleId === titleId)) return;
     this.#grants.push({
@@ -200,7 +207,9 @@ export async function projectStoryFixture(
         (chapter) => chapter.roadmapWeek === week,
       );
       if (!assignment) throw new Error("Fixture story plan is missing a week");
-      ledger.grantStoryChapter(assignment.assignmentId, command.id, "color");
+      // Weekly Rhythm changes presentation only. Ownership still waits for the
+      // fixture's week-end stand-in (`advance-week`), matching persistence.
+      ledger.markStoryChapterColor(assignment.assignmentId);
     }
 
     if (

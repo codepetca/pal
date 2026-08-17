@@ -3168,6 +3168,7 @@ test(
           token: "summer-2026",
           start: "2026-05-11",
           end: "2026-08-30",
+          finalWeekStart: "2026-08-24",
         },
         next: {
           token: "fall-2026",
@@ -3183,14 +3184,15 @@ test(
           token: "fall-2026",
           start: "2026-08-31",
           end: "2026-12-18",
+          finalWeekStart: "2026-12-14",
         },
         next: {
           token: "winter-2026",
-          start: "2026-12-19",
+          start: "2026-12-21",
           end: "2027-04-09",
         },
-        before: "2026-12-19T04:59:59.000Z",
-        at: "2026-12-19T05:00:00.000Z",
+        before: "2026-12-21T04:59:59.000Z",
+        at: "2026-12-21T05:00:00.000Z",
       },
     ];
 
@@ -3212,7 +3214,7 @@ test(
               term_end_day: boundary.previous.end,
               term_timezone: "America/Toronto",
               term_week_count: 16,
-              week_start_day: boundary.previous.end,
+              week_start_day: boundary.previous.finalWeekStart,
               week_index: 16,
             },
             boundary.before,
