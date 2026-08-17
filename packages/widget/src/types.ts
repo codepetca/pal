@@ -242,6 +242,8 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
+  /** @deprecated Story ownership is no longer granted by this fixture action. */
+  | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";

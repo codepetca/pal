@@ -519,6 +519,9 @@ export function createFixturePalClient(
       if (action === "duplicate-replayed") {
         return "Duplicate replayed — no progress changed";
       }
+      if (action === "reward-earned") {
+        return "Deprecated reward action replayed — no progress changed";
+      }
       if (action === "advance-week") {
         const finalWeek = snapshot.roadmap.weeks.length;
         const nextWeek = Math.min(finalWeek, snapshot.roadmap.currentWeek + 1);

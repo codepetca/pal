@@ -127,6 +127,21 @@ test("fixture story request rejects private or unbounded commands", () => {
   );
 });
 
+test("legacy reward fixture histories remain valid and inert", async () => {
+  const baseline = await projectStoryFixture({ termWeeks: 16, commands: [] });
+  const request = parseFixtureStoryRequest({
+    termWeeks: 16,
+    commands: [{
+      type: "action",
+      id: "legacy-reward-action",
+      action: "reward-earned",
+    }],
+  });
+  assert.ok(request);
+
+  assert.deepEqual(await projectStoryFixture(request), baseline);
+});
+
 test("the maximum accepted action history still produces a valid public snapshot", async () => {
   const request = parseFixtureStoryRequest({
     termWeeks: 16,
