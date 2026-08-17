@@ -195,6 +195,191 @@ test("successful acknowledgement refills the bounded reward page", async () => {
   );
 });
 
+test("a failed automatic refill retries until the next reward loads", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First reward",
+    description: "The last reward on the visible page.",
+  }];
+  const nextPage = structuredClone(firstPage);
+  nextPage.rewards = [{
+    id: "reward-2",
+    title: "Next reward",
+    description: "The first reward on the next page.",
+  }];
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      if (snapshotCalls === 1) return firstPage;
+      if (snapshotCalls === 2) throw new Error("Temporary refill failure");
+      return nextPage;
+    },
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled = new Map<number, () => void>();
+  const delays: number[] = [];
+  let nextTimerId = 0;
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout(timerId: number) {
+        scheduled.delete(timerId);
+      },
+      setTimeout(callback: () => void, delayMs: number) {
+        const timerId = ++nextTimerId;
+        scheduled.set(timerId, callback);
+        delays.push(delayMs);
+        return timerId;
+      },
+    },
+  });
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={firstPage}
+          scopeKey="fixture-refill-retry"
+        >
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    assert.equal(snapshotCalls, 1);
+
+    await act(async () => {
+      await widget.dismissReward("reward-1");
+      await Promise.resolve();
+    });
+    assert.equal(snapshotCalls, 2);
+    assert.equal(widget.snapshot?.rewards.length, 0);
+    assert.deepEqual(delays, [1_000]);
+
+    const retry = scheduled.values().next().value;
+    assert.ok(retry);
+    await act(async () => {
+      retry();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(snapshotCalls, 3);
+    assert.deepEqual(
+      widget.snapshot?.rewards.map((reward) => reward.id),
+      ["reward-2"],
+    );
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("switching learner scope cancels a pending refill retry", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards = [{
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "The last visible reward for learner A.",
+  }];
+  const learnerB = createFixtureSnapshot();
+  learnerB.rewards = [];
+  let learnerACalls = 0;
+  const clientA: PalClient = {
+    async getSnapshot() {
+      learnerACalls += 1;
+      if (learnerACalls === 1) return learnerA;
+      throw new Error("Learner A refill failure");
+    },
+    markRewardSeen: async () => undefined,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled = new Map<number, () => void>();
+  let nextTimerId = 0;
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout(timerId: number) {
+        scheduled.delete(timerId);
+      },
+      setTimeout(callback: () => void) {
+        const timerId = ++nextTimerId;
+        scheduled.set(timerId, callback);
+        return timerId;
+      },
+    },
+  });
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          scopeKey="learner-a"
+        >
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    await act(async () => {
+      await widget.dismissReward("reward-a");
+      await Promise.resolve();
+    });
+    assert.equal(learnerACalls, 2);
+    const staleRetry = scheduled.values().next().value;
+    assert.ok(staleRetry);
+
+    await act(async () => {
+      renderer.update(
+        <PalProvider client={clientB} scopeKey="learner-b">
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    assert.equal(scheduled.size, 0);
+
+    await act(async () => {
+      staleRetry();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(learnerACalls, 2);
+    assert.deepEqual(widget.snapshot?.rewards, []);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
 test("acknowledgement drains the visible reward page before refilling", async () => {
   const snapshot = createFixtureSnapshot();
   const pendingRewards = [
