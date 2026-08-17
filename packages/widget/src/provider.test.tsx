@@ -289,6 +289,69 @@ test("acknowledgement drains the visible reward page before refilling", async ()
   assert.ok(snapshotCalls >= 2);
 });
 
+test("refresh cannot append the next reward before a full page drains", async () => {
+  const snapshot = createFixtureSnapshot();
+  const allRewards = Array.from({ length: 101 }, (_, index) => ({
+    id: `reward-${index + 1}`,
+    title: `Reward ${index + 1}`,
+    description: "A bounded reward-page notice.",
+  }));
+  snapshot.rewards = allRewards.slice(0, 100);
+  const acknowledged = new Set<string>();
+  const client: PalClient = {
+    async getSnapshot() {
+      const next = structuredClone(snapshot);
+      next.rewards = allRewards
+        .filter((reward) => !acknowledged.has(reward.id))
+        .slice(0, 100);
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledged.add(rewardId);
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-full-page"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  for (let index = 0; index < 100; index += 1) {
+    const rewardId = `reward-${index + 1}`;
+    assert.equal(widget.snapshot?.rewards[0]?.id, rewardId);
+    await act(async () => {
+      await widget.dismissReward(rewardId);
+    });
+    if (index < 99) {
+      await act(async () => {
+        await widget.refresh();
+      });
+      assert.equal(
+        widget.snapshot?.rewards.some((reward) => reward.id === "reward-101"),
+        false,
+      );
+    }
+  }
+
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["reward-101"],
+  );
+});
+
 test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

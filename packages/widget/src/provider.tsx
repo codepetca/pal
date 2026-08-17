@@ -69,14 +69,16 @@ function reconcileVisibleRewards(
   current: readonly PalRewardNotice[],
   next: readonly PalRewardNotice[],
 ): PalRewardNotice[] {
+  if (current.length === 0) return next.slice(0, MAX_VISIBLE_REWARDS);
   const nextById = new Map(next.map((reward) => [reward.id, reward]));
   const preserved = current.flatMap((reward) => {
     const updated = nextById.get(reward.id);
     if (!updated) return [];
-    nextById.delete(reward.id);
     return [updated];
   });
-  return [...preserved, ...nextById.values()].slice(0, MAX_VISIBLE_REWARDS);
+  return preserved.length > 0
+    ? preserved
+    : next.slice(0, MAX_VISIBLE_REWARDS);
 }
 
 function isAbortError(cause: unknown, signal: AbortSignal): boolean {
