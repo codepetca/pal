@@ -48,7 +48,7 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.ok(
     snapshot.rewards.some(
       (reward) =>
-        reward.kind === "achievement" &&
+        reward.achievement !== undefined &&
         reward.achievement.key === "weekly-rhythm",
     ),
   );

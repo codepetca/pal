@@ -729,7 +729,7 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     assert.deepEqual(fixture.progression(), snapshot.progression);
     const displayReward = (reward: PalRewardNotice) => {
       assert.notEqual(reward.kind, "achievement");
-      if (reward.kind === "achievement") throw new Error("Expected a grant reward");
+      if (reward.achievement) throw new Error("Expected a grant reward");
       return {
         title: reward.title,
         description: reward.description,
@@ -744,7 +744,7 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     assert.deepEqual(
       fixture.rewards().map(displayReward),
       snapshot.rewards
-        .filter((reward) => reward.kind !== "achievement")
+        .filter((reward) => reward.achievement === undefined)
         .map(displayReward),
     );
     assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
@@ -856,7 +856,7 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
     assert.ok(notice);
     assert.notEqual(notice.kind, "achievement");
-    if (notice.kind === "achievement") throw new Error("Expected a title notice");
+    if (notice.achievement) throw new Error("Expected a title notice");
     assert.equal(notice.titleAward, "On-Time Pro");
 
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
@@ -918,7 +918,7 @@ test("historical achievement rows do not backfill grants or celebrations", { ski
     assert.equal((await getDb().select().from(learnerRewardGrants).where(eq(learnerRewardGrants.learnerId, learnerId))).length, 0);
     assert.equal(
       (await loadLearnerSnapshot(integration.id, learnerId)).rewards.some(
-        (reward) => reward.kind === "achievement",
+        (reward) => reward.achievement !== undefined,
       ),
       false,
     );

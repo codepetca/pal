@@ -242,7 +242,15 @@ function achievementCelebration(
   return presentation
     ? {
         id: row.id,
-        kind: "achievement",
+        kind: "standard",
+        title: presentation.title,
+        description: presentation.description,
+        ...(presentation.badge.assetUrl === undefined
+          ? {}
+          : { assetUrl: presentation.badge.assetUrl }),
+        ...(presentation.badge.icon === undefined
+          ? {}
+          : { icon: presentation.badge.icon }),
         achievement: {
           id: row.achievementInstanceId,
           ...presentation,

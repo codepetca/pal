@@ -34,7 +34,11 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
   assert.ok(storyReward);
   assert.deepEqual(
     earned.rewards.map((reward) => reward.kind ?? "standard"),
-    ["standard", "story", "achievement"],
+    ["standard", "story", "standard"],
+  );
+  assert.equal(
+    earned.rewards.some((reward) => reward.achievement !== undefined),
+    true,
   );
 
   await client.markRewardSeen(storyReward.id);

@@ -112,7 +112,8 @@ export interface PalGrantRewardNotice extends PalRewardNotice {
 export interface PalAchievementCelebrationNotice extends PalRewardNotice {
   /** Transient acknowledgement identity. */
   id: string;
-  kind: "achievement";
+  /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
+  kind: "standard";
   /** Presentation-safe identity selected by the authenticated Pal server. */
   achievement: PalAchievementPresentation & {
     /** Stable earned achievement-instance identity used by the roadmap. */

@@ -441,7 +441,15 @@ export function createFixturePalClient(
     if (!snapshot.rewards.some((reward) => reward.id === rewardId)) {
       snapshot.rewards.push({
         id: rewardId,
-        kind: "achievement",
+        kind: "standard",
+        title: presentation.title,
+        description: presentation.description,
+        ...(presentation.badge.assetUrl === undefined
+          ? {}
+          : { assetUrl: presentation.badge.assetUrl }),
+        ...(presentation.badge.icon === undefined
+          ? {}
+          : { icon: presentation.badge.icon }),
         achievement: {
           id: achievement.id,
           ...presentation,
