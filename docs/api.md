@@ -40,6 +40,9 @@ makes backlog exhaustion alertable instead of presenting a partially drained
 queue as an ordinary successful cron run; pending rows remain recoverable. If
 learner failures and cap exhaustion happen together, the response is `503` with
 `status: "partial_failure_incomplete"` so neither condition is hidden.
+The production default is 100 batches of 100 learners (10,000 learners per
+five-minute invocation); rollout operations must stay within that explicit
+cohort bound or raise capacity/frequency before enabling it.
 
 The route does not accept a learner, period, date, or event payload. It derives
 eligibility only from typed, indexed due-work materialized from validated stored

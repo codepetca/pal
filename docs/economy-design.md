@@ -125,10 +125,12 @@ older widget/API pair.
 - A version-controlled Vercel cron wakes the worker daily. It pages through
   learners with ungranted overdue assignments, takes the same per-learner row
   lock as event ingest, and reconciles every overdue week for that learner in one
-  transaction. Accepted events call the same idempotent reconciler, but learner
-  activity is not required: missed cron runs recover on a later daily run.
+  transaction. The current production bound is 10,000 learners per invocation;
+  reaching it returns an alertable incomplete response. Accepted events call the
+  same idempotent reconciler, but learner activity is not required: missed cron
+  runs recover on a later daily run.
 - The reconciler writes one append-only `story_chapter` ownership grant using a
-  stored post-rollout weekly configuration fact as provenance. It never writes
+  stored weekly configuration fact as provenance. It never writes
   XP, achievement events, student activity, or a finish. The authenticated
   snapshot projects sketch when that week's durable Weekly Rhythm is not earned
   and color when it is earned. An achievement earned before the due day does not
@@ -136,8 +138,9 @@ older widget/API pair.
   collectible's presentation without inserting another grant.
 - Schedule-grant eligibility is fail-closed until
   `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is configured. Both the provenance
-  fact and due instant must be at or after that boundary, so deploying the
-  feature never backfills older weeks. `CRON_SECRET` separately authenticates
+  fact and its typed schedule may predate deployment, but the due instant must be
+  at or after that boundary, so deploying the feature never awards older weeks
+  or loses future work. `CRON_SECRET` separately authenticates
   the daily cron route and is not an eligibility input for accepted-event
   recovery. Level, streak, and assignment milestones may award titles or
   ordinary rewards, but never color story props.

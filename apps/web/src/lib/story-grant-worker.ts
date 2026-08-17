@@ -24,9 +24,11 @@ import {
 } from "@/lib/story-grant-reconciler";
 import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 
-export const STORY_GRANT_BATCH_SIZE = 25;
-export const STORY_GRANT_MAX_BATCHES = 20;
-export const STORY_GRANT_CONCURRENCY = 5;
+export const STORY_GRANT_BATCH_SIZE = 100;
+export const STORY_GRANT_MAX_BATCHES = 100;
+export const STORY_GRANT_CONCURRENCY = 10;
+export const STORY_GRANT_MAX_LEARNERS_PER_RUN =
+  STORY_GRANT_BATCH_SIZE * STORY_GRANT_MAX_BATCHES;
 export const STORY_GRANT_MAX_ATTEMPTS = 3;
 export const STORY_GRANT_RETRY_BASE_DELAY_MS = 100;
 const STORY_GRANT_DISCOVERY_ROWS_PER_LEARNER = 24;
@@ -80,7 +82,6 @@ export async function findLearnersWithDueStoryGrants(
     .where(
       and(
         isNull(storyCollectibleSchedules.reconciledAt),
-        gte(storyCollectibleSchedules.createdAt, input.rolloutEffectiveAt),
         gte(storyCollectibleSchedules.dueAt, input.rolloutEffectiveAt),
         lte(storyCollectibleSchedules.dueAt, input.asOf),
         ...(input.onlyLearnerIds

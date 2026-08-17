@@ -74,7 +74,6 @@ export async function reconcileDueStoryGrants(
       and(
         eq(storyCollectibleSchedules.learnerId, input.learnerId),
         isNull(storyCollectibleSchedules.reconciledAt),
-        gte(storyCollectibleSchedules.createdAt, effectiveAt),
         gte(storyCollectibleSchedules.dueAt, effectiveAt),
         lte(storyCollectibleSchedules.dueAt, asOf),
       ),
