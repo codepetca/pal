@@ -71,14 +71,7 @@ function reconcileVisibleRewards(
 ): PalRewardNotice[] {
   if (current.length === 0) return next.slice(0, MAX_VISIBLE_REWARDS);
   const nextById = new Map(next.map((reward) => [reward.id, reward]));
-  const preserved = current.flatMap((reward) => {
-    const updated = nextById.get(reward.id);
-    if (!updated) return [];
-    return [updated];
-  });
-  return preserved.length > 0
-    ? preserved
-    : next.slice(0, MAX_VISIBLE_REWARDS);
+  return current.map((reward) => nextById.get(reward.id) ?? reward);
 }
 
 function isAbortError(cause: unknown, signal: AbortSignal): boolean {
