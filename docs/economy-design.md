@@ -120,7 +120,9 @@ older widget/API pair.
   Weekly Rhythm reveals the same collectible immediately in full color. The
   configured-week boundary uses its authoritative local start day: a future
   preconfiguration cannot reveal the prior chapter early, and a non-final
-  close cannot reveal its own chapter. If Pika preconfigures a week early, the
+  close cannot reveal its own chapter. Pal rejects a closed configuration before
+  that period's authoritative local start, including calendarless revisions of
+  an already configured period. If Pika preconfigures a week early, the
   first accepted period-bearing learner event after its local start reconciles
   every eligible due sketch in that term, including intervening weeks with no
   learner activity. Schedule
