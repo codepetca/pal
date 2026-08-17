@@ -21,12 +21,19 @@ DECLARE
 	"term_end" date;
 	"week_start" date;
 	"week_index_value" integer;
+	"term_week_count_value" integer;
 	"term_timezone_value" text;
+	"earliest_week_start" date;
+	"latest_week_start" date;
 	"weekday" integer;
 	"friday" date;
 	"due_day" date;
 BEGIN
-	IF jsonb_typeof("calendar_metadata"->'term_start_day') IS DISTINCT FROM 'string'
+	IF jsonb_typeof("calendar_metadata"->'term_token') IS DISTINCT FROM 'string'
+		OR length("calendar_metadata"->>'term_token') < 1
+		OR length("calendar_metadata"->>'term_token') > 128
+		OR ("calendar_metadata"->>'term_token') !~ '^[A-Za-z0-9._~-]+$'
+		OR jsonb_typeof("calendar_metadata"->'term_start_day') IS DISTINCT FROM 'string'
 		OR jsonb_typeof("calendar_metadata"->'term_end_day') IS DISTINCT FROM 'string'
 		OR jsonb_typeof("calendar_metadata"->'term_timezone') IS DISTINCT FROM 'string'
 		OR jsonb_typeof("calendar_metadata"->'week_index') IS DISTINCT FROM 'number'
@@ -42,25 +49,44 @@ BEGIN
 	"week_index_value" := ("calendar_metadata"->>'week_index')::integer;
 	"term_timezone_value" := "calendar_metadata"->>'term_timezone';
 
-	IF "term_start" > "term_end" OR "week_index_value" < 1 OR NOT EXISTS (
+	IF ("calendar_metadata" ? 'term_week_count') <> ("calendar_metadata" ? 'week_start_day') THEN
+		RETURN NULL;
+	END IF;
+
+	IF "calendar_metadata" ? 'term_week_count' THEN
+		IF jsonb_typeof("calendar_metadata"->'term_week_count') IS DISTINCT FROM 'number'
+			OR ("calendar_metadata"->>'term_week_count') !~ '^[0-9]{1,2}$'
+			OR jsonb_typeof("calendar_metadata"->'week_start_day') IS DISTINCT FROM 'string'
+			OR ("calendar_metadata"->>'week_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+		THEN
+			RETURN NULL;
+		END IF;
+		"term_week_count_value" := ("calendar_metadata"->>'term_week_count')::integer;
+		"week_start" := ("calendar_metadata"->>'week_start_day')::date;
+	ELSE
+		"term_week_count_value" := 16;
+	END IF;
+
+	IF "term_start" > "term_end"
+		OR "term_week_count_value" < 6
+		OR "term_week_count_value" > 24
+		OR "week_index_value" < 1
+		OR "week_index_value" > "term_week_count_value"
+		OR NOT EXISTS (
 		SELECT 1 FROM "pg_catalog"."pg_timezone_names"
 		WHERE name = "term_timezone_value"
 	) THEN
 		RETURN NULL;
 	END IF;
 
-	IF "calendar_metadata" ? 'week_start_day' THEN
-		IF jsonb_typeof("calendar_metadata"->'week_start_day') IS DISTINCT FROM 'string'
-			OR ("calendar_metadata"->>'week_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-		THEN
-			RETURN NULL;
-		END IF;
-		"week_start" := ("calendar_metadata"->>'week_start_day')::date;
-	ELSE
-		"week_start" := "term_start" + (("week_index_value" - 1) * 7);
-	END IF;
+	-- A producer may delay a period for breaks or shorten the term edges, but
+	-- it cannot place a numbered period before its forward ordinal or so late
+	-- that the remaining declared periods no longer fit inside the term.
+	"earliest_week_start" := "term_start" + (("week_index_value" - 1) * 7);
+	"latest_week_start" := "term_end" - (("term_week_count_value" - "week_index_value") * 7);
+	"week_start" := coalesce("week_start", "earliest_week_start");
 
-	IF "week_start" < "term_start" OR "week_start" > "term_end" THEN
+	IF "week_start" < "earliest_week_start" OR "week_start" > "latest_week_start" THEN
 		RETURN NULL;
 	END IF;
 
@@ -83,10 +109,13 @@ DECLARE
 BEGIN
 	IF NEW."event_type" <> 'daily_log_week.configured'
 		OR NEW."period_key" IS NULL
-		OR NOT (NEW."metadata" ?& ARRAY[
+		OR NOT (NEW."metadata" ?| ARRAY[
+			'term_token',
 			'term_start_day',
 			'term_end_day',
 			'term_timezone',
+			'term_week_count',
+			'week_start_day',
 			'week_index'
 		])
 	THEN
@@ -216,19 +245,17 @@ CREATE TRIGGER "story_collectible_schedules_protect"
 BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
 FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_schedule"();
 --> statement-breakpoint
-CREATE FUNCTION "public"."protect_story_collectible_source_fact"() RETURNS trigger AS $$
+CREATE FUNCTION "public"."protect_learner_fact_immutable"() RETURNS trigger AS $$
 BEGIN
-	IF NEW IS DISTINCT FROM OLD AND EXISTS (
-		SELECT 1
-		FROM "public"."story_collectible_schedules"
-		WHERE "story_collectible_schedules"."source_fact_id" = OLD."id"
-			AND "story_collectible_schedules"."learner_id" = OLD."learner_id"
+	IF TG_OP = 'DELETE' AND NOT EXISTS (
+		SELECT 1 FROM "public"."learners" WHERE "id" = OLD."learner_id"
 	) THEN
-		RAISE EXCEPTION 'story schedule source facts are immutable'
-			USING ERRCODE = '23514',
-				CONSTRAINT = 'story_collectible_schedule_source_fact_immutable';
+		RETURN OLD;
 	END IF;
-	RETURN NEW;
+
+	RAISE EXCEPTION 'learner facts are append-only'
+		USING ERRCODE = '23514',
+			CONSTRAINT = 'learner_facts_immutable';
 END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
@@ -236,6 +263,6 @@ CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
 AFTER INSERT ON "public"."learner_facts"
 FOR EACH ROW EXECUTE FUNCTION "public"."enqueue_story_collectible_schedule"();
 --> statement-breakpoint
-CREATE TRIGGER "learner_facts_protect_story_collectible_source"
-BEFORE UPDATE ON "public"."learner_facts"
-FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_source_fact"();
+CREATE TRIGGER "learner_facts_immutable"
+BEFORE UPDATE OR DELETE ON "public"."learner_facts"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_learner_fact_immutable"();

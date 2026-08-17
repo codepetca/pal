@@ -814,6 +814,7 @@ test(
       ]).returning({ id: events.id });
 
       const calendar = {
+        term_token: `story-schedule-term-${suffix}`,
         term_start_day: "2026-08-31",
         term_end_day: "2026-10-09",
         term_timezone: "America/Toronto",
@@ -955,6 +956,16 @@ test(
         db.delete(learnerFacts).where(eq(learnerFacts.id, firstFact.id)),
         (error) => postgresViolation(error, "23514"),
       );
+      await assert.rejects(
+        db.update(learnerFacts).set({
+          metadata: { forged: true },
+        }).where(eq(learnerFacts.id, nonConfigurationFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.delete(learnerFacts).where(eq(learnerFacts.id, nonConfigurationFact.id)),
+        (error) => postgresViolation(error, "23514"),
+      );
 
       await assert.rejects(
         db.update(storyCollectibleSchedules).set({
@@ -1026,6 +1037,7 @@ test(
       ]).returning({ id: events.id });
     const client = await getPool().connect();
     const calendar = {
+      term_token: `story-shadow-term-${suffix}`,
       term_start_day: "2026-08-31",
       term_end_day: "2026-10-09",
       term_timezone: "America/Toronto",
@@ -1185,6 +1197,7 @@ test(
         {
           name: "legacy-midweek-start",
           metadata: {
+            term_token: `legacy-midweek-start-${suffix}`,
             term_start_day: "2026-09-02",
             term_end_day: "2026-12-18",
             term_timezone: "America/Toronto",
@@ -1195,9 +1208,11 @@ test(
         {
           name: "weekend",
           metadata: {
+            term_token: `weekend-${suffix}`,
             term_start_day: "2026-09-06",
             term_end_day: "2026-10-16",
             term_timezone: "America/Toronto",
+            term_week_count: 6,
             week_start_day: "2026-09-06",
             week_index: 1,
           },
@@ -1206,9 +1221,11 @@ test(
         {
           name: "dst",
           metadata: {
+            term_token: `dst-${suffix}`,
             term_start_day: "2026-03-02",
             term_end_day: "2026-06-19",
             term_timezone: "America/New_York",
+            term_week_count: 16,
             week_start_day: "2026-03-09",
             week_index: 2,
           },
@@ -1217,9 +1234,11 @@ test(
         {
           name: "midweek-end",
           metadata: {
-            term_start_day: "2026-09-02",
+            term_token: `midweek-end-${suffix}`,
+            term_start_day: "2026-08-31",
             term_end_day: "2026-10-07",
             term_timezone: "Pacific/Kiritimati",
+            term_week_count: 6,
             week_start_day: "2026-10-05",
             week_index: 6,
           },
@@ -1254,36 +1273,101 @@ test(
         assert.equal(schedule!.dueAt.toISOString(), scenario.expected);
       }
 
-      const [invalidLearner] = await db.insert(learners).values({
-        integrationId: integration.id,
-        externalLearnerId: `story-calendar-invalid-${suffix}`,
-      }).returning({ id: learners.id });
-      const [invalidEvent] = await db.insert(events).values({
-        integrationId: integration.id,
-        learnerId: invalidLearner.id,
-        idempotencyKey: `story-calendar-invalid-${suffix}`,
-        eventType: "daily_log_week.configured",
-        occurredAt: new Date(),
-        metadata: {},
-      }).returning({ id: events.id });
-      await assert.rejects(
-        db.insert(learnerFacts).values({
-          integrationId: integration.id,
-          learnerId: invalidLearner.id,
-          sourceEventId: invalidEvent.id,
-          eventType: "daily_log_week.configured",
-          semanticKey: `story-calendar-invalid-${suffix}:1`,
-          periodKey: `story-calendar-invalid-${suffix}`,
-          occurredAt: new Date(),
+      const invalidScenarios = [
+        {
+          name: "malformed-date-and-timezone",
           metadata: {
+            term_token: `malformed-${suffix}`,
             term_start_day: "2026-99-99",
             term_end_day: "2026-10-09",
             term_timezone: "Not/A_Timezone",
             week_index: 1,
           },
-        }),
-        (error) => postgresViolation(error, "23514"),
-      );
+        },
+        {
+          name: "legacy-week-out-of-range",
+          metadata: {
+            term_token: `legacy-range-${suffix}`,
+            term_start_day: "2026-01-05",
+            term_end_day: "2026-05-01",
+            term_timezone: "America/Toronto",
+            week_index: 17,
+          },
+        },
+        {
+          name: "adaptive-week-out-of-range",
+          metadata: {
+            term_token: `adaptive-range-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-10-12",
+            week_index: 7,
+          },
+        },
+        {
+          name: "adaptive-count-without-start",
+          metadata: {
+            term_token: `adaptive-missing-start-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_index: 1,
+          },
+        },
+        {
+          name: "adaptive-start-without-count",
+          metadata: {
+            term_token: `adaptive-missing-count-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            week_start_day: "2026-08-31",
+            week_index: 1,
+          },
+        },
+        {
+          name: "adaptive-week-position-mismatch",
+          metadata: {
+            term_token: `adaptive-position-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-08-31",
+            week_index: 6,
+          },
+        },
+      ] as const;
+      for (const scenario of invalidScenarios) {
+        const [invalidLearner] = await db.insert(learners).values({
+          integrationId: integration.id,
+          externalLearnerId: `story-calendar-invalid-${scenario.name}-${suffix}`,
+        }).returning({ id: learners.id });
+        const [invalidEvent] = await db.insert(events).values({
+          integrationId: integration.id,
+          learnerId: invalidLearner.id,
+          idempotencyKey: `story-calendar-invalid-${scenario.name}-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date(),
+          metadata: {},
+        }).returning({ id: events.id });
+        await assert.rejects(
+          db.insert(learnerFacts).values({
+            integrationId: integration.id,
+            learnerId: invalidLearner.id,
+            sourceEventId: invalidEvent.id,
+            eventType: "daily_log_week.configured",
+            semanticKey: `story-calendar-invalid-${scenario.name}-${suffix}:1`,
+            periodKey: `story-calendar-invalid-${scenario.name}-${suffix}`,
+            occurredAt: new Date(),
+            metadata: scenario.metadata,
+          }),
+          (error) => postgresViolation(error, "23514"),
+        );
+      }
     } finally {
       await db.delete(integrations).where(eq(integrations.id, integration.id));
     }

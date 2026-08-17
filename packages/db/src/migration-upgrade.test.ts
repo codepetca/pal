@@ -5,6 +5,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
+function postgresViolation(error: unknown, code: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: string; cause?: unknown };
+  return (
+    candidate.code === code ||
+    (candidate.cause !== undefined && postgresViolation(candidate.cause, code))
+  );
+}
+
 const migrationsDirectory = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -40,6 +49,7 @@ test(
       const integrationId = crypto.randomUUID();
       const learnerId = crypto.randomUUID();
       const historicalEventId = crypto.randomUUID();
+      const historicalFactId = crypto.randomUUID();
       await upgrade.query(
         `INSERT INTO integrations (id, slug, name, secret_hash)
          VALUES ($1, $2, 'Upgrade test', $3)`,
@@ -59,14 +69,16 @@ test(
       );
       await upgrade.query(
         `INSERT INTO learner_facts (
-           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           id, integration_id, learner_id, source_event_id, event_type, semantic_key,
            period_key, occurred_at, metadata, created_at
-         ) VALUES ($1, $2, $3, 'daily_log_week.configured', 'historical-fact',
-           'historical-period', '2025-09-01T12:00:00Z', $4, '2025-09-01T12:00:00Z')`,
-        [integrationId, learnerId, historicalEventId, {
+         ) VALUES ($1, $2, $3, $4, 'daily_log_week.configured', 'historical-fact',
+           'historical-period', '2025-09-01T12:00:00Z', $5, '2025-09-01T12:00:00Z')`,
+        [historicalFactId, integrationId, learnerId, historicalEventId, {
+          term_token: "historical-term",
           term_start_day: "2025-09-01",
           term_end_day: "2025-10-10",
           term_timezone: "America/Toronto",
+          term_week_count: 6,
           week_index: 1,
           week_start_day: "2025-09-01",
         }],
@@ -92,6 +104,33 @@ test(
         0,
       );
 
+      const scheduleWriter = await upgrade.connect();
+      const factWriter = await upgrade.connect();
+      try {
+        await scheduleWriter.query("BEGIN");
+        await scheduleWriter.query(
+          `INSERT INTO story_collectible_schedules (
+             learner_id, period_key, source_fact_id, due_at, created_at
+           ) VALUES ($1, 'historical-period', $2,
+             '2025-09-06T04:00:00Z', '2025-09-01T12:00:00Z')`,
+          [learnerId, historicalFactId],
+        );
+        await assert.rejects(
+          factWriter.query(
+            `UPDATE learner_facts
+             SET metadata = metadata || '{"week_index": 2}'::jsonb
+             WHERE id = $1`,
+            [historicalFactId],
+          ),
+          (error) => postgresViolation(error, "23514"),
+        );
+        await scheduleWriter.query("ROLLBACK");
+      } finally {
+        await scheduleWriter.query("ROLLBACK").catch(() => undefined);
+        scheduleWriter.release();
+        factWriter.release();
+      }
+
       const currentEventId = crypto.randomUUID();
       await upgrade.query(
         `INSERT INTO events (
@@ -107,9 +146,11 @@ test(
          ) VALUES ($1, $2, $3, 'daily_log_week.configured', 'current-fact',
            'current-period', '2026-09-07T12:00:00Z', $4, '2026-09-07T12:00:00Z')`,
         [integrationId, learnerId, currentEventId, {
+          term_token: "current-term",
           term_start_day: "2026-08-31",
           term_end_day: "2026-10-09",
           term_timezone: "America/Toronto",
+          term_week_count: 6,
           week_index: 2,
           week_start_day: "2026-09-07",
         }],

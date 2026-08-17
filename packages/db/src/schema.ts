@@ -98,10 +98,11 @@ export const events = pgTable(
   ]
 );
 
-// A semantically unique, privacy-safe fact derived from an accepted event. An
-// integration retry is deduplicated by events.idempotency_key; this second
-// ledger independently prevents a producer from changing the idempotency key
-// and counting the same learner behavior twice.
+// An append-only, semantically unique, privacy-safe fact derived from an
+// accepted event. An integration retry is deduplicated by events.idempotency_key;
+// this second ledger independently prevents a producer from changing the
+// idempotency key and counting the same learner behavior twice. A migration
+// trigger rejects direct updates/deletes while preserving learner-consent cascades.
 export const learnerFacts = pgTable(
   "learner_facts",
   {

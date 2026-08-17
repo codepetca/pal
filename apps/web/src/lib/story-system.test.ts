@@ -654,6 +654,7 @@ test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !pr
   const legacy = configuredWeek(`period-${crypto.randomUUID()}`, `legacy-term-${crypto.randomUUID()}`);
   legacy.metadata.term_end_day = "2026-12-18";
   delete (legacy.metadata as { term_week_count?: number }).term_week_count;
+  delete (legacy.metadata as { week_start_day?: string }).week_start_day;
   try {
     await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
