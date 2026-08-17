@@ -12,8 +12,8 @@ CREATE TABLE "story_collectible_schedules" (
 );
 --> statement-breakpoint
 ALTER TABLE "story_collectible_schedules" ADD CONSTRAINT "story_collectible_schedules_source_owner_fk" FOREIGN KEY ("source_fact_id","learner_id") REFERENCES "public"."learner_facts"("id","learner_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "story_collectible_schedules_pending_due_idx" ON "story_collectible_schedules" USING btree ("due_at","id","learner_id") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;--> statement-breakpoint
-CREATE INDEX "story_collectible_schedules_pending_learner_idx" ON "story_collectible_schedules" USING btree ("learner_id","due_at") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;
+CREATE INDEX "story_collectible_schedules_pending_due_idx" ON "story_collectible_schedules" USING btree ("due_at","created_at","id","learner_id","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "story_collectible_schedules_pending_learner_idx" ON "story_collectible_schedules" USING btree ("learner_id","due_at","created_at","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;
 --> statement-breakpoint
 CREATE FUNCTION "calculate_story_collectible_due_at"("calendar_metadata" jsonb) RETURNS timestamp with time zone AS $$
 DECLARE

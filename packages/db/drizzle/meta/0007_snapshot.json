@@ -1297,6 +1297,12 @@
               "nulls": "last"
             },
             {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
               "expression": "id",
               "isExpression": false,
               "asc": true,
@@ -1304,6 +1310,12 @@
             },
             {
               "expression": "learner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1326,6 +1338,18 @@
             },
             {
               "expression": "due_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
