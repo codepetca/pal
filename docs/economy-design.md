@@ -114,11 +114,36 @@ older widget/API pair.
   reference is used only for new plans; persisted plans and reward notices
   continue resolving through their assigned version, so a new story or Pip v2
   does not require a database or learning-event contract change.
-- A period's collectible is earned only when that period's durable Weekly
-  Rhythm achievement is earned. That transition queues one story reveal linked
-  to the weekly achievement, so retries and later activity cannot create a
-  second collectible. Level, streak, and assignment milestones may award titles
-  or ordinary rewards, but never unlock story props.
+- Every configured instructional period becomes due on the local calendar day
+  after its own instructional end: Saturday after a normal Friday, or the next
+  day when the authoritative term ends midweek. The first partial week begins on
+  `term_start_day`; later normal weeks begin Monday. A later instructional week,
+  holiday, or break never moves the current period's due day. Boundaries use the
+  term's authoritative IANA timezone. For defensive compatibility with the
+  existing Pika contract, a contract-valid weekend start uses the following
+  Monday-Friday instructional span and becomes due that Saturday.
+- A version-controlled Vercel cron wakes the worker daily. It pages through
+  learners with ungranted overdue assignments, takes the same per-learner row
+  lock as event ingest, and reconciles every overdue week for that learner in one
+  transaction. The current production bound is 10,000 learners per invocation;
+  reaching it returns an alertable incomplete response. Accepted events call the
+  same idempotent reconciler, but learner activity is not required: missed cron
+  runs recover on a later daily run.
+- The reconciler writes one append-only `story_chapter` ownership grant using a
+  stored weekly configuration fact as provenance. It never writes
+  XP, achievement events, student activity, or a finish. The authenticated
+  snapshot projects sketch when that week's durable Weekly Rhythm is not earned
+  and color when it is earned. An achievement earned before the due day does not
+  create early ownership; a delayed valid achievement upgrades the existing
+  collectible's presentation without inserting another grant.
+- Schedule-grant eligibility is fail-closed until
+  `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is configured. Both the provenance
+  fact and its typed schedule may predate deployment, but the due instant must be
+  at or after that boundary, so deploying the feature never awards older weeks
+  or loses future work. `CRON_SECRET` separately authenticates
+  the daily cron route and is not an eligibility input for accepted-event
+  recovery. Level, streak, and assignment milestones may award titles or
+  ordinary rewards, but never color story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready
@@ -133,15 +158,16 @@ older widget/API pair.
   never create reward grants; every new grant has an exact source fact.
 - The widget gives every roadmap week a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
-  well as the UI. Once earned, that week's slot reveals its collectible (at
-  most one reward per period). Older snapshots without `progression` keep the
-  existing cat and achievement UI.
+  well as the UI. Once the chapter is granted, that week's slot reveals one
+  sketch or full-color collectible (at most one reward per period). Older
+  snapshots without `progression` keep the existing cat and achievement UI.
 - Pal's authenticated snapshot producer is the authority for story awards and
   reveal eligibility. The widget's network parser validates shape, bounds, and
   asset origins; it deliberately does not maintain a second story engine or
   attempt to prove entitlement from other fields in the same response.
-- Catch-up remains deliberately deferred. The story copy, collectible briefs,
-  scheduling rules, and that boundary are defined in
+- The active daily scheduler catches up every overdue post-rollout assignment
+  for each selected learner. Story copy, collectible briefs, and scheduling
+  rules are defined in
   [Pip's First Recipe — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy

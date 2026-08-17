@@ -13,6 +13,7 @@ export type PalWeekStatus = "past" | "current" | "future";
 export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
 export type PalUnlockStatus = "earned" | "next" | "locked";
 export type PalCollectibleKind = "companion" | "room" | "cosmetic";
+export type PalCollectibleFinish = "sketch" | "color";
 
 export interface PalProgress {
   current: number;
@@ -84,32 +85,48 @@ export interface PalCompanionState {
   assetUrl?: string;
 }
 
-export interface PalGrantRewardNotice {
+/**
+ * Backward-compatible schema-v1 reward surface. Hosts may continue reading the
+ * original optional grant fields without first narrowing a newer achievement
+ * celebration variant.
+ */
+export interface PalRewardNotice {
   id: string;
   title: string;
   description: string;
   kind?: "standard" | "story";
   collectibleTitle?: string;
+  /** Sketch is the guaranteed story keepsake; color marks an earned Weekly Rhythm. */
+  collectibleFinish?: PalCollectibleFinish;
   titleAward?: string;
   titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
+  achievement?: PalAchievementPresentation & {
+    /** Stable earned achievement-instance identity used by the roadmap. */
+    id: string;
+  };
 }
 
-export interface PalAchievementCelebrationNotice {
+export interface PalGrantRewardNotice extends PalRewardNotice {
+  achievement?: never;
+}
+
+export interface PalAchievementCelebrationNotice extends PalRewardNotice {
   /** Transient acknowledgement identity. */
   id: string;
-  kind: "achievement";
+  /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
+  kind: "standard";
+  title: string;
+  description: string;
+  assetUrl?: string;
+  icon?: string;
   /** Presentation-safe identity selected by the authenticated Pal server. */
   achievement: PalAchievementPresentation & {
     /** Stable earned achievement-instance identity used by the roadmap. */
     id: string;
   };
 }
-
-export type PalRewardNotice =
-  | PalGrantRewardNotice
-  | PalAchievementCelebrationNotice;
 
 export interface PalCollectionItem {
   id: string;
@@ -143,6 +160,8 @@ export type PalCollectibleUnlock =
       titleAward?: string;
       titleRevealCopy?: string;
       kind: PalCollectibleKind;
+      /** Presentation tier. Older schema-v1 producers omit this and render in color. */
+      finish?: PalCollectibleFinish;
       assetUrl: string;
     }
   | PalCollectibleUnlockBase & {
@@ -232,6 +251,8 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
+  /** @deprecated Use a concrete achievement action so the celebration has canonical identity. */
+  | "reward-earned"
   | "duplicate-replayed"
   | "session-started"
   | "reset";

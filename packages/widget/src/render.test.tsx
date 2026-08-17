@@ -48,7 +48,7 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.ok(
     snapshot.rewards.some(
       (reward) =>
-        reward.kind === "achievement" &&
+        reward.achievement !== undefined &&
         reward.achievement.key === "weekly-rhythm",
     ),
   );
@@ -115,6 +115,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
     title: "Mystery Egg",
     description: "An earned keepsake.",
     kind: "room",
+    finish: "sketch",
     assetUrl: "/assets/world/reward-mystery-egg-v1.png",
   };
   snapshot.progression!.currentTitle = "Rhythm Builder";
@@ -134,11 +135,11 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.match(html, />Rhythm Builder</);
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 1<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="earned" aria-label="Week 1 collectible: Mystery Egg, earned" role="img"><span class="pal-week-collectible-art" aria-hidden="true"><img src="\/assets\/world\/reward-mystery-egg-v1\.png"/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 1<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="earned" data-collectible-finish="sketch" aria-label="Week 1 collectible: Mystery Egg, storybook sketch" role="img"><span class="pal-week-collectible-art" aria-hidden="true"><img src="\/assets\/world\/reward-mystery-egg-v1\.png"/,
   );
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
 
@@ -165,6 +166,26 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Quest Keeper/);
   assert.doesNotMatch(html, /Level Leader/);
   assert.doesNotMatch(html, /Semester Legend/);
+});
+
+test("story celebration names the sketch finish without relying on color", () => {
+  const snapshot = createFixtureSnapshot(1, 6);
+  snapshot.rewards = [{
+    id: "story-sketch",
+    kind: "story",
+    title: "A new chapter",
+    description: "The egg waits beside the lamp.",
+    collectibleTitle: "Mystery Egg",
+    collectibleFinish: "sketch",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  }];
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="sketch-reward">
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+  assert.match(html, />Storybook sketch</);
 });
 
 test("roadmap omits the title chip until the learner earns a title", () => {

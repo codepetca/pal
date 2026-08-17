@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "test": "node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx' 'src/**/*.test.mts'",
+    "test": "PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT=2026-01-01T00:00:00Z node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx' 'src/**/*.test.mts'",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },

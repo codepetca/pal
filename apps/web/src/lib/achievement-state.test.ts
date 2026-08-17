@@ -102,7 +102,7 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
 function achievementCelebrationPresentations(snapshot: PalWidgetSnapshot) {
   return snapshot.rewards
     .flatMap((reward) =>
-      reward.kind === "achievement"
+      reward.achievement !== undefined
         ? [{
             key: reward.achievement.key,
             title: reward.achievement.title,
@@ -394,15 +394,17 @@ test(
         ["world-study-bird-v1"],
       );
       const achievementCelebrations = snapshot.rewards.filter(
-        (reward) => reward.kind === "achievement",
+        (reward) => reward.achievement !== undefined,
       );
       assert.equal(achievementCelebrations.length, 5);
       const roadmapAchievements = snapshot.roadmap.weeks.flatMap(
         (week) => week.achievements,
       );
       for (const celebration of achievementCelebrations) {
+        assert.ok(celebration.achievement);
+        const celebratedAchievement = celebration.achievement;
         const mapped = roadmapAchievements.find(
-          (achievement) => achievement.id === celebration.achievement.id,
+          (achievement) => achievement.id === celebratedAchievement.id,
         );
         assert.ok(mapped);
         assert.equal(mapped.status, "earned");
@@ -418,7 +420,7 @@ test(
       assert.equal(
         snapshot.rewards.some(
           (reward) =>
-            reward.kind !== "achievement" &&
+            reward.achievement === undefined &&
             reward.titleAward === "On-Time Pro",
         ),
         true,
@@ -799,6 +801,113 @@ test(
       assert.equal(corrected.status, "processed");
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "uses the same Friday and final-term boundaries for Weekly Rhythm and collectibles",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const scenarios = [
+      {
+        learner: `friday-boundary-${crypto.randomUUID()}`,
+        period: `friday-period-${crypto.randomUUID()}`,
+        term: "friday-term",
+        termStart: "2026-09-14",
+        termEnd: "2026-10-23",
+        weekStart: "2026-09-14",
+        weekIndex: 1,
+        acceptedDay: "2026-09-18",
+        rejectedDay: "2026-09-19",
+      },
+      {
+        learner: `partial-boundary-${crypto.randomUUID()}`,
+        period: `partial-period-${crypto.randomUUID()}`,
+        term: "partial-term",
+        termStart: "2026-09-02",
+        termEnd: "2026-10-09",
+        weekStart: "2026-09-02",
+        weekIndex: 1,
+        acceptedDay: "2026-09-04",
+        rejectedDay: "2026-09-07",
+      },
+      {
+        learner: `term-end-boundary-${crypto.randomUUID()}`,
+        period: `term-end-period-${crypto.randomUUID()}`,
+        term: "term-end-term",
+        termStart: "2026-09-02",
+        termEnd: "2026-10-07",
+        weekStart: "2026-10-05",
+        weekIndex: 6,
+        acceptedDay: "2026-10-07",
+        rejectedDay: "2026-10-08",
+      },
+    ] as const;
+
+    try {
+      for (const scenario of scenarios) {
+        const configured = await processEventInDb(
+          integration.id,
+          scenario.learner,
+          event(
+            "daily_log_week.configured",
+            {
+              period_key: scenario.period,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 5,
+              term_token: scenario.term,
+              term_start_day: scenario.termStart,
+              term_end_day: scenario.termEnd,
+              term_timezone: "America/Toronto",
+              term_week_count: 6,
+              week_start_day: scenario.weekStart,
+              week_index: scenario.weekIndex,
+            },
+            `${scenario.weekStart}T12:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(configured.status, "processed");
+
+        const accepted = await processEventInDb(
+          integration.id,
+          scenario.learner,
+          event(
+            "daily_log.completed",
+            { period_key: scenario.period, activity_day: scenario.acceptedDay },
+            `${scenario.acceptedDay}T16:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.equal(accepted.status, "processed");
+
+        const rejected = await processEventInDb(
+          integration.id,
+          scenario.learner,
+          event(
+            "daily_log.completed",
+            { period_key: scenario.period, activity_day: scenario.rejectedDay },
+            `${scenario.rejectedDay}T16:00:00.000Z`,
+          ),
+          key(),
+        );
+        assert.deepEqual(rejected, {
+          status: "rejected",
+          error: "inconsistent_activity_day",
+        });
+      }
+    } finally {
+      for (const scenario of scenarios) {
+        await resetLearnerInDb(integration.id, scenario.learner);
+      }
     }
   },
 );
@@ -3083,6 +3192,7 @@ test(
           token: "summer-2026",
           start: "2026-05-11",
           end: "2026-08-30",
+          finalWeekStart: "2026-08-24",
         },
         next: {
           token: "fall-2026",
@@ -3098,14 +3208,15 @@ test(
           token: "fall-2026",
           start: "2026-08-31",
           end: "2026-12-18",
+          finalWeekStart: "2026-12-14",
         },
         next: {
           token: "winter-2026",
-          start: "2026-12-19",
+          start: "2026-12-21",
           end: "2027-04-09",
         },
-        before: "2026-12-19T04:59:59.000Z",
-        at: "2026-12-19T05:00:00.000Z",
+        before: "2026-12-21T04:59:59.000Z",
+        at: "2026-12-21T05:00:00.000Z",
       },
     ];
 
@@ -3127,7 +3238,7 @@ test(
               term_end_day: boundary.previous.end,
               term_timezone: "America/Toronto",
               term_week_count: 16,
-              week_start_day: boundary.previous.end,
+              week_start_day: boundary.previous.finalWeekStart,
               week_index: 16,
             },
             boundary.before,

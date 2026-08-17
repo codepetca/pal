@@ -15,7 +15,6 @@ import type { IncomingEvent } from "@pal/engine";
 import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
-  grantStoryChapterForPeriod,
 } from "@/lib/reward-grants";
 import {
   hasValidStoryWeekPosition,
@@ -131,6 +130,7 @@ export type WeeklyConfigurationError =
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
   | "invalid_term_story_schedule"
+  | "premature_period_close"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -370,6 +370,21 @@ export async function weeklyConfigurationRejection(
     !existing || (existingCalendar?.startDay === null && calendar)
       ? periodCalendarFromMetadata(calendar)
       : undefined;
+  const closureCalendar =
+    existingCalendar?.startDay === null || !existingCalendar
+      ? firstConfigurationCalendarOverride
+      : existingCalendar;
+  if (
+    periodStatus === "closed" &&
+    closureCalendar?.timeZone &&
+    closureCalendar.startDay &&
+    calendarDayInTimeZone(
+      new Date(event.occurred_at),
+      closureCalendar.timeZone,
+    ) < closureCalendar.startDay
+  ) {
+    return "premature_period_close";
+  }
   if (
     periodStatus === "closed" &&
     eligibleDays <
@@ -1023,7 +1038,6 @@ async function recomputeWeeklyRhythm(
         achievementInstanceId: existing.id,
         achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
       });
-      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
     }
     return status === "earned";
   }
@@ -1049,7 +1063,6 @@ async function recomputeWeeklyRhythm(
       achievementInstanceId: created.id,
       achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
     });
-    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
   }
   return status === "earned";
 }

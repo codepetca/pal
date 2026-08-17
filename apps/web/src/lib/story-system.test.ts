@@ -38,6 +38,7 @@ import {
   acknowledgeLearnerReward,
   loadLearnerSnapshot,
 } from "@/lib/learner-snapshot";
+import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 
 const secret = "story-system-test-secret-at-least-32-characters";
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
@@ -237,7 +238,7 @@ test("projector keeps prior-term titles without unlocking current-term collectib
 });
 
 test("server fixture replays grants, titles, and acknowledgement without future content", async () => {
-  const commands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
+  const rhythmCommands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
     (activityDay, index) => ({
       type: "action" as const,
       id: `daily-${index + 1}`,
@@ -245,6 +246,12 @@ test("server fixture replays grants, titles, and acknowledgement without future 
       context: { activityDay },
     }),
   );
+  const beforeDue = await projectStoryFixture({ termWeeks: 16, commands: rhythmCommands });
+  assert.equal(beforeDue.progression?.collectibles[0]?.status, "next");
+  const commands = [
+    ...rhythmCommands,
+    { type: "action" as const, id: "advance-week-one", action: "advance-week" as const },
+  ];
   const locked = await projectStoryFixture({ termWeeks: 16, commands: [] });
   const lockedRaw = JSON.stringify(locked);
   assert.equal(lockedRaw.includes("pips-first-recipe"), false);
@@ -252,6 +259,12 @@ test("server fixture replays grants, titles, and acknowledgement without future 
 
   const earned = await projectStoryFixture({ termWeeks: 16, commands });
   assert.equal(earned.progression?.collectibles[0]?.status, "earned");
+  assert.equal(
+    earned.progression?.collectibles[0]?.status === "earned"
+      ? earned.progression.collectibles[0].finish
+      : undefined,
+    "color",
+  );
   assert.equal(
     earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
     true,
@@ -518,7 +531,9 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
   const legacy = configuredWeek(periodKey, termKey);
   legacy.occurred_at = "2026-08-03T12:00:00.000Z";
   legacy.metadata.term_start_day = "2026-06-29";
-  legacy.metadata.term_end_day = "2026-10-16";
+  // Leave one schedule-gap week so a different Monday remains structurally
+  // valid and this test reaches the immutable-calendar conflict check.
+  legacy.metadata.term_end_day = "2026-10-23";
   legacy.metadata.week_index = 6;
   delete (legacy.metadata as Record<string, unknown>).term_week_count;
   delete (legacy.metadata as Record<string, unknown>).week_start_day;
@@ -540,7 +555,7 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
     adaptive.occurred_at = "2026-08-04T12:00:00.000Z";
     adaptive.metadata.config_version = 2;
     adaptive.metadata.term_week_count = 16;
-    adaptive.metadata.week_start_day = "2026-08-04";
+    adaptive.metadata.week_start_day = "2026-08-10";
     const moved = await processEventInDb(
       integration.id,
       externalLearnerId,
@@ -755,6 +770,11 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       streakLastDay: "2026-08-30",
     }).where(eq(economy.learnerId, learnerId));
     await processEventInDb(integration.id, externalLearnerId, dailyLog(periodKey), crypto.randomUUID());
+    await runStoryGrantWorker({
+      asOf: new Date("2026-09-05T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
 
     const plan = await loadPersistedStoryPlan(getDb(), learnerId, "story-term");
     assert.ok(plan);
@@ -762,22 +782,26 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       .where(eq(learnerRewardGrants.learnerId, learnerId))
       .orderBy(asc(learnerRewardGrants.grantOrder));
     assert.equal(persistedGrants.length, 2);
-    assert.equal(new Set(persistedGrants.map((grant) => grant.sourceFactId)).size, 1);
+    assert.equal(new Set(persistedGrants.map((grant) => grant.sourceFactId)).size, 2);
 
     const fixture = new StoryFixtureLedger(plan);
     for (const persisted of persistedGrants) {
       if (persisted.kind === "story_chapter") {
-        fixture.grantStoryChapter(persisted.storyPlanChapterId!, persisted.sourceFactId);
+        fixture.grantStoryChapter(
+          persisted.storyPlanChapterId!,
+          persisted.sourceFactId,
+          "color",
+        );
       } else {
         assert.equal(persisted.behaviorTitleId, "rhythm-builder");
         fixture.grantBehaviorTitle("rhythm-builder", persisted.sourceFactId);
       }
     }
-    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.deepEqual(fixture.progression(), snapshot.progression);
     const displayReward = (reward: PalRewardNotice) => {
-      assert.notEqual(reward.kind, "achievement");
-      if (reward.kind === "achievement") throw new Error("Expected a grant reward");
+      assert.equal(reward.achievement, undefined);
+      if (reward.achievement) throw new Error("Expected a grant reward");
       return {
         title: reward.title,
         description: reward.description,
@@ -792,13 +816,13 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     assert.deepEqual(
       fixture.rewards().map(displayReward),
       snapshot.rewards
-        .filter((reward) => reward.kind !== "achievement")
+        .filter((reward) => reward.achievement === undefined)
         .map(displayReward),
     );
     assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
 
     await getDb().update(economy).set({ streakCurrent: 0, streakLastDay: null }).where(eq(economy.learnerId, learnerId));
-    const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.equal(afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"), true);
     assert.equal(afterBreak.progression?.currentTitle, "Gentle Keeper");
   } finally {
@@ -845,6 +869,11 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
       integration.id,
       externalLearnerId,
     );
+    await runStoryGrantWorker({
+      asOf: new Date("2026-10-20T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
     const snapshot = await loadLearnerSnapshot(
       integration.id,
       learnerId,
@@ -903,8 +932,8 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
     assert.equal(snapshot.progression, undefined);
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
     assert.ok(notice);
-    assert.notEqual(notice.kind, "achievement");
-    if (notice.kind === "achievement") throw new Error("Expected a title notice");
+    assert.equal(notice.achievement, undefined);
+    if (notice.achievement) throw new Error("Expected a title notice");
     assert.equal(notice.titleAward, "On-Time Pro");
 
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
@@ -920,7 +949,7 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
   }
 });
 
-test("Weekly Rhythm grants exactly once under retries and acknowledgement preserves the grant", { skip: !process.env.DATABASE_URL }, async () => {
+test("scheduled ownership stays exact-once after Weekly Rhythm retries and acknowledgement", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `grant-retry-${crypto.randomUUID()}`;
   const periodKey = `period-${crypto.randomUUID()}`;
@@ -933,20 +962,31 @@ test("Weekly Rhythm grants exactly once under retries and acknowledgement preser
       crypto.randomUUID(),
     )));
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
+    await runStoryGrantWorker({
+      asOf: new Date("2026-09-05T12:00:00.000Z"),
+      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
+      onlyLearnerIds: [learnerId],
+    });
     const storyGrants = await getDb().select().from(learnerRewardGrants).where(and(
       eq(learnerRewardGrants.learnerId, learnerId),
       eq(learnerRewardGrants.kind, "story_chapter"),
     ));
     assert.equal(storyGrants.length, 1);
-    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     const notice = snapshot.rewards.find((reward) => reward.kind === "story");
     assert.ok(notice);
     await acknowledgeLearnerReward(integration.id, learnerId, notice.id, getDb());
     const [owned] = await getDb().select().from(learnerRewardGrants).where(eq(learnerRewardGrants.id, notice.id));
     assert.ok(owned?.seenAt);
-    const after = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-01T12:00:00Z") });
+    const after = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.equal(after.rewards.some((reward) => reward.id === notice.id), false);
     assert.equal(after.progression?.collectibles[0]?.status, "earned");
+    assert.equal(
+      after.progression?.collectibles[0]?.status === "earned"
+        ? after.progression.collectibles[0].finish
+        : undefined,
+      "color",
+    );
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
@@ -966,7 +1006,7 @@ test("historical achievement rows do not backfill grants or celebrations", { ski
     assert.equal((await getDb().select().from(learnerRewardGrants).where(eq(learnerRewardGrants.learnerId, learnerId))).length, 0);
     assert.equal(
       (await loadLearnerSnapshot(integration.id, learnerId)).rewards.some(
-        (reward) => reward.kind === "achievement",
+        (reward) => reward.achievement !== undefined,
       ),
       false,
     );

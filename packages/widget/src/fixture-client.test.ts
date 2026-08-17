@@ -78,13 +78,22 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   assert.deepEqual(afterDuplicate, beforeDuplicate);
 });
 
+test("deprecated reward-earned fixture action remains a compatible no-op", () => {
+  const client = createFixturePalClient();
+  const before = client.peek();
+
+  assert.match(client.dispatch("reward-earned"), /deprecated/i);
+  assert.deepEqual(client.peek(), before);
+});
+
 test("fixture achievement celebration can be acknowledged exactly once", async () => {
   const client = createFixturePalClient();
 
   client.dispatch("on-time-finish", { itemToken: "acknowledged-item" });
   const reward = (await client.getSnapshot()).rewards[0];
   assert.ok(reward);
-  assert.equal(reward.kind, "achievement");
+  assert.equal(reward.kind, "standard");
+  assert.ok(reward.achievement);
 
   await client.markRewardSeen(reward.id);
   assert.equal((await client.getSnapshot()).rewards.length, 0);
@@ -111,13 +120,15 @@ test("every newly earned fixture achievement queues one canonical celebration", 
 
   const earned = client.peek();
   const celebrations = earned.rewards.filter(
-    (reward) => reward.kind === "achievement",
+    (reward) => reward.achievement !== undefined,
   );
   assert.equal(celebrations.length, 5);
   for (const celebration of celebrations) {
+    assert.ok(celebration.achievement);
+    const celebratedAchievement = celebration.achievement;
     const mapped = earned.roadmap.weeks
       .flatMap((week) => week.achievements)
-      .find((achievement) => achievement.id === celebration.achievement.id);
+      .find((achievement) => achievement.id === celebratedAchievement.id);
     assert.ok(mapped);
     assert.equal(mapped.status, "earned");
     assert.deepEqual(celebration.achievement, {
@@ -137,6 +148,8 @@ test("every newly earned fixture achievement queues one canonical celebration", 
   assert.equal(client.peek().rewards.length, 5);
 
   const acknowledged = celebrations[0]!;
+  assert.ok(acknowledged.achievement);
+  const acknowledgedAchievement = acknowledged.achievement;
   await client.markRewardSeen(acknowledged.id);
   const afterAcknowledgement = client.peek();
   assert.equal(
@@ -150,7 +163,7 @@ test("every newly earned fixture achievement queues one canonical celebration", 
       .flatMap((week) => week.achievements)
       .some(
         (achievement) =>
-          achievement.id === acknowledged.achievement.id &&
+          achievement.id === acknowledgedAchievement.id &&
           achievement.status === "earned",
       ),
   );

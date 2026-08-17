@@ -1,7 +1,7 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-08-01
+> Last updated: 2026-08-16
 
 ---
 
@@ -13,14 +13,42 @@
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
 | GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
+| GET | `/api/cron/story-collectibles` | Vercel Cron | Reconcile overdue post-rollout story ownership in bounded learner batches |
 
 The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
 and public PR previews; production and optional local persisted clients use these
 learner routes.
 
-Rule preview, integration-triggered learner deletion, scheduling, and admin APIs remain
-planned work; they are not current routes or contracts.
+### Scheduled story reconciliation
+
+Vercel invokes `GET /api/cron/story-collectibles` with
+`Authorization: Bearer <CRON_SECRET>`. Missing or malformed deployment
+configuration returns `503`; an invalid bearer returns `401`. Successful runs
+return `200` with batch, learner, retry, and grant counts. Discovery and each
+learner transaction use bounded in-invocation retries. If an individual learner
+still fails, the worker records only a sanitized failure code, attempt count,
+and non-PII correlation identifier, continues the bounded batch, and returns
+`500` with `status: "partial_failure"`. A later daily run rediscovers every
+still-ungranted week.
+
+If the bounded run reaches its batch cap while more due work may remain, it
+returns `503` with `status: "incomplete"` and `batchLimitReached: true`. This
+makes backlog exhaustion alertable instead of presenting a partially drained
+queue as an ordinary successful cron run; pending rows remain recoverable. If
+learner failures and cap exhaustion happen together, the response is `503` with
+`status: "partial_failure_incomplete"` so neither condition is hidden.
+The production default is 100 batches of 100 learners (10,000 learners per
+five-minute invocation); rollout operations must stay within that explicit
+cohort bound or raise capacity/frequency before enabling it.
+
+The route does not accept a learner, period, date, or event payload. It derives
+eligibility only from typed, indexed due-work materialized from validated stored
+calendar configuration and immutable story-plan assignments. It creates no Pika
+event, XP, activity, or achievement.
+
+Rule preview, integration-triggered learner deletion, generic scheduling, and admin
+APIs remain planned work; they are not current routes or contracts.
 
 ### Read-token request
 

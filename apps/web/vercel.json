@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node scripts/vercel-build.mjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/story-collectibles",
+      "schedule": "0 0 * * *"
+    }
+  ]
 }

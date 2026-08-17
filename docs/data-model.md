@@ -1,7 +1,7 @@
 # Data Model
 
 > Living document. Update as the schema evolves.
-> Last updated: 2026-08-14
+> Last updated: 2026-08-17
 
 The authoritative schema is `packages/db/src/schema.ts` — column-level detail,
 indexes, and foreign keys live there, not here. This document covers what the
@@ -29,7 +29,8 @@ These exist as tables today:
 - **LearnerFact** — a privacy-safe, semantically unique fact derived from an accepted event. It prevents the same learner behavior from counting twice even if a producer changes the transport idempotency key.
 - **AchievementPeriod** — roadmap placement for an opaque academic period. Its anchor is the earliest authoritative behavior/configuration time seen for that period, so delivery order cannot reorder weeks.
 - **StoryPlan** — one immutable authoritative term start, versioned story identity, and supported period count for a learner's opaque academic term. Its normalized chapter assignments must cover every contiguous ordinal at transaction commit and may bind only to an opaque period owned by that learner. Plan identity, term length, and chapter assignments never change after creation; only an initially unbound period key may be attached once. Chapter IDs are catalog references, never student-authored content.
-- **LearnerRewardGrant** — the append-only durable ownership ledger. A `story_chapter` grant references the exact learner-owned plan assignment; a `behavior_title` grant references a stable title ID. Every grant references the same learner's source fact, carries database-generated order, and remains owned after `seen_at` is set. Partial uniqueness makes retries exact-once without deriving ownership from notices or current economy state.
+- **StoryCollectibleSchedule** — a typed, durable due-work row derived from the first valid weekly configuration fact for one learner and opaque period. The migration materializes valid existing configuration metadata so an in-flight term cannot lose future work, but it never creates reward ownership. Its indexed `due_at` is the authoritative local boundary used for rollout eligibility, so historical weeks whose due boundary predates rollout remain unawarded. `reconciled_at` consumes queue work only after the existing reward ledger proves ownership; it is not a second ownership source. Identity and due fields are immutable, and deletion follows the source fact's learner-owned cascade.
+- **LearnerRewardGrant** — the append-only durable ownership ledger. A `story_chapter` grant references the exact learner-owned plan assignment; a `behavior_title` grant references a stable title ID. A chapter is granted once after its authoritative local instructional week ends, regardless of Weekly Rhythm. The grant stores no sketch/color finish: the snapshot projects that from the durable weekly achievement, allowing a delayed achievement to upgrade presentation without a second item. Every grant references the same learner's source fact, carries database-generated order, and remains owned after `seen_at` is set. Partial uniqueness makes retries exact-once without deriving ownership from notices or current economy state.
 - **WeeklyRhythmConfig** — the highest accepted Pika opportunity configuration for one learner and period, including whether delayed facts require reconciliation.
 - **AchievementInstance** — one durable achievement outcome within its lifetime, classroom, item, or weekly scope. Earned outcomes are historical and are not revoked by later source-system edits.
 - **RewardNotice** — an exactly-once learner-facing reward notification linked to its achievement instance. A nullable acknowledgement timestamp makes reads retryable and acknowledgement idempotent.
@@ -69,7 +70,12 @@ SELECT id FROM learners WHERE id = $1 FOR UPDATE;
 
 The second transaction blocks until the first commits, then reads fresh state. Locks are always taken in the same order (learner row first), scoped to one learner, and held only for the duration of one apply — so throughput across *different* learners is unaffected.
 
-Anything that mutates learner state — event ingest, cron ticks, scheduled calendar events — goes through the same applier and therefore the same lock.
+Anything that writes learner state — event ingest, cron ticks, scheduled
+calendar events, or reward-ledger reconciliation — takes this same learner lock.
+Gameplay mutations still flow through the engine/applier. The story scheduler
+does not manufacture a gameplay event; it inserts only the already-selected
+chapter's ownership row under this lock and relies on the ledger's uniqueness
+constraint for retry safety.
 
 This is why `@pal/db` connects with node-postgres over a pooled connection rather than an HTTP serverless driver. An HTTP driver sends each statement as its own request and cannot hold a transaction open, which would make the `FOR UPDATE` above silently do nothing. See the comment in `packages/db/src/client.ts` before changing the driver.
 

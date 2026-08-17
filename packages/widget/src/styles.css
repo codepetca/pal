@@ -219,6 +219,11 @@
   object-fit: contain;
 }
 
+.pal-week-collectible[data-collectible-finish="sketch"] .pal-week-collectible-art img,
+.pal-celebration-icon img[data-collectible-finish="sketch"] {
+  filter: grayscale(1);
+}
+
 .pal-week-collectible strong {
   overflow: hidden;
   width: 100%;
@@ -584,6 +589,12 @@
 
 .pal-celebration-collectible {
   font-size: 1rem;
+}
+
+.pal-celebration-finish {
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .pal-celebration-title {

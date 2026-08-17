@@ -16,8 +16,9 @@ clients receive a presentation-safe snapshot.
    PostgreSQL row lock.
 4. The pure engine evaluates the event and derived events. The transaction applies
    its mutations, records achievement transitions, and writes exact-once reward facts.
-5. Weekly Rhythm may grant the chapter assigned to that learner's immutable term plan.
-   Level, streak, and on-time transitions may grant stable behavior titles.
+5. The daily scheduler grants each due chapter from that learner's immutable term
+   plan. Weekly Rhythm controls whether it appears as sketch or color; level, streak,
+   and on-time transitions may grant stable behavior titles.
 6. Pika mints a short-lived learner-scoped read token and the widget requests the
    learner snapshot.
 7. The server resolves durable grants against pinned catalogs and removes all unearned
@@ -36,8 +37,10 @@ clients receive a presentation-safe snapshot.
 
 Next.js App Router hosts both the application UI and API on Vercel. PostgreSQL is the
 durable store; local persisted development and CI use isolated databases. Static art
-is versioned under `apps/web/public/assets`. There is no Redis cache, background
-scheduler, classroom model, story CMS, or object-storage asset registry in the MVP.
+is versioned under `apps/web/public/assets`. The one daily story scheduler reconciles
+ownership under the learner lock without synthetic activity, achievement, or XP. There
+is no Redis cache, classroom model, story CMS, generic scheduler, or object-storage
+asset registry in the MVP.
 
 ## State authority
 
@@ -76,6 +79,22 @@ are server-only application modules.
 
 The browser package contains no story catalog, future chapter copy, title definitions,
 or future asset URLs. Locked DTO slots contain only concealed presentation state.
+
+## Guaranteed weekly story collectible
+
+The weekly configuration trigger materializes a typed due row using the term's IANA
+timezone. A week ends Friday, except that the first week may begin midweek and the
+final week is clamped to `term_end_day`; ownership becomes due the following local
+day. Migration may materialize valid existing schedule metadata, but neither that nor
+an older configuration creates ownership. Only due boundaries at or after the explicit
+rollout cutoff are eligible.
+
+The authenticated Vercel cron wakes daily, pages the pending index, and reconciles
+each learner under the same row lock used by event ingest. Reward-ledger uniqueness
+makes retries exact-once. The production default is bounded at 10,000 learners per
+five-minute invocation; a remaining backlog returns an alertable `503` and stays in
+the queue. Accepted learner events call the same reconciler as a recovery path, but no
+learner activity is required for the scheduled grant.
 
 ## Read authentication
 
@@ -122,6 +141,7 @@ not silently strip them. Fixture request objects are also exact-key validated.
 | `POST` | `/api/v1/integration/read-token` | Mint a learner-scoped read token |
 | `GET` | `/api/v1/learner/snapshot` | Return projected roadmap, companion, collection, and rewards |
 | `POST` | `/api/v1/learner/rewards/:rewardId/seen` | Idempotently acknowledge a reveal/notice |
+| `GET` | `/api/cron/story-collectibles` | Reconcile overdue story ownership from typed due work |
 
 Sandbox-only routes are documented in [dev-workflow.md](dev-workflow.md). Proposed
 admin, scheduling, deletion, and rule-preview APIs are not implemented contracts.
