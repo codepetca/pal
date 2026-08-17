@@ -1,12 +1,11 @@
-import { and, asc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import {
-  learnerFacts,
   learnerRewardGrants,
+  storyCollectibleSchedules,
   storyPlanChapters,
   type Db,
 } from "@pal/db";
 import { insertStoryChapterGrant } from "@/lib/reward-grants";
-import { isStoryCollectibleDue } from "@/lib/story-grant-calendar";
 import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 
 export type StoryGrantReconciliationResult = {
@@ -36,22 +35,29 @@ export async function reconcileDueStoryGrants(
   if (!effectiveAt) return { candidates: 0, due: 0, granted: 0 };
   const asOf = input.asOf ?? new Date();
 
-  // DISTINCT ON chooses one stable, post-rollout provenance fact per immutable
-  // learner-owned story assignment while the reward-ledger join avoids work for
-  // chapters already granted by an earlier event or scheduled reconciliation.
+  // The typed schedule is durable due work derived from one stable weekly fact.
+  // The reward ledger remains ownership authority; an existing grant is enough
+  // to consume queue work left pending by a retry or pre-migration scheduler.
   const candidates = await db
-    .selectDistinctOn([storyPlanChapters.id], {
-      sourceFactId: learnerFacts.id,
-      metadata: learnerFacts.metadata,
+    .select({
+      scheduleId: storyCollectibleSchedules.id,
+      sourceFactId: storyCollectibleSchedules.sourceFactId,
       storyPlanId: storyPlanChapters.storyPlanId,
       storyPlanChapterId: storyPlanChapters.id,
+      existingGrantId: learnerRewardGrants.id,
     })
-    .from(storyPlanChapters)
+    .from(storyCollectibleSchedules)
     .innerJoin(
-      learnerFacts,
+      storyPlanChapters,
       and(
-        eq(learnerFacts.learnerId, storyPlanChapters.learnerId),
-        eq(learnerFacts.periodKey, storyPlanChapters.periodKey),
+        eq(
+          storyCollectibleSchedules.learnerId,
+          storyPlanChapters.learnerId,
+        ),
+        eq(
+          storyCollectibleSchedules.periodKey,
+          storyPlanChapters.periodKey,
+        ),
       ),
     )
     .leftJoin(
@@ -66,43 +72,43 @@ export async function reconcileDueStoryGrants(
     )
     .where(
       and(
-        eq(storyPlanChapters.learnerId, input.learnerId),
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-        gte(learnerFacts.createdAt, effectiveAt),
-        sql`${learnerFacts.metadata} ? 'term_timezone'`,
-        isNull(learnerRewardGrants.id),
+        eq(storyCollectibleSchedules.learnerId, input.learnerId),
+        isNull(storyCollectibleSchedules.reconciledAt),
+        gte(storyCollectibleSchedules.createdAt, effectiveAt),
+        gte(storyCollectibleSchedules.dueAt, effectiveAt),
+        lte(storyCollectibleSchedules.dueAt, asOf),
       ),
     )
     .orderBy(
-      asc(storyPlanChapters.id),
-      asc(learnerFacts.createdAt),
-      asc(learnerFacts.id),
+      asc(storyCollectibleSchedules.dueAt),
+      asc(storyCollectibleSchedules.id),
     );
 
-  let due = 0;
   let granted = 0;
   for (const candidate of candidates) {
-    if (
-      !candidate.metadata ||
-      typeof candidate.metadata !== "object" ||
-      Array.isArray(candidate.metadata) ||
-      !isStoryCollectibleDue(
-        candidate.metadata as Record<string, unknown>,
-        asOf,
-        effectiveAt,
-      )
-    ) {
-      continue;
+    if (!candidate.existingGrantId) {
+      if (await insertStoryChapterGrant(db, {
+        learnerId: input.learnerId,
+        sourceFactId: candidate.sourceFactId,
+        storyPlanId: candidate.storyPlanId,
+        storyPlanChapterId: candidate.storyPlanChapterId,
+      })) {
+        granted += 1;
+      }
     }
-    due += 1;
-    if (await insertStoryChapterGrant(db, {
-      learnerId: input.learnerId,
-      sourceFactId: candidate.sourceFactId,
-      storyPlanId: candidate.storyPlanId,
-      storyPlanChapterId: candidate.storyPlanChapterId,
-    })) {
-      granted += 1;
-    }
+    await db
+      .update(storyCollectibleSchedules)
+      .set({ reconciledAt: sql`now()` })
+      .where(
+        and(
+          eq(storyCollectibleSchedules.id, candidate.scheduleId),
+          isNull(storyCollectibleSchedules.reconciledAt),
+        ),
+      );
   }
-  return { candidates: candidates.length, due, granted };
+  return {
+    candidates: candidates.length,
+    due: candidates.length,
+    granted,
+  };
 }

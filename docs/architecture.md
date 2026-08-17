@@ -197,19 +197,24 @@ achievement transition. Neither is accepted from an integration.
 ### Guaranteed weekly story collectible
 
 `apps/web/vercel.json` declares a daily UTC wake-up for the authenticated
-`/api/cron/story-collectibles` route. The worker computes each due boundary from
-the stored term calendar and authoritative IANA timezone: Friday-ending weeks
-become due Saturday, while a midweek final week becomes due the following day.
-It never waits for the next instructional week, so holidays and breaks cannot
-delay ownership. Stable learner pages, per-learner transactions, row locks, and
-the reward ledger's uniqueness constraint make retries and concurrent event/cron
-runs safe. Discovery and learner transactions retry transient failures up to a
-small fixed attempt limit during the same invocation. A short transaction-local
-lock timeout prevents a concurrent event from consuming the connection's full
-statement timeout; terminal learner failures remain isolated from the rest of
-the batch. Malformed legacy calendar JSON is quarantined before any date,
-integer, or timezone evaluation. Each selected learner reconciles all overdue
-post-rollout weeks, which also repairs missed daily invocations.
+`/api/cron/story-collectibles` route. When an authoritative weekly configuration
+fact is stored, a database trigger materializes its due boundary in the typed
+`story_collectible_schedules` queue using the term's IANA timezone. Friday-ending
+weeks become due Saturday, while a midweek final week becomes due the following
+day. It never waits for the next instructional week, so holidays and breaks
+cannot delay ownership. New malformed calendars fail closed; the migration
+backfill safely skips malformed legacy rows.
+
+The worker pages through the partial pending-due index with a stable
+`(due_at, id)` cursor, then reconciles every overdue post-rollout row for each
+selected learner. Per-learner transactions, row locks, and the reward ledger's
+uniqueness constraint make retries and concurrent event/cron runs safe.
+Discovery and learner transactions retry transient failures up to a small fixed
+attempt limit during the same invocation. A short transaction-local lock timeout
+prevents a concurrent event from consuming the connection's full statement
+timeout; terminal learner failures remain isolated from the rest of the batch.
+Pending queue rows survive missed daily invocations and are consumed only after
+the ownership ledger contains the matching collectible.
 
 ### Future operator schedules
 

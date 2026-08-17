@@ -7,15 +7,15 @@ import {
   gte,
   inArray,
   isNull,
+  lte,
+  notInArray,
+  or,
   sql,
-  type SQL,
 } from "drizzle-orm";
 import {
   getDb,
-  learnerFacts,
-  learnerRewardGrants,
   learners,
-  storyPlanChapters,
+  storyCollectibleSchedules,
   type Db,
 } from "@pal/db";
 import {
@@ -29,6 +29,18 @@ export const STORY_GRANT_MAX_BATCHES = 20;
 export const STORY_GRANT_CONCURRENCY = 5;
 export const STORY_GRANT_MAX_ATTEMPTS = 3;
 export const STORY_GRANT_RETRY_BASE_DELAY_MS = 100;
+const STORY_GRANT_DISCOVERY_ROWS_PER_LEARNER = 24;
+
+export type StoryGrantDiscoveryCursor = {
+  dueAt: Date;
+  id: string;
+};
+
+export type StoryGrantDiscoveryPage = {
+  learnerIds: string[];
+  cursor?: StoryGrantDiscoveryCursor;
+  scannedRows: number;
+};
 
 export type StoryGrantWorkerResult = {
   batches: number;
@@ -39,130 +51,78 @@ export type StoryGrantWorkerResult = {
   batchLimitReached: boolean;
 };
 
-const termStartDayText = sql`(${learnerFacts.metadata}->>'term_start_day')`;
-const termEndDayText = sql`(${learnerFacts.metadata}->>'term_end_day')`;
-const timeZoneText = sql`(${learnerFacts.metadata}->>'term_timezone')`;
-const weekIndexText = sql`(${learnerFacts.metadata}->>'week_index')`;
-const weekStartDayText = sql`(${learnerFacts.metadata}->>'week_start_day')`;
-const weekStartDay = sql`coalesce(
-  nullif(${weekStartDayText}, '')::date,
-  (${learnerFacts.metadata}->>'term_start_day')::date
-    + ((((${learnerFacts.metadata}->>'week_index')::int) - 1) * 7)
-)`;
-const friday = sql`(${weekStartDay}
-  + ((5 - extract(isodow from ${weekStartDay})::int + 7) % 7))`;
-const dueDay = sql`(least(
-  ${friday},
-  (${learnerFacts.metadata}->>'term_end_day')::date
-) + 1)`;
-
-function safeIsoCalendarDay(dayText: SQL): SQL {
-  return sql`CASE
-    WHEN ${dayText} ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (
-      substring(${dayText} from 1 for 4)::int between 1 and 9999
-      AND substring(${dayText} from 6 for 2)::int between 1 and 12
-      AND substring(${dayText} from 9 for 2)::int between 1 AND CASE
-        WHEN substring(${dayText} from 6 for 2)::int in (4, 6, 9, 11) THEN 30
-        WHEN substring(${dayText} from 6 for 2)::int = 2 THEN CASE
-          WHEN substring(${dayText} from 1 for 4)::int % 400 = 0
-            OR (
-              substring(${dayText} from 1 for 4)::int % 4 = 0
-              AND substring(${dayText} from 1 for 4)::int % 100 <> 0
-            ) THEN 29
-          ELSE 28
-        END
-        ELSE 31
-      END
-    )
-    ELSE false
-  END`;
-}
-
-// All casts and timezone evaluation stay inside the true arm of this CASE.
-// Historical JSON predating today's contract can therefore be quarantined by
-// the query instead of aborting the entire cron invocation.
-const safeCalendarMetadata = sql`(
-  jsonb_typeof(${learnerFacts.metadata}->'term_start_day') = 'string'
-  AND ${safeIsoCalendarDay(termStartDayText)}
-  AND jsonb_typeof(${learnerFacts.metadata}->'term_end_day') = 'string'
-  AND ${safeIsoCalendarDay(termEndDayText)}
-  AND jsonb_typeof(${learnerFacts.metadata}->'term_timezone') = 'string'
-  AND EXISTS (
-    SELECT 1 FROM pg_timezone_names
-    WHERE name = ${timeZoneText}
-  )
-  AND jsonb_typeof(${learnerFacts.metadata}->'week_index') = 'number'
-  AND ${weekIndexText} ~ '^[0-9]+$'
-  AND length(${weekIndexText}) <= 2
-  AND (
-    NOT (${learnerFacts.metadata} ? 'week_start_day')
-    OR (
-      jsonb_typeof(${learnerFacts.metadata}->'week_start_day') = 'string'
-      AND ${safeIsoCalendarDay(weekStartDayText)}
-    )
-  )
-)`;
-
 /** Returns one bounded, stable page of learners with at least one overdue slot. */
 export async function findLearnersWithDueStoryGrants(
   db: Db,
   input: {
     asOf: Date;
     rolloutEffectiveAt: Date;
-    afterLearnerId?: string;
+    after?: StoryGrantDiscoveryCursor;
+    excludedLearnerIds?: readonly string[];
     onlyLearnerIds?: readonly string[];
     limit: number;
   },
-): Promise<string[]> {
-  if (input.onlyLearnerIds?.length === 0) return [];
+): Promise<StoryGrantDiscoveryPage> {
+  if (input.onlyLearnerIds?.length === 0) {
+    return { learnerIds: [], scannedRows: 0 };
+  }
+  const rowLimit = Math.min(
+    input.limit * STORY_GRANT_DISCOVERY_ROWS_PER_LEARNER,
+    2_400,
+  );
   const rows = await db
-    .selectDistinct({ learnerId: storyPlanChapters.learnerId })
-    .from(storyPlanChapters)
-    .innerJoin(
-      learnerFacts,
-      and(
-        eq(learnerFacts.learnerId, storyPlanChapters.learnerId),
-        eq(learnerFacts.periodKey, storyPlanChapters.periodKey),
-      ),
-    )
-    .leftJoin(
-      learnerRewardGrants,
-      and(
-        eq(
-          learnerRewardGrants.storyPlanChapterId,
-          storyPlanChapters.id,
-        ),
-        eq(learnerRewardGrants.kind, "story_chapter"),
-      ),
-    )
+    .select({
+      id: storyCollectibleSchedules.id,
+      dueAt: storyCollectibleSchedules.dueAt,
+      learnerId: storyCollectibleSchedules.learnerId,
+    })
+    .from(storyCollectibleSchedules)
     .where(
       and(
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-        gte(learnerFacts.createdAt, input.rolloutEffectiveAt),
-        sql`${learnerFacts.metadata} ?& array[
-          'term_start_day',
-          'term_end_day',
-          'term_timezone',
-          'week_index'
-        ]`,
-        sql`CASE WHEN ${safeCalendarMetadata} THEN (
-          ${weekStartDay} >= (${termStartDayText})::date
-          AND ${weekStartDay} <= (${termEndDayText})::date
-          AND (${input.asOf} at time zone ${timeZoneText})::date >= ${dueDay}
-          AND ${dueDay}::timestamp at time zone ${timeZoneText} >= ${input.rolloutEffectiveAt}
-        ) ELSE false END`,
-        isNull(learnerRewardGrants.id),
+        isNull(storyCollectibleSchedules.reconciledAt),
+        gte(storyCollectibleSchedules.createdAt, input.rolloutEffectiveAt),
+        gte(storyCollectibleSchedules.dueAt, input.rolloutEffectiveAt),
+        lte(storyCollectibleSchedules.dueAt, input.asOf),
         ...(input.onlyLearnerIds
-          ? [inArray(storyPlanChapters.learnerId, input.onlyLearnerIds)]
+          ? [inArray(
+              storyCollectibleSchedules.learnerId,
+              [...input.onlyLearnerIds],
+            )]
           : []),
-        ...(input.afterLearnerId
-          ? [gt(storyPlanChapters.learnerId, input.afterLearnerId)]
+        ...(input.excludedLearnerIds?.length
+          ? [notInArray(
+              storyCollectibleSchedules.learnerId,
+              [...input.excludedLearnerIds],
+            )]
+          : []),
+        ...(input.after
+          ? [or(
+              gt(storyCollectibleSchedules.dueAt, input.after.dueAt),
+              and(
+                eq(storyCollectibleSchedules.dueAt, input.after.dueAt),
+                gt(storyCollectibleSchedules.id, input.after.id),
+              ),
+            )]
           : []),
       ),
     )
-    .orderBy(asc(storyPlanChapters.learnerId))
-    .limit(input.limit);
-  return rows.map((row) => row.learnerId);
+    .orderBy(
+      asc(storyCollectibleSchedules.dueAt),
+      asc(storyCollectibleSchedules.id),
+    )
+    .limit(rowLimit);
+
+  const learnerIds: string[] = [];
+  const seen = new Set<string>();
+  let cursor: StoryGrantDiscoveryCursor | undefined;
+  for (const row of rows) {
+    cursor = { dueAt: row.dueAt, id: row.id };
+    if (seen.has(row.learnerId)) continue;
+    seen.add(row.learnerId);
+    learnerIds.push(row.learnerId);
+    if (learnerIds.length === input.limit) break;
+  }
+  return { learnerIds, cursor, scannedRows: rows.length };
 }
 
 /** Serializes one scheduled reconciliation with every other learner write. */
@@ -251,8 +211,9 @@ export async function runStoryGrantWorker(
   let failedLearners = 0;
   let grants = 0;
   let retries = 0;
-  let afterLearnerId: string | undefined;
-  let lastBatchWasFull = false;
+  let cursor: StoryGrantDiscoveryCursor | undefined;
+  const failedLearnerIds = new Set<string>();
+  let lastPageMayHaveMore = false;
 
   const retry = async <T>(input: {
     scope: "discovery" | "learner";
@@ -298,7 +259,8 @@ export async function runStoryGrantWorker(
       operation: () => findLearners(db, {
         asOf,
         rolloutEffectiveAt: effectiveAt,
-        afterLearnerId,
+        after: cursor,
+        excludedLearnerIds: [...failedLearnerIds],
         onlyLearnerIds: options.onlyLearnerIds,
         limit: batchSize,
       }),
@@ -307,15 +269,20 @@ export async function runStoryGrantWorker(
     if (!discovery.ok) {
       throw new Error("scheduled story grant discovery failed after retries");
     }
-    const learnerIds = discovery.value;
+    const { learnerIds } = discovery.value;
     if (learnerIds.length === 0) break;
     batches += 1;
-    lastBatchWasFull = learnerIds.length === batchSize;
-    afterLearnerId = learnerIds.at(-1);
+    lastPageMayHaveMore = learnerIds.length === batchSize ||
+      discovery.value.scannedRows === Math.min(
+        batchSize * STORY_GRANT_DISCOVERY_ROWS_PER_LEARNER,
+        2_400,
+      );
+    cursor = discovery.value.cursor;
 
     for (let offset = 0; offset < learnerIds.length; offset += concurrency) {
+      const learnerChunk = learnerIds.slice(offset, offset + concurrency);
       const results = await Promise.all(
-        learnerIds.slice(offset, offset + concurrency).map((learnerId) => retry({
+        learnerChunk.map((learnerId) => retry({
           scope: "learner",
           correlationId: learnerCorrelationId(learnerId),
           operation: () => reconcileLearner(learnerId, {
@@ -325,13 +292,14 @@ export async function runStoryGrantWorker(
           }),
         })),
       );
-      for (const result of results) {
+      for (const [index, result] of results.entries()) {
         learnersProcessed += 1;
         retries += result.retries;
         if (result.ok) {
           grants += result.value.granted;
         } else {
           failedLearners += 1;
+          failedLearnerIds.add(learnerChunk[index]!);
           // The retry helper already emitted one sanitized terminal record.
         }
       }
@@ -344,7 +312,7 @@ export async function runStoryGrantWorker(
     failedLearners,
     grants,
     retries,
-    batchLimitReached: batches === maxBatches && lastBatchWasFull,
+    batchLimitReached: batches === maxBatches && lastPageMayHaveMore,
   };
 }
 

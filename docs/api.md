@@ -35,8 +35,9 @@ and non-PII correlation identifier, continues the bounded batch, and returns
 still-ungranted week.
 
 The route does not accept a learner, period, date, or event payload. It derives
-eligibility only from validated stored calendar configuration and immutable
-story-plan assignments. It creates no Pika event, XP, activity, or achievement.
+eligibility only from typed, indexed due-work materialized from validated stored
+calendar configuration and immutable story-plan assignments. It creates no Pika
+event, XP, activity, or achievement.
 
 ### Read-token request
 

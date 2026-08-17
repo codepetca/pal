@@ -6,6 +6,7 @@ import {
   getDb,
   learnerFacts,
   learnerRewardGrants,
+  storyCollectibleSchedules,
 } from "@pal/db";
 import { GET as runCronRoute } from "@/app/api/cron/story-collectibles/route";
 import {
@@ -520,7 +521,7 @@ test(
 );
 
 test(
-  "malformed historical calendar JSON is quarantined without blocking valid learners",
+  "typed due work remains authoritative if source JSON is later corrupted",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const integration = await resolveIntegration({
@@ -571,13 +572,20 @@ test(
         rolloutEffectiveAt: rollout,
         onlyLearnerIds: [validLearnerId, malformedLearnerId],
       });
-      assert.equal(result.grants, 1);
+      assert.equal(result.grants, 2);
       assert.equal(result.failedLearners, 0);
       assert.equal(
         (await getDb().select().from(learnerRewardGrants).where(
           eq(learnerRewardGrants.learnerId, malformedLearnerId),
         )).length,
-        0,
+        1,
+      );
+      const [corruptedSchedule] = await getDb().select()
+        .from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.learnerId, malformedLearnerId));
+      assert.ok(
+        corruptedSchedule?.reconciledAt instanceof Date,
+        "the typed queue should reconcile without rereading source JSON",
       );
     } finally {
       await resetLearnerInDb(integration.id, validLearner);
@@ -826,34 +834,19 @@ test(
         integration.id,
         externalLearnerId,
       );
-      await getDb()
-        .update(learnerFacts)
-        .set({ createdAt: new Date("2026-08-01T00:00:00.000Z") })
-        .where(
-          and(
-            eq(learnerFacts.learnerId, learnerId),
-            eq(learnerFacts.eventType, "daily_log_week.configured"),
-          ),
-        );
+      const [schedule] = await getDb().select().from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.learnerId, learnerId));
+      assert.ok(schedule);
       const provenanceCutoff = await runStoryGrantWorker({
         asOf: new Date("2026-09-20T12:00:00.000Z"),
-        rolloutEffectiveAt: new Date("2026-08-02T00:00:00.000Z"),
+        rolloutEffectiveAt: new Date(schedule.createdAt.getTime() + 1),
         onlyLearnerIds: [learnerId],
       });
       assert.equal(provenanceCutoff.grants, 0);
 
-      await getDb()
-        .update(learnerFacts)
-        .set({ createdAt: new Date("2026-09-10T00:00:00.000Z") })
-        .where(
-          and(
-            eq(learnerFacts.learnerId, learnerId),
-            eq(learnerFacts.eventType, "daily_log_week.configured"),
-          ),
-        );
       const dueCutoff = await runStoryGrantWorker({
         asOf: new Date("2026-09-20T12:00:00.000Z"),
-        rolloutEffectiveAt: new Date("2026-09-06T00:00:00.000Z"),
+        rolloutEffectiveAt: new Date(schedule.dueAt.getTime() + 1),
         onlyLearnerIds: [learnerId],
       });
       assert.equal(dueCutoff.grants, 0);
