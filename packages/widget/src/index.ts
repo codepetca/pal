@@ -1,4 +1,8 @@
 export { PalAchievements } from "./achievements";
+export {
+  PAL_ACHIEVEMENT_KEYS,
+  resolvePalAchievementPresentation,
+} from "./achievement-presentation";
 export { PalCompanion } from "./companion";
 export { collectionItemsForUnlocks, PalCollection } from "./collection";
 export {
@@ -21,6 +25,9 @@ export {
 } from "./snapshot-validation";
 export type {
   PalAchievement,
+  PalAchievementCelebrationNotice,
+  PalAchievementKey,
+  PalAchievementPresentation,
   PalAchievementStatus,
   PalBadge,
   PalClient,
@@ -36,6 +43,7 @@ export type {
   PalFixtureAction,
   PalFixtureActionContext,
   PalFixtureController,
+  PalGrantRewardNotice,
   PalProgress,
   PalProgressionState,
   PalProviderProps,

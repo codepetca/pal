@@ -14,6 +14,7 @@ import {
   storyForTermStartDay,
 } from "@/lib/story-catalog";
 import type { BehaviorTitleId } from "@/lib/reward-grants";
+import { mergePendingRewardQueues } from "@/lib/reward-queue";
 import type { PersistedStoryPlan } from "@/lib/story-plan";
 import {
   projectStoryProgression,
@@ -215,9 +216,9 @@ export async function projectStoryFixture(
     companionRevealed,
   );
   snapshot.progression = progression;
-  snapshot.rewards = [
-    ...snapshot.rewards,
-    ...ledger.rewards(),
-  ].slice(0, 100);
+  snapshot.rewards = mergePendingRewardQueues(
+    ledger.rewards(),
+    snapshot.rewards,
+  );
   return snapshot;
 }

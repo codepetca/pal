@@ -81,7 +81,7 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const firstRequest = deferred<void>();
@@ -131,7 +131,7 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(widget.snapshot?.rewards.length, 1);
   assert.ok(widget.rewardError);
   assert.match(JSON.stringify(renderer.toJSON()), /Try again/);
-  assert.match(JSON.stringify(renderer.toJSON()), /Fish for Pip/);
+  assert.match(JSON.stringify(renderer.toJSON()), /Achievement earned/);
 
   await act(async () => {
     await widget.dismissReward("reward-1");
@@ -141,11 +141,496 @@ test("reward acknowledgement is duplicate-safe, recoverable, and removed after s
   assert.equal(renderer.toJSON(), null);
 });
 
+test("successful acknowledgement refills the bounded reward page", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First reward",
+    description: "The first bounded-page reward.",
+  }];
+  const secondPage = structuredClone(firstPage);
+  secondPage.rewards = [{
+    id: "reward-2",
+    title: "Next reward",
+    description: "The next reward loaded after acknowledgement.",
+  }];
+  let acknowledged = false;
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      return acknowledged ? secondPage : firstPage;
+    },
+    async markRewardSeen() {
+      acknowledged = true;
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={firstPage}
+        scopeKey="fixture-refill"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  await act(async () => {
+    await widget.dismissReward("reward-1");
+  });
+
+  assert.ok(snapshotCalls >= 2);
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["reward-2"],
+  );
+});
+
+test("a failed automatic refill retries until the next reward loads", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First reward",
+    description: "The last reward on the visible page.",
+  }];
+  const nextPage = structuredClone(firstPage);
+  nextPage.rewards = [{
+    id: "reward-2",
+    title: "Next reward",
+    description: "The first reward on the next page.",
+  }];
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      if (snapshotCalls === 1) return firstPage;
+      if (snapshotCalls === 2) throw new Error("Temporary refill failure");
+      return nextPage;
+    },
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled = new Map<number, () => void>();
+  const delays: number[] = [];
+  let nextTimerId = 0;
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout(timerId: number) {
+        scheduled.delete(timerId);
+      },
+      setTimeout(callback: () => void, delayMs: number) {
+        const timerId = ++nextTimerId;
+        scheduled.set(timerId, callback);
+        delays.push(delayMs);
+        return timerId;
+      },
+    },
+  });
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={firstPage}
+          scopeKey="fixture-refill-retry"
+        >
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    assert.equal(snapshotCalls, 1);
+
+    await act(async () => {
+      await widget.dismissReward("reward-1");
+      await Promise.resolve();
+    });
+    assert.equal(snapshotCalls, 2);
+    assert.equal(widget.snapshot?.rewards.length, 0);
+    assert.deepEqual(delays, [1_000]);
+
+    const retry = scheduled.values().next().value;
+    assert.ok(retry);
+    await act(async () => {
+      retry();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(snapshotCalls, 3);
+    assert.deepEqual(
+      widget.snapshot?.rewards.map((reward) => reward.id),
+      ["reward-2"],
+    );
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("switching learner scope cancels a pending refill retry", async () => {
+  const learnerA = createFixtureSnapshot();
+  learnerA.rewards = [{
+    id: "reward-a",
+    title: "Learner A reward",
+    description: "The last visible reward for learner A.",
+  }];
+  const learnerB = createFixtureSnapshot();
+  learnerB.rewards = [];
+  let learnerACalls = 0;
+  const clientA: PalClient = {
+    async getSnapshot() {
+      learnerACalls += 1;
+      if (learnerACalls === 1) return learnerA;
+      throw new Error("Learner A refill failure");
+    },
+    markRewardSeen: async () => undefined,
+  };
+  const clientB: PalClient = {
+    getSnapshot: async () => learnerB,
+    markRewardSeen: async () => undefined,
+  };
+  const scheduled = new Map<number, () => void>();
+  let nextTimerId = 0;
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout(timerId: number) {
+        scheduled.delete(timerId);
+      },
+      setTimeout(callback: () => void) {
+        const timerId = ++nextTimerId;
+        scheduled.set(timerId, callback);
+        return timerId;
+      },
+    },
+  });
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          scopeKey="learner-a"
+        >
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    await act(async () => {
+      await widget.dismissReward("reward-a");
+      await Promise.resolve();
+    });
+    assert.equal(learnerACalls, 2);
+    const staleRetry = scheduled.values().next().value;
+    assert.ok(staleRetry);
+
+    await act(async () => {
+      renderer.update(
+        <PalProvider client={clientB} scopeKey="learner-b">
+          <Probe />
+        </PalProvider>,
+      );
+    });
+    assert.equal(scheduled.size, 0);
+
+    await act(async () => {
+      staleRetry();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(learnerACalls, 2);
+    assert.deepEqual(widget.snapshot?.rewards, []);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("acknowledgement drains the visible reward page before refilling", async () => {
+  const snapshot = createFixtureSnapshot();
+  const pendingRewards = [
+    {
+      id: "achievement-1",
+      title: "Achievement 1",
+      description: "First achievement notice.",
+    },
+    {
+      id: "grant-1",
+      title: "Grant 1",
+      description: "First story or title grant.",
+    },
+    {
+      id: "achievement-2",
+      title: "Achievement 2",
+      description: "Second achievement notice.",
+    },
+    {
+      id: "grant-2",
+      title: "Grant 2",
+      description: "Second story or title grant.",
+    },
+  ];
+  snapshot.rewards = pendingRewards;
+  const acknowledged = new Set<string>();
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    async getSnapshot() {
+      snapshotCalls += 1;
+      const next = structuredClone(snapshot);
+      const achievements = pendingRewards.filter(
+        (reward) =>
+          reward.id.startsWith("achievement-") &&
+          !acknowledged.has(reward.id),
+      );
+      const grants = pendingRewards.filter(
+        (reward) =>
+          reward.id.startsWith("grant-") &&
+          !acknowledged.has(reward.id),
+      );
+      next.rewards = Array.from(
+        { length: Math.max(achievements.length, grants.length) },
+        (_, index) => [achievements[index], grants[index]],
+      ).flatMap((rewards) => rewards.filter((reward) => reward !== undefined));
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledged.add(rewardId);
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-stable-page"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  const consumed: string[] = [];
+  const expectedOrder = pendingRewards.map((reward) => reward.id);
+  for (const [index, expectedId] of expectedOrder.entries()) {
+    assert.equal(widget.snapshot?.rewards[0]?.id, expectedId);
+    consumed.push(expectedId);
+    await act(async () => {
+      await widget.dismissReward(expectedId);
+    });
+    if (index < expectedOrder.length - 1) {
+      await act(async () => {
+        await widget.refresh();
+      });
+    }
+  }
+
+  assert.deepEqual(consumed, [
+    "achievement-1",
+    "grant-1",
+    "achievement-2",
+    "grant-2",
+  ]);
+  assert.ok(snapshotCalls >= 2);
+});
+
+test("refresh cannot append the next reward before a full page drains", async () => {
+  const snapshot = createFixtureSnapshot();
+  const allRewards = Array.from({ length: 101 }, (_, index) => ({
+    id: `reward-${index + 1}`,
+    title: `Reward ${index + 1}`,
+    description: "A bounded reward-page notice.",
+  }));
+  snapshot.rewards = allRewards.slice(0, 100);
+  const acknowledged = new Set<string>();
+  const client: PalClient = {
+    async getSnapshot() {
+      const next = structuredClone(snapshot);
+      next.rewards = allRewards
+        .filter((reward) => !acknowledged.has(reward.id))
+        .slice(0, 100);
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledged.add(rewardId);
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-full-page"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  for (let index = 0; index < 100; index += 1) {
+    const rewardId = `reward-${index + 1}`;
+    assert.equal(widget.snapshot?.rewards[0]?.id, rewardId);
+    await act(async () => {
+      await widget.dismissReward(rewardId);
+    });
+    if (index < 99) {
+      await act(async () => {
+        await widget.refresh();
+      });
+      assert.equal(
+        widget.snapshot?.rewards.some((reward) => reward.id === "reward-101"),
+        false,
+      );
+    }
+  }
+
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["reward-101"],
+  );
+});
+
+test("a category reshuffle cannot evict an unacknowledged reward", async () => {
+  const snapshot = createFixtureSnapshot();
+  const achievements = [
+    {
+      id: "achievement-1",
+      title: "Achievement 1",
+      description: "The first achievement notice.",
+    },
+  ];
+  const grants = Array.from({ length: 100 }, (_, index) => ({
+    id: `grant-${index + 1}`,
+    title: `Grant ${index + 1}`,
+    description: "A story or title grant.",
+  }));
+  const acknowledged = new Set<string>();
+  const serverPage = () => {
+    const pendingAchievements = achievements.filter(
+      (reward) => !acknowledged.has(reward.id),
+    );
+    const pendingGrants = grants.filter(
+      (reward) => !acknowledged.has(reward.id),
+    );
+    return Array.from(
+      { length: Math.max(pendingAchievements.length, pendingGrants.length) },
+      (_, index) => [pendingAchievements[index], pendingGrants[index]],
+    )
+      .flatMap((rewards) => rewards.filter((reward) => reward !== undefined))
+      .slice(0, 100);
+  };
+  snapshot.rewards = serverPage();
+  const originalIds = snapshot.rewards.map((reward) => reward.id);
+  const client: PalClient = {
+    async getSnapshot() {
+      const next = structuredClone(snapshot);
+      next.rewards = serverPage();
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledged.add(rewardId);
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="fixture-category-reshuffle"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  achievements.push({
+    id: "achievement-2",
+    title: "Achievement 2",
+    description: "A newly earned achievement notice.",
+  });
+  await act(async () => {
+    await widget.refresh();
+  });
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    originalIds,
+  );
+  assert.equal(widget.snapshot?.rewards.some((reward) => reward.id === "grant-99"), true);
+  assert.equal(
+    widget.snapshot?.rewards.some((reward) => reward.id === "achievement-2"),
+    false,
+  );
+
+  for (const rewardId of originalIds) {
+    await act(async () => {
+      await widget.dismissReward(rewardId);
+    });
+  }
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["achievement-2", "grant-100"],
+  );
+});
+
 test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const client: PalClient = {
@@ -245,7 +730,7 @@ test("a host-managed reward does not publish a competing open lifecycle", async 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const openChanges: boolean[] = [];
@@ -275,7 +760,7 @@ test("an older snapshot refresh cannot resurrect an acknowledged reward", async 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   const staleRefresh = deferred<PalWidgetSnapshot>();
@@ -284,9 +769,9 @@ test("an older snapshot refresh cannot resurrect an acknowledged reward", async 
   const client: PalClient = {
     getSnapshot() {
       snapshotCalls += 1;
-      return snapshotCalls === 1
-        ? Promise.resolve(snapshot)
-        : staleRefresh.promise;
+      return snapshotCalls === 2
+        ? staleRefresh.promise
+        : Promise.resolve(snapshot);
     },
     async markRewardSeen() {
       acknowledgementCalls += 1;
@@ -546,7 +1031,7 @@ test("snapshot refresh does not clear a reward acknowledgement retry", async () 
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
-    title: "Fish for Pip",
+    title: "Achievement earned",
     description: "A reward notice",
   });
   let snapshotCalls = 0;

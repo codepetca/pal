@@ -67,7 +67,13 @@ export function PalRewardCelebration({
 
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
-  const storyReward = reward.kind === "story";
+  const achievement = reward.achievement;
+  const grantReward = achievement ? undefined : reward;
+  const storyReward = grantReward?.kind === "story";
+  const title = achievement?.title ?? grantReward?.title ?? "";
+  const description = achievement?.description ?? grantReward?.description ?? "";
+  const assetUrl = achievement?.badge.assetUrl ?? grantReward?.assetUrl;
+  const icon = achievement?.badge.icon ?? grantReward?.icon;
 
   return (
     <section
@@ -94,26 +100,32 @@ export function PalRewardCelebration({
       <div className="pal-celebration-burst" aria-hidden="true">
         <span>✦</span><span>✧</span><span>✦</span>
       </div>
-      <p className="pal-eyebrow">{storyReward ? "Story unlocked" : "Reward earned"}</p>
-      <h2 id={titleId}>{reward.title}</h2>
+      <p className="pal-eyebrow">
+        {achievement
+          ? "Achievement earned"
+          : storyReward
+            ? "Story unlocked"
+            : "Reward earned"}
+      </p>
+      <h2 id={titleId}>{title}</h2>
       <div className="pal-celebration-icon" aria-hidden="true">
-        {reward.assetUrl ? (
-          <img src={reward.assetUrl} alt="" width="80" height="80" />
+        {assetUrl ? (
+          <img src={assetUrl} alt="" width="80" height="80" />
         ) : (
-          reward.icon ?? "★"
+          icon ?? "★"
         )}
       </div>
-      {reward.collectibleTitle ? (
+      {grantReward?.collectibleTitle ? (
         <strong className="pal-celebration-collectible">
-          {reward.collectibleTitle}
+          {grantReward.collectibleTitle}
         </strong>
       ) : null}
-      <p id={descriptionId}>{reward.description}</p>
-      {reward.titleAward ? (
+      <p id={descriptionId}>{description}</p>
+      {grantReward?.titleAward ? (
         <div className="pal-celebration-title">
           <span>New title</span>
-          <strong>{reward.titleAward}</strong>
-          {reward.titleRevealCopy ? <p>{reward.titleRevealCopy}</p> : null}
+          <strong>{grantReward.titleAward}</strong>
+          {grantReward.titleRevealCopy ? <p>{grantReward.titleRevealCopy}</p> : null}
         </div>
       ) : null}
       {rewardError ? (

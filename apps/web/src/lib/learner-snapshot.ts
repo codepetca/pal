@@ -26,17 +26,23 @@ import {
 } from "@pal/db";
 import type {
   PalAchievement,
+  PalAchievementCelebrationNotice,
   PalCollectionItem,
   PalCompanionMood,
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
+import { resolvePalAchievementPresentation } from "@codepet/pal-widget/achievement-presentation";
 import { PROGRESSION_POLICY } from "@pal/engine";
-import { ACHIEVEMENT_KEYS } from "@/lib/achievement-state";
+import {
+  ACHIEVEMENT_KEYS,
+  ACHIEVEMENT_NOTICE_KEY,
+} from "@/lib/achievement-state";
 import {
   loadPersistedStoryPlan,
   loadPersistedStoryPlansByIds,
 } from "@/lib/story-plan";
+import { mergePendingRewardQueues } from "@/lib/reward-queue";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
@@ -173,32 +179,23 @@ function achievementFromRow(
   row: AchievementRow,
   reconciliationRequired: boolean,
 ): PalAchievement | null {
+  const presentation = resolvePalAchievementPresentation(row.achievementKey);
+  if (!presentation) return null;
   const common = {
     id: row.id,
+    ...presentation,
     status: row.status as PalAchievement["status"],
   };
   switch (row.achievementKey) {
     case ACHIEVEMENT_KEYS.firstLogin:
       return {
         ...common,
-        title: "First Pika Login",
-        description: "Started your first authenticated Pika session.",
         statusLabel: "Earned",
-        badge: {
-          label: "First Pika Login",
-          assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
-        },
       };
     case ACHIEVEMENT_KEYS.joinedClass:
       return {
         ...common,
-        title: "Joined the Class",
-        description: "Joined a new classroom.",
         statusLabel: "Earned",
-        badge: {
-          label: "Joined the Class",
-          assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
-        },
       };
     case ACHIEVEMENT_KEYS.weeklyRhythm: {
       const current = row.progressCurrent ?? 0;
@@ -208,18 +205,12 @@ function achievementFromRow(
         : `${current} of ${target} eligible days`;
       return {
         ...common,
-        title: "Weekly Rhythm",
-        description: "Complete daily logs on the target number of eligible days.",
         statusLabel:
           row.status === "earned"
             ? "Earned"
             : row.status === "incomplete"
               ? "Not completed"
               : progressLabel,
-        badge: {
-          label: "Weekly Rhythm",
-          assetUrl: "/assets/badges/badge-checkin-7-day-v1.png",
-        },
         progress: { current, target, label: progressLabel },
         ...(row.status === "earned"
           ? { rewardLabel: "Happy companion" }
@@ -229,29 +220,44 @@ function achievementFromRow(
     case ACHIEVEMENT_KEYS.readyEarly:
       return {
         ...common,
-        title: "Ready Early",
-        description: "Opened a learning item soon after it was released.",
         statusLabel: row.status === "earned" ? "Earned early" : "Opened later",
-        badge: {
-          label: "Ready Early",
-          assetUrl: "/assets/badges/badge-ready-early-v1.png",
-        },
       };
     case ACHIEVEMENT_KEYS.onTimeFinish:
       return {
         ...common,
-        title: "On-Time Finish",
-        description: "Completed a learning item by its deadline.",
         statusLabel: row.status === "earned" ? "Earned on time" : "Completed late",
-        badge: {
-          label: "On-Time Finish",
-          assetUrl: "/assets/badges/badge-on-time-finish.png",
-        },
-        ...(row.status === "earned" ? { rewardLabel: "Fish snack" } : {}),
       };
     default:
       return null;
   }
+}
+
+function achievementCelebration(
+  row: {
+    id: string;
+    achievementInstanceId: string;
+    achievementKey: string;
+  },
+): PalAchievementCelebrationNotice | null {
+  const presentation = resolvePalAchievementPresentation(row.achievementKey);
+  return presentation
+    ? {
+        id: row.id,
+        kind: "standard",
+        title: presentation.title,
+        description: presentation.description,
+        ...(presentation.badge.assetUrl === undefined
+          ? {}
+          : { assetUrl: presentation.badge.assetUrl }),
+        ...(presentation.badge.icon === undefined
+          ? {}
+          : { icon: presentation.badge.icon }),
+        achievement: {
+          id: row.achievementInstanceId,
+          ...presentation,
+        },
+      }
+    : null;
 }
 
 export async function loadLearnerSnapshot(
@@ -314,13 +320,32 @@ export async function loadLearnerSnapshot(
           ),
         )
         .orderBy(asc(learnerFacts.occurredAt));
-      const rewards = await tx
-        .select()
+      const achievementRewards = await tx
+        .select({
+          id: rewardNotices.id,
+          achievementInstanceId: achievementInstances.id,
+          achievementKey: achievementInstances.achievementKey,
+          rewardKey: rewardNotices.rewardKey,
+          title: rewardNotices.title,
+          description: rewardNotices.description,
+          icon: rewardNotices.icon,
+        })
         .from(rewardNotices)
+        .innerJoin(
+          achievementInstances,
+          and(
+            eq(
+              achievementInstances.id,
+              rewardNotices.achievementInstanceId,
+            ),
+            eq(achievementInstances.learnerId, rewardNotices.learnerId),
+          ),
+        )
         .where(
           and(
             eq(rewardNotices.learnerId, learnerId),
             isNull(rewardNotices.seenAt),
+            eq(achievementInstances.status, "earned"),
           ),
         )
         .orderBy(asc(rewardNotices.createdAt))
@@ -615,18 +640,24 @@ export async function loadLearnerSnapshot(
             worldRows[0]?.unlockedObjectIds ?? [],
           ),
         },
-        rewards: [
-          ...rewards.map((reward) => ({
-            id: reward.id,
-            title:
-              !companionRevealed && reward.rewardKey === "fish-snack-v1"
-                ? "A treat for your companion!"
-                : reward.title,
-            description: reward.description,
-            ...(reward.icon ? { icon: reward.icon } : {}),
-          })),
-          ...projectUnseenGrantRewards(grantRows, storyPlansById),
-        ].slice(0, 100),
+        rewards: mergePendingRewardQueues(
+          projectUnseenGrantRewards(grantRows, storyPlansById),
+          achievementRewards.flatMap((reward) => {
+            if (reward.rewardKey === ACHIEVEMENT_NOTICE_KEY) {
+              const projected = achievementCelebration(reward);
+              return projected ? [projected] : [];
+            }
+            return [{
+              id: reward.id,
+              title:
+                !companionRevealed && reward.rewardKey === "fish-snack-v1"
+                  ? "A treat for your companion!"
+                  : reward.title,
+              description: reward.description,
+              ...(reward.icon ? { icon: reward.icon } : {}),
+            }];
+          }),
+        ),
         ...(progression ? { progression } : {}),
       };
     },

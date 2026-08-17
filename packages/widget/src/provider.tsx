@@ -15,6 +15,7 @@ import type {
   PalDensity,
   PalMotion,
   PalProviderProps,
+  PalRewardNotice,
   PalTheme,
   PalViewport,
   PalWidgetSnapshot,
@@ -57,12 +58,50 @@ interface PalRequestScope {
   scopeKey: string;
 }
 
+interface PalVisibleRewardQueue {
+  rewards: PalRewardNotice[];
+  scopeKey: string;
+}
+
+interface PalRewardRefill {
+  promise: Promise<void> | null;
+  scopeKey: string;
+}
+
+const MAX_VISIBLE_REWARDS = 100;
+const REWARD_REFILL_RETRY_BASE_MS = 1_000;
+const REWARD_REFILL_RETRY_MAX_MS = 30_000;
+
+function reconcileVisibleRewards(
+  current: readonly PalRewardNotice[],
+  next: readonly PalRewardNotice[],
+): PalRewardNotice[] {
+  if (current.length === 0) return next.slice(0, MAX_VISIBLE_REWARDS);
+  const nextById = new Map(next.map((reward) => [reward.id, reward]));
+  return current.map((reward) => nextById.get(reward.id) ?? reward);
+}
+
 function isAbortError(cause: unknown, signal: AbortSignal): boolean {
   return (
     signal.aborted ||
     (cause instanceof DOMException && cause.name === "AbortError") ||
     (cause instanceof Error && cause.name === "AbortError")
   );
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(true);
+    }, delayMs);
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      resolve(false);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export function PalProvider({
@@ -96,6 +135,14 @@ export function PalProvider({
     ids: new Set<string>(),
     scopeKey,
   });
+  const visibleRewardQueueRef = useRef<PalVisibleRewardQueue>({
+    rewards: initialSnapshot?.rewards ?? [],
+    scopeKey,
+  });
+  const rewardRefillRef = useRef<PalRewardRefill>({
+    promise: null,
+    scopeKey,
+  });
   const requestSequence = useRef(0);
   const onErrorRef = useRef(onError);
   const activeScopeRef = useRef(scopeKey);
@@ -126,6 +173,14 @@ export function PalProvider({
       };
       acknowledgedRewardIdsRef.current = {
         ids: new Set(),
+        scopeKey,
+      };
+      visibleRewardQueueRef.current = {
+        rewards: [],
+        scopeKey,
+      };
+      rewardRefillRef.current = {
+        promise: null,
         scopeKey,
       };
       setResource({
@@ -176,14 +231,14 @@ export function PalProvider({
           scopeKey,
         };
 
-  const refresh = useCallback(async () => {
+  const refreshSnapshot = useCallback(async (): Promise<boolean> => {
     const requestScope = requestScopeRef.current;
     if (
       requestScope.client !== client ||
       requestScope.scopeKey !== scopeKey ||
       requestScope.controller.signal.aborted
     ) {
-      return;
+      return false;
     }
     const { signal } = requestScope.controller;
     const sequence = ++requestSequence.current;
@@ -215,13 +270,25 @@ export function PalProvider({
         !mountedRef.current ||
         activeScopeRef.current !== scopeKey
       ) {
-        return;
+        return false;
       }
+      const serverRewards = nextSnapshot.rewards.filter(
+        (reward) => !acknowledgedRewardIdsRef.current.ids.has(reward.id),
+      );
+      const visibleRewards =
+        visibleRewardQueueRef.current.scopeKey === scopeKey
+          ? reconcileVisibleRewards(
+              visibleRewardQueueRef.current.rewards,
+              serverRewards,
+            )
+          : serverRewards;
+      visibleRewardQueueRef.current = {
+        rewards: visibleRewards,
+        scopeKey,
+      };
       const visibleSnapshot = {
         ...nextSnapshot,
-        rewards: nextSnapshot.rewards.filter(
-          (reward) => !acknowledgedRewardIdsRef.current.ids.has(reward.id),
-        ),
+        rewards: visibleRewards,
       };
       setResource({
         error: null,
@@ -229,16 +296,17 @@ export function PalProvider({
         snapshot: visibleSnapshot,
         state: "ready",
       });
+      return true;
     } catch (cause) {
       if (isAbortError(cause, signal)) {
-        return;
+        return false;
       }
       if (
         sequence !== requestSequence.current ||
         !mountedRef.current ||
         activeScopeRef.current !== scopeKey
       ) {
-        return;
+        return false;
       }
       const nextError =
         cause instanceof Error ? cause : new Error("Pal could not load learner state");
@@ -257,8 +325,57 @@ export function PalProvider({
             },
       );
       onErrorRef.current?.(nextError);
+      return false;
     }
   }, [client, scopeKey]);
+
+  const refresh = useCallback(async () => {
+    await refreshSnapshot();
+  }, [refreshSnapshot]);
+
+  const refillEmptyRewardPage = useCallback(() => {
+    const requestScope = requestScopeRef.current;
+    if (
+      requestScope.client !== client ||
+      requestScope.scopeKey !== scopeKey ||
+      requestScope.controller.signal.aborted ||
+      visibleRewardQueueRef.current.scopeKey !== scopeKey ||
+      visibleRewardQueueRef.current.rewards.length > 0
+    ) {
+      return;
+    }
+    if (
+      rewardRefillRef.current.scopeKey === scopeKey &&
+      rewardRefillRef.current.promise
+    ) {
+      return;
+    }
+
+    const { signal } = requestScope.controller;
+    const refill = (async () => {
+      let failedAttempts = 0;
+      while (
+        !signal.aborted &&
+        activeScopeRef.current === scopeKey &&
+        visibleRewardQueueRef.current.scopeKey === scopeKey &&
+        visibleRewardQueueRef.current.rewards.length === 0
+      ) {
+        if (await refreshSnapshot()) return;
+        const delayMs = Math.min(
+          REWARD_REFILL_RETRY_BASE_MS * (2 ** failedAttempts),
+          REWARD_REFILL_RETRY_MAX_MS,
+        );
+        failedAttempts += 1;
+        if (!(await waitForRetry(delayMs, signal))) return;
+      }
+    })();
+    rewardRefillRef.current = { promise: refill, scopeKey };
+    void refill.finally(() => {
+      if (rewardRefillRef.current.promise === refill) {
+        rewardRefillRef.current = { promise: null, scopeKey };
+      }
+    });
+  }, [client, refreshSnapshot, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,6 +444,12 @@ export function PalProvider({
           return;
         }
         acknowledgedRewardIdsRef.current.ids.add(rewardId);
+        if (visibleRewardQueueRef.current.scopeKey === scopeKey) {
+          visibleRewardQueueRef.current.rewards =
+            visibleRewardQueueRef.current.rewards.filter(
+              (reward) => reward.id !== rewardId,
+            );
+        }
         setResource((current) =>
           current.scopeKey === scopeKey && current.snapshot
             ? {
@@ -340,6 +463,12 @@ export function PalProvider({
               }
             : current,
         );
+        if (
+          visibleRewardQueueRef.current.scopeKey === scopeKey &&
+          visibleRewardQueueRef.current.rewards.length === 0
+        ) {
+          refillEmptyRewardPage();
+        }
       } catch (cause) {
         if (isAbortError(cause, signal)) {
           return;
@@ -380,7 +509,7 @@ export function PalProvider({
         }
       }
     },
-    [client, scopeKey],
+    [client, refillEmptyRewardPage, scopeKey],
   );
 
   const isRewardPending = useCallback(

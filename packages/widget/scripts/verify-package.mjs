@@ -64,6 +64,7 @@ try {
 
     const widget = await import("@codepet/pal-widget");
     const fixture = await import("@codepet/pal-widget/fixture");
+    const achievementPresentation = await import("@codepet/pal-widget/achievement-presentation");
     const theme = await import("@codepet/pal-widget/theme-contract");
     const entryUrl = import.meta.resolve("@codepet/pal-widget");
     const fixtureUrl = import.meta.resolve("@codepet/pal-widget/fixture");
@@ -81,6 +82,10 @@ try {
     assert.equal(typeof widget.PalCollection, "function");
     assert.equal(typeof fixture.createEmptyFixtureSnapshot, "function");
     assert.equal(typeof fixture.createFixturePalClient, "function");
+    assert.equal(
+      achievementPresentation.resolvePalAchievementPresentation("on-time-finish")?.title,
+      "On-Time Finish",
+    );
     assert.equal(theme.PAL_THEME_CONTRACT_VERSION, 1);
     assert.match(stylesheetUrl, /\\/dist\\/styles\\.css$/);
     assert.match(readFileSync(new URL(entryUrl), "utf8"), /^"use client";/);

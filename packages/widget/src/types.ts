@@ -26,8 +26,24 @@ export interface PalBadge {
   assetUrl?: string;
 }
 
+export type PalAchievementKey =
+  | "first-pika-login"
+  | "joined-class"
+  | "weekly-rhythm"
+  | "ready-early"
+  | "on-time-finish";
+
+export interface PalAchievementPresentation {
+  key: PalAchievementKey;
+  title: string;
+  description: string;
+  badge: PalBadge;
+}
+
 export interface PalAchievement {
   id: string;
+  /** Stable canonical identity. Optional only for older schema-v1 hosts. */
+  key?: PalAchievementKey;
   title: string;
   description: string;
   status: PalAchievementStatus;
@@ -68,6 +84,11 @@ export interface PalCompanionState {
   assetUrl?: string;
 }
 
+/**
+ * Backward-compatible schema-v1 reward surface. Hosts may continue reading the
+ * original optional grant fields without first narrowing a newer achievement
+ * celebration variant.
+ */
 export interface PalRewardNotice {
   id: string;
   title: string;
@@ -78,6 +99,26 @@ export interface PalRewardNotice {
   titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
+  achievement?: PalAchievementPresentation & {
+    /** Stable earned achievement-instance identity used by the roadmap. */
+    id: string;
+  };
+}
+
+export interface PalGrantRewardNotice extends PalRewardNotice {
+  achievement?: never;
+}
+
+export interface PalAchievementCelebrationNotice extends PalRewardNotice {
+  /** Transient acknowledgement identity. */
+  id: string;
+  /** Kept schema-v1 compatible; older widgets render this as a standard reward. */
+  kind: "standard";
+  /** Presentation-safe identity selected by the authenticated Pal server. */
+  achievement: PalAchievementPresentation & {
+    /** Stable earned achievement-instance identity used by the roadmap. */
+    id: string;
+  };
 }
 
 export interface PalCollectionItem {
@@ -201,6 +242,7 @@ export type PalFixtureAction =
   | "late-finish"
   | "short-week-configured"
   | "week-configured"
+  /** @deprecated Story ownership is no longer granted by this fixture action. */
   | "reward-earned"
   | "duplicate-replayed"
   | "session-started"

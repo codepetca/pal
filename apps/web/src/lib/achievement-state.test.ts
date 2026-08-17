@@ -8,6 +8,8 @@ import {
   getDb,
   getPool,
   learnerFacts,
+  learnerRewardGrants,
+  rewardNotices,
   worldState,
 } from "@pal/db";
 import {
@@ -92,6 +94,23 @@ function itemOutcomeCounts(snapshot: PalWidgetSnapshot) {
     },
     collection: snapshot.collection?.items.map((item) => item.id) ?? [],
   };
+}
+
+function achievementCelebrationPresentations(snapshot: PalWidgetSnapshot) {
+  return snapshot.rewards
+    .flatMap((reward) =>
+      reward.achievement !== undefined
+        ? [{
+            key: reward.achievement.key,
+            title: reward.achievement.title,
+            description: reward.achievement.description,
+            badge: reward.achievement.badge,
+          }]
+        : [],
+    )
+    .toSorted((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
 }
 
 test(
@@ -194,6 +213,10 @@ test(
       assert.match(fixture.peek().companion.message, /your companion/i);
       assert.doesNotMatch(fixture.peek().companion.message, /\bPip\b/);
       assert.deepEqual(itemOutcomeCounts(fixture.peek()), itemOutcomeCounts(persisted));
+      assert.deepEqual(
+        achievementCelebrationPresentations(fixture.peek()),
+        achievementCelebrationPresentations(persisted),
+      );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -201,7 +224,7 @@ test(
 );
 
 test(
-  "persists the five pilot achievements, semantic deduplication, and one reward",
+  "persists five canonical achievement celebrations with semantic deduplication",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -367,10 +390,54 @@ test(
         snapshot.collection?.items.map((item) => item.id),
         ["world-study-bird-v1"],
       );
-      assert.equal(snapshot.rewards.length, 2);
+      const achievementCelebrations = snapshot.rewards.filter(
+        (reward) => reward.achievement !== undefined,
+      );
+      assert.equal(achievementCelebrations.length, 5);
+      const roadmapAchievements = snapshot.roadmap.weeks.flatMap(
+        (week) => week.achievements,
+      );
+      for (const celebration of achievementCelebrations) {
+        assert.ok(celebration.achievement);
+        const celebratedAchievement = celebration.achievement;
+        const mapped = roadmapAchievements.find(
+          (achievement) => achievement.id === celebratedAchievement.id,
+        );
+        assert.ok(mapped);
+        assert.equal(mapped.status, "earned");
+        assert.deepEqual(celebration.achievement, {
+          id: mapped.id,
+          key: mapped.key,
+          title: mapped.title,
+          description: mapped.description,
+          badge: mapped.badge,
+        });
+      }
+      assert.equal(snapshot.rewards.length, 6);
       assert.equal(
-        snapshot.rewards.some((reward) => reward.titleAward === "On-Time Pro"),
+        snapshot.rewards.some(
+          (reward) =>
+            reward.achievement === undefined &&
+            reward.titleAward === "On-Time Pro",
+        ),
         true,
+      );
+      const noticeRows = await getDb()
+        .select()
+        .from(rewardNotices)
+        .where(eq(rewardNotices.learnerId, internalLearnerId));
+      assert.equal(noticeRows.length, 5);
+      assert.deepEqual(
+        new Set(noticeRows.map((notice) => notice.rewardKey)),
+        new Set(["achievement-earned-v1"]),
+      );
+      const durableGrants = await getDb()
+        .select()
+        .from(learnerRewardGrants)
+        .where(eq(learnerRewardGrants.learnerId, internalLearnerId));
+      assert.deepEqual(
+        new Set(durableGrants.map((grant) => grant.kind)),
+        new Set(["behavior_title"]),
       );
 
       for (const reward of snapshot.rewards) {
@@ -385,10 +452,102 @@ test(
           reward.id,
         );
       }
+      const acknowledged = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+      assert.equal(acknowledged.rewards.length, 0);
       assert.equal(
-        (await loadLearnerSnapshot(integration.id, internalLearnerId)).rewards
-          .length,
-        0,
+        acknowledged.roadmap.weeks
+          .flatMap((week) => week.achievements)
+          .filter((achievement) => achievement.status === "earned").length,
+        5,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps an unread legacy reward visible and acknowledgeable after upgrade",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `legacy-notice-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const periodKey = `legacy-period-${crypto.randomUUID()}`;
+
+    try {
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("daily_log_week.configured", {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 5,
+        }),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event("learning_item.completed", {
+          item_token: "legacy-notice-item",
+          kind: "assignment",
+          period_key: periodKey,
+          timing: "on_time",
+        }),
+        key(),
+      );
+      const internalLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const [notice] = await getDb()
+        .update(rewardNotices)
+        .set({
+          rewardKey: "fish-snack-v1",
+          title: "A treat for your companion!",
+          description: "Your on-time work earned a fish snack.",
+          icon: "🐟",
+        })
+        .where(eq(rewardNotices.learnerId, internalLearnerId))
+        .returning({ id: rewardNotices.id });
+      assert.ok(notice);
+
+      const snapshot = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+      const legacyReward = snapshot.rewards.find(
+        (reward) => reward.id === notice.id,
+      );
+      assert.deepEqual(legacyReward, {
+        id: notice.id,
+        title: "A treat for your companion!",
+        description: "Your on-time work earned a fish snack.",
+        icon: "🐟",
+      });
+
+      await acknowledgeLearnerReward(
+        integration.id,
+        internalLearnerId,
+        notice.id,
+      );
+      const acknowledged = await loadLearnerSnapshot(
+        integration.id,
+        internalLearnerId,
+      );
+      assert.equal(
+        acknowledged.rewards.some((reward) => reward.id === notice.id),
+        false,
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
