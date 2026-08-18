@@ -16,7 +16,10 @@ import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
 } from "@/lib/reward-grants";
-import { storyInstructionalEndDay } from "@/lib/story-grant-calendar";
+import {
+  storyInstructionalEndDay,
+  storyWeekStartDay,
+} from "@/lib/story-grant-calendar";
 
 export const ACHIEVEMENT_KEYS = PAL_ACHIEVEMENT_KEYS;
 export const ACHIEVEMENT_NOTICE_KEY = "achievement-earned-v1";
@@ -224,13 +227,6 @@ function offsetCalendarDay(day: string, days: number): string | null {
     : new Date(timestamp + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-function isoWeekday(day: string): number | null {
-  const timestamp = Date.parse(`${day}T00:00:00.000Z`);
-  if (Number.isNaN(timestamp)) return null;
-  const weekday = new Date(timestamp).getUTCDay();
-  return weekday === 0 ? 7 : weekday;
-}
-
 function periodCalendarFromMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): PeriodCalendar {
@@ -246,14 +242,7 @@ function periodCalendarFromMetadata(
     typeof metadata?.term_end_day === "string"
       ? metadata.term_end_day
       : null;
-  const weekIndex = metadata?.week_index;
-  const explicitWeekStart = metadata?.week_start_day;
-  const startDay =
-    typeof explicitWeekStart === "string"
-      ? explicitWeekStart
-      : termStartDay && Number.isInteger(weekIndex)
-        ? offsetCalendarDay(termStartDay, ((weekIndex as number) - 1) * 7)
-        : null;
+  const startDay = storyWeekStartDay(metadata ?? {});
   const endDay = startDay && termEndDay
     ? storyInstructionalEndDay(metadata ?? {})
     : null;
@@ -261,46 +250,7 @@ function periodCalendarFromMetadata(
 }
 
 function hasValidStoryWeekPosition(calendar: TermCalendarMetadata): boolean {
-  const totalWeeks = calendar.term_week_count ?? 16;
-  const termStartWeekday = isoWeekday(calendar.term_start_day);
-  const termEndWeekday = isoWeekday(calendar.term_end_day);
-  if (!termStartWeekday || !termEndWeekday) return false;
-  const firstNormalMonday = offsetCalendarDay(
-    calendar.term_start_day,
-    8 - termStartWeekday,
-  );
-  const finalMonday = offsetCalendarDay(
-    calendar.term_end_day,
-    -(termEndWeekday - 1),
-  );
-  const earliestStart = calendar.week_index === 1
-    ? calendar.term_start_day
-    : firstNormalMonday
-      ? offsetCalendarDay(
-          firstNormalMonday,
-          (calendar.week_index - 2) * 7,
-        )
-      : null;
-  const latestStart = calendar.week_index === 1
-    ? calendar.term_start_day
-    : finalMonday
-      ? offsetCalendarDay(
-          finalMonday,
-          -(totalWeeks - calendar.week_index) * 7,
-        )
-      : null;
-  const compatibilityStart = offsetCalendarDay(
-    calendar.term_start_day,
-    (calendar.week_index - 1) * 7,
-  );
-  const actualStart = calendar.week_start_day ?? compatibilityStart;
-  return Boolean(
-    earliestStart &&
-      latestStart &&
-      actualStart &&
-      earliestStart <= actualStart &&
-      actualStart <= latestStart,
-  );
+  return storyWeekStartDay(calendar) !== null;
 }
 
 async function firstConfigurationCalendar(

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   isStoryCollectibleDue,
   storyCollectibleDueDay,
+  storyWeekCalendar,
 } from "@/lib/story-grant-calendar";
 
 function calendar(overrides: Record<string, unknown> = {}) {
@@ -69,26 +70,56 @@ test("a semester ending Friday becomes due Saturday", () => {
 });
 
 test("a later instructional break does not delay the current week's due day", () => {
-  const beforeBreak = calendar({ week_start_day: "2026-10-05", week_index: 6 });
-  const afterBreak = calendar({ week_start_day: "2026-10-26", week_index: 7 });
+  const beforeBreak = calendar({
+    term_week_count: 14,
+    week_start_day: "2026-10-05",
+    week_index: 6,
+  });
+  const afterBreak = calendar({
+    term_week_count: 14,
+    week_start_day: "2026-10-26",
+    week_index: 7,
+  });
   assert.equal(storyCollectibleDueDay(beforeBreak), "2026-10-10");
   assert.equal(storyCollectibleDueDay(afterBreak), "2026-10-31");
 });
 
-test("contract-valid weekend starts use the following instructional Friday", () => {
+test("weekend term starts normalize to Monday without overlapping Week 2", () => {
+  const first = calendar({
+    term_start_day: "2026-09-06",
+    term_end_day: "2026-10-16",
+    term_week_count: 6,
+    week_start_day: "2026-09-06",
+  });
+  const second = calendar({
+    term_start_day: "2026-09-06",
+    term_end_day: "2026-10-16",
+    term_week_count: 6,
+    week_start_day: "2026-09-14",
+    week_index: 2,
+  });
+  assert.equal(storyWeekCalendar(first)?.weekStartDay, "2026-09-07");
+  assert.equal(storyCollectibleDueDay(first), "2026-09-12");
+  assert.equal(storyWeekCalendar(second)?.weekStartDay, "2026-09-14");
+});
+
+test("legacy 16-week calendars normalize the first and last short weeks", () => {
+  const legacy = {
+    term_start_day: "2026-09-02",
+    term_end_day: "2026-12-16",
+    term_timezone: "America/Toronto",
+  };
   assert.equal(
-    storyCollectibleDueDay(calendar({
-      term_start_day: "2026-09-05",
-      week_start_day: "2026-09-05",
-    })),
-    "2026-09-12",
+    storyWeekCalendar({ ...legacy, week_index: 2 })?.weekStartDay,
+    "2026-09-07",
   );
   assert.equal(
-    storyCollectibleDueDay(calendar({
-      term_start_day: "2026-09-06",
-      week_start_day: "2026-09-06",
-    })),
-    "2026-09-12",
+    storyWeekCalendar({ ...legacy, week_index: 16 })?.weekStartDay,
+    "2026-12-14",
+  );
+  assert.equal(
+    storyCollectibleDueDay({ ...legacy, week_index: 16 }),
+    "2026-12-17",
   );
 });
 

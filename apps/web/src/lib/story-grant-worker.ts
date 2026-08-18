@@ -293,13 +293,33 @@ export async function runStoryGrantWorker(
     }
   }
 
+  let batchLimitReached = false;
+  if (batches === maxBatches && lastPageMayHaveMore) {
+    const lookahead = await retry({
+      scope: "discovery",
+      correlationId: "capacity-lookahead",
+      operation: () => findLearners(db, {
+        asOf,
+        after: cursor,
+        excludedLearnerIds: [...failedLearnerIds],
+        onlyLearnerIds: options.onlyLearnerIds,
+        limit: 1,
+      }),
+    });
+    retries += lookahead.retries;
+    if (!lookahead.ok) {
+      throw new Error("scheduled story grant capacity lookahead failed after retries");
+    }
+    batchLimitReached = lookahead.value.learnerIds.length > 0;
+  }
+
   return {
     batches,
     learners: learnersProcessed,
     failedLearners,
     grants,
     retries,
-    batchLimitReached: batches === maxBatches && lastPageMayHaveMore,
+    batchLimitReached,
   };
 }
 
@@ -308,11 +328,20 @@ function learnerCorrelationId(learnerId: string): string {
 }
 
 function sanitizedFailureCode(error: unknown): string {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const code = (error as { code?: unknown }).code;
-    if (typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code)) {
-      return code;
+  const seen = new Set<object>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (typeof current !== "object" || current === null || seen.has(current)) break;
+    seen.add(current);
+    if ("code" in current) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(code)) {
+        return code;
+      }
     }
+    current = "cause" in current
+      ? (current as { cause?: unknown }).cause
+      : undefined;
   }
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,31}$/.test(error.name)) {
     return error.name;

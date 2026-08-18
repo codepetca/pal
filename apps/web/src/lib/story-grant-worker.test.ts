@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import {
   getDb,
+  getPool,
   learnerFacts,
   learnerRewardGrants,
   storyCollectibleSchedules,
@@ -274,6 +275,25 @@ test(
         (reward) => reward.kind === "story" && reward.collectibleFinish === "sketch",
       );
       assert.ok(sketchReward);
+      const legacyBefore = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        {
+          asOf: new Date("2026-09-19T12:00:00.000Z"),
+          supportsCollectibleFinish: false,
+        },
+      );
+      assert.equal(
+        legacyBefore.progression?.collectibles.some(
+          (collectible) => collectible.status === "earned",
+        ),
+        false,
+      );
+      assert.equal(
+        legacyBefore.rewards.some((reward) => reward.kind === "story"),
+        false,
+      );
 
       const achievement = await processEventInDb(
         integration.id,
@@ -304,6 +324,24 @@ test(
       assert.equal(
         second?.status === "earned" ? second.finish : undefined,
         "color",
+      );
+      const legacyUpgraded = await loadLearnerSnapshot(
+        integration.id,
+        learnerId,
+        getDb(),
+        {
+          asOf: new Date("2026-09-19T12:00:00.000Z"),
+          supportsCollectibleFinish: false,
+        },
+      );
+      const legacySecond = legacyUpgraded.progression?.collectibles[1];
+      assert.equal(
+        legacySecond?.status === "earned" ? legacySecond.finish : undefined,
+        "color",
+      );
+      assert.equal(
+        legacyUpgraded.progression?.collectibles[0]?.status,
+        "next",
       );
       const secondGrant = grants.find((grant) =>
         upgraded.rewards.some(
@@ -482,8 +520,8 @@ test(
           findLearners: async (...args) => {
             discoveryAttempts += 1;
             if (discoveryAttempts === 1) {
-              throw Object.assign(new Error("must not be logged"), {
-                code: "40001",
+              throw new Error("must not be logged", {
+                cause: { code: "40001" },
               });
             }
             return findLearnersWithDueStoryGrants(...args);
@@ -519,7 +557,74 @@ test(
 );
 
 test(
-  "typed due work remains authoritative if source JSON is later corrupted",
+  "a wrapped real learner lock timeout retries after the lock is released",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-real-lock-${crypto.randomUUID()}`;
+    const lockClient = await getPool().connect();
+    try {
+      await configure(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(
+          `worker-real-lock-period-${crypto.randomUUID()}`,
+          `worker-real-lock-term-${crypto.randomUUID()}`,
+          1,
+          "2026-08-31",
+        ),
+      );
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      await lockClient.query("BEGIN");
+      await lockClient.query('SELECT id FROM "learners" WHERE id = $1 FOR UPDATE', [
+        learnerId,
+      ]);
+      const release = setTimeout(() => {
+        void lockClient.query("COMMIT");
+      }, 1_700);
+      try {
+        let discoveryCalls = 0;
+        const result = await runStoryGrantWorker({
+          asOf: new Date("2026-09-05T12:00:00.000Z"),
+          onlyLearnerIds: [learnerId],
+          retryBaseDelayMs: 0,
+          findLearners: async () => {
+            discoveryCalls += 1;
+            return discoveryCalls === 1
+              ? {
+                  learnerIds: [learnerId],
+                  scannedRows: 1,
+                  cursor: {
+                    dueAt: new Date("2026-09-05T04:00:00.000Z"),
+                    id: learnerId,
+                  },
+                }
+              : { learnerIds: [], scannedRows: 0 };
+          },
+        });
+        assert.equal(result.grants, 1);
+        assert.equal(result.retries, 1);
+      } finally {
+        clearTimeout(release);
+        await lockClient.query("ROLLBACK");
+      }
+    } finally {
+      lockClient.release();
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "typed due work remains authoritative because source facts are immutable",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const integration = await resolveIntegration({
@@ -670,12 +775,13 @@ test(
       secret,
     });
     const externalLearnerId = `worker-weekend-${crypto.randomUUID()}`;
+    const periodKey = `worker-weekend-period-${crypto.randomUUID()}`;
     try {
       await configure(
         integration.id,
         externalLearnerId,
         configuredWeek(
-          `worker-weekend-period-${crypto.randomUUID()}`,
+          periodKey,
           `worker-weekend-term-${crypto.randomUUID()}`,
           1,
           "2026-09-06",
@@ -687,6 +793,16 @@ test(
           },
         ),
       );
+      const sundayActivity = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLog(periodKey, "2026-09-06"),
+        crypto.randomUUID(),
+      );
+      assert.deepEqual(sundayActivity, {
+        status: "rejected",
+        error: "inconsistent_activity_day",
+      });
       const learnerId = await getOrCreateLearnerIdentity(
         getDb(),
         integration.id,
@@ -873,6 +989,37 @@ test("default daily capacity drains a cohort larger than the former 500-learner 
     batchLimitReached: false,
   });
 });
+
+for (const [learnerCount, expectedBacklog] of [
+  [10_000, false],
+  [10_001, true],
+] as const) {
+  test(`capacity lookahead reports ${learnerCount} due learners accurately`, async () => {
+    const learnerIds = Array.from(
+      { length: learnerCount },
+      (_, index) => `capacity-${String(index).padStart(5, "0")}`,
+    );
+    let offset = 0;
+    const result = await runStoryGrantWorker({
+      db: {} as Db,
+      retryBaseDelayMs: 0,
+      findLearners: async (_db, input) => {
+        const page = learnerIds.slice(offset, offset + input.limit);
+        offset += page.length;
+        return {
+          learnerIds: page,
+          scannedRows: page.length,
+          cursor: page.length > 0
+            ? { dueAt: new Date("2026-09-05T04:00:00.000Z"), id: page.at(-1)! }
+            : undefined,
+        };
+      },
+      reconcileLearner: async () => ({ candidates: 1, due: 1, granted: 1 }),
+    });
+    assert.equal(result.learners, 10_000);
+    assert.equal(result.batchLimitReached, expectedBacklog);
+  });
+}
 
 test(
   "cron route rejects invalid deployment/auth configuration and runs when valid",

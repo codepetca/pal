@@ -240,12 +240,12 @@ emits one companion reveal decision. Fixtures call the same projector. The
 widget validates the resulting transport shape and renders it without
 re-evaluating chapter eligibility.
 
-Guaranteed schedule grants are enabled by an explicit deployment cutoff. Pal
-reconciles every eligible ungranted chapter whose own local due day has arrived.
-The daily worker does not require a learner event, while any later accepted
-event calls the same reconciler as a recovery path. Neither configurations
-stored before the cutoff nor migration itself create story ownership; only a
-week whose due instant is at or after the cutoff may be granted.
+Guaranteed schedule grants begin at the prospective queue boundary introduced
+by the scheduler migration. Pal reconciles every queued, ungranted chapter whose
+own local due day has arrived. The daily worker does not require a learner
+event, while any later accepted event calls the same reconciler as a recovery
+path. Existing configuration facts are not backfilled, so deployment cannot
+create historical story ownership.
 
 Reduced-motion mode should replace scale, bounce, or sparkle sequences with a
 short opacity transition. The full reveal must remain understandable with no

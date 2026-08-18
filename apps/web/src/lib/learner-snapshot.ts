@@ -269,6 +269,8 @@ export async function loadLearnerSnapshot(
     // deterministic concurrent write. Production callers leave this unset.
     afterScopeVerified?: () => Promise<void>;
     asOf?: Date;
+    /** False for schema-v1 widget builds that cannot render sketch ownership. */
+    supportsCollectibleFinish?: boolean;
   } = {},
 ): Promise<PalWidgetSnapshot> {
   return db.transaction(
@@ -619,10 +621,17 @@ export async function loadLearnerSnapshot(
         ),
       );
       const storyProjectionOptions = { colorChapterAssignmentIds };
+      const projectableGrantRows = options.supportsCollectibleFinish === false
+        ? grantRows.filter((grant) =>
+            grant.kind !== "story_chapter" ||
+            (grant.storyPlanChapterId !== null &&
+              colorChapterAssignmentIds.has(grant.storyPlanChapterId)),
+          )
+        : grantRows;
       const progression = persistedStoryPlan
         ? projectStoryProgression(
             persistedStoryPlan,
-            grantRows,
+            projectableGrantRows,
             storyPlansById,
             storyProjectionOptions,
           )
@@ -667,7 +676,7 @@ export async function loadLearnerSnapshot(
         },
         rewards: mergePendingRewardQueues(
           projectUnseenGrantRewards(
-            grantRows,
+            projectableGrantRows,
             storyPlansById,
             storyProjectionOptions,
           ),
