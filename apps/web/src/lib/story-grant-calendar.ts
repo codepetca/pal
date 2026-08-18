@@ -80,9 +80,11 @@ export function storyWeekStartDay(
     ? null
     : isoWeekday(rawExplicitStart);
   const explicit = typeof metadata.week_start_day === "string"
-    ? explicitWeekday !== null && explicitWeekday > 5
-      ? followingInstructionalDay(metadata.week_start_day)
-      : (weekIndex as number) === 1
+    ? (weekIndex as number) === (termWeekCount as number)
+      ? mondayOfCalendarWeek(metadata.week_start_day)
+      : explicitWeekday !== null && explicitWeekday > 5
+        ? followingInstructionalDay(metadata.week_start_day)
+        : (weekIndex as number) === 1
         ? followingInstructionalDay(metadata.week_start_day)
         : mondayOfCalendarWeek(metadata.week_start_day)
     : null;

@@ -125,26 +125,16 @@ test("a middle-week weekday marker normalizes to Monday and becomes due Saturday
   assert.equal(storyCollectibleDueDay(middle), "2026-09-12");
 });
 
-test("a weekend marker before the final week resolves to the following Monday", () => {
+test("a terminal weekend marker preserves the preceding instructional week", () => {
   const finalWeek = calendar({
-    term_start_day: "2026-05-11",
-    term_end_day: "2026-08-30",
-    term_week_count: 16,
-    week_start_day: "2026-08-23",
-    week_index: 16,
-  });
-  assert.equal(storyWeekCalendar(finalWeek)?.weekStartDay, "2026-08-24");
-  assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-29");
-});
-
-test("a terminal weekend marker with no instructional day remaining is rejected", () => {
-  assert.equal(storyWeekCalendar(calendar({
     term_start_day: "2026-05-11",
     term_end_day: "2026-08-30",
     term_week_count: 16,
     week_start_day: "2026-08-30",
     week_index: 16,
-  })), null);
+  });
+  assert.equal(storyWeekCalendar(finalWeek)?.weekStartDay, "2026-08-24");
+  assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-29");
 });
 
 test("raw adaptive starts must fall inside the term before normalization", () => {
