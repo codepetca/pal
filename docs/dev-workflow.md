@@ -94,8 +94,9 @@ execute Vercel cron jobs.
 
 One invocation is intentionally bounded at 10,000 learners (100 batches of 100,
 with at most 10 learner transactions active at once) and a 270-second work
-deadline inside the route's five-minute limit. Each learner transaction consumes
-at most 24 schedules; the worker uses additional transactions while time remains.
+deadline inside the route's five-minute limit. Each learner receives at most one
+24-schedule transaction per run so a deep lifetime backlog cannot starve other
+learners or tenants.
 Do not enable this rollout for a cohort above that operational bound without
 increasing capacity or frequency first. Hitting either bound returns an alertable
 `503` and leaves the remaining queue rows intact.

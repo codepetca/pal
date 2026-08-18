@@ -209,8 +209,7 @@ facts. Queue ownership remains prospective from the PR70 trigger boundary.
 
 The worker pages through the partial pending-due index with a stable
 `(due_at, id)` cursor, then reconciles at most 24 overdue rows per selected
-learner transaction. Further pages use new transactions while the invocation's
-270-second work budget remains. Event ingest performs only one page. Per-learner
+learner per invocation. Event ingest uses the same one-page bound. Per-learner
 transactions, row locks, and the reward ledger's uniqueness constraint make
 retries and concurrent event/cron runs safe.
 Discovery and learner transactions retry transient failures up to a small fixed
@@ -219,7 +218,7 @@ prevents a concurrent event from consuming the connection's full statement
 timeout; terminal learner failures remain isolated from the rest of the batch.
 Pending queue rows survive missed daily invocations and are consumed only after
 the ownership ledger contains the matching collectible. Reaching the bounded
-invocation capacity or work deadline returns an alertable incomplete response
+invocation capacity, per-learner page limit, or work deadline returns an alertable incomplete response
 rather than ordinary success, while leaving the remaining rows for the next run.
 The production default admits up to 10,000 learners per five-minute invocation;
 deployment must remain within that explicit cohort bound unless capacity or

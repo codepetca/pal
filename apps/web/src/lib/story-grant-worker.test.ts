@@ -1133,6 +1133,7 @@ test("default daily capacity drains a cohort larger than the former 500-learner 
     grants: 501,
     retries: 0,
     batchLimitReached: false,
+    learnerPageLimitReached: false,
     deadlineReached: false,
   });
 });
@@ -1173,35 +1174,40 @@ for (const [learnerCount, expectedBacklog] of [
   });
 }
 
-test("worker drains one learner in bounded reconciliation transactions", async () => {
+test("deep queues cannot starve an ordinary learner behind the concurrency window", async () => {
+  const deepLearners = Array.from({ length: 11 }, (_, index) => `deep-${index}`);
+  const ordinaryLearner = "ordinary-learner";
   let discoveryCalls = 0;
-  let reconciliationCalls = 0;
+  const reconciledLearners: string[] = [];
   const result = await runStoryGrantWorker({
     db: {} as Db,
+    concurrency: 10,
     retryBaseDelayMs: 0,
     findLearners: async () => {
       discoveryCalls += 1;
       return discoveryCalls === 1
         ? {
-            learnerIds: ["many-term-learner"],
-            scannedRows: 1,
+            learnerIds: [...deepLearners, ordinaryLearner],
+            scannedRows: 12,
             cursor: {
               dueAt: new Date("2026-09-05T04:00:00.000Z"),
-              id: "many-term-schedule",
+              id: "ordinary-schedule",
             },
           }
         : { learnerIds: [], scannedRows: 0 };
     },
-    reconcileLearner: async () => {
-      reconciliationCalls += 1;
-      return reconciliationCalls === 1
-        ? { candidates: 24, due: 24, granted: 24, hasMore: true }
-        : { candidates: 6, due: 6, granted: 6, hasMore: false };
+    reconcileLearner: async (learnerId) => {
+      reconciledLearners.push(learnerId);
+      return learnerId === ordinaryLearner
+        ? { candidates: 1, due: 1, granted: 1, hasMore: false }
+        : { candidates: 24, due: 24, granted: 24, hasMore: true };
     },
   });
-  assert.equal(reconciliationCalls, 2);
-  assert.equal(result.learners, 1);
-  assert.equal(result.grants, 30);
+  assert.equal(reconciledLearners.length, 12);
+  assert.ok(reconciledLearners.includes(ordinaryLearner));
+  assert.equal(result.learners, 12);
+  assert.equal(result.grants, 265);
+  assert.equal(result.learnerPageLimitReached, true);
   assert.equal(result.deadlineReached, false);
 });
 
@@ -1219,8 +1225,8 @@ test("worker stops before its deadline and reports known remaining work", async 
       discoveryCalls += 1;
       return discoveryCalls === 1
         ? {
-            learnerIds: ["slow-learner", "waiting-learner"],
-            scannedRows: 2,
+            learnerIds: ["slow-learner", "waiting-learner", "deferred-learner"],
+            scannedRows: 3,
             cursor: {
               dueAt: new Date("2026-09-05T04:00:00.000Z"),
               id: "waiting-schedule",
@@ -1233,8 +1239,9 @@ test("worker stops before its deadline and reports known remaining work", async 
       return { candidates: 24, due: 24, granted: 24, hasMore: true };
     },
   });
-  assert.equal(result.learners, 1);
+  assert.equal(result.learners, 2);
   assert.equal(result.grants, 48);
+  assert.equal(result.learnerPageLimitReached, true);
   assert.equal(result.deadlineReached, true);
   assert.deepEqual(storyGrantCronOutcome(result), {
     bodyStatus: "incomplete",
@@ -1284,6 +1291,7 @@ test("cron reports bounded-cap backlog as incomplete", () => {
     grants: 500,
     retries: 0,
     batchLimitReached: true,
+    learnerPageLimitReached: false,
     deadlineReached: false,
   });
   assert.deepEqual(outcome, {
@@ -1300,6 +1308,7 @@ test("cron response preserves failures when bounded-cap backlog remains", async 
     grants: 498,
     retries: 6,
     batchLimitReached: true,
+    learnerPageLimitReached: false,
     deadlineReached: false,
   });
   assert.equal(response.status, 503);
@@ -1311,6 +1320,7 @@ test("cron response preserves failures when bounded-cap backlog remains", async 
     grants: 498,
     retries: 6,
     batchLimitReached: true,
+    learnerPageLimitReached: false,
     deadlineReached: false,
   });
 });

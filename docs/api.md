@@ -34,12 +34,13 @@ and non-PII correlation identifier, continues the bounded batch, and returns
 `500` with `status: "partial_failure"`. A later daily run rediscovers every
 still-ungranted week.
 
-Each learner transaction consumes at most 24 schedules. The worker drains more
-pages for that learner in separate transactions while its 270-second work budget
-remains, while event ingestion invokes only one page. If the run reaches its
-batch cap or work deadline while due work remains, it returns `503` with
+Each learner receives at most one 24-schedule transaction per run, and event
+ingestion uses the same one-page bound. This keeps deep lifetime queues from
+starving other learners or making an event request unbounded. If the run reaches
+its batch cap, a learner page limit, or its work deadline while due work remains,
+it returns `503` with
 `status: "incomplete"` and the corresponding `batchLimitReached` or
-`deadlineReached` flag. This makes backlog exhaustion alertable instead of
+`learnerPageLimitReached`, or `deadlineReached` flag. This makes backlog exhaustion alertable instead of
 presenting a partially drained queue as an ordinary successful cron run; pending
 rows remain recoverable. If learner failures and exhaustion happen together,
 the response is `503` with `status: "partial_failure_incomplete"` so neither

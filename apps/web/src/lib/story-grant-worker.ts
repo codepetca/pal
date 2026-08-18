@@ -50,6 +50,7 @@ export type StoryGrantWorkerResult = {
   grants: number;
   retries: number;
   batchLimitReached: boolean;
+  learnerPageLimitReached: boolean;
   deadlineReached: boolean;
 };
 
@@ -210,6 +211,7 @@ export async function runStoryGrantWorker(
   let failedLearners = 0;
   let grants = 0;
   let retries = 0;
+  let learnerPageLimitReached = false;
   let cursor: StoryGrantDiscoveryCursor | undefined;
   const failedLearnerIds = new Set<string>();
   let lastPageMayHaveMore = false;
@@ -292,51 +294,17 @@ export async function runStoryGrantWorker(
         knownDeadlineBacklog = true;
         break;
       }
-      const results = await Promise.all(learnerChunk.map(async (learnerId) => {
-        let learnerRetries = 0;
-        let learnerGrants = 0;
-        while (true) {
-          if (isPastDeadline()) {
-            return {
-              ok: true as const,
-              grants: learnerGrants,
-              retries: learnerRetries,
-              deadlineBacklog: true,
-            };
-          }
-          const result = await retry({
-            scope: "learner",
-            correlationId: learnerCorrelationId(learnerId),
-            operation: () => reconcileLearner(learnerId, { asOf, db }),
-          });
-          learnerRetries += result.retries;
-          if (!result.ok) {
-            return {
-              ok: false as const,
-              retries: learnerRetries,
-              deadlineBacklog: false,
-            };
-          }
-          learnerGrants += result.value.granted;
-          if (!result.value.hasMore) {
-            return {
-              ok: true as const,
-              grants: learnerGrants,
-              retries: learnerRetries,
-              deadlineBacklog: false,
-            };
-          }
-        }
-      }));
+      const results = await Promise.all(learnerChunk.map((learnerId) => retry({
+        scope: "learner",
+        correlationId: learnerCorrelationId(learnerId),
+        operation: () => reconcileLearner(learnerId, { asOf, db }),
+      })));
       for (const [index, result] of results.entries()) {
         learnersProcessed += 1;
         retries += result.retries;
         if (result.ok) {
-          grants += result.grants;
-          if (result.deadlineBacklog) {
-            deadlineReached = true;
-            knownDeadlineBacklog = true;
-          }
+          grants += result.value.granted;
+          learnerPageLimitReached ||= result.value.hasMore;
         } else {
           failedLearners += 1;
           failedLearnerIds.add(learnerChunk[index]!);
@@ -394,6 +362,7 @@ export async function runStoryGrantWorker(
     grants,
     retries,
     batchLimitReached,
+    learnerPageLimitReached,
     deadlineReached: deadlineReached && knownDeadlineBacklog,
   };
 }

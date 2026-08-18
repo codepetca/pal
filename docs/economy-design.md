@@ -124,10 +124,9 @@ older widget/API pair.
   Monday-Friday instructional span and becomes due that Saturday.
 - A version-controlled Vercel cron wakes the worker daily. It pages through
   learners with ungranted overdue assignments, takes the same per-learner row
-  lock as event ingest, and reconciles at most 24 overdue weeks per transaction.
-  The worker drains further pages in separate transactions while its 270-second
-  budget remains; accepted events run only one bounded page so backlog cannot
-  make an ordinary event request unbounded. The current production bound is
+  lock as event ingest, and reconciles at most 24 overdue weeks per learner per
+  run. Accepted events use the same one-page bound, so a lifetime backlog cannot
+  make an ordinary event request unbounded or starve later tenants. The current production bound is
   10,000 learners per invocation; reaching either capacity or time returns an
   alertable incomplete response. Learner activity is not required: missed cron
   runs recover on a later daily run.
@@ -166,8 +165,8 @@ older widget/API pair.
   asset origins; it deliberately does not maintain a second story engine or
   attempt to prove entitlement from other fields in the same response.
 - The active daily scheduler catches up overdue post-rollout assignments in
-  bounded pages, leaving any work beyond the invocation deadline for the next
-  daily run. Story copy, collectible briefs, and scheduling rules are defined in
+  one fair bounded page per learner, leaving deeper or deadline-exceeding work
+  for the next daily run. Story copy, collectible briefs, and scheduling rules are defined in
   [Pip's First Recipe — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy
