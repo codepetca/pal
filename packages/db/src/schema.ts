@@ -141,11 +141,12 @@ export const learnerFacts = pgTable(
   ],
 );
 
-// Durable, typed work queue for guaranteed story ownership. Only configuration
-// facts accepted after rollout create work; neither schedules nor rewards are
-// backfilled. The append-only learner_reward_grants ledger remains canonical,
-// and reconciled_at records queue consumption only after that ledger proves
-// ownership.
+// Durable, typed work queue for guaranteed story ownership. Only complete
+// calendar-bearing configuration facts accepted after rollout create work;
+// calendar-less V1 facts remain valid for Weekly Rhythm but cannot define a
+// local story boundary. Neither schedules nor rewards are backfilled. The
+// append-only learner_reward_grants ledger remains canonical, and reconciled_at
+// records queue consumption only after that ledger proves ownership.
 export const storyCollectibleSchedules = pgTable(
   "story_collectible_schedules",
   {

@@ -214,6 +214,22 @@ test(
         week_index: 1,
         week_start_day: "2026-08-31",
       });
+      await insertOldWriterFact("calendarless-weekly-rhythm", {
+        period_key: "calendarless-weekly-rhythm-period",
+        config_version: 1,
+        period_status: "open",
+        eligible_days: 5,
+      });
+      assert.equal(Number((await upgrade.query(
+        `SELECT count(*) AS count
+         FROM learner_facts
+         WHERE period_key = 'calendarless-weekly-rhythm-period'`,
+      )).rows[0].count), 1);
+      assert.equal(Number((await upgrade.query(
+        `SELECT count(*) AS count
+         FROM story_collectible_schedules
+         WHERE period_key = 'calendarless-weekly-rhythm-period'`,
+      )).rows[0].count), 0);
       const timezoneNames = new Set(
         (await upgrade.query(`SELECT lower(name) AS name FROM pg_timezone_names`))
           .rows.map((row) => String(row.name)),
