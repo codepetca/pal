@@ -202,25 +202,28 @@ fact is stored, a database trigger materializes its due boundary in the typed
 `story_collectible_schedules` queue using the term's IANA timezone. Friday-ending
 weeks become due Saturday, while a midweek final week becomes due the following
 day. It never waits for the next instructional week, so holidays and breaks
-cannot delay ownership. New malformed calendars fail closed; the migration
-only aligns the due-date function and does not scan or backfill historical
-schedules or rewards. Queue ownership remains prospective from the PR70 trigger
-boundary.
+cannot delay ownership. New malformed calendars fail closed. The terminal-weekend
+compatibility migration closes only pending schedules first delivered after the
+authoritative final Sunday; it creates no ownership and does not enroll historical
+facts. Queue ownership remains prospective from the PR70 trigger boundary.
 
 The worker pages through the partial pending-due index with a stable
-`(due_at, id)` cursor, then reconciles every overdue post-rollout row for each
-selected learner. Per-learner transactions, row locks, and the reward ledger's
-uniqueness constraint make retries and concurrent event/cron runs safe.
+`(due_at, id)` cursor, then reconciles at most 24 overdue rows per selected
+learner transaction. Further pages use new transactions while the invocation's
+270-second work budget remains. Event ingest performs only one page. Per-learner
+transactions, row locks, and the reward ledger's uniqueness constraint make
+retries and concurrent event/cron runs safe.
 Discovery and learner transactions retry transient failures up to a small fixed
 attempt limit during the same invocation. A short transaction-local lock timeout
 prevents a concurrent event from consuming the connection's full statement
 timeout; terminal learner failures remain isolated from the rest of the batch.
 Pending queue rows survive missed daily invocations and are consumed only after
 the ownership ledger contains the matching collectible. Reaching the bounded
-invocation cap returns an alertable incomplete response rather than ordinary
-success, while leaving the remaining rows for the next run. The production
-default admits up to 10,000 learners per five-minute invocation; deployment must
-remain within that explicit cohort bound unless capacity or frequency is raised.
+invocation capacity or work deadline returns an alertable incomplete response
+rather than ordinary success, while leaving the remaining rows for the next run.
+The production default admits up to 10,000 learners per five-minute invocation;
+deployment must remain within that explicit cohort bound unless capacity or
+frequency is raised.
 
 ### Future operator schedules
 

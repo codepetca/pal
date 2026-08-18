@@ -87,15 +87,18 @@ inventing activity or relying on Vercel retries.
 Before enabling the rollout in production, configure `CRON_SECRET` in the
 Production environment. The cron endpoint fails closed when it is absent or
 malformed. Schedule rows are created prospectively by the database boundary
-introduced in PR #70, so the worker needs no second date cutoff and cannot
-backfill older configurations. Preview deployments do not execute Vercel cron
-jobs.
+introduced in PR #70. The follow-up terminal-weekend guard closes a schedule
+first delivered after its authoritative final Sunday, so the worker cannot turn
+that compatibility case into a historical grant. Preview deployments do not
+execute Vercel cron jobs.
 
 One invocation is intentionally bounded at 10,000 learners (100 batches of 100,
-with at most 10 learner transactions active at once) inside the route's
-five-minute limit. Do not enable this rollout for a cohort above that operational
-bound without increasing capacity or frequency first. Hitting the cap returns an
-alertable `503` and leaves the remaining queue rows intact.
+with at most 10 learner transactions active at once) and a 270-second work
+deadline inside the route's five-minute limit. Each learner transaction consumes
+at most 24 schedules; the worker uses additional transactions while time remains.
+Do not enable this rollout for a cohort above that operational bound without
+increasing capacity or frequency first. Hitting either bound returns an alertable
+`503` and leaves the remaining queue rows intact.
 
 The Pika-like host preview should show the 16-week Pal roadmap, companion, and
 collapsible semester controls. Configure a week, complete daily logs, or finish an item on

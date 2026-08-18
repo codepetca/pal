@@ -124,10 +124,12 @@ older widget/API pair.
   Monday-Friday instructional span and becomes due that Saturday.
 - A version-controlled Vercel cron wakes the worker daily. It pages through
   learners with ungranted overdue assignments, takes the same per-learner row
-  lock as event ingest, and reconciles every overdue week for that learner in one
-  transaction. The current production bound is 10,000 learners per invocation;
-  reaching it returns an alertable incomplete response. Accepted events call the
-  same idempotent reconciler, but learner activity is not required: missed cron
+  lock as event ingest, and reconciles at most 24 overdue weeks per transaction.
+  The worker drains further pages in separate transactions while its 270-second
+  budget remains; accepted events run only one bounded page so backlog cannot
+  make an ordinary event request unbounded. The current production bound is
+  10,000 learners per invocation; reaching either capacity or time returns an
+  alertable incomplete response. Learner activity is not required: missed cron
   runs recover on a later daily run.
 - The reconciler writes one append-only `story_chapter` ownership grant using a
   stored weekly configuration fact as provenance. It never writes
@@ -163,9 +165,9 @@ older widget/API pair.
   reveal eligibility. The widget's network parser validates shape, bounds, and
   asset origins; it deliberately does not maintain a second story engine or
   attempt to prove entitlement from other fields in the same response.
-- The active daily scheduler catches up every overdue post-rollout assignment
-  for each selected learner. Story copy, collectible briefs, and scheduling
-  rules are defined in
+- The active daily scheduler catches up overdue post-rollout assignments in
+  bounded pages, leaving any work beyond the invocation deadline for the next
+  daily run. Story copy, collectible briefs, and scheduling rules are defined in
   [Pip's First Recipe — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy

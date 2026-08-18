@@ -34,15 +34,18 @@ and non-PII correlation identifier, continues the bounded batch, and returns
 `500` with `status: "partial_failure"`. A later daily run rediscovers every
 still-ungranted week.
 
-If the bounded run reaches its batch cap while more due work may remain, it
-returns `503` with `status: "incomplete"` and `batchLimitReached: true`. This
-makes backlog exhaustion alertable instead of presenting a partially drained
-queue as an ordinary successful cron run; pending rows remain recoverable. If
-learner failures and cap exhaustion happen together, the response is `503` with
-`status: "partial_failure_incomplete"` so neither condition is hidden.
-The production default is 100 batches of 100 learners (10,000 learners per
-five-minute invocation); rollout operations must stay within that explicit
-cohort bound or raise capacity/frequency before enabling it.
+Each learner transaction consumes at most 24 schedules. The worker drains more
+pages for that learner in separate transactions while its 270-second work budget
+remains, while event ingestion invokes only one page. If the run reaches its
+batch cap or work deadline while due work remains, it returns `503` with
+`status: "incomplete"` and the corresponding `batchLimitReached` or
+`deadlineReached` flag. This makes backlog exhaustion alertable instead of
+presenting a partially drained queue as an ordinary successful cron run; pending
+rows remain recoverable. If learner failures and exhaustion happen together,
+the response is `503` with `status: "partial_failure_incomplete"` so neither
+condition is hidden. The production default is 100 batches of 100 learners
+(10,000 learners per five-minute invocation); rollout operations must stay
+within that explicit cohort bound or raise capacity/frequency before enabling it.
 
 The route does not accept a learner, period, date, or event payload. It derives
 eligibility only from typed, indexed due-work materialized from validated stored
