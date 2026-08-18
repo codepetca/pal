@@ -1532,6 +1532,41 @@ test(
           expected: "2026-09-05T04:00:00.000Z",
         },
         {
+          name: "legacy-midweek-week-two",
+          metadata: {
+            term_token: `legacy-midweek-week-two-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-12-16",
+            term_timezone: "America/Toronto",
+            week_index: 2,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "legacy-overdue",
+          metadata: {
+            term_token: `legacy-overdue-${suffix}`,
+            term_start_day: "2026-06-29",
+            term_end_day: "2026-10-23",
+            term_timezone: "America/Toronto",
+            week_index: 6,
+          },
+          createdAt: "2026-08-10T12:00:00.000Z",
+          expected: "2026-08-08T04:00:00.000Z",
+          expectedReconciledAt: "2026-08-10T12:00:00.000Z",
+        },
+        {
+          name: "legacy-midweek-final-week",
+          metadata: {
+            term_token: `legacy-midweek-final-week-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-12-16",
+            term_timezone: "America/Toronto",
+            week_index: 16,
+          },
+          expected: "2026-12-17T05:00:00.000Z",
+        },
+        {
           name: "weekend",
           metadata: {
             term_token: `weekend-${suffix}`,
@@ -1543,6 +1578,59 @@ test(
             week_index: 1,
           },
           expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "delayed-first-week",
+          metadata: {
+            term_token: `delayed-first-week-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 12,
+            week_start_day: "2026-09-07",
+            week_index: 1,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "middle-week-wednesday-marker",
+          metadata: {
+            term_token: `middle-week-wednesday-marker-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-09-09",
+            week_index: 2,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "terminal-weekend",
+          metadata: {
+            term_token: `terminal-weekend-${suffix}`,
+            term_start_day: "2026-05-11",
+            term_end_day: "2026-08-30",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-08-30",
+            week_index: 16,
+          },
+          createdAt: "2026-08-17T12:00:00.000Z",
+          expected: "2026-08-30T04:00:00.000Z",
+        },
+        {
+          name: "friday-final-week-marker",
+          metadata: {
+            term_token: `friday-final-week-marker-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-12-18",
+            week_index: 16,
+          },
+          expected: "2026-12-19T05:00:00.000Z",
         },
         {
           name: "dst",
@@ -1570,6 +1658,19 @@ test(
           },
           expected: "2026-10-07T10:00:00.000Z",
         },
+        {
+          name: "short-both-edges",
+          metadata: {
+            term_token: `short-both-edges-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-10-07",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-10-05",
+            week_index: 6,
+          },
+          expected: "2026-10-08T04:00:00.000Z",
+        },
       ] as const;
       for (const scenario of scenarios) {
         const [learner] = await db.insert(learners).values({
@@ -1593,10 +1694,19 @@ test(
           periodKey: `story-calendar-${scenario.name}-${suffix}`,
           occurredAt: new Date("2026-03-01T12:00:00.000Z"),
           metadata: scenario.metadata,
+          ...("createdAt" in scenario
+            ? { createdAt: new Date(scenario.createdAt) }
+            : {}),
         });
         const [schedule] = await db.select().from(storyCollectibleSchedules)
           .where(eq(storyCollectibleSchedules.learnerId, learner.id));
         assert.equal(schedule!.dueAt.toISOString(), scenario.expected);
+        if ("expectedReconciledAt" in scenario) {
+          assert.equal(
+            schedule!.reconciledAt?.toISOString(),
+            scenario.expectedReconciledAt,
+          );
+        }
       }
 
       const [decimalLearner] = await db.insert(learners).values({
@@ -1715,6 +1825,30 @@ test(
             term_week_count: 6,
             week_start_day: "2026-08-31",
             week_index: 6,
+          },
+        },
+        {
+          name: "week-one-raw-start-before-term",
+          metadata: {
+            term_token: `raw-before-term-${suffix}`,
+            term_start_day: "2026-09-07",
+            term_end_day: "2026-10-16",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-09-06",
+            week_index: 1,
+          },
+        },
+        {
+          name: "final-raw-start-after-term",
+          metadata: {
+            term_token: `raw-after-term-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-12-19",
+            week_index: 16,
           },
         },
         {

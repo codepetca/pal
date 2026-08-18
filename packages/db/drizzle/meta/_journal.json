@@ -57,6 +57,13 @@
       "when": 1786935594939,
       "tag": "0007_story_collectible_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787019254000,
+      "tag": "0008_align_short_story_weeks",
+      "breakpoints": true
     }
   ]
 }
