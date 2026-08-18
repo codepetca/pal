@@ -410,6 +410,32 @@ test(
         0,
       );
 
+      const adjacentEventId = crypto.randomUUID();
+      await upgrade.query(
+        `INSERT INTO events (
+           id, integration_id, learner_id, idempotency_key, event_type, occurred_at
+         ) VALUES ($1, $2, $3, 'adjacent-weekend-event',
+           'daily_log_week.configured', '2026-08-23T12:00:00Z')`,
+        [adjacentEventId, integrationId, learnerId],
+      );
+      await upgrade.query(
+        `INSERT INTO learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata, created_at
+         ) VALUES ($1, $2, $3, 'daily_log_week.configured',
+           'adjacent-weekend-fact', 'adjacent-weekend-period',
+           '2026-08-23T12:00:00Z', $4, '2026-08-23T12:00:00Z')`,
+        [integrationId, learnerId, adjacentEventId, {
+          term_token: "terminal-weekend-term",
+          term_start_day: "2026-05-11",
+          term_end_day: "2026-08-30",
+          term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_index: 15,
+          week_start_day: "2026-08-23",
+        }],
+      );
+
       const terminalEventId = crypto.randomUUID();
       await upgrade.query(
         `INSERT INTO events (
@@ -436,50 +462,121 @@ test(
         }],
       );
       const beforeAlignment = await upgrade.query(
-        `SELECT due_at, reconciled_at
+        `SELECT period_key, due_at, reconciled_at
          FROM story_collectible_schedules
-         WHERE period_key = 'terminal-weekend-period'`,
+         WHERE period_key = ANY($1::text[])
+         ORDER BY period_key`,
+        [["adjacent-weekend-period", "terminal-weekend-period"]],
       );
-      assert.equal(
-        new Date(beforeAlignment.rows[0].due_at).toISOString(),
-        "2026-08-31T04:00:00.000Z",
+      assert.deepEqual(
+        beforeAlignment.rows.map((row) => ({
+          periodKey: row.period_key,
+          dueAt: new Date(row.due_at).toISOString(),
+          reconciledAt: row.reconciled_at,
+        })),
+        [
+          {
+            periodKey: "adjacent-weekend-period",
+            dueAt: "2026-08-29T04:00:00.000Z",
+            reconciledAt: null,
+          },
+          {
+            periodKey: "terminal-weekend-period",
+            dueAt: "2026-08-31T04:00:00.000Z",
+            reconciledAt: null,
+          },
+        ],
       );
-      assert.equal(beforeAlignment.rows[0].reconciled_at, null);
 
       const alignmentMigrationSql = await readFile(
         join(migrationsDirectory, "0008_align_short_story_weeks.sql"),
         "utf8",
       );
+      const alignmentLockHolder = await upgrade.connect();
+      const alignmentMigrationClient = await upgrade.connect();
+      const alignmentObserver = await upgrade.connect();
+      try {
+        await alignmentLockHolder.query("BEGIN");
+        await alignmentLockHolder.query(
+          "LOCK TABLE story_collectible_schedules IN ROW EXCLUSIVE MODE",
+        );
+        const alignmentPid = Number(
+          (await alignmentMigrationClient.query("SELECT pg_backend_pid() AS pid"))
+            .rows[0].pid,
+        );
+        const alignmentStartedAt = Date.now();
+        const alignmentAttempt = alignmentMigrationClient
+          .query(alignmentMigrationSql)
+          .then(
+            () => ({ ok: true as const }),
+            (error: unknown) => ({ ok: false as const, error }),
+          );
+        await waitFor(async () => {
+          const waiting = await alignmentObserver.query(
+            `SELECT wait_event_type
+             FROM pg_stat_activity
+             WHERE pid = $1`,
+            [alignmentPid],
+          );
+          return waiting.rows[0]?.wait_event_type === "Lock";
+        });
+        const alignmentResult = await alignmentAttempt;
+        assert.equal(alignmentResult.ok, false);
+        if (alignmentResult.ok) throw new Error("alignment migration unexpectedly succeeded");
+        assert.ok(postgresViolation(alignmentResult.error, "55P03"));
+        assert.ok(Date.now() - alignmentStartedAt < 5_000);
+      } finally {
+        await alignmentLockHolder.query("ROLLBACK").catch(() => undefined);
+        alignmentLockHolder.release();
+        alignmentMigrationClient.release();
+        alignmentObserver.release();
+      }
+
       await upgrade.query(alignmentMigrationSql);
       const afterAlignment = await upgrade.query(
-        `SELECT due_at, reconciled_at
+        `SELECT period_key, due_at, reconciled_at
          FROM story_collectible_schedules
-         WHERE period_key = 'terminal-weekend-period'`,
+         WHERE period_key = ANY($1::text[])
+         ORDER BY period_key`,
+        [["adjacent-weekend-period", "terminal-weekend-period"]],
       );
-      assert.equal(
-        new Date(afterAlignment.rows[0].due_at).toISOString(),
-        "2026-08-29T04:00:00.000Z",
+      assert.deepEqual(
+        afterAlignment.rows.map((row) => ({
+          periodKey: row.period_key,
+          dueAt: new Date(row.due_at).toISOString(),
+          reconciledAt: row.reconciled_at,
+        })),
+        [
+          {
+            periodKey: "adjacent-weekend-period",
+            dueAt: "2026-08-29T04:00:00.000Z",
+            reconciledAt: null,
+          },
+          {
+            periodKey: "terminal-weekend-period",
+            dueAt: "2026-08-30T12:00:00.000Z",
+            reconciledAt: null,
+          },
+        ],
       );
-      assert.equal(afterAlignment.rows[0].reconciled_at, null);
 
-      const rejectedTerminalEventId = crypto.randomUUID();
+      const compatibleTerminalEventId = crypto.randomUUID();
       await upgrade.query(
         `INSERT INTO events (
            id, integration_id, learner_id, idempotency_key, event_type, occurred_at
-         ) VALUES ($1, $2, $3, 'rejected-terminal-weekend-event',
+         ) VALUES ($1, $2, $3, 'compatible-terminal-weekend-event',
            'daily_log_week.configured', '2026-08-30T12:00:00Z')`,
-        [rejectedTerminalEventId, integrationId, learnerId],
+        [compatibleTerminalEventId, integrationId, learnerId],
       );
-      await assert.rejects(
-        upgrade.query(
-          `INSERT INTO learner_facts (
-             integration_id, learner_id, source_event_id, event_type, semantic_key,
-             period_key, occurred_at, metadata, created_at
-           ) VALUES ($1, $2, $3, 'daily_log_week.configured',
-             'rejected-terminal-weekend-fact', 'rejected-terminal-weekend-period',
-             '2026-08-30T12:00:00Z', $4, '2026-08-30T12:00:00Z')`,
-          [integrationId, learnerId, rejectedTerminalEventId, {
-            term_token: "rejected-terminal-weekend-term",
+      await upgrade.query(
+        `INSERT INTO learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata, created_at
+         ) VALUES ($1, $2, $3, 'daily_log_week.configured',
+           'compatible-terminal-weekend-fact', 'compatible-terminal-weekend-period',
+           '2026-08-30T12:00:00Z', $4, '2026-08-30T12:00:00Z')`,
+        [integrationId, learnerId, compatibleTerminalEventId, {
+            term_token: "compatible-terminal-weekend-term",
             term_start_day: "2026-05-11",
             term_end_day: "2026-08-30",
             term_timezone: "America/Toronto",
@@ -487,14 +584,18 @@ test(
             week_index: 16,
             week_start_day: "2026-08-30",
           }],
-        ),
-        (error) => postgresViolation(error, "23514"),
       );
-      assert.equal(Number((await upgrade.query(
-        `SELECT count(*) AS count
+      const compatibleTerminalSchedule = await upgrade.query(
+        `SELECT due_at, reconciled_at
          FROM story_collectible_schedules
-         WHERE period_key = 'rejected-terminal-weekend-period'`,
-      )).rows[0].count), 0);
+         WHERE period_key = 'compatible-terminal-weekend-period'`,
+      );
+      assert.equal(compatibleTerminalSchedule.rowCount, 1);
+      assert.equal(
+        new Date(compatibleTerminalSchedule.rows[0].due_at).toISOString(),
+        "2026-08-30T12:00:00.000Z",
+      );
+      assert.equal(compatibleTerminalSchedule.rows[0].reconciled_at, null);
     } finally {
       await upgrade?.end();
       await admin.query(
