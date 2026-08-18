@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION "public"."calculate_story_collectible_due_at"("calend
 DECLARE
 	"term_start" date;
 	"term_end" date;
+	"raw_week_start" date;
 	"week_start" date;
 	"week_index_numeric" numeric;
 	"week_index_value" integer;
@@ -68,7 +69,8 @@ BEGIN
 			RETURN NULL;
 		END IF;
 		"term_week_count_value" := "term_week_count_numeric"::integer;
-		"week_start" := ("calendar_metadata"->>'week_start_day')::date;
+		"raw_week_start" := ("calendar_metadata"->>'week_start_day')::date;
+		"week_start" := "raw_week_start";
 	ELSE
 		"term_week_count_value" := 16;
 	END IF;
@@ -79,6 +81,12 @@ BEGIN
 		OR "week_index_value" < 1
 		OR "week_index_value" > "term_week_count_value"
 		OR "resolved_timezone_value" IS NULL THEN
+		RETURN NULL;
+	END IF;
+	IF "raw_week_start" IS NOT NULL AND (
+		"raw_week_start" < "term_start"
+		OR "raw_week_start" > "term_end"
+	) THEN
 		RETURN NULL;
 	END IF;
 
@@ -113,9 +121,7 @@ BEGIN
 		END
 	);
 	"weekday" := extract(isodow from "week_start")::integer;
-	IF "week_index_value" = "term_week_count_value" THEN
-		"week_start" := "week_start" - ("weekday" - 1);
-	ELSIF "weekday" > 5 THEN
+	IF "weekday" > 5 THEN
 		"week_start" := "week_start" + (8 - "weekday");
 	ELSIF "week_index_value" > 1 THEN
 		"week_start" := "week_start" - ("weekday" - 1);
@@ -139,3 +145,61 @@ EXCEPTION
 		RETURN NULL;
 END;
 $$ LANGUAGE plpgsql STABLE;
+--> statement-breakpoint
+DROP TRIGGER "story_collectible_schedules_protect"
+ON "public"."story_collectible_schedules";
+--> statement-breakpoint
+WITH "pending_source" AS MATERIALIZED (
+	SELECT
+		"schedule"."id",
+		"fact"."metadata",
+		"public"."calculate_story_collectible_due_at"("fact"."metadata") AS "normalized_due_at",
+		("fact"."metadata"->>'term_start_day')::date AS "term_start",
+		("fact"."metadata"->>'term_end_day')::date AS "term_end",
+		("fact"."metadata"->>'week_start_day')::date AS "raw_week_start",
+		("fact"."metadata"->>'week_index')::numeric::integer AS "week_index",
+		("fact"."metadata"->>'term_week_count')::numeric::integer AS "term_week_count"
+	FROM "public"."story_collectible_schedules" AS "schedule"
+	INNER JOIN "public"."learner_facts" AS "fact"
+		ON "fact"."id" = "schedule"."source_fact_id"
+		AND "fact"."learner_id" = "schedule"."learner_id"
+	WHERE "schedule"."reconciled_at" IS NULL
+),
+"corrected_due" AS MATERIALIZED (
+	SELECT
+		"pending_source"."id",
+		coalesce(
+			"pending_source"."normalized_due_at",
+			CASE
+				-- Migration 0007 accepted a terminal Saturday/Sunday marker and
+				-- kept its schedule pending. Grandfather that already-enrolled
+				-- week onto the preceding instructional Monday; new facts reject
+				-- the same marker because no instructional day remains in term.
+				WHEN "pending_source"."raw_week_start" BETWEEN
+						"pending_source"."term_start" AND "pending_source"."term_end"
+					AND "pending_source"."week_index" = "pending_source"."term_week_count"
+					AND extract(isodow FROM "pending_source"."raw_week_start") > 5
+				THEN "public"."calculate_story_collectible_due_at"(
+					jsonb_set(
+						"pending_source"."metadata",
+						'{week_start_day}',
+						to_jsonb((
+							"pending_source"."raw_week_start" -
+							(extract(isodow FROM "pending_source"."raw_week_start")::integer - 1)
+						)::text)
+					)
+				)
+			END
+		) AS "due_at"
+	FROM "pending_source"
+)
+UPDATE "public"."story_collectible_schedules" AS "schedule"
+SET "due_at" = "corrected_due"."due_at"
+FROM "corrected_due"
+WHERE "schedule"."id" = "corrected_due"."id"
+	AND "corrected_due"."due_at" IS NOT NULL
+	AND "schedule"."due_at" IS DISTINCT FROM "corrected_due"."due_at";
+--> statement-breakpoint
+CREATE TRIGGER "story_collectible_schedules_protect"
+BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_schedule"();
