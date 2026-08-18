@@ -28,7 +28,8 @@ export function widgetCorsHeaders(request: NextRequest): Headers | null {
   }
   return new Headers({
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers":
+      "Authorization, Content-Type, X-Pal-Collectible-Finish",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "600",
     Vary: "Origin",

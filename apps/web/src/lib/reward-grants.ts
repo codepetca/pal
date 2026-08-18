@@ -1,9 +1,5 @@
-import { and, eq, isNull } from "drizzle-orm";
 import {
   learnerRewardGrants,
-  storyCollectibleSchedules,
-  storyPlanChapters,
-  storyPlans,
   type Db,
 } from "@pal/db";
 
@@ -32,33 +28,25 @@ export async function grantBehaviorTitle(
   }).onConflictDoNothing();
 }
 
-export async function grantStoryChapterForPeriod(
+export async function insertStoryChapterGrant(
   db: Db,
-  input: { learnerId: string; periodKey: string; sourceFactId: string },
-): Promise<void> {
-  const [assignment] = await db
-    .select({ storyPlanId: storyPlans.id, storyPlanChapterId: storyPlanChapters.id })
-    .from(storyPlanChapters)
-    .innerJoin(storyPlans, and(
-      eq(storyPlans.id, storyPlanChapters.storyPlanId),
-      eq(storyPlans.learnerId, storyPlanChapters.learnerId),
-    ))
-    .innerJoin(storyCollectibleSchedules, and(
-      eq(storyCollectibleSchedules.learnerId, storyPlanChapters.learnerId),
-      eq(storyCollectibleSchedules.periodKey, storyPlanChapters.periodKey),
-      isNull(storyCollectibleSchedules.reconciledAt),
-    ))
-    .where(and(
-      eq(storyPlanChapters.learnerId, input.learnerId),
-      eq(storyPlanChapters.periodKey, input.periodKey),
-    ))
-    .limit(1);
-  if (!assignment) return;
-  await db.insert(learnerRewardGrants).values({
-    learnerId: input.learnerId,
-    kind: "story_chapter",
-    sourceFactId: input.sourceFactId,
-    storyPlanId: assignment.storyPlanId,
-    storyPlanChapterId: assignment.storyPlanChapterId,
-  }).onConflictDoNothing();
+  input: {
+    learnerId: string;
+    sourceFactId: string;
+    storyPlanId: string;
+    storyPlanChapterId: string;
+  },
+): Promise<boolean> {
+  const [created] = await db
+    .insert(learnerRewardGrants)
+    .values({
+      learnerId: input.learnerId,
+      kind: "story_chapter",
+      sourceFactId: input.sourceFactId,
+      storyPlanId: input.storyPlanId,
+      storyPlanChapterId: input.storyPlanChapterId,
+    })
+    .onConflictDoNothing()
+    .returning({ id: learnerRewardGrants.id });
+  return Boolean(created);
 }

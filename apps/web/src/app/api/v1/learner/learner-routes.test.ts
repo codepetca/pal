@@ -9,6 +9,7 @@ import {
 } from "@/lib/db-learner";
 import { resolveIntegration } from "@/lib/integration-auth";
 import { mintPalReadToken } from "@/lib/read-token";
+import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 import { GET as getSnapshot, OPTIONS as snapshotOptions } from "./snapshot/route";
 import {
   OPTIONS as rewardOptions,
@@ -178,6 +179,107 @@ test(
       assert.equal(
         ((await afterAck.json()) as { rewards: unknown[] }).rewards.length,
         0,
+      );
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "snapshot capability header opts schema-v1 clients into sketch collectibles",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `routes-sketch-${crypto.randomUUID()}`;
+    const periodKey = `routes-sketch-period-${crypto.randomUUID()}`;
+    const termKey = `routes-sketch-term-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      const configured = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        {
+          event_type: "daily_log_week.configured",
+          occurred_at: "2026-08-17T12:00:00.000Z",
+          metadata: {
+            period_key: periodKey,
+            config_version: 1,
+            period_status: "open",
+            eligible_days: 1,
+            term_token: termKey,
+            term_start_day: "2026-08-17",
+            term_end_day: "2026-09-25",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-08-17",
+            week_index: 1,
+          },
+        },
+        `routes-sketch-${crypto.randomUUID()}`,
+        { storyGrantAsOf: new Date("2026-08-17T00:00:00.000Z") },
+      );
+      assert.equal(configured.status, "processed");
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const worker = await runStoryGrantWorker({
+        asOf: new Date("2026-08-22T12:00:00.000Z"),
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(worker.grants, 1);
+      const { token } = await mintPalReadToken({
+        learnerId,
+        integrationId: integration.id,
+      });
+
+      const legacyResponse = await getSnapshot(
+        request("/api/v1/learner/snapshot", token, allowedOrigin),
+      );
+      const legacy = (await legacyResponse.json()) as {
+        progression?: { collectibles: Array<{ status: string }> };
+        rewards: Array<{ kind?: string }>;
+      };
+      assert.equal(
+        legacy.progression?.collectibles.some(
+          (collectible) => collectible.status === "earned",
+        ),
+        false,
+      );
+      assert.equal(legacy.rewards.some((reward) => reward.kind === "story"), false);
+
+      const capableRequest = request(
+        "/api/v1/learner/snapshot",
+        token,
+        allowedOrigin,
+      );
+      capableRequest.headers.set("X-Pal-Collectible-Finish", "1");
+      const capableResponse = await getSnapshot(capableRequest);
+      const capable = (await capableResponse.json()) as {
+        progression?: {
+          collectibles: Array<{ status: string; finish?: string }>;
+        };
+        rewards: Array<{ kind?: string; collectibleFinish?: string }>;
+      };
+      assert.equal(
+        capable.progression?.collectibles.some(
+          (collectible) =>
+            collectible.status === "earned" && collectible.finish === "sketch",
+        ),
+        true,
+      );
+      assert.equal(
+        capable.rewards.some(
+          (reward) =>
+            reward.kind === "story" && reward.collectibleFinish === "sketch",
+        ),
+        true,
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);

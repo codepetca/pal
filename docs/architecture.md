@@ -1,7 +1,7 @@
 # Architecture Overview
 
 > Living document. Update this as decisions are made and designs evolve.
-> Last updated: 2026-07-14
+> Last updated: 2026-08-16
 
 ---
 
@@ -43,7 +43,11 @@ A student submits an assignment in Pika. Here is everything that happens:
 
 5. **World service** (`world/` domain) records the pet mood change with an expiry timestamp.
 
-6. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. Earning a Weekly Rhythm also advances the durable collection.
+6. **Daily story reconciliation** — Vercel wakes Pal's authenticated worker. It
+   takes the learner lock and inserts the one due story-ownership ledger row
+   without creating a learning event or gameplay mutation.
+
+7. **Student loads their world** — the frontend (`frontend/` domain) calls the authenticated `GET /api/v1/learner/snapshot` route with a short-lived learner-scoped token. The pet is bouncing and the XP bar has moved. The due weekly story is a sketch keepsake unless that week's durable Weekly Rhythm brings the same item to life in color.
 
 That's the full loop. Each domain owns one step.
 
@@ -59,7 +63,10 @@ Everything in Pal is driven by one of three trigger types:
 | **Time-elapsed** | Pal internally | Student active for 30 days → plants grow in world |
 | **Scheduled** | Operator configures once | Semester month ends → new world region unlocks for all learners |
 
-All three routes pass through the same rule engine. From the engine's perspective they are identical — just events with different sources.
+Gameplay changes from all three trigger types pass through the same rule engine.
+The story scheduler is narrower: it reconciles an already-selected ownership
+ledger under the same learner lock and deliberately emits no synthetic activity,
+achievement, or XP event.
 
 ---
 
@@ -186,6 +193,38 @@ achievement transition. Neither is accepted from an integration.
 ---
 
 ## Schedules
+
+### Guaranteed weekly story collectible
+
+`apps/web/vercel.json` declares a daily UTC wake-up for the authenticated
+`/api/cron/story-collectibles` route. When an authoritative weekly configuration
+fact is stored, a database trigger materializes its due boundary in the typed
+`story_collectible_schedules` queue using the term's IANA timezone. Friday-ending
+weeks become due Saturday, while a midweek final week becomes due the following
+day. It never waits for the next instructional week, so holidays and breaks
+cannot delay ownership. New malformed calendars fail closed. The terminal-weekend
+compatibility migration closes only pending schedules first delivered after the
+authoritative final Sunday; it creates no ownership and does not enroll historical
+facts. Queue ownership remains prospective from the PR70 trigger boundary.
+
+The worker pages through the partial pending-due index with a stable
+`(due_at, id)` cursor, then reconciles at most 24 overdue rows per selected
+learner per invocation. Event ingest uses the same one-page bound. Per-learner
+transactions, row locks, and the reward ledger's uniqueness constraint make
+retries and concurrent event/cron runs safe.
+Discovery and learner transactions retry transient failures up to a small fixed
+attempt limit during the same invocation. A short transaction-local lock timeout
+prevents a concurrent event from consuming the connection's full statement
+timeout; terminal learner failures remain isolated from the rest of the batch.
+Pending queue rows survive missed daily invocations and are consumed only after
+the ownership ledger contains the matching collectible. Reaching the bounded
+invocation capacity, per-learner page limit, or work deadline returns an alertable incomplete response
+rather than ordinary success, while leaving the remaining rows for the next run.
+The production default admits up to 10,000 learners per five-minute invocation;
+deployment must remain within that explicit cohort bound unless capacity or
+frequency is raised.
+
+### Future operator schedules
 
 Operators define a calendar of future events once during integration setup:
 

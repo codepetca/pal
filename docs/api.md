@@ -1,7 +1,7 @@
 # API Contracts
 
 > Living document. Update as endpoints are finalized.
-> Last updated: 2026-08-01
+> Last updated: 2026-08-16
 
 ---
 
@@ -13,6 +13,7 @@
 | POST | `/api/v1/integration/read-token` | Integration backend | Mint a short-lived read token for a learner |
 | GET | `/api/v1/learner/snapshot` | `@codepet/pal-widget` client | Fetch roadmap, companion, and unseen reward state |
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
+| GET | `/api/cron/story-collectibles` | Vercel Cron | Reconcile overdue post-rollout story ownership in bounded learner batches |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
 | POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
 
@@ -20,6 +21,37 @@ The read-token, authenticated learner-snapshot, and reward acknowledgement route
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
 and public PR previews; production and optional local persisted clients use these
 learner routes.
+
+### Scheduled story reconciliation
+
+Vercel invokes `GET /api/cron/story-collectibles` with
+`Authorization: Bearer <CRON_SECRET>`. Missing or malformed deployment
+configuration returns `503`; an invalid bearer returns `401`. Successful runs
+return `200` with batch, learner, retry, and grant counts. Discovery and each
+learner transaction use bounded in-invocation retries. If an individual learner
+still fails, the worker records only a sanitized failure code, attempt count,
+and non-PII correlation identifier, continues the bounded batch, and returns
+`500` with `status: "partial_failure"`. A later daily run rediscovers every
+still-ungranted week.
+
+Each learner receives at most one 24-schedule transaction per run, and event
+ingestion uses the same one-page bound. This keeps deep lifetime queues from
+starving other learners or making an event request unbounded. If the run reaches
+its batch cap, a learner page limit, or its work deadline while due work remains,
+it returns `503` with
+`status: "incomplete"` and the corresponding `batchLimitReached` or
+`learnerPageLimitReached`, or `deadlineReached` flag. This makes backlog exhaustion alertable instead of
+presenting a partially drained queue as an ordinary successful cron run; pending
+rows remain recoverable. If learner failures and exhaustion happen together,
+the response is `503` with `status: "partial_failure_incomplete"` so neither
+condition is hidden. The production default is 100 batches of 100 learners
+(10,000 learners per five-minute invocation); rollout operations must stay
+within that explicit cohort bound or raise capacity/frequency before enabling it.
+
+The route does not accept a learner, period, date, or event payload. It derives
+eligibility only from typed, indexed due-work materialized from validated stored
+calendar configuration and immutable story-plan assignments. It creates no Pika
+event, XP, activity, or achievement.
 
 ### Read-token request
 
@@ -49,7 +81,15 @@ Authorization: Bearer <short-lived learner-scoped read token>
 Cross-origin browser requests are accepted only when their exact HTTPS origin appears
 in `PAL_ALLOWED_WIDGET_ORIGINS` (HTTP is allowed only for localhost development).
 Responses use `Cache-Control: no-store`; preflights allow only `Authorization`,
-`Content-Type`, and the learner route methods.
+`Content-Type`, `X-Pal-Collectible-Finish`, and the learner route methods.
+
+Clients that understand the optional schema-v1 `finish` and
+`collectibleFinish` fields send `X-Pal-Collectible-Finish: 1` on snapshot
+requests. Pal then includes earned sketch and color story collectibles. A
+schema-v1 client that omits the capability header receives the legacy-safe
+fallback: sketch-only story collectibles and their notices remain withheld,
+while color-complete collectibles remain visible. The current
+`@codepet/pal-widget` HTTP client sends this header automatically.
 
 The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is

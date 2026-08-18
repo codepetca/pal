@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createFixtureSnapshot } from "./fixture-client";
+import {
+  createEmptyFixtureSnapshot,
+  createFixturePalClient,
+  createFixtureSnapshot,
+} from "./fixture-client";
 import { parsePalWidgetSnapshot } from "./snapshot-validation";
 
 test("snapshot parser accepts the bounded v1 fixture", () => {
@@ -143,6 +147,23 @@ test("snapshot parser preserves a presentation-safe achievement celebration", ()
   );
 });
 
+test("new achievement celebrations retain the deployed schema-v1 reward envelope", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  client.dispatch("classroom-joined");
+  const reward = client.peek().rewards.find(
+    (candidate) => candidate.achievement !== undefined,
+  );
+  assert.ok(reward);
+
+  // This is the outer contract required by the parser shipped before nested
+  // achievement presentation was added. Unknown fields are intentionally ignored.
+  assert.equal(reward.kind, "standard");
+  assert.equal(typeof reward.title, "string");
+  assert.equal(typeof reward.description, "string");
+  assert.ok(reward.title.length > 0);
+  assert.ok(reward.description.length > 0);
+});
+
 test("snapshot parser bounds and deduplicates durable collection items", () => {
   const tooMany = createFixtureSnapshot();
   tooMany.collection = {
@@ -247,6 +268,30 @@ test("snapshot parser rejects concealed content on locked rewards", () => {
   assert.throws(
     () => parsePalWidgetSnapshot(lockedTitle),
     /concealed title content while locked/i,
+  );
+});
+
+test("snapshot parser accepts only sketch or color collectible finishes", () => {
+  const fixture = createFixtureSnapshot(2);
+  fixture.progression!.collectibles[0] = {
+    id: "week-one-keepsake",
+    chapterId: "week-one-chapter",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Story keepsake",
+    title: "Mystery Egg",
+    description: "The story begins.",
+    kind: "room",
+    finish: "sketch",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  };
+  const parsed = parsePalWidgetSnapshot(fixture).progression?.collectibles[0];
+  assert.equal(parsed?.status === "earned" ? parsed.finish : undefined, "sketch");
+
+  (fixture.progression!.collectibles[0] as unknown as { finish: string }).finish = "gold";
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /collectibles\[0\]\.finish/i,
   );
 });
 

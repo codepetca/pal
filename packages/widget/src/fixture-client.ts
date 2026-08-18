@@ -524,6 +524,7 @@ export function createFixturePalClient(
       }
       if (action === "advance-week") {
         const finalWeek = snapshot.roadmap.weeks.length;
+        const closesSemester = snapshot.roadmap.currentWeek === finalWeek;
         const nextWeek = Math.min(finalWeek, snapshot.roadmap.currentWeek + 1);
         snapshot.roadmap.currentWeek = nextWeek;
         for (const week of snapshot.roadmap.weeks) {
@@ -542,7 +543,11 @@ export function createFixturePalClient(
         }
         ensureCurrentRhythm();
         refreshProgression(snapshot, currentTitleId);
-        return nextWeek === finalWeek ? "Moved to final semester week" : `Moved to week ${nextWeek}`;
+        return closesSemester
+          ? "Finished the semester story"
+          : nextWeek === finalWeek
+            ? "Moved to final semester week"
+            : `Moved to week ${nextWeek}`;
       }
       if (action === "week-configured") {
         ensureCurrentRhythm();
@@ -714,6 +719,9 @@ export function createFixturePalClient(
           queueAchievementCelebration(achievement);
         }
         return "platform.session.started applied to fixture state";
+      }
+      if (action === "reward-earned") {
+        return "Deprecated fixture reward action ignored; use a concrete achievement action";
       }
 
       return "No fixture action applied";

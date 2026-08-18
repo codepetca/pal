@@ -14,8 +14,10 @@ of instructional periods, and Pal schedules exactly one story chapter with one
 offered collectible for each period. Eight core chapters preserve the full arc.
 Sixteen optional chapters let the same story breathe in longer courses.
 
-Catch-up eligibility is deliberately outside this document. This catalog says
-what a period can offer, not how a learner recovers a missed reward.
+Eligibility is intentionally separate from catalog selection. The daily
+story-collectible scheduler grants one durable assignment per eligible
+learner/week after that week's local instructional end; this catalog defines
+what that already-selected assignment reveals.
 
 ## Voice and copy rules
 
@@ -216,7 +218,9 @@ story pack rather than forcing them into this arc.
 
 ## Reveal behavior
 
-When a chapter is earned, reveal it in this order:
+When a week ends, reveal its guaranteed sketch chapter in this order. If the
+learner earns Weekly Rhythm first, use the same sequence with the full-color
+artwork instead:
 
 1. Show the reveal headline.
 2. Reveal the collectible artwork and name together.
@@ -224,9 +228,10 @@ When a chapter is earned, reveal it in this order:
 4. If the chapter grants a title, reveal the title last and make it the new
    displayed title.
 
-The roadmap card then keeps the earned artwork and collectible name visible for
-that period. A locked card continues to show only the lock treatment. The next
-scheduled collectible is not previewed.
+The roadmap card then keeps the artwork and collectible name visible for that
+period. A sketch becomes full color when Weekly Rhythm is earned; it is never a
+separate collectible. A locked card continues to show only the lock treatment.
+The next scheduled collectible is not previewed.
 
 Pal derives this display state at the authenticated snapshot boundary from the
 learner's pinned story plan and durable awards. That canonical projector removes
@@ -234,6 +239,13 @@ locked names, copy, title definitions, and asset URLs before serialization and
 emits one companion reveal decision. Fixtures call the same projector. The
 widget validates the resulting transport shape and renders it without
 re-evaluating chapter eligibility.
+
+Guaranteed schedule grants begin at the prospective queue boundary introduced
+by the scheduler migration. Pal reconciles every queued, ungranted chapter whose
+own local due day has arrived. The daily worker does not require a learner
+event, while any later accepted event calls the same reconciler as a recovery
+path. Existing configuration facts are not backfilled, so deployment cannot
+create historical story ownership.
 
 Reduced-motion mode should replace scale, bounce, or sparkle sequences with a
 short opacity transition. The full reveal must remain understandable with no

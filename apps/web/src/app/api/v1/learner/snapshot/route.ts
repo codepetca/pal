@@ -52,6 +52,11 @@ export async function GET(request: NextRequest) {
     const snapshot = await loadLearnerSnapshot(
       claims.integrationId,
       claims.learnerId,
+      undefined,
+      {
+        supportsCollectibleFinish:
+          request.headers.get("x-pal-collectible-finish") === "1",
+      },
     );
     return NextResponse.json(snapshot, { headers: responseHeaders(cors) });
   } catch (error) {

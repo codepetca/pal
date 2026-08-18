@@ -34,6 +34,10 @@ test("HTTP client keeps the integration secret out and uses a learner token", as
     new Headers(requests[0]?.init?.headers).get("authorization"),
     "Bearer short-lived-reader-token",
   );
+  assert.equal(
+    new Headers(requests[0]?.init?.headers).get("x-pal-collectible-finish"),
+    "1",
+  );
 });
 
 test("HTTP client rejects an empty learner token before making a request", async () => {

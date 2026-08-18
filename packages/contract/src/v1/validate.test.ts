@@ -117,6 +117,30 @@ test("a future-dated event still validates — the clock check belongs to ingest
   assert.equal(result.ok, true);
 });
 
+test("a real in-term weekend week start remains contract-valid", () => {
+  const result = validateV1Event({
+    schema_version: 1,
+    idempotency_key: "weekend-calendar-regression",
+    learner_id: "opaque-weekend-learner",
+    event_type: "daily_log_week.configured",
+    occurred_at: "2026-09-06T12:00:00Z",
+    metadata: {
+      period_key: "fall-week-01",
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 5,
+      term_token: "fall-2026",
+      term_start_day: "2026-09-06",
+      term_end_day: "2026-10-16",
+      term_timezone: "America/Toronto",
+      term_week_count: 6,
+      week_start_day: "2026-09-06",
+      week_index: 1,
+    },
+  });
+  assert.equal(result.ok, true);
+});
+
 test("a payload that is not an object is rejected without throwing", () => {
   for (const payload of [null, undefined, 42, "event", [], true]) {
     const result = validateV1Event(payload);

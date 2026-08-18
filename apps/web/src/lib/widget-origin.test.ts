@@ -28,6 +28,12 @@ test("allows only exact configured browser origins", () => {
     "https://pal.example",
   );
   assert.equal(widgetCorsHeaders(request())?.get("vary"), "Origin");
+  assert.match(
+    widgetCorsHeaders(request("https://pika.example"))?.get(
+      "access-control-allow-headers",
+    ) ?? "",
+    /X-Pal-Collectible-Finish/,
+  );
 });
 
 test("rejects unsafe or path-bearing origin configuration", () => {

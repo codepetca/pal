@@ -15,8 +15,11 @@ import type { IncomingEvent } from "@pal/engine";
 import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
-  grantStoryChapterForPeriod,
 } from "@/lib/reward-grants";
+import {
+  storyInstructionalEndDay,
+  storyWeekStartDay,
+} from "@/lib/story-grant-calendar";
 
 export const ACHIEVEMENT_KEYS = PAL_ACHIEVEMENT_KEYS;
 export const ACHIEVEMENT_NOTICE_KEY = "achievement-earned-v1";
@@ -123,6 +126,7 @@ export type WeeklyConfigurationError =
   | "contradictory_period_configuration"
   | "conflicting_period_calendar"
   | "invalid_term_story_schedule"
+  | "premature_period_close"
   | "inconsistent_activity_day"
   | "daily_log_period_limit_exceeded";
 
@@ -216,13 +220,6 @@ type PeriodCalendar = {
   endDay: string | null;
 };
 
-function offsetCalendarDay(day: string, days: number): string | null {
-  const timestamp = Date.parse(`${day}T00:00:00.000Z`);
-  return Number.isNaN(timestamp)
-    ? null
-    : new Date(timestamp + days * 86_400_000).toISOString().slice(0, 10);
-}
-
 function periodCalendarFromMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): PeriodCalendar {
@@ -230,48 +227,19 @@ function periodCalendarFromMetadata(
     typeof metadata?.term_timezone === "string"
       ? metadata.term_timezone
       : null;
-  const termStartDay =
-    typeof metadata?.term_start_day === "string"
-      ? metadata.term_start_day
-      : null;
   const termEndDay =
     typeof metadata?.term_end_day === "string"
       ? metadata.term_end_day
       : null;
-  const weekIndex = metadata?.week_index;
-  const explicitWeekStart = metadata?.week_start_day;
-  const startDay =
-    typeof explicitWeekStart === "string"
-      ? explicitWeekStart
-      : termStartDay && Number.isInteger(weekIndex)
-        ? offsetCalendarDay(termStartDay, ((weekIndex as number) - 1) * 7)
-        : null;
-  const nominalEndDay = startDay ? offsetCalendarDay(startDay, 6) : null;
-  const endDay =
-    nominalEndDay && termEndDay && termEndDay < nominalEndDay
-      ? termEndDay
-      : nominalEndDay;
+  const startDay = storyWeekStartDay(metadata ?? {});
+  const endDay = startDay && termEndDay
+    ? storyInstructionalEndDay(metadata ?? {})
+    : null;
   return { timeZone, startDay, endDay };
 }
 
 function hasValidStoryWeekPosition(calendar: TermCalendarMetadata): boolean {
-  const totalWeeks = calendar.term_week_count ?? 16;
-  const earliestStart = offsetCalendarDay(
-    calendar.term_start_day,
-    (calendar.week_index - 1) * 7,
-  );
-  const latestStart = offsetCalendarDay(
-    calendar.term_end_day,
-    -(totalWeeks - calendar.week_index) * 7,
-  );
-  const actualStart = calendar.week_start_day ?? earliestStart;
-  return Boolean(
-    earliestStart &&
-      latestStart &&
-      actualStart &&
-      earliestStart <= actualStart &&
-      actualStart <= latestStart,
-  );
+  return storyWeekStartDay(calendar) !== null;
 }
 
 async function firstConfigurationCalendar(
@@ -527,6 +495,21 @@ export async function weeklyConfigurationRejection(
     !existing || (existingCalendar?.startDay === null && calendar)
       ? periodCalendarFromMetadata(calendar)
       : undefined;
+  const closureCalendar =
+    existingCalendar?.startDay === null || !existingCalendar
+      ? firstConfigurationCalendarOverride
+      : existingCalendar;
+  if (
+    periodStatus === "closed" &&
+    closureCalendar?.timeZone &&
+    closureCalendar.startDay &&
+    calendarDayInTimeZone(
+      new Date(event.occurred_at),
+      closureCalendar.timeZone,
+    ) < closureCalendar.startDay
+  ) {
+    return "premature_period_close";
+  }
   if (
     periodStatus === "closed" &&
     eligibleDays <
@@ -1183,7 +1166,6 @@ async function recomputeWeeklyRhythm(
         achievementInstanceId: existing.id,
         achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
       });
-      await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
     }
     return status === "earned";
   }
@@ -1209,7 +1191,6 @@ async function recomputeWeeklyRhythm(
       achievementInstanceId: created.id,
       achievementKey: ACHIEVEMENT_KEYS.weeklyRhythm,
     });
-    await grantStoryChapterForPeriod(db, { learnerId, periodKey, sourceFactId: factId });
   }
   return status === "earned";
 }
