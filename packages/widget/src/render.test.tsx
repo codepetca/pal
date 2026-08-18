@@ -414,6 +414,25 @@ test("host-managed rewards leave dialog and focus ownership to the host", () => 
   assert.doesNotMatch(html, /aria-describedby=/);
 });
 
+test("host-managed modal content retains its acknowledgement action", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "host-managed-modal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="host-managed-modal-learner"
+    >
+      <PalRewardCelebration hostManaged modal />
+    </PalProvider>,
+  );
+
+  assert.match(html, />Continue<\/button>/);
+  assert.doesNotMatch(html, /pal-celebration-backdrop/);
+  assert.doesNotMatch(html, /role="dialog"/);
+  assert.doesNotMatch(html, /aria-modal=/);
+});
+
 test("a title reward shows only the earned title and its action", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({

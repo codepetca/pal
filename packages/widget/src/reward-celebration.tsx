@@ -139,7 +139,7 @@ export function PalRewardCelebration({
           We could not save that yet. Try again.
         </p>
       ) : null}
-      {!modal || rewardError ? (
+      {!modal || hostManaged || rewardError ? (
         <button
           className="pal-button"
           type="button"
