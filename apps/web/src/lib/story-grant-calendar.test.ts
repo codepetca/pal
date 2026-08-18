@@ -103,6 +103,29 @@ test("weekend term starts normalize to Monday without overlapping Week 2", () =>
   assert.equal(storyWeekCalendar(second)?.weekStartDay, "2026-09-14");
 });
 
+test("term slack permits a delayed Week 1 without leaving Monday-Friday", () => {
+  const delayed = calendar({
+    term_start_day: "2026-08-31",
+    term_end_day: "2026-12-18",
+    term_week_count: 12,
+    week_start_day: "2026-09-07",
+  });
+  assert.equal(storyWeekCalendar(delayed)?.weekStartDay, "2026-09-07");
+  assert.equal(storyCollectibleDueDay(delayed), "2026-09-12");
+});
+
+test("a weekend final-week marker resolves to the preceding Monday", () => {
+  const finalWeek = calendar({
+    term_start_day: "2026-05-11",
+    term_end_day: "2026-08-30",
+    term_week_count: 16,
+    week_start_day: "2026-08-30",
+    week_index: 16,
+  });
+  assert.equal(storyWeekCalendar(finalWeek)?.weekStartDay, "2026-08-24");
+  assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-29");
+});
+
 test("legacy 16-week calendars normalize the first and last short weeks", () => {
   const legacy = {
     term_start_day: "2026-09-02",

@@ -25,6 +25,11 @@ function followingInstructionalDay(day: string): string | null {
   return addCalendarDays(day, weekday <= 5 ? 0 : 8 - weekday);
 }
 
+function mondayOfCalendarWeek(day: string): string | null {
+  const weekday = isoWeekday(day);
+  return weekday === null ? null : addCalendarDays(day, -(weekday - 1));
+}
+
 /**
  * Resolves a story ordinal onto Pal's Monday-Friday instructional calendar.
  * Week 1 begins on the first instructional day on/after the term start. Week 2
@@ -62,20 +67,21 @@ export function storyWeekStartDay(
       ? addCalendarDays(secondStart, ((weekIndex as number) - 2) * 7)
       : null;
   const explicit = typeof metadata.week_start_day === "string"
-    ? followingInstructionalDay(metadata.week_start_day)
+    ? (weekIndex as number) === (termWeekCount as number) &&
+        (isoWeekday(metadata.week_start_day) ?? 0) > 5
+      ? mondayOfCalendarWeek(metadata.week_start_day)
+      : followingInstructionalDay(metadata.week_start_day)
     : null;
   if (metadata.week_start_day !== undefined && explicit === null) return null;
   const actualStart = explicit ?? defaultStart;
 
   const finalMonday = addCalendarDays(termEndDay, -(termEndWeekday - 1));
-  const latestStart = (weekIndex as number) === 1
-    ? firstStart
-    : finalMonday
-      ? addCalendarDays(
-          finalMonday,
-          -((termWeekCount as number) - (weekIndex as number)) * 7,
-        )
-      : null;
+  const latestStart = finalMonday
+    ? addCalendarDays(
+        finalMonday,
+        -((termWeekCount as number) - (weekIndex as number)) * 7,
+      )
+    : null;
   return actualStart && defaultStart && latestStart &&
       actualStart >= defaultStart && actualStart <= latestStart && actualStart <= termEndDay
     ? actualStart
