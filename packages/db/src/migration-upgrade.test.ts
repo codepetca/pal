@@ -596,6 +596,75 @@ test(
         "2026-08-30T12:00:00.000Z",
       );
       assert.equal(compatibleTerminalSchedule.rows[0].reconciled_at, null);
+
+      const lateTerminalEventId = crypto.randomUUID();
+      await upgrade.query(
+        `INSERT INTO events (
+           id, integration_id, learner_id, idempotency_key, event_type, occurred_at
+         ) VALUES ($1, $2, $3, 'late-terminal-weekend-event',
+           'daily_log_week.configured', '2026-08-31T12:00:00Z')`,
+        [lateTerminalEventId, integrationId, learnerId],
+      );
+      await upgrade.query(
+        `INSERT INTO learner_facts (
+           integration_id, learner_id, source_event_id, event_type, semantic_key,
+           period_key, occurred_at, metadata, created_at
+         ) VALUES ($1, $2, $3, 'daily_log_week.configured',
+           'late-terminal-weekend-fact', 'late-terminal-weekend-period',
+           '2026-08-31T12:00:00Z', $4, '2026-08-31T12:00:00Z')`,
+        [integrationId, learnerId, lateTerminalEventId, {
+          term_token: "late-terminal-weekend-term",
+          term_start_day: "2026-05-11",
+          term_end_day: "2026-08-30",
+          term_timezone: "America/Toronto",
+          term_week_count: 16,
+          week_index: 16,
+          week_start_day: "2026-08-30",
+        }],
+      );
+      const beforeRolloutBoundary = await upgrade.query(
+        `SELECT due_at, reconciled_at
+         FROM story_collectible_schedules
+         WHERE period_key = 'late-terminal-weekend-period'`,
+      );
+      assert.equal(beforeRolloutBoundary.rowCount, 1);
+      assert.equal(
+        new Date(beforeRolloutBoundary.rows[0].due_at).toISOString(),
+        "2026-08-31T12:00:00.000Z",
+      );
+      assert.equal(beforeRolloutBoundary.rows[0].reconciled_at, null);
+
+      const rolloutBoundaryMigrationSql = await readFile(
+        join(migrationsDirectory, "0009_terminal_story_rollout.sql"),
+        "utf8",
+      );
+      await upgrade.query(rolloutBoundaryMigrationSql);
+
+      const afterRolloutBoundary = await upgrade.query(
+        `SELECT period_key, reconciled_at
+         FROM story_collectible_schedules
+         WHERE period_key = ANY($1::text[])
+         ORDER BY period_key`,
+        [["compatible-terminal-weekend-period", "late-terminal-weekend-period"]],
+      );
+      assert.deepEqual(
+        afterRolloutBoundary.rows.map((row) => ({
+          periodKey: row.period_key,
+          reconciledAt: row.reconciled_at === null
+            ? null
+            : new Date(row.reconciled_at).toISOString(),
+        })),
+        [
+          {
+            periodKey: "compatible-terminal-weekend-period",
+            reconciledAt: null,
+          },
+          {
+            periodKey: "late-terminal-weekend-period",
+            reconciledAt: "2026-08-31T12:00:00.000Z",
+          },
+        ],
+      );
     } finally {
       await upgrade?.end();
       await admin.query(

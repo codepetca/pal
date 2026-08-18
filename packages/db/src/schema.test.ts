@@ -1620,6 +1620,21 @@ test(
           expected: "2026-08-30T04:00:00.000Z",
         },
         {
+          name: "late-terminal-weekend",
+          metadata: {
+            term_token: `late-terminal-weekend-${suffix}`,
+            term_start_day: "2026-05-11",
+            term_end_day: "2026-08-30",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-08-30",
+            week_index: 16,
+          },
+          createdAt: "2026-08-31T12:00:00.000Z",
+          expected: "2026-08-31T12:00:00.000Z",
+          expectedReconciledAt: "2026-08-31T12:00:00.000Z",
+        },
+        {
           name: "friday-final-week-marker",
           metadata: {
             term_token: `friday-final-week-marker-${suffix}`,
