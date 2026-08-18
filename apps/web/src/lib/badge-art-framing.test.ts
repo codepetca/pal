@@ -138,6 +138,57 @@ function artworkBounds({ width, height, alpha }: DecodedAlpha) {
   return { minX, minY, maxX, maxY };
 }
 
+/**
+ * Connected runs of visible pixels, largest first. Eight-connected, so a shape
+ * joined only at a diagonal still counts as one piece.
+ */
+function connectedComponents({ width, height, alpha }: DecodedAlpha) {
+  const seen = new Uint8Array(width * height);
+  const components: {
+    size: number;
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  }[] = [];
+
+  for (let start = 0; start < width * height; start++) {
+    if (seen[start] || alpha[start] <= ALPHA_THRESHOLD) continue;
+    const stack = [start];
+    seen[start] = 1;
+    let size = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    while (stack.length) {
+      const index = stack.pop() as number;
+      const x = index % width;
+      const y = (index / width) | 0;
+      size += 1;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const next = ny * width + nx;
+          if (seen[next] || alpha[next] <= ALPHA_THRESHOLD) continue;
+          seen[next] = 1;
+          stack.push(next);
+        }
+      }
+    }
+    components.push({ size, minX, minY, maxX, maxY });
+  }
+
+  return components.sort((a, b) => b.size - a.size);
+}
+
 const badgeFiles = readdirSync(BADGE_DIR)
   .filter((name) => name.endsWith(".png"))
   .sort();
@@ -165,6 +216,25 @@ for (const file of badgeFiles) {
     assert.ok(
       Math.abs(offsetY) <= CENTRE_TOLERANCE_PX,
       `${file} artwork is ${offsetY.toFixed(1)}px off centre vertically`,
+    );
+  });
+
+  test(`${file} has no artwork detached from its body`, () => {
+    const image = decodePngAlpha(readFileSync(join(BADGE_DIR, file)));
+    const [body, ...rest] = connectedComponents(image);
+    const detached = rest.filter(
+      (component) =>
+        component.maxX < body.minX ||
+        component.minX > body.maxX ||
+        component.maxY < body.minY ||
+        component.minY > body.maxY,
+    );
+    assert.deepEqual(
+      detached.map(
+        (c) => `${c.maxX - c.minX + 1}x${c.maxY - c.minY + 1} at ${c.minX},${c.minY}`,
+      ),
+      [],
+      `${file} has artwork sitting outside its body, which drags the bounding box out and shrinks the badge`,
     );
   });
 
