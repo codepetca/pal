@@ -177,22 +177,32 @@ test(
         metadata: Record<string, unknown>,
       ): Promise<void> => {
         const sourceEventId = crypto.randomUUID();
-        await upgrade!.query(
-          `INSERT INTO events (
-             id, integration_id, learner_id, idempotency_key, event_type, occurred_at,
-             metadata
-           ) VALUES ($1, $2, $3, $4,
-             'daily_log_week.configured', '2026-08-31T12:00:00Z', $5)`,
-          [sourceEventId, integrationId, learnerId, `${name}-event`, metadata],
-        );
-        await upgrade!.query(
-          `INSERT INTO learner_facts (
-             integration_id, learner_id, source_event_id, event_type, semantic_key,
-             period_key, occurred_at, metadata, created_at
-           ) VALUES ($1, $2, $3, 'daily_log_week.configured', $4, $5,
-             '2026-08-31T12:00:00Z', $6, '2026-08-31T12:00:00Z')`,
-          [integrationId, learnerId, sourceEventId, `${name}-fact`, `${name}-period`, metadata],
-        );
+        const writer = await upgrade!.connect();
+        try {
+          await writer.query("BEGIN");
+          await writer.query(
+            `INSERT INTO events (
+               id, integration_id, learner_id, idempotency_key, event_type, occurred_at,
+               metadata
+             ) VALUES ($1, $2, $3, $4,
+               'daily_log_week.configured', '2026-08-31T12:00:00Z', $5)`,
+            [sourceEventId, integrationId, learnerId, `${name}-event`, metadata],
+          );
+          await writer.query(
+            `INSERT INTO learner_facts (
+               integration_id, learner_id, source_event_id, event_type, semantic_key,
+               period_key, occurred_at, metadata, created_at
+             ) VALUES ($1, $2, $3, 'daily_log_week.configured', $4, $5,
+               '2026-08-31T12:00:00Z', $6, '2026-08-31T12:00:00Z')`,
+            [integrationId, learnerId, sourceEventId, `${name}-fact`, `${name}-period`, metadata],
+          );
+          await writer.query("COMMIT");
+        } catch (error) {
+          await writer.query("ROLLBACK").catch(() => undefined);
+          throw error;
+        } finally {
+          writer.release();
+        }
       };
 
       await insertOldWriterFact("lowercase-timezone", {
@@ -215,25 +225,39 @@ test(
         "Mexico/General",
         "Brazil/East",
         "Australia/ACT",
-      ].find((candidate) => {
+      ].map((candidate) => {
         try {
-          new Intl.DateTimeFormat("en", { timeZone: candidate }).format(0);
-          return !timezoneNames.has(candidate.toLowerCase());
+          const canonical = new Intl.DateTimeFormat("en", {
+            timeZone: candidate,
+          }).resolvedOptions().timeZone;
+          return { candidate, canonical };
         } catch {
-          return false;
+          return undefined;
         }
-      });
+      }).find((candidate) =>
+        candidate !== undefined &&
+        !timezoneNames.has(candidate.candidate.toLowerCase()) &&
+        timezoneNames.has(candidate.canonical.toLowerCase())
+      );
       assert.ok(icuOnlyTimezone, "test requires an ICU-valid PostgreSQL-absent alias");
-      await insertOldWriterFact("icu-timezone-alias", {
+      const icuAliasMetadata = {
         term_token: "icu-timezone-alias-term",
         term_start_day: "2026-08-31",
         term_end_day: "2026-10-09",
-        term_timezone: icuOnlyTimezone,
+        term_timezone: icuOnlyTimezone.candidate,
         term_week_count: 6,
         week_index: 1,
         week_start_day: "2026-08-31",
+      };
+      await assert.rejects(
+        insertOldWriterFact("icu-timezone-alias", icuAliasMetadata),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await insertOldWriterFact("icu-timezone-retry", {
+        ...icuAliasMetadata,
+        term_timezone: icuOnlyTimezone.canonical,
       });
-      await insertOldWriterFact("year-zero", {
+      await assert.rejects(insertOldWriterFact("year-zero", {
         term_token: "year-zero-term",
         term_start_day: "0000-08-31",
         term_end_day: "0000-10-09",
@@ -241,8 +265,8 @@ test(
         term_week_count: 6,
         week_index: 1,
         week_start_day: "0000-08-31",
-      });
-      await insertOldWriterFact("year-zero-cross-year", {
+      }), (error) => postgresViolation(error, "23514"));
+      await assert.rejects(insertOldWriterFact("year-zero-cross-year", {
         term_token: "year-zero-cross-year-term",
         term_start_day: "0000-12-01",
         term_end_day: "0001-01-31",
@@ -250,7 +274,17 @@ test(
         term_week_count: 6,
         week_index: 1,
         week_start_day: "0000-12-01",
-      });
+      }), (error) => postgresViolation(error, "23514"));
+      assert.equal(Number((await upgrade.query(
+        `SELECT count(*) AS count
+         FROM learner_facts
+         WHERE period_key = ANY($1::text[])`,
+        [[
+          "icu-timezone-alias-period",
+          "year-zero-period",
+          "year-zero-cross-year-period",
+        ]],
+      )).rows[0].count), 0);
       const oldWriterSchedules = await upgrade.query(
         `SELECT period_key, due_at
          FROM story_collectible_schedules
@@ -258,16 +292,30 @@ test(
          ORDER BY period_key`,
         [[
           "lowercase-timezone-period",
-          "icu-timezone-alias-period",
+          "icu-timezone-retry-period",
           "year-zero-period",
           "year-zero-cross-year-period",
         ]],
       );
-      assert.equal(oldWriterSchedules.rowCount, 1);
-      assert.equal(oldWriterSchedules.rows[0].period_key, "lowercase-timezone-period");
-      assert.equal(
-        new Date(oldWriterSchedules.rows[0].due_at).toISOString(),
-        "2026-09-05T04:00:00.000Z",
+      const retryExpectedDueAt = new Date((await upgrade.query(
+        `SELECT '2026-09-05'::timestamp AT TIME ZONE $1 AS due_at`,
+        [icuOnlyTimezone.canonical],
+      )).rows[0].due_at).toISOString();
+      assert.deepEqual(
+        oldWriterSchedules.rows.map((row) => ({
+          periodKey: row.period_key,
+          dueAt: new Date(row.due_at).toISOString(),
+        })),
+        [
+          {
+            periodKey: "icu-timezone-retry-period",
+            dueAt: retryExpectedDueAt,
+          },
+          {
+            periodKey: "lowercase-timezone-period",
+            dueAt: "2026-09-05T04:00:00.000Z",
+          },
+        ],
       );
       assert.equal(
         Number((await upgrade.query(

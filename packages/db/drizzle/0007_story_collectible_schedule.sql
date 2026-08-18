@@ -122,8 +122,6 @@ $$ LANGUAGE plpgsql STABLE;
 CREATE FUNCTION "public"."enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
-	"has_legacy_only_value" boolean := false;
-	"legacy_source_matches" boolean := false;
 BEGIN
 	IF NEW."event_type" <> 'daily_log_week.configured'
 		OR NEW."period_key" IS NULL
@@ -142,47 +140,6 @@ BEGIN
 
 	"due_at_value" := "public"."calculate_story_collectible_due_at"(NEW."metadata");
 	IF "due_at_value" IS NULL THEN
-		-- Vercel applies migrations before replacing the running application.
-		-- The previous contract accepted ICU timezone aliases that PostgreSQL may
-		-- not know, plus ISO year zero. Let those old-writer facts commit during
-		-- the short cutover; the new application canonicalizes/rejects them before
-		-- persistence. All other malformed direct facts remain rejected below.
-		IF (
-			jsonb_typeof(NEW."metadata"->'term_timezone') = 'string'
-			AND NOT EXISTS (
-				SELECT 1
-				FROM "pg_catalog"."pg_timezone_names" AS "time_zone"
-				WHERE "pg_catalog"."lower"("time_zone"."name") =
-					"pg_catalog"."lower"(NEW."metadata"->>'term_timezone')
-			)
-		) THEN
-			"has_legacy_only_value" := true;
-		END IF;
-		IF coalesce(NEW."metadata"->>'term_start_day', '') LIKE '0000-%' THEN
-			"has_legacy_only_value" := true;
-		END IF;
-		IF coalesce(NEW."metadata"->>'term_end_day', '') LIKE '0000-%' THEN
-			"has_legacy_only_value" := true;
-		END IF;
-		IF coalesce(NEW."metadata"->>'week_start_day', '') LIKE '0000-%' THEN
-			"has_legacy_only_value" := true;
-		END IF;
-		IF "has_legacy_only_value" THEN
-			SELECT EXISTS (
-				SELECT 1
-				FROM "public"."events" AS "source_event"
-				WHERE "source_event"."id" = NEW."source_event_id"
-					AND "source_event"."learner_id" = NEW."learner_id"
-					AND "source_event"."integration_id" = NEW."integration_id"
-					AND "source_event"."event_type" = NEW."event_type"
-					AND "source_event"."occurred_at" = NEW."occurred_at"
-					AND "source_event"."metadata" = NEW."metadata"
-			)
-			INTO "legacy_source_matches";
-		END IF;
-		IF "legacy_source_matches" THEN
-			RETURN NEW;
-		END IF;
 		RAISE EXCEPTION 'weekly configuration fact has no valid story due boundary'
 			USING ERRCODE = '23514',
 				CONSTRAINT = 'story_collectible_schedule_calendar_valid';
