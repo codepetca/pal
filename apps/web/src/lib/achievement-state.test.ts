@@ -10,6 +10,7 @@ import {
   learnerFacts,
   learnerRewardGrants,
   rewardNotices,
+  storyCollectibleSchedules,
   worldState,
 } from "@pal/db";
 import {
@@ -2874,6 +2875,119 @@ test(
       }
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "keeps delayed Pika story configurations on producer chronology across retries",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const integration = await resolveIntegration({
+      slug: "pika",
+      name: "Pika",
+      secret: pikaSecret,
+    });
+    const eligibleLearner = `delayed-story-eligible-${crypto.randomUUID()}`;
+    const lateLearner = `delayed-story-late-${crypto.randomUUID()}`;
+    const periodKey = `pika-week-2026-08-03-${crypto.randomUUID()}`;
+    const calendar = {
+      period_key: periodKey,
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 3,
+      term_token: `pika-term-2026-summer-${crypto.randomUUID()}`,
+      term_start_day: "2026-06-29",
+      term_end_day: "2026-08-30",
+      term_timezone: "America/Toronto",
+      term_week_count: 9,
+      week_start_day: "2026-08-03",
+      week_index: 6,
+    };
+    const sourceOccurredAt = "2026-08-07T23:59:59.123Z";
+    const deliveryKey = key();
+
+    try {
+      const first = await processEventInDb(
+        integration.id,
+        eligibleLearner,
+        event("daily_log_week.configured", calendar, sourceOccurredAt),
+        deliveryKey,
+        { storyGrantAsOf: new Date("2026-08-10T12:00:00.000Z") },
+      );
+      assert.equal(first.status, "processed");
+
+      const retry = await processEventInDb(
+        integration.id,
+        eligibleLearner,
+        event("daily_log_week.configured", calendar, sourceOccurredAt),
+        deliveryKey,
+        { storyGrantAsOf: new Date("2026-08-11T12:00:00.000Z") },
+      );
+      assert.deepEqual(retry, { status: "duplicate" });
+
+      const eligibleLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        eligibleLearner,
+      );
+      const eligibleFacts = await getDb().select().from(learnerFacts).where(and(
+        eq(learnerFacts.learnerId, eligibleLearnerId),
+        eq(learnerFacts.eventType, "daily_log_week.configured"),
+        eq(learnerFacts.periodKey, periodKey),
+      ));
+      assert.equal(eligibleFacts.length, 1);
+      assert.equal(eligibleFacts[0]!.occurredAt.toISOString(), sourceOccurredAt);
+
+      const eligibleSchedules = await getDb().select()
+        .from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.learnerId, eligibleLearnerId));
+      assert.equal(eligibleSchedules.length, 1);
+      assert.equal(
+        eligibleSchedules[0]!.dueAt.toISOString(),
+        "2026-08-08T04:00:00.000Z",
+      );
+      assert.ok(eligibleSchedules[0]!.createdAt > eligibleFacts[0]!.occurredAt);
+      assert.notEqual(eligibleSchedules[0]!.reconciledAt, null);
+      assert.equal((await getDb().select().from(learnerRewardGrants).where(
+        eq(learnerRewardGrants.sourceFactId, eligibleFacts[0]!.id),
+      )).length, 1);
+
+      const latePeriodKey = `pika-week-2026-08-03-late-${crypto.randomUUID()}`;
+      const late = await processEventInDb(
+        integration.id,
+        lateLearner,
+        event(
+          "daily_log_week.configured",
+          {
+            ...calendar,
+            period_key: latePeriodKey,
+            term_token: `pika-term-2026-summer-late-${crypto.randomUUID()}`,
+          },
+          "2026-08-08T05:00:00.000Z",
+        ),
+        key(),
+        { storyGrantAsOf: new Date("2026-08-10T12:00:00.000Z") },
+      );
+      assert.equal(late.status, "processed");
+
+      const lateLearnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        lateLearner,
+      );
+      const [lateSchedule] = await getDb().select()
+        .from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.learnerId, lateLearnerId));
+      assert.equal(lateSchedule!.dueAt.toISOString(), "2026-08-08T04:00:00.000Z");
+      assert.notEqual(lateSchedule!.reconciledAt, null);
+      assert.equal((await getDb().select().from(learnerRewardGrants).where(
+        eq(learnerRewardGrants.learnerId, lateLearnerId),
+      )).length, 0);
+    } finally {
+      await resetLearnerInDb(integration.id, eligibleLearner);
+      await resetLearnerInDb(integration.id, lateLearner);
     }
   },
 );

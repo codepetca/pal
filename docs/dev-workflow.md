@@ -88,9 +88,10 @@ Before enabling the rollout in production, configure `CRON_SECRET` in the
 Production environment. The cron endpoint fails closed when it is absent or
 malformed. Schedule rows are created prospectively by the database boundary
 introduced in PR #70. The follow-up terminal-weekend guard closes a schedule
-first delivered after its authoritative final Sunday, so the worker cannot turn
-that compatibility case into a historical grant. Preview deployments do not
-execute Vercel cron jobs.
+produced after its authoritative final Sunday, while an outbox retry keeps the
+original producer timestamp and remains eligible. The worker therefore cannot
+turn a genuinely late configuration into a historical grant. Preview
+deployments do not execute Vercel cron jobs.
 
 One invocation is intentionally bounded at 10,000 learners (100 batches of 100,
 with at most 10 learner transactions active at once) and a 270-second work

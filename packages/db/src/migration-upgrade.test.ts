@@ -665,6 +665,141 @@ test(
           },
         ],
       );
+
+      const chronologyMetadata = {
+        term_token: "source-chronology-term",
+        term_start_day: "2026-08-31",
+        term_end_day: "2026-10-09",
+        term_timezone: "America/Toronto",
+        term_week_count: 6,
+        week_index: 1,
+        week_start_day: "2026-08-31",
+      };
+      const insertChronologyFact = async (
+        name: string,
+        occurredAt: string,
+        createdAt: string,
+      ): Promise<string> => {
+        const sourceEventId = crypto.randomUUID();
+        await upgrade!.query(
+          `INSERT INTO events (
+             id, integration_id, learner_id, idempotency_key, event_type, occurred_at
+           ) VALUES ($1, $2, $3, $4, 'daily_log_week.configured', $5)`,
+          [sourceEventId, integrationId, learnerId, `${name}-event`, occurredAt],
+        );
+        const inserted = await upgrade!.query(
+          `INSERT INTO learner_facts (
+             integration_id, learner_id, source_event_id, event_type, semantic_key,
+             period_key, occurred_at, metadata, created_at
+           ) VALUES ($1, $2, $3, 'daily_log_week.configured', $4, $5, $6, $7, $8)
+           RETURNING id`,
+          [
+            integrationId,
+            learnerId,
+            sourceEventId,
+            `${name}-fact`,
+            `${name}-period`,
+            occurredAt,
+            chronologyMetadata,
+            createdAt,
+          ],
+        );
+        return String(inserted.rows[0].id);
+      };
+
+      // Preserve the already-landed no-backfill boundary: migration 0010 fixes
+      // new schedules but never reopens a row classified by the old receipt-time
+      // implementation.
+      await insertChronologyFact(
+        "pre-source-timestamp-migration",
+        "2026-09-04T20:00:00Z",
+        "2026-09-06T12:00:00Z",
+      );
+      const preMigrationSchedule = await upgrade.query(
+        `SELECT due_at, reconciled_at
+         FROM story_collectible_schedules
+         WHERE period_key = 'pre-source-timestamp-migration-period'`,
+      );
+      assert.equal(
+        new Date(preMigrationSchedule.rows[0].reconciled_at).toISOString(),
+        "2026-09-06T12:00:00.000Z",
+      );
+
+      const sourceTimestampMigrationSql = await readFile(
+        join(migrationsDirectory, "0010_story_source_timestamps.sql"),
+        "utf8",
+      );
+      await upgrade.query(sourceTimestampMigrationSql);
+      const unchangedHistoricalSchedule = await upgrade.query(
+        `SELECT due_at, reconciled_at
+         FROM story_collectible_schedules
+         WHERE period_key = 'pre-source-timestamp-migration-period'`,
+      );
+      assert.equal(
+        new Date(unchangedHistoricalSchedule.rows[0].reconciled_at).toISOString(),
+        "2026-09-06T12:00:00.000Z",
+      );
+
+      const delayedFactId = await insertChronologyFact(
+        "post-source-timestamp-delayed",
+        "2026-09-04T20:00:00Z",
+        "2026-09-06T12:00:00Z",
+      );
+      const lateFactId = await insertChronologyFact(
+        "post-source-timestamp-late",
+        "2026-09-05T05:00:00Z",
+        "2026-09-06T13:00:00Z",
+      );
+      const sourceTimestampSchedules = await upgrade.query(
+        `SELECT period_key, due_at, reconciled_at, created_at
+         FROM story_collectible_schedules
+         WHERE period_key = ANY($1::text[])
+         ORDER BY period_key`,
+        [[
+          "post-source-timestamp-delayed-period",
+          "post-source-timestamp-late-period",
+        ]],
+      );
+      assert.deepEqual(
+        sourceTimestampSchedules.rows.map((row) => ({
+          periodKey: row.period_key,
+          dueAt: new Date(row.due_at).toISOString(),
+          reconciledAt: row.reconciled_at === null
+            ? null
+            : new Date(row.reconciled_at).toISOString(),
+          createdAt: new Date(row.created_at).toISOString(),
+        })),
+        [
+          {
+            periodKey: "post-source-timestamp-delayed-period",
+            dueAt: "2026-09-05T04:00:00.000Z",
+            reconciledAt: null,
+            createdAt: "2026-09-06T12:00:00.000Z",
+          },
+          {
+            periodKey: "post-source-timestamp-late-period",
+            dueAt: "2026-09-05T04:00:00.000Z",
+            reconciledAt: "2026-09-06T13:00:00.000Z",
+            createdAt: "2026-09-06T13:00:00.000Z",
+          },
+        ],
+      );
+
+      // Reconstructing the delayed source as receipt-time-late must fail before
+      // uniqueness is considered; the protection path uses the same occurred_at
+      // semantics as automatic enqueueing.
+      await assert.rejects(
+        upgrade.query(
+          `INSERT INTO story_collectible_schedules (
+             learner_id, period_key, source_fact_id, due_at, reconciled_at, created_at
+           ) VALUES ($1, 'post-source-timestamp-delayed-period', $2,
+             '2026-09-05T04:00:00Z', '2026-09-06T12:00:00Z',
+             '2026-09-06T12:00:00Z')`,
+          [learnerId, delayedFactId],
+        ),
+        (error) => postgresViolation(error, "23514"),
+      );
+      assert.ok(lateFactId);
     } finally {
       await upgrade?.end();
       await admin.query(

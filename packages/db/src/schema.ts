@@ -147,8 +147,9 @@ export const learnerFacts = pgTable(
 // local story boundary. Neither schedules nor rewards are backfilled. The
 // append-only learner_reward_grants ledger remains canonical, and reconciled_at
 // records either queue consumption after that ledger proves ownership or a
-// terminal no-backfill skip when the due boundary had already passed before
-// the configuration fact reached Pal.
+// terminal no-backfill skip when the producer timestamp had already passed the
+// due boundary. created_at remains receipt/audit time and never changes source
+// chronology.
 export const storyCollectibleSchedules = pgTable(
   "story_collectible_schedules",
   {
