@@ -117,6 +117,8 @@ BEGIN
 		"week_start" := "week_start" - ("weekday" - 1);
 	ELSIF "weekday" > 5 THEN
 		"week_start" := "week_start" + (8 - "weekday");
+	ELSIF "week_index_value" > 1 THEN
+		"week_start" := "week_start" - ("weekday" - 1);
 	END IF;
 
 	IF "week_start" < "earliest_week_start"

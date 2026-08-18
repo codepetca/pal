@@ -1580,6 +1580,19 @@ test(
           expected: "2026-09-12T04:00:00.000Z",
         },
         {
+          name: "middle-week-wednesday-marker",
+          metadata: {
+            term_token: `middle-week-wednesday-marker-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-09-09",
+            week_index: 2,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
           name: "weekend-final-week",
           metadata: {
             term_token: `weekend-final-week-${suffix}`,
