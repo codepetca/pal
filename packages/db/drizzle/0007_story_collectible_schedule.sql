@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '2s';
+--> statement-breakpoint
 CREATE TABLE "public"."story_collectible_schedules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"learner_id" uuid NOT NULL,
@@ -25,6 +27,7 @@ DECLARE
 	"term_week_count_numeric" numeric;
 	"term_week_count_value" integer;
 	"term_timezone_value" text;
+	"resolved_timezone_value" text;
 	"earliest_week_start" date;
 	"latest_week_start" date;
 	"weekday" integer;
@@ -53,6 +56,14 @@ BEGIN
 	END IF;
 	"week_index_value" := "week_index_numeric"::integer;
 	"term_timezone_value" := "calendar_metadata"->>'term_timezone';
+	SELECT "time_zone"."name"
+	INTO "resolved_timezone_value"
+	FROM "pg_catalog"."pg_timezone_names" AS "time_zone"
+	WHERE "pg_catalog"."lower"("time_zone"."name") =
+		"pg_catalog"."lower"("term_timezone_value")
+	ORDER BY ("time_zone"."name" = "term_timezone_value") DESC,
+		"time_zone"."name"
+	LIMIT 1;
 
 	IF ("calendar_metadata" ? 'term_week_count') <> ("calendar_metadata" ? 'week_start_day') THEN
 		RETURN NULL;
@@ -80,10 +91,7 @@ BEGIN
 		OR "term_week_count_value" > 24
 		OR "week_index_value" < 1
 		OR "week_index_value" > "term_week_count_value"
-		OR NOT EXISTS (
-		SELECT 1 FROM "pg_catalog"."pg_timezone_names"
-		WHERE name = "term_timezone_value"
-	) THEN
+		OR "resolved_timezone_value" IS NULL THEN
 		RETURN NULL;
 	END IF;
 
@@ -101,7 +109,7 @@ BEGIN
 	"weekday" := extract(isodow from "week_start")::integer;
 	"friday" := "week_start" + ((5 - "weekday" + 7) % 7);
 	"due_day" := least("friday", "term_end") + 1;
-	RETURN "due_day"::timestamp AT TIME ZONE "term_timezone_value";
+	RETURN "due_day"::timestamp AT TIME ZONE "resolved_timezone_value";
 EXCEPTION
 	WHEN invalid_text_representation
 		OR datetime_field_overflow
@@ -114,6 +122,8 @@ $$ LANGUAGE plpgsql STABLE;
 CREATE FUNCTION "public"."enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
+	"compatibility_metadata" jsonb;
+	"has_legacy_only_value" boolean := false;
 BEGIN
 	IF NEW."event_type" <> 'daily_log_week.configured'
 		OR NEW."period_key" IS NULL
@@ -132,6 +142,59 @@ BEGIN
 
 	"due_at_value" := "public"."calculate_story_collectible_due_at"(NEW."metadata");
 	IF "due_at_value" IS NULL THEN
+		-- Vercel applies migrations before replacing the running application.
+		-- The previous contract accepted ICU timezone aliases that PostgreSQL may
+		-- not know, plus ISO year zero. Let those old-writer facts commit during
+		-- the short cutover; the new application canonicalizes/rejects them before
+		-- persistence. All other malformed direct facts remain rejected below.
+		"compatibility_metadata" := NEW."metadata";
+		IF (
+			jsonb_typeof(NEW."metadata"->'term_timezone') = 'string'
+			AND NOT EXISTS (
+				SELECT 1
+				FROM "pg_catalog"."pg_timezone_names" AS "time_zone"
+				WHERE "pg_catalog"."lower"("time_zone"."name") =
+					"pg_catalog"."lower"(NEW."metadata"->>'term_timezone')
+			)
+		) THEN
+			"compatibility_metadata" := jsonb_set(
+				"compatibility_metadata",
+				'{term_timezone}',
+				'"UTC"'::jsonb
+			);
+			"has_legacy_only_value" := true;
+		END IF;
+		IF coalesce(NEW."metadata"->>'term_start_day', '') LIKE '0000-%' THEN
+			"compatibility_metadata" := jsonb_set(
+				"compatibility_metadata",
+				'{term_start_day}',
+				to_jsonb('2000-' || substring(NEW."metadata"->>'term_start_day' FROM 6))
+			);
+			"has_legacy_only_value" := true;
+		END IF;
+		IF coalesce(NEW."metadata"->>'term_end_day', '') LIKE '0000-%' THEN
+			"compatibility_metadata" := jsonb_set(
+				"compatibility_metadata",
+				'{term_end_day}',
+				to_jsonb('2000-' || substring(NEW."metadata"->>'term_end_day' FROM 6))
+			);
+			"has_legacy_only_value" := true;
+		END IF;
+		IF coalesce(NEW."metadata"->>'week_start_day', '') LIKE '0000-%' THEN
+			"compatibility_metadata" := jsonb_set(
+				"compatibility_metadata",
+				'{week_start_day}',
+				to_jsonb('2000-' || substring(NEW."metadata"->>'week_start_day' FROM 6))
+			);
+			"has_legacy_only_value" := true;
+		END IF;
+		IF "has_legacy_only_value"
+			AND "public"."calculate_story_collectible_due_at"(
+				"compatibility_metadata"
+			) IS NOT NULL
+		THEN
+			RETURN NEW;
+		END IF;
 		RAISE EXCEPTION 'weekly configuration fact has no valid story due boundary'
 			USING ERRCODE = '23514',
 				CONSTRAINT = 'story_collectible_schedule_calendar_valid';
