@@ -475,7 +475,7 @@ test("a legacy calendar derives the same future-week grant boundary", { skip: !p
   }
 });
 
-test("an adaptive revision cannot move an earned legacy week into the future", { skip: !process.env.DATABASE_URL }, async () => {
+test("an adaptive revision cannot move a legacy week into the future", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-revision-story-${crypto.randomUUID()}`;
   const periodKey = `legacy-revision-period-${crypto.randomUUID()}`;
@@ -531,7 +531,9 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
       { asOf: new Date("2026-08-04T12:00:00.000Z") },
     );
     assert.notEqual(snapshot.roadmap.weeks[5]?.status, "future");
-    assert.equal(snapshot.progression?.collectibles[5]?.status, "earned");
+    // The queue is prospective: this configuration arrived after its derived
+    // due day, so it pins placement without backfilling story ownership.
+    assert.equal(snapshot.progression?.collectibles[5]?.status, "locked");
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
@@ -636,6 +638,7 @@ test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !pr
   const legacy = configuredWeek(`period-${crypto.randomUUID()}`, `legacy-term-${crypto.randomUUID()}`);
   legacy.metadata.term_end_day = "2026-12-18";
   delete (legacy.metadata as { term_week_count?: number }).term_week_count;
+  delete (legacy.metadata as { week_start_day?: string }).week_start_day;
   try {
     await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);

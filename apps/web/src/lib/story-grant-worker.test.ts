@@ -657,18 +657,20 @@ test(
         integration.id,
         malformedLearner,
       );
-      await getDb().update(learnerFacts).set({
-        metadata: {
-          term_start_day: "2026-99-99",
-          term_end_day: "not-a-day",
-          term_timezone: "Not/A_Timezone",
-          week_index: 1,
-          week_start_day: "also-not-a-day",
-        },
-      }).where(and(
-        eq(learnerFacts.learnerId, malformedLearnerId),
-        eq(learnerFacts.eventType, "daily_log_week.configured"),
-      ));
+      await assert.rejects(
+        getDb().update(learnerFacts).set({
+          metadata: {
+            term_start_day: "2026-99-99",
+            term_end_day: "not-a-day",
+            term_timezone: "Not/A_Timezone",
+            week_index: 1,
+            week_start_day: "also-not-a-day",
+          },
+        }).where(and(
+          eq(learnerFacts.learnerId, malformedLearnerId),
+          eq(learnerFacts.eventType, "daily_log_week.configured"),
+        )),
+      );
 
       const result = await runStoryGrantWorker({
         asOf: new Date("2026-09-05T12:00:00.000Z"),
