@@ -9,6 +9,7 @@ import {
   economy,
   getDb,
   learnerRewardGrants,
+  storyCollectibleSchedules,
   storyPlanChapters,
   storyPlans,
 } from "@pal/db";
@@ -645,6 +646,68 @@ test("the first calendar-bearing revision quarantines calendarless pending facts
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
+  }
+});
+
+test("a closed calendarless period remains story-ineligible", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `closed-calendarless-${crypto.randomUUID()}`;
+  const periodKey = `closed-calendarless-period-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2026-08-31T12:00:00.000Z",
+        metadata: {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "closed",
+          eligible_days: 0,
+        },
+      },
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const calendarRevision = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2026-09-01T12:00:00.000Z",
+        metadata: {
+          period_key: periodKey,
+          config_version: 2,
+          period_status: "closed",
+          eligible_days: 0,
+          term_token: `closed-calendarless-term-${crypto.randomUUID()}`,
+          term_start_day: "2026-08-31",
+          term_end_day: "2026-10-09",
+          term_timezone: "America/Toronto",
+          term_week_count: 6,
+          week_start_day: "2026-08-31",
+          week_index: 1,
+        },
+      },
+      crypto.randomUUID(),
+    );
+    assert.deepEqual(calendarRevision, {
+      status: "rejected",
+      error: "closed_period_revision",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(storyCollectibleSchedules).where(and(
+      eq(storyCollectibleSchedules.learnerId, learnerId),
+      eq(storyCollectibleSchedules.periodKey, periodKey),
+    ))).length, 0);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
   }
 });
 
