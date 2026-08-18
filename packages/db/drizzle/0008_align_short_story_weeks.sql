@@ -101,8 +101,8 @@ BEGIN
 		ELSE "first_normal_monday" + (("week_index_value" - 2) * 7)
 	END;
 	"latest_week_start" := CASE
-		WHEN "week_index_value" = 1 THEN "first_instructional_day"
-		ELSE "final_monday" - (("term_week_count_value" - "week_index_value") * 7)
+		WHEN "week_index_value" >= 1
+			THEN "final_monday" - (("term_week_count_value" - "week_index_value") * 7)
 	END;
 	"week_start" := coalesce(
 		"week_start",
@@ -113,7 +113,11 @@ BEGIN
 	);
 	"weekday" := extract(isodow from "week_start")::integer;
 	IF "weekday" > 5 THEN
-		"week_start" := "week_start" + (8 - "weekday");
+		"week_start" := CASE
+			WHEN "week_index_value" = "term_week_count_value"
+				THEN "week_start" - ("weekday" - 1)
+			ELSE "week_start" + (8 - "weekday")
+		END;
 	END IF;
 
 	IF "week_start" < "earliest_week_start"
