@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import {
   getDb,
@@ -208,6 +208,88 @@ test(
         onlyLearnerIds: [learnerId],
       });
       assert.equal(retry.grants, 0);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "event ingest stays bounded while cron drains overdue schedules across terms",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-many-terms-${crypto.randomUUID()}`;
+    const weekStartDays = [
+      "2026-08-31",
+      "2026-09-07",
+      "2026-09-14",
+      "2026-09-21",
+      "2026-09-28",
+      "2026-10-05",
+    ];
+    const periodKeys: string[] = [];
+    try {
+      for (let term = 0; term < 5; term += 1) {
+        const termKey = `worker-many-terms-${term}-${crypto.randomUUID()}`;
+        for (const [index, weekStartDay] of weekStartDays.entries()) {
+          const periodKey = `worker-many-terms-period-${crypto.randomUUID()}`;
+          periodKeys.push(periodKey);
+          await configure(
+            integration.id,
+            externalLearnerId,
+            configuredWeek(periodKey, termKey, index + 1, weekStartDay),
+          );
+        }
+      }
+
+      const accepted = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLog(periodKeys[0]!, "2026-08-31"),
+        crypto.randomUUID(),
+        { storyGrantAsOf: new Date("2026-10-10T12:00:00.000Z") },
+      );
+      assert.equal(accepted.status, "processed");
+
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const grantsAfterEvent = await getDb().select()
+        .from(learnerRewardGrants)
+        .where(and(
+          eq(learnerRewardGrants.learnerId, learnerId),
+          eq(learnerRewardGrants.kind, "story_chapter"),
+        ));
+      assert.equal(grantsAfterEvent.length, 24);
+      const pendingAfterEvent = await getDb().select()
+        .from(storyCollectibleSchedules)
+        .where(and(
+          eq(storyCollectibleSchedules.learnerId, learnerId),
+          isNull(storyCollectibleSchedules.reconciledAt),
+        ));
+      assert.equal(pendingAfterEvent.length, 6);
+
+      const worker = await runStoryGrantWorker({
+        asOf: new Date("2026-10-10T12:00:00.000Z"),
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(worker.failedLearners, 0);
+      assert.equal(worker.grants, 6);
+      assert.equal(worker.deadlineReached, false);
+      const pendingAfterWorker = await getDb().select()
+        .from(storyCollectibleSchedules)
+        .where(and(
+          eq(storyCollectibleSchedules.learnerId, learnerId),
+          isNull(storyCollectibleSchedules.reconciledAt),
+        ));
+      assert.equal(pendingAfterWorker.length, 0);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -1037,7 +1119,12 @@ test("default daily capacity drains a cohort larger than the former 500-learner 
           : undefined,
       };
     },
-    reconcileLearner: async () => ({ candidates: 1, due: 1, granted: 1 }),
+    reconcileLearner: async () => ({
+      candidates: 1,
+      due: 1,
+      granted: 1,
+      hasMore: false,
+    }),
   });
   assert.deepEqual(result, {
     batches: 6,
@@ -1046,6 +1133,7 @@ test("default daily capacity drains a cohort larger than the former 500-learner 
     grants: 501,
     retries: 0,
     batchLimitReached: false,
+    deadlineReached: false,
   });
 });
 
@@ -1073,12 +1161,86 @@ for (const [learnerCount, expectedBacklog] of [
             : undefined,
         };
       },
-      reconcileLearner: async () => ({ candidates: 1, due: 1, granted: 1 }),
+      reconcileLearner: async () => ({
+        candidates: 1,
+        due: 1,
+        granted: 1,
+        hasMore: false,
+      }),
     });
     assert.equal(result.learners, 10_000);
     assert.equal(result.batchLimitReached, expectedBacklog);
   });
 }
+
+test("worker drains one learner in bounded reconciliation transactions", async () => {
+  let discoveryCalls = 0;
+  let reconciliationCalls = 0;
+  const result = await runStoryGrantWorker({
+    db: {} as Db,
+    retryBaseDelayMs: 0,
+    findLearners: async () => {
+      discoveryCalls += 1;
+      return discoveryCalls === 1
+        ? {
+            learnerIds: ["many-term-learner"],
+            scannedRows: 1,
+            cursor: {
+              dueAt: new Date("2026-09-05T04:00:00.000Z"),
+              id: "many-term-schedule",
+            },
+          }
+        : { learnerIds: [], scannedRows: 0 };
+    },
+    reconcileLearner: async () => {
+      reconciliationCalls += 1;
+      return reconciliationCalls === 1
+        ? { candidates: 24, due: 24, granted: 24, hasMore: true }
+        : { candidates: 6, due: 6, granted: 6, hasMore: false };
+    },
+  });
+  assert.equal(reconciliationCalls, 2);
+  assert.equal(result.learners, 1);
+  assert.equal(result.grants, 30);
+  assert.equal(result.deadlineReached, false);
+});
+
+test("worker stops before its deadline and reports known remaining work", async () => {
+  let currentTime = Date.parse("2026-09-05T12:00:00.000Z");
+  let discoveryCalls = 0;
+  const result = await runStoryGrantWorker({
+    db: {} as Db,
+    asOf: new Date(currentTime),
+    deadline: new Date(currentTime + 10),
+    now: () => new Date(currentTime),
+    concurrency: 1,
+    retryBaseDelayMs: 0,
+    findLearners: async () => {
+      discoveryCalls += 1;
+      return discoveryCalls === 1
+        ? {
+            learnerIds: ["slow-learner", "waiting-learner"],
+            scannedRows: 2,
+            cursor: {
+              dueAt: new Date("2026-09-05T04:00:00.000Z"),
+              id: "waiting-schedule",
+            },
+          }
+        : { learnerIds: [], scannedRows: 0 };
+    },
+    reconcileLearner: async () => {
+      currentTime += 6;
+      return { candidates: 24, due: 24, granted: 24, hasMore: true };
+    },
+  });
+  assert.equal(result.learners, 1);
+  assert.equal(result.grants, 48);
+  assert.equal(result.deadlineReached, true);
+  assert.deepEqual(storyGrantCronOutcome(result), {
+    bodyStatus: "incomplete",
+    httpStatus: 503,
+  });
+});
 
 test(
   "cron route rejects invalid deployment/auth configuration and runs when valid",
@@ -1122,6 +1284,7 @@ test("cron reports bounded-cap backlog as incomplete", () => {
     grants: 500,
     retries: 0,
     batchLimitReached: true,
+    deadlineReached: false,
   });
   assert.deepEqual(outcome, {
     bodyStatus: "incomplete",
@@ -1137,6 +1300,7 @@ test("cron response preserves failures when bounded-cap backlog remains", async 
     grants: 498,
     retries: 6,
     batchLimitReached: true,
+    deadlineReached: false,
   });
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
@@ -1147,5 +1311,6 @@ test("cron response preserves failures when bounded-cap backlog remains", async 
     grants: 498,
     retries: 6,
     batchLimitReached: true,
+    deadlineReached: false,
   });
 });

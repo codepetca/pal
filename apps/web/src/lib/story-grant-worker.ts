@@ -29,6 +29,7 @@ export const STORY_GRANT_MAX_LEARNERS_PER_RUN =
   STORY_GRANT_BATCH_SIZE * STORY_GRANT_MAX_BATCHES;
 export const STORY_GRANT_MAX_ATTEMPTS = 3;
 export const STORY_GRANT_RETRY_BASE_DELAY_MS = 100;
+export const STORY_GRANT_RUN_BUDGET_MS = 270_000;
 const STORY_GRANT_DISCOVERY_ROWS_PER_LEARNER = 24;
 
 export type StoryGrantDiscoveryCursor = {
@@ -49,6 +50,7 @@ export type StoryGrantWorkerResult = {
   grants: number;
   retries: number;
   batchLimitReached: boolean;
+  deadlineReached: boolean;
 };
 
 /** Returns one bounded, stable page of learners with at least one overdue slot. */
@@ -137,7 +139,9 @@ export async function reconcileDueStoryGrantsForLearner(
       .from(learners)
       .where(eq(learners.id, learnerId))
       .limit(1);
-    if (!learner) return { candidates: 0, due: 0, granted: 0 };
+    if (!learner) {
+      return { candidates: 0, due: 0, granted: 0, hasMore: false };
+    }
     // Do not spend the connection's full statement timeout waiting behind an
     // accepted event or concurrent cron. lock_timeout produces 55P03, which the
     // bounded worker retry loop can recover within this invocation.
@@ -160,6 +164,8 @@ export async function runStoryGrantWorker(
     concurrency?: number;
     maxAttempts?: number;
     retryBaseDelayMs?: number;
+    deadline?: Date;
+    now?: () => Date;
     // Deterministic integration-test seam; production always leaves this unset.
     onlyLearnerIds?: readonly string[];
     db?: Db;
@@ -168,7 +174,11 @@ export async function runStoryGrantWorker(
   } = {},
 ): Promise<StoryGrantWorkerResult> {
   const db = options.db ?? getDb();
-  const asOf = options.asOf ?? new Date();
+  const now = options.now ?? (() => new Date());
+  const asOf = options.asOf ?? now();
+  const deadline = options.deadline ?? new Date(
+    now().getTime() + STORY_GRANT_RUN_BUDGET_MS,
+  );
   const batchSize = Math.max(
     1,
     Math.min(options.batchSize ?? STORY_GRANT_BATCH_SIZE, 100),
@@ -203,6 +213,10 @@ export async function runStoryGrantWorker(
   let cursor: StoryGrantDiscoveryCursor | undefined;
   const failedLearnerIds = new Set<string>();
   let lastPageMayHaveMore = false;
+  let deadlineReached = false;
+  let knownDeadlineBacklog = false;
+
+  const isPastDeadline = () => now().getTime() >= deadline.getTime();
 
   const retry = async <T>(input: {
     scope: "discovery" | "learner";
@@ -242,6 +256,10 @@ export async function runStoryGrantWorker(
   };
 
   while (batches < maxBatches) {
+    if (isPastDeadline()) {
+      deadlineReached = true;
+      break;
+    }
     const discovery = await retry({
       scope: "discovery",
       correlationId: `batch-${batches + 1}`,
@@ -269,28 +287,65 @@ export async function runStoryGrantWorker(
 
     for (let offset = 0; offset < learnerIds.length; offset += concurrency) {
       const learnerChunk = learnerIds.slice(offset, offset + concurrency);
-      const results = await Promise.all(
-        learnerChunk.map((learnerId) => retry({
-          scope: "learner",
-          correlationId: learnerCorrelationId(learnerId),
-          operation: () => reconcileLearner(learnerId, {
-            asOf,
-            db,
-          }),
-        })),
-      );
+      if (isPastDeadline()) {
+        deadlineReached = true;
+        knownDeadlineBacklog = true;
+        break;
+      }
+      const results = await Promise.all(learnerChunk.map(async (learnerId) => {
+        let learnerRetries = 0;
+        let learnerGrants = 0;
+        while (true) {
+          if (isPastDeadline()) {
+            return {
+              ok: true as const,
+              grants: learnerGrants,
+              retries: learnerRetries,
+              deadlineBacklog: true,
+            };
+          }
+          const result = await retry({
+            scope: "learner",
+            correlationId: learnerCorrelationId(learnerId),
+            operation: () => reconcileLearner(learnerId, { asOf, db }),
+          });
+          learnerRetries += result.retries;
+          if (!result.ok) {
+            return {
+              ok: false as const,
+              retries: learnerRetries,
+              deadlineBacklog: false,
+            };
+          }
+          learnerGrants += result.value.granted;
+          if (!result.value.hasMore) {
+            return {
+              ok: true as const,
+              grants: learnerGrants,
+              retries: learnerRetries,
+              deadlineBacklog: false,
+            };
+          }
+        }
+      }));
       for (const [index, result] of results.entries()) {
         learnersProcessed += 1;
         retries += result.retries;
         if (result.ok) {
-          grants += result.value.granted;
+          grants += result.grants;
+          if (result.deadlineBacklog) {
+            deadlineReached = true;
+            knownDeadlineBacklog = true;
+          }
         } else {
           failedLearners += 1;
           failedLearnerIds.add(learnerChunk[index]!);
           // The retry helper already emitted one sanitized terminal record.
         }
       }
+      if (deadlineReached) break;
     }
+    if (deadlineReached) break;
   }
 
   let batchLimitReached = false;
@@ -313,6 +368,25 @@ export async function runStoryGrantWorker(
     batchLimitReached = lookahead.value.learnerIds.length > 0;
   }
 
+  if (deadlineReached && !knownDeadlineBacklog && lastPageMayHaveMore) {
+    const lookahead = await retry({
+      scope: "discovery",
+      correlationId: "deadline-lookahead",
+      operation: () => findLearners(db, {
+        asOf,
+        after: cursor,
+        excludedLearnerIds: [...failedLearnerIds],
+        onlyLearnerIds: options.onlyLearnerIds,
+        limit: 1,
+      }),
+    });
+    retries += lookahead.retries;
+    if (!lookahead.ok) {
+      throw new Error("scheduled story grant deadline lookahead failed after retries");
+    }
+    knownDeadlineBacklog = lookahead.value.learnerIds.length > 0;
+  }
+
   return {
     batches,
     learners: learnersProcessed,
@@ -320,6 +394,7 @@ export async function runStoryGrantWorker(
     grants,
     retries,
     batchLimitReached,
+    deadlineReached: deadlineReached && knownDeadlineBacklog,
   };
 }
 

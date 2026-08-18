@@ -13,7 +13,7 @@ export type StoryGrantCronOutcome = {
 export function storyGrantCronOutcome(
   result: StoryGrantWorkerResult,
 ): StoryGrantCronOutcome {
-  if (result.batchLimitReached) {
+  if (result.batchLimitReached || result.deadlineReached) {
     return {
       bodyStatus: result.failedLearners > 0
         ? "partial_failure_incomplete"

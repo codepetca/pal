@@ -11,11 +11,15 @@ export type StoryGrantReconciliationResult = {
   candidates: number;
   due: number;
   granted: number;
+  hasMore: boolean;
 };
 
+export const STORY_GRANT_RECONCILE_LIMIT = 24;
+
 /**
- * Reconciles every overdue post-rollout story assignment for one locked
- * learner. Both event ingest and the scheduled worker call this function.
+ * Reconciles one bounded page of overdue post-rollout story assignments for
+ * one locked learner. Both event ingest and the scheduled worker call this
+ * function; the worker drains additional pages in separate transactions.
  * It grants ownership only: Weekly Rhythm remains the durable authority for
  * sketch-versus-color presentation, XP, achievements, and activity state.
  *
@@ -26,14 +30,19 @@ export async function reconcileDueStoryGrants(
   input: {
     learnerId: string;
     asOf?: Date;
+    limit?: number;
   },
 ): Promise<StoryGrantReconciliationResult> {
   const asOf = input.asOf ?? new Date();
+  const limit = Math.max(
+    1,
+    Math.min(input.limit ?? STORY_GRANT_RECONCILE_LIMIT, 100),
+  );
 
   // The typed schedule is durable due work derived from one stable weekly fact.
   // The reward ledger remains ownership authority; an existing grant is enough
   // to consume queue work left pending by a retry or pre-migration scheduler.
-  const candidates = await db
+  const discoveredCandidates = await db
     .select({
       scheduleId: storyCollectibleSchedules.id,
       sourceFactId: storyCollectibleSchedules.sourceFactId,
@@ -75,7 +84,11 @@ export async function reconcileDueStoryGrants(
     .orderBy(
       asc(storyCollectibleSchedules.dueAt),
       asc(storyCollectibleSchedules.id),
-    );
+    )
+    .limit(limit + 1);
+
+  const hasMore = discoveredCandidates.length > limit;
+  const candidates = discoveredCandidates.slice(0, limit);
 
   let granted = 0;
   for (const candidate of candidates) {
@@ -103,5 +116,6 @@ export async function reconcileDueStoryGrants(
     candidates: candidates.length,
     due: candidates.length,
     granted,
+    hasMore,
   };
 }

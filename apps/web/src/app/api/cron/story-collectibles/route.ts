@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron-auth";
 import { storyGrantCronResponse } from "@/lib/story-grant-cron-result";
-import { runStoryGrantWorker } from "@/lib/story-grant-worker";
+import {
+  runStoryGrantWorker,
+  STORY_GRANT_RUN_BUDGET_MS,
+} from "@/lib/story-grant-worker";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -24,6 +27,8 @@ export async function GET(request: NextRequest) {
   if (authorization !== "authorized") {
     return response({ error: "unauthorized" }, 401);
   }
-  const result = await runStoryGrantWorker();
+  const result = await runStoryGrantWorker({
+    deadline: new Date(Date.now() + STORY_GRANT_RUN_BUDGET_MS),
+  });
   return storyGrantCronResponse(result);
 }
