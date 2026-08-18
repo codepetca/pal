@@ -67,8 +67,7 @@ export function storyWeekStartDay(
       ? addCalendarDays(secondStart, ((weekIndex as number) - 2) * 7)
       : null;
   const explicit = typeof metadata.week_start_day === "string"
-    ? (weekIndex as number) === (termWeekCount as number) &&
-        (isoWeekday(metadata.week_start_day) ?? 0) > 5
+    ? (weekIndex as number) === (termWeekCount as number)
       ? mondayOfCalendarWeek(metadata.week_start_day)
       : followingInstructionalDay(metadata.week_start_day)
     : null;

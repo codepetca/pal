@@ -126,6 +126,15 @@ test("a weekend final-week marker resolves to the preceding Monday", () => {
   assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-29");
 });
 
+test("a Friday final-week marker resolves to Monday and still ends Friday", () => {
+  const finalWeek = calendar({
+    week_start_day: "2026-12-18",
+    week_index: 16,
+  });
+  assert.equal(storyWeekCalendar(finalWeek)?.weekStartDay, "2026-12-14");
+  assert.equal(storyCollectibleDueDay(finalWeek), "2026-12-19");
+});
+
 test("legacy 16-week calendars normalize the first and last short weeks", () => {
   const legacy = {
     term_start_day: "2026-09-02",
