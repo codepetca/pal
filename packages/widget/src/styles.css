@@ -545,6 +545,17 @@
   user-drag: none;
 }
 
+.pal-celebration-backdrop {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.pal-celebration-backdrop[data-pal-pending="true"] {
+  cursor: wait;
+}
+
 .pal-celebration {
   position: relative;
   display: grid;
@@ -563,6 +574,10 @@
     var(--pal-effective-motion-deliberate)
     var(--pal-effective-motion-easing)
     both;
+}
+
+.pal-celebration[aria-busy="true"] {
+  opacity: 0.72;
 }
 
 .pal-celebration h2 {

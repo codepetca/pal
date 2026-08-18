@@ -61,6 +61,22 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.doesNotMatch(html, /aria-label="New Pal reward"/);
 });
 
+test("modal celebration uses backdrop dismissal without a continue button", () => {
+  const client = createFixturePalClient();
+  client.dispatch("item-opened-early", { itemToken: "modal-celebration-item" });
+  const snapshot = client.peek();
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="modal-reward">
+      <PalRewardCelebration modal />
+    </PalProvider>,
+  );
+
+  assert.match(html, /class="pal-celebration-backdrop"/);
+  assert.match(html, /aria-modal="true"/);
+  assert.match(html, /tabindex="-1"/);
+  assert.doesNotMatch(html, />Continue<\/button>/);
+});
+
 test("roadmap hides future weeks and renders visible weeks newest first", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(

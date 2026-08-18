@@ -29,7 +29,8 @@ export function PalRewardCelebration({
   } = usePalWidget();
   const reward = snapshot?.rewards[0];
   const rewardId = reward?.id;
-  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const actionButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const titleId = useId();
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export function PalRewardCelebration({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    continueButtonRef.current?.focus();
+    dialogRef.current?.focus();
     return () => {
       const restoreFocus = () => {
         if (previousFocus?.isConnected) previousFocus.focus();
@@ -84,8 +85,9 @@ export function PalRewardCelebration({
   const icon = achievement?.badge.icon ?? grantReward?.icon;
   const showArtwork = !titleReward;
 
-  return (
+  const celebration = (
     <section
+      aria-busy={pending || undefined}
       aria-labelledby={hostManaged ? undefined : titleId}
       aria-modal={!hostManaged && modal ? "true" : undefined}
       className="pal-celebration"
@@ -98,13 +100,19 @@ export function PalRewardCelebration({
         if (hostManaged) return;
         if (event.key === "Tab" && modal) {
           event.preventDefault();
-          continueButtonRef.current?.focus();
+          if (rewardError) {
+            actionButtonRef.current?.focus();
+          } else {
+            dialogRef.current?.focus();
+          }
         } else if (event.key === "Escape" && !pending) {
           event.preventDefault();
           void dismissReward(reward.id);
         }
       }}
+      ref={dialogRef}
       role={hostManaged ? undefined : "dialog"}
+      tabIndex={hostManaged ? undefined : -1}
     >
       {showArtwork ? (
         <div className="pal-celebration-icon" aria-hidden="true">
@@ -127,15 +135,32 @@ export function PalRewardCelebration({
           We could not save that yet. Try again.
         </p>
       ) : null}
-      <button
-        className="pal-button"
-        type="button"
-        disabled={pending}
-        onClick={() => void dismissReward(reward.id)}
-        ref={continueButtonRef}
-      >
-        {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
-      </button>
+      {!modal || rewardError ? (
+        <button
+          className="pal-button"
+          type="button"
+          disabled={pending}
+          onClick={() => void dismissReward(reward.id)}
+          ref={actionButtonRef}
+        >
+          {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
+        </button>
+      ) : null}
     </section>
+  );
+
+  if (!modal || hostManaged) return celebration;
+
+  return (
+    <div
+      className="pal-celebration-backdrop"
+      data-pal-pending={pending ? "true" : "false"}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget || pending) return;
+        void dismissReward(reward.id);
+      }}
+    >
+      {celebration}
+    </div>
   );
 }

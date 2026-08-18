@@ -626,16 +626,19 @@ test("a category reshuffle cannot evict an unacknowledged reward", async () => {
   );
 });
 
-test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
+test("reward modal dismisses from its backdrop and restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
     title: "Achievement earned",
     description: "A reward notice",
   });
+  let acknowledgementCalls = 0;
   const client: PalClient = {
     getSnapshot: async () => snapshot,
-    markRewardSeen: async () => undefined,
+    markRewardSeen: async () => {
+      acknowledgementCalls += 1;
+    },
   };
   class FakeElement {
     focusCount = 0;
@@ -646,7 +649,7 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
     }
   }
   const previousFocus = new FakeElement();
-  const continueButton = new FakeElement();
+  const dialogElement = new FakeElement();
   const openChanges: boolean[] = [];
   const originalDocument = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -682,16 +685,21 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
         </PalProvider>,
         {
           createNodeMock(element) {
-            return element.type === "button" ? continueButton : null;
+            return element.type === "section" ? dialogElement : null;
           },
         },
       );
     });
 
     const dialog = renderer!.root.findByType("section");
+    const backdrop = renderer!.root.findByProps({
+      className: "pal-celebration-backdrop",
+    });
     assert.equal(dialog.props.role, "dialog");
     assert.equal(dialog.props["aria-modal"], "true");
-    assert.equal(continueButton.focusCount, 1);
+    assert.equal(dialog.props.tabIndex, -1);
+    assert.equal(dialogElement.focusCount, 1);
+    assert.equal(renderer!.root.findAllByType("button").length, 0);
     assert.deepEqual(openChanges, [true]);
 
     let tabPrevented = false;
@@ -704,7 +712,26 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
       });
     });
     assert.equal(tabPrevented, true);
-    assert.equal(continueButton.focusCount, 2);
+    assert.equal(dialogElement.focusCount, 2);
+
+    await act(async () => {
+      backdrop.props.onClick({ target: {}, currentTarget: {} });
+      await Promise.resolve();
+    });
+    assert.equal(acknowledgementCalls, 0);
+
+    const backdropTarget = {};
+    await act(async () => {
+      backdrop.props.onClick({
+        target: backdropTarget,
+        currentTarget: backdropTarget,
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(acknowledgementCalls, 1);
+    assert.equal(renderer!.toJSON(), null);
+    assert.equal(previousFocus.focusCount, 1);
+    assert.deepEqual(openChanges, [true, false]);
 
     await act(async () => {
       renderer?.unmount();
