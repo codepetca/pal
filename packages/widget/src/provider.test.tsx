@@ -852,6 +852,148 @@ test("modal Escape dismissal is duplicate-safe and exposes retry only after fail
   assert.equal(renderer.toJSON(), null);
 });
 
+test("a refilled reward cancels stale focus restoration", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First achievement",
+    description: "The final reward on the visible page.",
+  }];
+  const nextPage = structuredClone(firstPage);
+  nextPage.rewards = [{
+    id: "reward-2",
+    title: "Refilled achievement",
+    description: "The first reward on the next page.",
+  }];
+  const refill = deferred<typeof nextPage>();
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    getSnapshot() {
+      snapshotCalls += 1;
+      return snapshotCalls === 1 ? Promise.resolve(firstPage) : refill.promise;
+    },
+    markRewardSeen: async () => undefined,
+  };
+  class FakeElement {
+    focusCount = 0;
+    isConnected = true;
+
+    focus() {
+      this.focusCount += 1;
+    }
+  }
+  const previousFocus = new FakeElement();
+  const dialogElement = new FakeElement();
+  const animationFrames: FrameRequestCallback[] = [];
+  const openChanges: boolean[] = [];
+  const handleOpenChange = (open: boolean) => openChanges.push(open);
+  const originalDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  const originalHTMLElement = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "HTMLElement",
+  );
+  const originalRequestAnimationFrame = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "requestAnimationFrame",
+  );
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer: ReactTestRenderer | undefined;
+
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    value: FakeElement,
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { activeElement: previousFocus },
+  });
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    configurable: true,
+    value: (callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    },
+  });
+
+  function Probe() {
+    widget = usePalWidget();
+    return (
+      <PalRewardCelebration
+        modal
+        onOpenChange={handleOpenChange}
+      />
+    );
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={firstPage}
+          scopeKey="fixture-refill-focus"
+        >
+          <Probe />
+        </PalProvider>,
+        {
+          createNodeMock(element) {
+            return element.type === "section" ? dialogElement : null;
+          },
+        },
+      );
+    });
+    assert.equal(dialogElement.focusCount, 1);
+
+    await act(async () => {
+      await widget.dismissReward("reward-1");
+    });
+    assert.equal(renderer!.toJSON(), null);
+    assert.equal(animationFrames.length, 1);
+
+    animationFrames.shift()?.(0);
+    assert.equal(animationFrames.length, 1);
+
+    await act(async () => {
+      refill.resolve(nextPage);
+      await refill.promise;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.match(JSON.stringify(renderer!.toJSON()), /Refilled achievement/);
+    assert.equal(dialogElement.focusCount, 2);
+    assert.equal(previousFocus.focusCount, 0);
+
+    animationFrames.shift()?.(16);
+    assert.equal(previousFocus.focusCount, 0);
+    assert.deepEqual(openChanges, [true, false, true]);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    if (originalDocument) {
+      Object.defineProperty(globalThis, "document", originalDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+    if (originalHTMLElement) {
+      Object.defineProperty(globalThis, "HTMLElement", originalHTMLElement);
+    } else {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+    if (originalRequestAnimationFrame) {
+      Object.defineProperty(
+        globalThis,
+        "requestAnimationFrame",
+        originalRequestAnimationFrame,
+      );
+    } else {
+      Reflect.deleteProperty(globalThis, "requestAnimationFrame");
+    }
+  }
+});
+
 test("a host-managed reward does not publish a competing open lifecycle", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

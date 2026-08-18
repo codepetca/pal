@@ -32,6 +32,7 @@ export function PalRewardCelebration({
   const open = Boolean(rewardId);
   const actionButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const focusCycleRef = useRef(0);
   const titleId = useId();
 
   useEffect(() => {
@@ -53,9 +54,11 @@ export function PalRewardCelebration({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    const focusCycle = ++focusCycleRef.current;
     dialogRef.current?.focus();
     return () => {
       const restoreFocus = () => {
+        if (focusCycleRef.current !== focusCycle) return;
         if (previousFocus?.isConnected) previousFocus.focus();
       };
       if (typeof requestAnimationFrame === "function") {
