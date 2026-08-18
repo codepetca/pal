@@ -6,11 +6,18 @@ import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 /**
- * Badge art is rendered by the widget into a fixed circular slot with
- * `object-fit: contain`, so the browser frames each badge by its *canvas*, not
- * by the artwork inside it. Any badge whose artwork is off-centre in its own
- * canvas, or that fills a different share of it, renders visibly misaligned or
- * mis-sized next to its neighbours in the achievement trail.
+ * Badge art is rendered by the widget into a fixed *circular* slot with
+ * `object-fit: contain`, so the browser frames each badge by its canvas, not by
+ * the artwork inside it. Any badge whose artwork is off-centre in its own
+ * canvas, or that occupies a different share of it, renders visibly misaligned
+ * or mis-sized next to its neighbours in the achievement trail.
+ *
+ * Because the slot is a circle, what has to fill it is the artwork's enclosing
+ * circle rather than its bounding box. Sizing by the box leaves every disc
+ * ringed by slot background; sizing the box to the whole canvas would instead
+ * push the corners of the non-circular badges past the slot and clip them.
+ * Pinning the enclosing circle covers both: a disc meets the slot edge exactly,
+ * and a shape with protrusions touches it at its extremes with nothing cut off.
  *
  * These tests pin the framing contract every badge PNG must satisfy so new art
  * cannot reintroduce that drift.
@@ -30,16 +37,16 @@ const BADGE_DIR = join(
 
 /** Canonical badge canvas: square, and the same for every badge. */
 const CANVAS = 512;
-/** Share of the canvas the artwork's longest edge must occupy. */
-const TARGET_FILL = 0.85;
+/** The artwork's enclosing circle must fill the canvas, matching the slot. */
+const TARGET_RADIUS = CANVAS / 2;
 /** Rounding slack, in canvas pixels, for the artwork's centre point. */
 const CENTRE_TOLERANCE_PX = 1;
 /**
- * Slack, in canvas pixels, for the fill target. Slightly looser than centring:
- * resampling artwork to the target size can soften its outermost column or row
- * below the alpha threshold, costing a pixel off the measured bounding box.
+ * Slack, in canvas pixels, for the radius target. Slightly looser than
+ * centring: resampling spreads the artwork's outer edge by a fraction of a
+ * pixel either way, so the measured radius lands just above or below the mark.
  */
-const FILL_TOLERANCE_PX = 2;
+const RADIUS_TOLERANCE_PX = 2;
 /** Alpha above which a pixel counts as artwork rather than empty margin. */
 const ALPHA_THRESHOLD = 8;
 
@@ -158,6 +165,26 @@ function artworkBounds({ width, height, alpha }: DecodedAlpha) {
 }
 
 /**
+ * Distance from the centre of the canvas to the furthest visible pixel - the
+ * radius of the circle the artwork occupies, which is what the circular slot
+ * has to accommodate.
+ */
+function enclosingRadius({ width, height, alpha }: DecodedAlpha) {
+  const centreX = (width - 1) / 2;
+  const centreY = (height - 1) / 2;
+  let radius = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (alpha[y * width + x] <= ALPHA_THRESHOLD) continue;
+      const distance = Math.hypot(x - centreX, y - centreY);
+      if (distance > radius) radius = distance;
+    }
+  }
+  assert.ok(radius > 0, "badge art must contain visible pixels");
+  return radius;
+}
+
+/**
  * Connected runs of visible pixels, largest first. Eight-connected, so a shape
  * joined only at a diagonal still counts as one piece.
  */
@@ -257,17 +284,14 @@ for (const file of badgeFiles) {
     );
   });
 
-  test(`${file} artwork fills the same share of the canvas as its peers`, () => {
+  test(`${file} artwork fills the circular slot`, () => {
     const image = decodePngAlpha(readFileSync(join(BADGE_DIR, file)));
-    const bounds = artworkBounds(image);
-    const longestEdge = Math.max(
-      bounds.maxX - bounds.minX + 1,
-      bounds.maxY - bounds.minY + 1,
-    );
-    const expected = CANVAS * TARGET_FILL;
+    const radius = enclosingRadius(image);
     assert.ok(
-      Math.abs(longestEdge - expected) <= FILL_TOLERANCE_PX,
-      `${file} artwork spans ${longestEdge}px, expected ${expected}px (±${FILL_TOLERANCE_PX})`,
+      Math.abs(radius - TARGET_RADIUS) <= RADIUS_TOLERANCE_PX,
+      `${file} artwork reaches ${radius.toFixed(1)}px from centre, expected ` +
+        `${TARGET_RADIUS}px (±${RADIUS_TOLERANCE_PX}). Short of it leaves a ring of ` +
+        `slot background around the badge; past it, the slot clips the artwork.`,
     );
   });
 }

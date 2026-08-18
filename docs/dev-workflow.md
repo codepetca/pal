@@ -230,17 +230,27 @@ apps/web/public/assets/badges/  — achievement art
 
 #### Badge framing contract
 
-The widget drops each badge into a fixed circular slot with `object-fit: contain`, so the
-browser frames the art by its **canvas**, not by the artwork inside it. Art that sits
-off-centre in its own canvas, or that fills a different share of it, renders visibly
+The widget drops each badge into a fixed **circular** slot with `object-fit: contain`, so
+the browser frames the art by its **canvas**, not by the artwork inside it. Art that sits
+off-centre in its own canvas, or that occupies a different share of it, renders visibly
 misaligned or mis-sized next to its neighbours in the achievement trail. Every file in
 `apps/web/public/assets/badges/` must therefore be:
 
 - a 512×512 RGBA PNG (transparent margin, never an opaque backdrop square),
-- centred — the artwork's alpha bounding box centred on the canvas, and
-- uniformly sized — the bounding box's longest edge spanning 85% of the canvas.
+- centred — the artwork's alpha bounding box centred on the canvas,
+- uniformly sized — the artwork's **enclosing circle** filling that canvas, and
+- whole — no detached specks sitting outside the artwork's body.
 
-`apps/web/src/lib/badge-art-framing.test.ts` enforces all three, so new badge art fails CI
+Size by the enclosing circle, not the bounding box. The slot is round: sizing by the box
+leaves every circular badge ringed by slot background, while stretching the box to the
+whole canvas pushes the corners of the non-circular badges past the slot and clips them.
+Pinning the enclosing circle covers both — a disc meets the slot edge exactly, and a shape
+with protrusions touches it at its extremes with nothing cut off.
+
+Reframe from the original art. Never compensate in CSS: the slot is shared by every badge,
+so scaling there to fix one shape clips the others.
+
+`apps/web/src/lib/badge-art-framing.test.ts` enforces all four, so new badge art fails CI
 until it is framed to match.
 
 ### Where assets live, and when that changes
