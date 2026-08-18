@@ -220,23 +220,12 @@ type PeriodCalendar = {
   endDay: string | null;
 };
 
-function offsetCalendarDay(day: string, days: number): string | null {
-  const timestamp = Date.parse(`${day}T00:00:00.000Z`);
-  return Number.isNaN(timestamp)
-    ? null
-    : new Date(timestamp + days * 86_400_000).toISOString().slice(0, 10);
-}
-
 function periodCalendarFromMetadata(
   metadata: Record<string, unknown> | null | undefined,
 ): PeriodCalendar {
   const timeZone =
     typeof metadata?.term_timezone === "string"
       ? metadata.term_timezone
-      : null;
-  const termStartDay =
-    typeof metadata?.term_start_day === "string"
-      ? metadata.term_start_day
       : null;
   const termEndDay =
     typeof metadata?.term_end_day === "string"

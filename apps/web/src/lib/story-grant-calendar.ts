@@ -77,10 +77,12 @@ export function storyWeekStartDay(
 
   const finalMonday = addCalendarDays(termEndDay, -(termEndWeekday - 1));
   const latestStart = finalMonday
-    ? addCalendarDays(
-        finalMonday,
-        -((termWeekCount as number) - (weekIndex as number)) * 7,
-      )
+    ? (weekIndex as number) === 1
+      ? addCalendarDays(finalMonday, -((termWeekCount as number) - 2) * 7 - 3)
+      : addCalendarDays(
+          finalMonday,
+          -((termWeekCount as number) - (weekIndex as number)) * 7,
+        )
     : null;
   return actualStart && defaultStart && latestStart &&
       actualStart >= defaultStart && actualStart <= latestStart && actualStart <= termEndDay
