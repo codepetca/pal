@@ -98,10 +98,11 @@ export const events = pgTable(
   ]
 );
 
-// A semantically unique, privacy-safe fact derived from an accepted event. An
-// integration retry is deduplicated by events.idempotency_key; this second
-// ledger independently prevents a producer from changing the idempotency key
-// and counting the same learner behavior twice.
+// An append-only, semantically unique, privacy-safe fact derived from an
+// accepted event. An integration retry is deduplicated by events.idempotency_key;
+// this second ledger independently prevents a producer from changing the
+// idempotency key and counting the same learner behavior twice. A migration
+// trigger rejects direct updates/deletes while preserving learner-consent cascades.
 export const learnerFacts = pgTable(
   "learner_facts",
   {
@@ -136,6 +137,49 @@ export const learnerFacts = pgTable(
       t.learnerId,
       t.eventType,
       t.periodKey,
+    ),
+  ],
+);
+
+// Durable, typed work queue for guaranteed story ownership. Only complete
+// calendar-bearing configuration facts accepted after rollout create work;
+// calendar-less V1 facts remain valid for Weekly Rhythm but cannot define a
+// local story boundary. Neither schedules nor rewards are backfilled. The
+// append-only learner_reward_grants ledger remains canonical, and reconciled_at
+// records either queue consumption after that ledger proves ownership or a
+// terminal no-backfill skip when the due boundary had already passed before
+// the configuration fact reached Pal.
+export const storyCollectibleSchedules = pgTable(
+  "story_collectible_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id").notNull(),
+    periodKey: text("period_key").notNull(),
+    sourceFactId: uuid("source_fact_id").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("story_collectible_schedules_learner_period_uq").on(
+      t.learnerId,
+      t.periodKey,
+    ),
+    unique("story_collectible_schedules_source_fact_uq").on(t.sourceFactId),
+    foreignKey({
+      columns: [t.sourceFactId, t.learnerId],
+      foreignColumns: [learnerFacts.id, learnerFacts.learnerId],
+      name: "story_collectible_schedules_source_owner_fk",
+    }).onDelete("cascade"),
+    index("story_collectible_schedules_pending_due_idx")
+      .on(t.dueAt, t.id, t.createdAt, t.learnerId, t.periodKey)
+      .where(sql`${t.reconciledAt} IS NULL`),
+    index("story_collectible_schedules_pending_learner_idx")
+      .on(t.learnerId, t.dueAt, t.createdAt, t.periodKey)
+      .where(sql`${t.reconciledAt} IS NULL`),
+    check(
+      "story_collectible_schedules_period_nonempty",
+      sql`length(btrim(${t.periodKey})) > 0`,
     ),
   ],
 );
@@ -264,7 +308,9 @@ export const storyPlanChapters = pgTable(
 // Append-only durable ownership ledger. Source facts group grants from one
 // accepted action; grant_order gives those action groups stable database order
 // even when timestamps collide. Story content is resolved from the exact
-// pinned plan assignment at read time and is never copied into this table.
+// pinned plan assignment at read time and is never copied into this table. A
+// migration trigger admits story ownership only while that assignment's typed
+// schedule is pending; this also contains old writers during rolling deploys.
 export const learnerRewardGrants = pgTable(
   "learner_reward_grants",
   {
@@ -533,6 +579,7 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   }),
   events: many(events),
   facts: many(learnerFacts),
+  storyCollectibleSchedules: many(storyCollectibleSchedules),
   periods: many(achievementPeriods),
   storyPlans: many(storyPlans),
   rewardGrants: many(learnerRewardGrants),
@@ -566,6 +613,23 @@ export const learnerFactsRelations = relations(learnerFacts, ({ one }) => ({
     references: [events.id],
   }),
 }));
+
+export const storyCollectibleSchedulesRelations = relations(
+  storyCollectibleSchedules,
+  ({ one }) => ({
+    learner: one(learners, {
+      fields: [storyCollectibleSchedules.learnerId],
+      references: [learners.id],
+    }),
+    sourceFact: one(learnerFacts, {
+      fields: [
+        storyCollectibleSchedules.sourceFactId,
+        storyCollectibleSchedules.learnerId,
+      ],
+      references: [learnerFacts.id, learnerFacts.learnerId],
+    }),
+  }),
+);
 
 export const achievementPeriodsRelations = relations(
   achievementPeriods,
@@ -686,6 +750,8 @@ export type Economy = typeof economy.$inferSelect;
 export type PetState = typeof petState.$inferSelect;
 export type WorldState = typeof worldState.$inferSelect;
 export type LearnerFact = typeof learnerFacts.$inferSelect;
+export type StoryCollectibleSchedule =
+  typeof storyCollectibleSchedules.$inferSelect;
 export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
 export type StoryPlan = typeof storyPlans.$inferSelect;
 export type StoryPlanChapter = typeof storyPlanChapters.$inferSelect;

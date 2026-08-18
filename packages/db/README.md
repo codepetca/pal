@@ -13,7 +13,7 @@ routes live elsewhere and import from here.
 | `integrations` | registered external system, its secret hash, event allow-list, rule pack | integration |
 | `learners` | internal ID ↔ the integration's pseudonymous learner ID | learner |
 | `events` | immutable record of every received signal | event |
-| `learner_facts` | semantically unique normalized behavior derived from events | learner + fact type + semantic identity |
+| `learner_facts` | append-only, semantically unique normalized behavior derived from events | learner + fact type + semantic identity |
 | `achievement_periods` | stable roadmap order for opaque academic periods | learner + period |
 | `story_plans` | immutable term start, versioned story identity, and length for an opaque academic term | learner + term |
 | `story_plan_chapters` | ordered chapter assignment, optionally bound to an opaque period | story plan + period number |

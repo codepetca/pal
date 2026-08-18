@@ -1,0 +1,354 @@
+SET LOCAL lock_timeout = '2s';
+--> statement-breakpoint
+CREATE TABLE "public"."story_collectible_schedules" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"learner_id" uuid NOT NULL,
+	"period_key" text NOT NULL,
+	"source_fact_id" uuid NOT NULL,
+	"due_at" timestamp with time zone NOT NULL,
+	"reconciled_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "story_collectible_schedules_learner_period_uq" UNIQUE("learner_id","period_key"),
+	CONSTRAINT "story_collectible_schedules_source_fact_uq" UNIQUE("source_fact_id"),
+	CONSTRAINT "story_collectible_schedules_period_nonempty" CHECK (length(btrim("story_collectible_schedules"."period_key")) > 0)
+);
+--> statement-breakpoint
+ALTER TABLE "public"."story_collectible_schedules" ADD CONSTRAINT "story_collectible_schedules_source_owner_fk" FOREIGN KEY ("source_fact_id","learner_id") REFERENCES "public"."learner_facts"("id","learner_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "story_collectible_schedules_pending_due_idx" ON "public"."story_collectible_schedules" USING btree ("due_at","id","created_at","learner_id","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;--> statement-breakpoint
+CREATE INDEX "story_collectible_schedules_pending_learner_idx" ON "public"."story_collectible_schedules" USING btree ("learner_id","due_at","created_at","period_key") WHERE "story_collectible_schedules"."reconciled_at" IS NULL;
+--> statement-breakpoint
+CREATE FUNCTION "public"."calculate_story_collectible_due_at"("calendar_metadata" jsonb) RETURNS timestamp with time zone AS $$
+DECLARE
+	"term_start" date;
+	"term_end" date;
+	"week_start" date;
+	"week_index_numeric" numeric;
+	"week_index_value" integer;
+	"term_week_count_numeric" numeric;
+	"term_week_count_value" integer;
+	"term_timezone_value" text;
+	"resolved_timezone_value" text;
+	"earliest_week_start" date;
+	"latest_week_start" date;
+	"weekday" integer;
+	"friday" date;
+	"due_day" date;
+BEGIN
+	IF jsonb_typeof("calendar_metadata"->'term_token') IS DISTINCT FROM 'string'
+		OR length("calendar_metadata"->>'term_token') < 1
+		OR length("calendar_metadata"->>'term_token') > 128
+		OR ("calendar_metadata"->>'term_token') !~ '^[A-Za-z0-9._~-]+$'
+		OR jsonb_typeof("calendar_metadata"->'term_start_day') IS DISTINCT FROM 'string'
+		OR jsonb_typeof("calendar_metadata"->'term_end_day') IS DISTINCT FROM 'string'
+		OR jsonb_typeof("calendar_metadata"->'term_timezone') IS DISTINCT FROM 'string'
+		OR jsonb_typeof("calendar_metadata"->'week_index') IS DISTINCT FROM 'number'
+		OR ("calendar_metadata"->>'term_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+		OR ("calendar_metadata"->>'term_end_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+	THEN
+		RETURN NULL;
+	END IF;
+
+	"term_start" := ("calendar_metadata"->>'term_start_day')::date;
+	"term_end" := ("calendar_metadata"->>'term_end_day')::date;
+	"week_index_numeric" := ("calendar_metadata"->>'week_index')::numeric;
+	IF "week_index_numeric" <> trunc("week_index_numeric") THEN
+		RETURN NULL;
+	END IF;
+	"week_index_value" := "week_index_numeric"::integer;
+	"term_timezone_value" := "calendar_metadata"->>'term_timezone';
+	SELECT "time_zone"."name"
+	INTO "resolved_timezone_value"
+	FROM "pg_catalog"."pg_timezone_names" AS "time_zone"
+	WHERE "pg_catalog"."lower"("time_zone"."name") =
+		"pg_catalog"."lower"("term_timezone_value")
+	ORDER BY ("time_zone"."name" = "term_timezone_value") DESC,
+		"time_zone"."name"
+	LIMIT 1;
+
+	IF ("calendar_metadata" ? 'term_week_count') <> ("calendar_metadata" ? 'week_start_day') THEN
+		RETURN NULL;
+	END IF;
+
+	IF "calendar_metadata" ? 'term_week_count' THEN
+		IF jsonb_typeof("calendar_metadata"->'term_week_count') IS DISTINCT FROM 'number'
+			OR jsonb_typeof("calendar_metadata"->'week_start_day') IS DISTINCT FROM 'string'
+			OR ("calendar_metadata"->>'week_start_day') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+		THEN
+			RETURN NULL;
+		END IF;
+		"term_week_count_numeric" := ("calendar_metadata"->>'term_week_count')::numeric;
+		IF "term_week_count_numeric" <> trunc("term_week_count_numeric") THEN
+			RETURN NULL;
+		END IF;
+		"term_week_count_value" := "term_week_count_numeric"::integer;
+		"week_start" := ("calendar_metadata"->>'week_start_day')::date;
+	ELSE
+		"term_week_count_value" := 16;
+	END IF;
+
+	IF "term_start" > "term_end"
+		OR "term_week_count_value" < 6
+		OR "term_week_count_value" > 24
+		OR "week_index_value" < 1
+		OR "week_index_value" > "term_week_count_value"
+		OR "resolved_timezone_value" IS NULL THEN
+		RETURN NULL;
+	END IF;
+
+	-- A producer may delay a period for breaks or shorten the term edges, but
+	-- it cannot place a numbered period before its forward ordinal or so late
+	-- that the remaining declared periods no longer fit inside the term.
+	"earliest_week_start" := "term_start" + (("week_index_value" - 1) * 7);
+	"latest_week_start" := "term_end" - (("term_week_count_value" - "week_index_value") * 7);
+	"week_start" := coalesce("week_start", "earliest_week_start");
+
+	IF "week_start" < "earliest_week_start" OR "week_start" > "latest_week_start" THEN
+		RETURN NULL;
+	END IF;
+
+	"weekday" := extract(isodow from "week_start")::integer;
+	"friday" := "week_start" + ((5 - "weekday" + 7) % 7);
+	"due_day" := least("friday", "term_end") + 1;
+	RETURN "due_day"::timestamp AT TIME ZONE "resolved_timezone_value";
+EXCEPTION
+	WHEN invalid_text_representation
+		OR datetime_field_overflow
+		OR numeric_value_out_of_range
+	THEN
+		RETURN NULL;
+END;
+$$ LANGUAGE plpgsql STABLE;
+--> statement-breakpoint
+CREATE FUNCTION "public"."enqueue_story_collectible_schedule"() RETURNS trigger AS $$
+DECLARE
+	"due_at_value" timestamp with time zone;
+BEGIN
+	IF NEW."event_type" <> 'daily_log_week.configured'
+		OR NEW."period_key" IS NULL
+		OR NOT (NEW."metadata" ?| ARRAY[
+			'term_token',
+			'term_start_day',
+			'term_end_day',
+			'term_timezone',
+			'term_week_count',
+			'week_start_day',
+			'week_index'
+		])
+	THEN
+		RETURN NEW;
+	END IF;
+	IF EXISTS (
+		SELECT 1
+		FROM "public"."weekly_rhythm_configs" AS "weekly_config"
+		WHERE "weekly_config"."learner_id" = NEW."learner_id"
+			AND "weekly_config"."period_key" = NEW."period_key"
+			AND "weekly_config"."period_status" = 'closed'
+	) AND NOT EXISTS (
+		SELECT 1
+		FROM "public"."learner_facts" AS "calendar_fact"
+		WHERE "calendar_fact"."learner_id" = NEW."learner_id"
+			AND "calendar_fact"."period_key" = NEW."period_key"
+			AND "calendar_fact"."event_type" = 'daily_log_week.configured'
+			AND "calendar_fact"."metadata" ? 'week_index'
+			AND "calendar_fact"."id" <> NEW."id"
+	) THEN
+		RAISE EXCEPTION 'closed calendar-less period cannot enroll in story scheduling'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedule_closed_calendarless';
+	END IF;
+
+	"due_at_value" := "public"."calculate_story_collectible_due_at"(NEW."metadata");
+	IF "due_at_value" IS NULL THEN
+		RAISE EXCEPTION 'weekly configuration fact has no valid story due boundary'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedule_calendar_valid';
+	END IF;
+
+	INSERT INTO "public"."story_collectible_schedules" (
+		"learner_id",
+		"period_key",
+		"source_fact_id",
+		"due_at",
+		"reconciled_at",
+		"created_at"
+	) VALUES (
+		NEW."learner_id",
+		NEW."period_key",
+		NEW."id",
+		"due_at_value",
+		CASE
+			WHEN "due_at_value" < NEW."created_at" THEN NEW."created_at"
+			ELSE NULL
+		END,
+		NEW."created_at"
+	)
+	ON CONFLICT ("learner_id", "period_key") DO NOTHING;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE FUNCTION "public"."protect_story_collectible_schedule"() RETURNS trigger AS $$
+DECLARE
+	"source_learner_id" uuid;
+	"source_event_type" text;
+	"source_period_key" text;
+	"source_due_at" timestamp with time zone;
+	"source_created_at" timestamp with time zone;
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		SELECT
+			"learner_facts"."learner_id",
+			"learner_facts"."event_type",
+			"learner_facts"."period_key",
+			"public"."calculate_story_collectible_due_at"("learner_facts"."metadata"),
+			"learner_facts"."created_at"
+		INTO
+			"source_learner_id",
+			"source_event_type",
+			"source_period_key",
+			"source_due_at",
+			"source_created_at"
+		FROM "public"."learner_facts"
+		WHERE "learner_facts"."id" = NEW."source_fact_id";
+
+		-- Leave absent or cross-owner sources to the composite foreign key so
+		-- callers retain the precise referential-integrity failure.
+		IF NOT FOUND OR "source_learner_id" IS DISTINCT FROM NEW."learner_id" THEN
+			RETURN NEW;
+		END IF;
+
+		IF "source_event_type" IS DISTINCT FROM 'daily_log_week.configured'
+			OR "source_period_key" IS DISTINCT FROM NEW."period_key"
+			OR "source_due_at" IS DISTINCT FROM NEW."due_at"
+			OR "source_created_at" IS DISTINCT FROM NEW."created_at"
+			OR NEW."reconciled_at" IS DISTINCT FROM (CASE
+				WHEN "source_due_at" < "source_created_at" THEN "source_created_at"
+				ELSE NULL
+			END)
+		THEN
+			RAISE EXCEPTION 'story schedule must match its configuration fact'
+				USING ERRCODE = '23514',
+					CONSTRAINT = 'story_collectible_schedules_source_valid';
+		END IF;
+		RETURN NEW;
+	END IF;
+
+	IF TG_OP = 'DELETE' THEN
+		IF EXISTS (SELECT 1 FROM "public"."learners" WHERE "id" = OLD."learner_id") THEN
+			RAISE EXCEPTION 'story collectible schedules are immutable'
+				USING ERRCODE = '23514',
+					CONSTRAINT = 'story_collectible_schedules_immutable';
+		END IF;
+		RETURN OLD;
+	END IF;
+
+	IF ROW(
+		NEW."id",
+		NEW."learner_id",
+		NEW."period_key",
+		NEW."source_fact_id",
+		NEW."due_at",
+		NEW."created_at"
+	) IS DISTINCT FROM ROW(
+		OLD."id",
+		OLD."learner_id",
+		OLD."period_key",
+		OLD."source_fact_id",
+		OLD."due_at",
+		OLD."created_at"
+	) OR (
+		OLD."reconciled_at" IS NOT NULL
+		AND NEW."reconciled_at" IS DISTINCT FROM OLD."reconciled_at"
+	) THEN
+		RAISE EXCEPTION 'story collectible schedules are immutable'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedules_immutable';
+	END IF;
+
+	IF OLD."reconciled_at" IS NULL AND NEW."reconciled_at" IS NOT NULL AND NOT EXISTS (
+		SELECT 1
+		FROM "public"."story_plan_chapters"
+		INNER JOIN "public"."learner_reward_grants"
+			ON "learner_reward_grants"."story_plan_chapter_id" = "story_plan_chapters"."id"
+			AND "learner_reward_grants"."kind" = 'story_chapter'
+		WHERE "story_plan_chapters"."learner_id" = NEW."learner_id"
+			AND "story_plan_chapters"."period_key" = NEW."period_key"
+	) THEN
+		RAISE EXCEPTION 'story schedule cannot reconcile before ownership exists'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedules_reconciliation_requires_grant';
+	END IF;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "story_collectible_schedules_protect"
+BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_schedule"();
+--> statement-breakpoint
+CREATE FUNCTION "public"."require_pending_story_schedule_for_grant"() RETURNS trigger AS $$
+DECLARE
+	"chapter_period_key" text;
+BEGIN
+	IF NEW."kind" IS DISTINCT FROM 'story_chapter'
+		OR NEW."story_plan_id" IS NULL
+		OR NEW."story_plan_chapter_id" IS NULL
+	THEN
+		RETURN NEW;
+	END IF;
+
+	SELECT "story_plan_chapters"."period_key"
+	INTO "chapter_period_key"
+	FROM "public"."story_plan_chapters"
+	WHERE "story_plan_chapters"."id" = NEW."story_plan_chapter_id"
+		AND "story_plan_chapters"."story_plan_id" = NEW."story_plan_id"
+		AND "story_plan_chapters"."learner_id" = NEW."learner_id";
+
+	-- Leave unknown/cross-owner assignments to the existing composite foreign
+	-- key. A valid assignment is grantable only while its prospective schedule
+	-- remains pending. RETURN NULL keeps an old writer from rolling back the
+	-- accepted event during the migration-first deployment window.
+	IF NOT FOUND THEN
+		RETURN NEW;
+	END IF;
+	IF "chapter_period_key" IS NULL OR NOT EXISTS (
+		SELECT 1
+		FROM "public"."story_collectible_schedules" AS "schedule"
+		WHERE "schedule"."learner_id" = NEW."learner_id"
+			AND "schedule"."period_key" = "chapter_period_key"
+			AND "schedule"."reconciled_at" IS NULL
+	) THEN
+		RETURN NULL;
+	END IF;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "learner_reward_grants_require_pending_story_schedule"
+BEFORE INSERT ON "public"."learner_reward_grants"
+FOR EACH ROW EXECUTE FUNCTION "public"."require_pending_story_schedule_for_grant"();
+--> statement-breakpoint
+CREATE FUNCTION "public"."protect_learner_fact_immutable"() RETURNS trigger AS $$
+BEGIN
+	IF TG_OP = 'DELETE' AND NOT EXISTS (
+		SELECT 1 FROM "public"."learners" WHERE "id" = OLD."learner_id"
+	) THEN
+		RETURN OLD;
+	END IF;
+
+	RAISE EXCEPTION 'learner facts are append-only'
+		USING ERRCODE = '23514',
+			CONSTRAINT = 'learner_facts_immutable';
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "learner_facts_enqueue_story_collectible_schedule"
+AFTER INSERT ON "public"."learner_facts"
+FOR EACH ROW EXECUTE FUNCTION "public"."enqueue_story_collectible_schedule"();
+--> statement-breakpoint
+CREATE TRIGGER "learner_facts_immutable"
+BEFORE UPDATE OR DELETE ON "public"."learner_facts"
+FOR EACH ROW EXECUTE FUNCTION "public"."protect_learner_fact_immutable"();

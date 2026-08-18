@@ -1,5 +1,11 @@
-import { and, eq } from "drizzle-orm";
-import { learnerRewardGrants, storyPlanChapters, storyPlans, type Db } from "@pal/db";
+import { and, eq, isNull } from "drizzle-orm";
+import {
+  learnerRewardGrants,
+  storyCollectibleSchedules,
+  storyPlanChapters,
+  storyPlans,
+  type Db,
+} from "@pal/db";
 
 export const BEHAVIOR_TITLES = Object.freeze({
   rhythmBuilder: Object.freeze({ id: "rhythm-builder", label: "Rhythm Builder", description: "Show up three days in a row.", revealCopy: "A steady rhythm becomes a strength you can keep." }),
@@ -36,6 +42,11 @@ export async function grantStoryChapterForPeriod(
     .innerJoin(storyPlans, and(
       eq(storyPlans.id, storyPlanChapters.storyPlanId),
       eq(storyPlans.learnerId, storyPlanChapters.learnerId),
+    ))
+    .innerJoin(storyCollectibleSchedules, and(
+      eq(storyCollectibleSchedules.learnerId, storyPlanChapters.learnerId),
+      eq(storyCollectibleSchedules.periodKey, storyPlanChapters.periodKey),
+      isNull(storyCollectibleSchedules.reconciledAt),
     ))
     .where(and(
       eq(storyPlanChapters.learnerId, input.learnerId),

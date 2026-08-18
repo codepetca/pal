@@ -9,6 +9,7 @@ import {
   economy,
   getDb,
   learnerRewardGrants,
+  storyCollectibleSchedules,
   storyPlanChapters,
   storyPlans,
 } from "@pal/db";
@@ -501,9 +502,9 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
   const periodKey = `legacy-revision-period-${crypto.randomUUID()}`;
   const termKey = `legacy-revision-term-${crypto.randomUUID()}`;
   const legacy = configuredWeek(periodKey, termKey);
-  legacy.occurred_at = "2026-08-03T12:00:00.000Z";
-  legacy.metadata.term_start_day = "2026-06-29";
-  legacy.metadata.term_end_day = "2026-10-16";
+  legacy.occurred_at = "2099-08-31T12:00:00.000Z";
+  legacy.metadata.term_start_day = "2099-07-27";
+  legacy.metadata.term_end_day = "2099-11-13";
   legacy.metadata.week_index = 6;
   delete (legacy.metadata as Record<string, unknown>).term_week_count;
   delete (legacy.metadata as Record<string, unknown>).week_start_day;
@@ -517,15 +518,15 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
     assert.equal((await processEventInDb(
       integration.id,
       externalLearnerId,
-      dailyLogOn(periodKey, "2026-08-03"),
+      dailyLogOn(periodKey, "2099-08-31"),
       crypto.randomUUID(),
     )).status, "processed");
 
     const adaptive = structuredClone(legacy);
-    adaptive.occurred_at = "2026-08-04T12:00:00.000Z";
+    adaptive.occurred_at = "2099-09-01T12:00:00.000Z";
     adaptive.metadata.config_version = 2;
     adaptive.metadata.term_week_count = 16;
-    adaptive.metadata.week_start_day = "2026-08-04";
+    adaptive.metadata.week_start_day = "2099-09-01";
     const moved = await processEventInDb(
       integration.id,
       externalLearnerId,
@@ -546,7 +547,7 @@ test("an adaptive revision cannot move an earned legacy week into the future", {
       integration.id,
       learnerId,
       getDb(),
-      { asOf: new Date("2026-08-04T12:00:00.000Z") },
+      { asOf: new Date("2099-09-01T12:00:00.000Z") },
     );
     assert.notEqual(snapshot.roadmap.weeks[5]?.status, "future");
     assert.equal(snapshot.progression?.collectibles[5]?.status, "earned");
@@ -648,12 +649,152 @@ test("the first calendar-bearing revision quarantines calendarless pending facts
   }
 });
 
+test("a closed calendarless period remains story-ineligible", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `closed-calendarless-${crypto.randomUUID()}`;
+  const periodKey = `closed-calendarless-period-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2026-08-31T12:00:00.000Z",
+        metadata: {
+          period_key: periodKey,
+          config_version: 2,
+          period_status: "closed",
+          eligible_days: 0,
+        },
+      },
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const calendarRevision = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2026-09-01T12:00:00.000Z",
+        metadata: {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "closed",
+          eligible_days: 0,
+          term_token: `closed-calendarless-term-${crypto.randomUUID()}`,
+          term_start_day: "2026-08-31",
+          term_end_day: "2026-10-09",
+          term_timezone: "America/Toronto",
+          term_week_count: 6,
+          week_start_day: "2026-08-31",
+          week_index: 1,
+        },
+      },
+      crypto.randomUUID(),
+    );
+    assert.deepEqual(calendarRevision, {
+      status: "rejected",
+      error: "closed_period_revision",
+    });
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    assert.equal((await getDb().select().from(storyCollectibleSchedules).where(and(
+      eq(storyCollectibleSchedules.learnerId, learnerId),
+      eq(storyCollectibleSchedules.periodKey, periodKey),
+    ))).length, 0);
+    assert.equal((await getDb().select().from(storyPlans).where(
+      eq(storyPlans.learnerId, learnerId),
+    )).length, 0);
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(
+      eq(learnerRewardGrants.learnerId, learnerId),
+    )).length, 0);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
+test("an after-due first configuration cannot backfill a story grant", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `late-first-configuration-${crypto.randomUUID()}`;
+  const periodKey = `late-first-configuration-period-${crypto.randomUUID()}`;
+  try {
+    assert.equal((await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      dailyLogOn(periodKey, "2025-06-30"),
+      crypto.randomUUID(),
+    )).status, "processed");
+
+    const configured = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      {
+        event_type: "daily_log_week.configured",
+        occurred_at: "2025-07-07T12:00:00.000Z",
+        metadata: {
+          period_key: periodKey,
+          config_version: 1,
+          period_status: "open",
+          eligible_days: 1,
+          term_token: `late-first-configuration-term-${crypto.randomUUID()}`,
+          term_start_day: "2025-06-30",
+          term_end_day: "2025-08-08",
+          term_timezone: "America/Toronto",
+          term_week_count: 6,
+          week_start_day: "2025-06-30",
+          week_index: 1,
+        },
+      },
+      crypto.randomUUID(),
+    );
+    assert.equal(configured.status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const [schedule] = await getDb()
+      .select()
+      .from(storyCollectibleSchedules)
+      .where(and(
+        eq(storyCollectibleSchedules.learnerId, learnerId),
+        eq(storyCollectibleSchedules.periodKey, periodKey),
+      ));
+    assert.ok(schedule?.reconciledAt);
+
+    const storyGrants = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(and(
+        eq(learnerRewardGrants.learnerId, learnerId),
+        eq(learnerRewardGrants.kind, "story_chapter"),
+      ));
+    assert.equal(storyGrants.length, 0);
+
+    const snapshot = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      { asOf: new Date("2025-07-07T12:00:00.000Z") },
+    );
+    assert.equal(snapshot.rewards.some((reward) => reward.kind === "story"), false);
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
+  }
+});
+
 test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `legacy-plan-${crypto.randomUUID()}`;
   const legacy = configuredWeek(`period-${crypto.randomUUID()}`, `legacy-term-${crypto.randomUUID()}`);
   legacy.metadata.term_end_day = "2026-12-18";
   delete (legacy.metadata as { term_week_count?: number }).term_week_count;
+  delete (legacy.metadata as { week_start_day?: string }).week_start_day;
   try {
     await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);

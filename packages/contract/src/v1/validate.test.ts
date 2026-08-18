@@ -142,3 +142,36 @@ test("the producer type requires the complete term calendar group", () => {
   };
   assert.ok(partial);
 });
+
+test("year zero calendar days are rejected before persistence", () => {
+  const base = readJson(
+    join(FIXTURES, "valid", "daily-log-week-configured.json"),
+  ) as Record<string, unknown>;
+  const result = validateV1Event({
+    ...base,
+    metadata: {
+      ...(base.metadata as Record<string, unknown>),
+      term_start_day: "0000-01-03",
+      term_end_day: "0000-02-11",
+      week_start_day: "0000-01-03",
+    },
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error, "invalid_metadata");
+});
+
+test("IANA aliases and case variants remain valid public timezones", () => {
+  const base = readJson(
+    join(FIXTURES, "valid", "daily-log-week-configured.json"),
+  ) as Record<string, unknown>;
+  for (const termTimezone of ["america/toronto", "US/Eastern"]) {
+    const result = validateV1Event({
+      ...base,
+      metadata: {
+        ...(base.metadata as Record<string, unknown>),
+        term_timezone: termTimezone,
+      },
+    });
+    assert.equal(result.ok, true, `${termTimezone} should remain contract-valid`);
+  }
+});
