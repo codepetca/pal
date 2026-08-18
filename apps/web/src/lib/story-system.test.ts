@@ -724,7 +724,6 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     await processEventInDb(integration.id, externalLearnerId, dailyLog(periodKey), crypto.randomUUID());
     await runStoryGrantWorker({
       asOf: new Date("2026-09-05T12:00:00.000Z"),
-      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
       onlyLearnerIds: [learnerId],
     });
 
@@ -823,7 +822,6 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
     );
     await runStoryGrantWorker({
       asOf: new Date("2026-10-20T12:00:00.000Z"),
-      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
       onlyLearnerIds: [learnerId],
     });
     const snapshot = await loadLearnerSnapshot(
@@ -916,7 +914,6 @@ test("scheduled ownership stays exact-once after Weekly Rhythm retries and ackno
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
     await runStoryGrantWorker({
       asOf: new Date("2026-09-05T12:00:00.000Z"),
-      rolloutEffectiveAt: new Date("2026-01-01T00:00:00.000Z"),
       onlyLearnerIds: [learnerId],
     });
     const storyGrants = await getDb().select().from(learnerRewardGrants).where(and(

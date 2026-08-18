@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, sql } from "drizzle-orm";
 import {
   learnerRewardGrants,
   storyCollectibleSchedules,
@@ -6,7 +6,6 @@ import {
   type Db,
 } from "@pal/db";
 import { insertStoryChapterGrant } from "@/lib/reward-grants";
-import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 
 export type StoryGrantReconciliationResult = {
   candidates: number;
@@ -27,12 +26,8 @@ export async function reconcileDueStoryGrants(
   input: {
     learnerId: string;
     asOf?: Date;
-    rolloutEffectiveAt?: Date;
   },
 ): Promise<StoryGrantReconciliationResult> {
-  const effectiveAt = input.rolloutEffectiveAt ??
-    STORY_SKETCH_REWARDS_EFFECTIVE_AT;
-  if (!effectiveAt) return { candidates: 0, due: 0, granted: 0 };
   const asOf = input.asOf ?? new Date();
 
   // The typed schedule is durable due work derived from one stable weekly fact.
@@ -74,7 +69,6 @@ export async function reconcileDueStoryGrants(
       and(
         eq(storyCollectibleSchedules.learnerId, input.learnerId),
         isNull(storyCollectibleSchedules.reconciledAt),
-        gte(storyCollectibleSchedules.dueAt, effectiveAt),
         lte(storyCollectibleSchedules.dueAt, asOf),
       ),
     )

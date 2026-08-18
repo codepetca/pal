@@ -136,14 +136,12 @@ older widget/API pair.
   and color when it is earned. An achievement earned before the due day does not
   create early ownership; a delayed valid achievement upgrades the existing
   collectible's presentation without inserting another grant.
-- Schedule-grant eligibility is fail-closed until
-  `PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT` is configured. Both the provenance
-  fact and its typed schedule may predate deployment, but the due instant must be
-  at or after that boundary, so deploying the feature never awards older weeks
-  or loses future work. `CRON_SECRET` separately authenticates
-  the daily cron route and is not an eligibility input for accepted-event
-  recovery. Level, streak, and assignment milestones may award titles or
-  ordinary rewards, but never color story props.
+- Schedule-grant eligibility is established prospectively by the typed due-work
+  rows introduced in PR #70. The worker consumes only those rows, so it needs no
+  second rollout timestamp and cannot award configurations that predate that
+  database boundary. `CRON_SECRET` authenticates the daily cron route. Level,
+  streak, and assignment milestones may award titles or ordinary rewards, but
+  never color story props.
 - Pip's reveal is scheduled by the generated plan (Week 4 in the standard
   16-week plan). The canonical progression projector evaluates the persisted
   plan and durable awards once, then emits a single display-ready

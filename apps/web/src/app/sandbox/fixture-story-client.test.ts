@@ -105,7 +105,7 @@ test("advancing the fixture guarantees the prior story keepsake as a sketch", as
   assert.equal(keepsake?.status, "earned");
   assert.equal(keepsake?.status === "earned" ? keepsake.finish : undefined, "sketch");
   const storyReward = snapshot.rewards.find((reward) => reward.kind === "story");
-  assert.ok(storyReward && storyReward.kind !== "achievement");
+  assert.ok(storyReward);
   assert.equal(storyReward.collectibleFinish, "sketch");
   assert.equal(
     snapshot.roadmap.weeks[0]?.achievements.find(

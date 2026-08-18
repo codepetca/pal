@@ -37,31 +37,6 @@ export function calendarDayInTimeZone(date: Date, timeZone: string): string | nu
   }
 }
 
-function isStartOfCalendarDayInTimeZone(
-  date: Date,
-  timeZone: string,
-): boolean {
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
-    const value = (type: "hour" | "minute" | "second") =>
-      parts.find((part) => part.type === type)?.value ?? "";
-    return (
-      value("hour") === "00" &&
-      value("minute") === "00" &&
-      value("second") === "00" &&
-      date.getUTCMilliseconds() === 0
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function storyWeekCalendar(
   metadata: Record<string, unknown>,
 ): StoryWeekCalendar | null {
@@ -135,25 +110,10 @@ export function storyCollectibleDueDay(
 export function isStoryCollectibleDue(
   metadata: Record<string, unknown>,
   asOf: Date,
-  rolloutEffectiveAt: Date,
 ): boolean {
   const calendar = storyWeekCalendar(metadata);
   const dueDay = storyCollectibleDueDay(metadata);
   if (!calendar || !dueDay) return false;
   const asOfDay = calendarDayInTimeZone(asOf, calendar.timeZone);
-  const rolloutDay = calendarDayInTimeZone(
-    rolloutEffectiveAt,
-    calendar.timeZone,
-  );
-  return Boolean(
-    asOfDay &&
-      rolloutDay &&
-      (dueDay > rolloutDay ||
-        (dueDay === rolloutDay &&
-          isStartOfCalendarDayInTimeZone(
-            rolloutEffectiveAt,
-            calendar.timeZone,
-          ))) &&
-      asOfDay >= dueDay,
-  );
+  return Boolean(asOfDay && asOfDay >= dueDay);
 }

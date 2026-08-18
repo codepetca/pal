@@ -4,7 +4,6 @@ import {
   asc,
   eq,
   gt,
-  gte,
   inArray,
   isNull,
   lte,
@@ -22,7 +21,6 @@ import {
   reconcileDueStoryGrants,
   type StoryGrantReconciliationResult,
 } from "@/lib/story-grant-reconciler";
-import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 
 export const STORY_GRANT_BATCH_SIZE = 100;
 export const STORY_GRANT_MAX_BATCHES = 100;
@@ -58,7 +56,6 @@ export async function findLearnersWithDueStoryGrants(
   db: Db,
   input: {
     asOf: Date;
-    rolloutEffectiveAt: Date;
     after?: StoryGrantDiscoveryCursor;
     excludedLearnerIds?: readonly string[];
     onlyLearnerIds?: readonly string[];
@@ -82,7 +79,6 @@ export async function findLearnersWithDueStoryGrants(
     .where(
       and(
         isNull(storyCollectibleSchedules.reconciledAt),
-        gte(storyCollectibleSchedules.dueAt, input.rolloutEffectiveAt),
         lte(storyCollectibleSchedules.dueAt, input.asOf),
         ...(input.onlyLearnerIds
           ? [inArray(
@@ -131,7 +127,6 @@ export async function reconcileDueStoryGrantsForLearner(
   learnerId: string,
   input: {
     asOf: Date;
-    rolloutEffectiveAt: Date;
     db?: Db;
   },
 ): Promise<StoryGrantReconciliationResult> {
@@ -153,7 +148,6 @@ export async function reconcileDueStoryGrantsForLearner(
     return reconcileDueStoryGrants(tx, {
       learnerId,
       asOf: input.asOf,
-      rolloutEffectiveAt: input.rolloutEffectiveAt,
     });
   });
 }
@@ -161,7 +155,6 @@ export async function reconcileDueStoryGrantsForLearner(
 export async function runStoryGrantWorker(
   options: {
     asOf?: Date;
-    rolloutEffectiveAt?: Date;
     batchSize?: number;
     maxBatches?: number;
     concurrency?: number;
@@ -174,11 +167,6 @@ export async function runStoryGrantWorker(
     reconcileLearner?: typeof reconcileDueStoryGrantsForLearner;
   } = {},
 ): Promise<StoryGrantWorkerResult> {
-  const effectiveAt = options.rolloutEffectiveAt ??
-    STORY_SKETCH_REWARDS_EFFECTIVE_AT;
-  if (!effectiveAt) {
-    throw new Error("PAL_STORY_SKETCH_REWARDS_EFFECTIVE_AT is required");
-  }
   const db = options.db ?? getDb();
   const asOf = options.asOf ?? new Date();
   const batchSize = Math.max(
@@ -259,7 +247,6 @@ export async function runStoryGrantWorker(
       correlationId: `batch-${batches + 1}`,
       operation: () => findLearners(db, {
         asOf,
-        rolloutEffectiveAt: effectiveAt,
         after: cursor,
         excludedLearnerIds: [...failedLearnerIds],
         onlyLearnerIds: options.onlyLearnerIds,
@@ -288,7 +275,6 @@ export async function runStoryGrantWorker(
           correlationId: learnerCorrelationId(learnerId),
           operation: () => reconcileLearner(learnerId, {
             asOf,
-            rolloutEffectiveAt: effectiveAt,
             db,
           }),
         })),

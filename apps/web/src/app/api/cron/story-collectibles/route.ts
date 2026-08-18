@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron-auth";
-import { STORY_SKETCH_REWARDS_EFFECTIVE_AT } from "@/lib/story-sketch-rollout";
 import { storyGrantCronResponse } from "@/lib/story-grant-cron-result";
 import { runStoryGrantWorker } from "@/lib/story-grant-worker";
 
@@ -25,12 +24,6 @@ export async function GET(request: NextRequest) {
   if (authorization !== "authorized") {
     return response({ error: "unauthorized" }, 401);
   }
-  if (!STORY_SKETCH_REWARDS_EFFECTIVE_AT) {
-    return response({ error: "story_rollout_not_configured" }, 503);
-  }
-
-  const result = await runStoryGrantWorker({
-    rolloutEffectiveAt: STORY_SKETCH_REWARDS_EFFECTIVE_AT,
-  });
+  const result = await runStoryGrantWorker();
   return storyGrantCronResponse(result);
 }

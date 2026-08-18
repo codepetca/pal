@@ -33,7 +33,6 @@ import {
 
 const secret = "story-worker-test-secret-at-least-32-characters";
 const cronSecret = "story_worker_cron_secret_1234567890";
-const rollout = new Date("2026-01-01T00:00:00.000Z");
 process.env.SANDBOX_INTEGRATION_SECRET = secret;
 
 type Calendar = {
@@ -143,7 +142,6 @@ test(
 
       const worker = await runStoryGrantWorker({
         asOf: new Date("2026-09-05T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [learnerId],
       });
       assert.equal(worker.grants, 1);
@@ -206,7 +204,6 @@ test(
 
       const retry = await runStoryGrantWorker({
         asOf: new Date("2026-09-05T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [learnerId],
       });
       assert.equal(retry.grants, 0);
@@ -256,7 +253,6 @@ test(
 
       const worker = await runStoryGrantWorker({
         asOf: new Date("2026-09-19T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [learnerId],
       });
       assert.equal(worker.failedLearners, 0);
@@ -368,12 +364,10 @@ test(
       const runs = await Promise.all([
         runStoryGrantWorker({
           asOf: new Date("2026-09-05T12:00:00.000Z"),
-          rolloutEffectiveAt: rollout,
           onlyLearnerIds: [learnerId],
         }),
         runStoryGrantWorker({
           asOf: new Date("2026-09-05T12:00:00.000Z"),
-          rolloutEffectiveAt: rollout,
           onlyLearnerIds: [learnerId],
         }),
       ]);
@@ -427,7 +421,6 @@ test(
       }
       const result = await runStoryGrantWorker({
         asOf: new Date("2026-09-05T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         batchSize: 2,
         maxBatches: 2,
         concurrency: 2,
@@ -484,7 +477,6 @@ test(
       try {
         const result = await runStoryGrantWorker({
           asOf: new Date("2026-09-05T12:00:00.000Z"),
-          rolloutEffectiveAt: rollout,
           onlyLearnerIds: [learnerId],
           retryBaseDelayMs: 0,
           findLearners: async (...args) => {
@@ -575,7 +567,6 @@ test(
 
       const result = await runStoryGrantWorker({
         asOf: new Date("2026-09-05T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [validLearnerId, malformedLearnerId],
       });
       assert.equal(result.grants, 2);
@@ -640,7 +631,6 @@ test(
       try {
         const result = await runStoryGrantWorker({
           asOf: new Date("2026-09-05T12:00:00.000Z"),
-          rolloutEffectiveAt: rollout,
           onlyLearnerIds: learnerIds,
           retryBaseDelayMs: 0,
           reconcileLearner: async (learnerId, input) => {
@@ -704,7 +694,6 @@ test(
       );
       const result = await runStoryGrantWorker({
         asOf: new Date("2026-09-12T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [learnerId],
       });
       assert.equal(result.grants, 1);
@@ -762,7 +751,6 @@ test(
       );
       const breakResult = await runStoryGrantWorker({
         asOf: new Date("2026-10-10T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [breakLearnerId],
       });
       assert.equal(breakResult.grants, 1);
@@ -803,7 +791,6 @@ test(
       );
       const midweekResult = await runStoryGrantWorker({
         asOf: new Date("2026-10-08T12:00:00.000Z"),
-        rolloutEffectiveAt: rollout,
         onlyLearnerIds: [midweekLearnerId],
       });
       assert.equal(midweekResult.grants, 2);
@@ -815,7 +802,7 @@ test(
 );
 
 test(
-  "rollout cutoff keeps future due work even when configuration predates rollout",
+  "prospective pending schedules need no second rollout cutoff",
   { skip: !process.env.DATABASE_URL },
   async () => {
     const integration = await resolveIntegration({
@@ -843,19 +830,11 @@ test(
       const [schedule] = await getDb().select().from(storyCollectibleSchedules)
         .where(eq(storyCollectibleSchedules.learnerId, learnerId));
       assert.ok(schedule);
-      const dueCutoff = await runStoryGrantWorker({
+      const result = await runStoryGrantWorker({
         asOf: new Date("2026-09-20T12:00:00.000Z"),
-        rolloutEffectiveAt: new Date(schedule.dueAt.getTime() + 1),
         onlyLearnerIds: [learnerId],
       });
-      assert.equal(dueCutoff.grants, 0);
-
-      const provenanceCutoff = await runStoryGrantWorker({
-        asOf: new Date("2026-09-20T12:00:00.000Z"),
-        rolloutEffectiveAt: new Date(schedule.createdAt.getTime() + 1),
-        onlyLearnerIds: [learnerId],
-      });
-      assert.equal(provenanceCutoff.grants, 1);
+      assert.equal(result.grants, 1);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -871,7 +850,6 @@ test("default daily capacity drains a cohort larger than the former 500-learner 
   let offset = 0;
   const result = await runStoryGrantWorker({
     db: {} as Db,
-    rolloutEffectiveAt: rollout,
     retryBaseDelayMs: 0,
     findLearners: async (_db, input) => {
       const page = learnerIds.slice(offset, offset + input.limit);

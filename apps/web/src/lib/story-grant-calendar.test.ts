@@ -6,8 +6,6 @@ import {
   storyCollectibleDueDay,
 } from "@/lib/story-grant-calendar";
 
-const rollout = new Date("2026-01-01T00:00:00.000Z");
-
 function calendar(overrides: Record<string, unknown> = {}) {
   return {
     term_start_day: "2026-08-31",
@@ -27,7 +25,6 @@ test("a normal Monday-Friday week becomes due Saturday", () => {
     isStoryCollectibleDue(
       metadata,
       new Date("2026-09-05T03:59:59.999Z"),
-      rollout,
     ),
     false,
   );
@@ -35,7 +32,6 @@ test("a normal Monday-Friday week becomes due Saturday", () => {
     isStoryCollectibleDue(
       metadata,
       new Date("2026-09-05T04:00:00.000Z"),
-      rollout,
     ),
     true,
   );
@@ -109,7 +105,6 @@ test("local calendar comparison remains stable across DST boundaries", () => {
     isStoryCollectibleDue(
       metadata,
       new Date("2026-03-14T03:59:59.999Z"),
-      rollout,
     ),
     false,
   );
@@ -117,7 +112,6 @@ test("local calendar comparison remains stable across DST boundaries", () => {
     isStoryCollectibleDue(
       metadata,
       new Date("2026-03-14T04:00:00.000Z"),
-      rollout,
     ),
     true,
   );
@@ -129,21 +123,12 @@ test("local due days are authoritative at both supported offset extremes", () =>
     ["Etc/GMT+12", "2026-09-05T11:59:59.999Z", "2026-09-05T12:00:00.000Z"],
   ] as const) {
     const metadata = calendar({ term_timezone: timeZone });
-    assert.equal(isStoryCollectibleDue(metadata, new Date(before), rollout), false);
-    assert.equal(isStoryCollectibleDue(metadata, new Date(at), rollout), true);
+    assert.equal(isStoryCollectibleDue(metadata, new Date(before)), false);
+    assert.equal(isStoryCollectibleDue(metadata, new Date(at)), true);
   }
 });
 
-test("rollout blocks historical due days and malformed calendars fail closed", () => {
-  const metadata = calendar();
-  assert.equal(
-    isStoryCollectibleDue(
-      metadata,
-      new Date("2026-09-20T12:00:00.000Z"),
-      new Date("2026-09-06T00:00:00.000Z"),
-    ),
-    false,
-  );
+test("malformed calendars fail closed", () => {
   assert.equal(
     storyCollectibleDueDay(calendar({ term_timezone: "Not/A_Timezone" })),
     null,
