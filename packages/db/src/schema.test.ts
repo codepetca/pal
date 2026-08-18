@@ -831,6 +831,7 @@ test(
         periodKey,
         occurredAt: new Date("2026-08-31T12:00:00.000Z"),
         metadata: calendar,
+        createdAt: new Date("2026-08-31T12:00:00.000Z"),
       }).returning({
         id: learnerFacts.id,
         createdAt: learnerFacts.createdAt,
@@ -844,6 +845,7 @@ test(
         periodKey,
         occurredAt: new Date("2026-09-01T12:00:00.000Z"),
         metadata: calendar,
+        createdAt: new Date("2026-09-01T12:00:00.000Z"),
       });
 
       const schedules = await db.select().from(storyCollectibleSchedules).where(
@@ -853,6 +855,81 @@ test(
       assert.equal(schedules[0]!.sourceFactId, firstFact.id);
       assert.equal(schedules[0]!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
       assert.equal(schedules[0]!.reconciledAt, null);
+
+      const latePeriodKey = `story-schedule-late-period-${suffix}`;
+      const lateCreatedAt = new Date("2026-09-06T12:00:00.000Z");
+      const [lateEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        idempotencyKey: `story-schedule-late-event-${suffix}`,
+        eventType: "daily_log_week.configured",
+        occurredAt: lateCreatedAt,
+        metadata: {},
+      }).returning({ id: events.id });
+      const [lateFact] = await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: lateEvent.id,
+        eventType: "daily_log_week.configured",
+        semanticKey: `${latePeriodKey}:1`,
+        periodKey: latePeriodKey,
+        occurredAt: lateCreatedAt,
+        metadata: {
+          ...calendar,
+          term_token: `story-schedule-late-term-${suffix}`,
+        },
+        createdAt: lateCreatedAt,
+      }).returning({ id: learnerFacts.id });
+      const [lateSchedule] = await db.select().from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.sourceFactId, lateFact.id));
+      assert.equal(lateSchedule!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
+      assert.equal(lateSchedule!.reconciledAt?.toISOString(), lateCreatedAt.toISOString());
+      assert.equal((await db.select().from(learnerRewardGrants).where(
+        eq(learnerRewardGrants.sourceFactId, lateFact.id),
+      )).length, 0);
+
+      const closedPeriodKey = `story-schedule-closed-period-${suffix}`;
+      await db.insert(achievementPeriods).values({
+        learnerId: learner.id,
+        periodKey: closedPeriodKey,
+        anchorAt: new Date("2026-08-31T12:00:00.000Z"),
+      });
+      await db.insert(weeklyRhythmConfigs).values({
+        learnerId: learner.id,
+        periodKey: closedPeriodKey,
+        configVersion: 2,
+        periodStatus: "closed",
+        eligibleDays: 0,
+        configuredAt: new Date("2026-08-31T12:00:00.000Z"),
+      });
+      const [staleCalendarEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        idempotencyKey: `story-schedule-stale-calendar-event-${suffix}`,
+        eventType: "daily_log_week.configured",
+        occurredAt: new Date("2026-08-30T12:00:00.000Z"),
+        metadata: {},
+      }).returning({ id: events.id });
+      await assert.rejects(
+        db.insert(learnerFacts).values({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          sourceEventId: staleCalendarEvent.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `${closedPeriodKey}:1`,
+          periodKey: closedPeriodKey,
+          occurredAt: new Date("2026-08-30T12:00:00.000Z"),
+          metadata: {
+            ...calendar,
+            term_token: `story-schedule-closed-term-${suffix}`,
+          },
+          createdAt: new Date("2026-08-31T13:00:00.000Z"),
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      assert.equal((await db.select().from(storyCollectibleSchedules).where(
+        eq(storyCollectibleSchedules.periodKey, closedPeriodKey),
+      )).length, 0);
 
       const [nonConfigurationEvent] = await db.insert(events).values({
         integrationId: integration.id,

@@ -516,6 +516,13 @@ export async function weeklyConfigurationRejection(
   const existingCalendar = existing
     ? await firstConfigurationCalendar(db, learnerId, periodKey)
     : undefined;
+  if (
+    existing?.periodStatus === "closed" &&
+    existingCalendar?.startDay === null &&
+    calendar
+  ) {
+    return "closed_period_revision";
+  }
   const firstConfigurationCalendarOverride =
     !existing || (existingCalendar?.startDay === null && calendar)
       ? periodCalendarFromMetadata(calendar)

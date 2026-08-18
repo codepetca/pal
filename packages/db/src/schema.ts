@@ -146,7 +146,9 @@ export const learnerFacts = pgTable(
 // calendar-less V1 facts remain valid for Weekly Rhythm but cannot define a
 // local story boundary. Neither schedules nor rewards are backfilled. The
 // append-only learner_reward_grants ledger remains canonical, and reconciled_at
-// records queue consumption only after that ledger proves ownership.
+// records either queue consumption after that ledger proves ownership or a
+// terminal no-backfill skip when the due boundary had already passed before
+// the configuration fact reached Pal.
 export const storyCollectibleSchedules = pgTable(
   "story_collectible_schedules",
   {

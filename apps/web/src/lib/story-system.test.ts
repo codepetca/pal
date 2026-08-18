@@ -662,7 +662,7 @@ test("a closed calendarless period remains story-ineligible", { skip: !process.e
         occurred_at: "2026-08-31T12:00:00.000Z",
         metadata: {
           period_key: periodKey,
-          config_version: 1,
+          config_version: 2,
           period_status: "closed",
           eligible_days: 0,
         },
@@ -678,7 +678,7 @@ test("a closed calendarless period remains story-ineligible", { skip: !process.e
         occurred_at: "2026-09-01T12:00:00.000Z",
         metadata: {
           period_key: periodKey,
-          config_version: 2,
+          config_version: 1,
           period_status: "closed",
           eligible_days: 0,
           term_token: `closed-calendarless-term-${crypto.randomUUID()}`,
@@ -706,6 +706,12 @@ test("a closed calendarless period remains story-ineligible", { skip: !process.e
       eq(storyCollectibleSchedules.learnerId, learnerId),
       eq(storyCollectibleSchedules.periodKey, periodKey),
     ))).length, 0);
+    assert.equal((await getDb().select().from(storyPlans).where(
+      eq(storyPlans.learnerId, learnerId),
+    )).length, 0);
+    assert.equal((await getDb().select().from(learnerRewardGrants).where(
+      eq(learnerRewardGrants.learnerId, learnerId),
+    )).length, 0);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

@@ -137,6 +137,25 @@ BEGIN
 	THEN
 		RETURN NEW;
 	END IF;
+	IF EXISTS (
+		SELECT 1
+		FROM "public"."weekly_rhythm_configs" AS "weekly_config"
+		WHERE "weekly_config"."learner_id" = NEW."learner_id"
+			AND "weekly_config"."period_key" = NEW."period_key"
+			AND "weekly_config"."period_status" = 'closed'
+	) AND NOT EXISTS (
+		SELECT 1
+		FROM "public"."learner_facts" AS "calendar_fact"
+		WHERE "calendar_fact"."learner_id" = NEW."learner_id"
+			AND "calendar_fact"."period_key" = NEW."period_key"
+			AND "calendar_fact"."event_type" = 'daily_log_week.configured'
+			AND "calendar_fact"."metadata" ? 'week_index'
+			AND "calendar_fact"."id" <> NEW."id"
+	) THEN
+		RAISE EXCEPTION 'closed calendar-less period cannot enroll in story scheduling'
+			USING ERRCODE = '23514',
+				CONSTRAINT = 'story_collectible_schedule_closed_calendarless';
+	END IF;
 
 	"due_at_value" := "public"."calculate_story_collectible_due_at"(NEW."metadata");
 	IF "due_at_value" IS NULL THEN
@@ -150,12 +169,17 @@ BEGIN
 		"period_key",
 		"source_fact_id",
 		"due_at",
+		"reconciled_at",
 		"created_at"
 	) VALUES (
 		NEW."learner_id",
 		NEW."period_key",
 		NEW."id",
 		"due_at_value",
+		CASE
+			WHEN "due_at_value" < NEW."created_at" THEN NEW."created_at"
+			ELSE NULL
+		END,
 		NEW."created_at"
 	)
 	ON CONFLICT ("learner_id", "period_key") DO NOTHING;
@@ -194,11 +218,14 @@ BEGIN
 			RETURN NEW;
 		END IF;
 
-		IF NEW."reconciled_at" IS NOT NULL
-			OR "source_event_type" IS DISTINCT FROM 'daily_log_week.configured'
+		IF "source_event_type" IS DISTINCT FROM 'daily_log_week.configured'
 			OR "source_period_key" IS DISTINCT FROM NEW."period_key"
 			OR "source_due_at" IS DISTINCT FROM NEW."due_at"
 			OR "source_created_at" IS DISTINCT FROM NEW."created_at"
+			OR NEW."reconciled_at" IS DISTINCT FROM (CASE
+				WHEN "source_due_at" < "source_created_at" THEN "source_created_at"
+				ELSE NULL
+			END)
 		THEN
 			RAISE EXCEPTION 'story schedule must match its configuration fact'
 				USING ERRCODE = '23514',
