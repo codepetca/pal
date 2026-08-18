@@ -18,6 +18,14 @@ import type { PalCompanionMood, PalCompanionProps, PalMotion } from "./types";
 // blending into the next.
 const MOOD_FRAME_MS = 600;
 
+// Sleeping runs on its own clock. The two frames are one breath in and one
+// breath out, so the pace has to read as a resting animal rather than as an
+// animation — a settled cat breathes roughly twenty times a minute, which puts
+// half a breath here.
+const MOOD_FRAME_MS_OVERRIDES: Partial<Record<PalCompanionMood, number>> = {
+  sleeping: 1500,
+};
+
 // A blink plays blinking-1..5 in sequence, then rests. The art is authored as a
 // ping-pong — frame 5 is byte-identical to frame 1 and frame 4 to frame 2, with
 // frame 3 the closed-eye peak — and frame 1 matches the resting pose, so the
@@ -60,8 +68,8 @@ const BLINK_SPECS: FrameSpec[] = [1, 2, 3, 4, 5].map((n) => ({
   dy: 0,
 }));
 
-// Moods with animation frames. A mood absent here — "neutral", and "sleeping"
-// until there is art for it — falls back to the resting pose and blinks.
+// Moods with animation frames. A mood absent here — "neutral" — falls back to
+// the resting pose and blinks.
 //
 // The second frame of each mood carries its own offsets rather than sharing the
 // first's: the art moves the cat between the two, and only a per-frame value can
@@ -74,6 +82,14 @@ const MOOD_SPECS: Partial<Record<PalCompanionMood, FrameSpec[]>> = {
   excited: [
     { file: "excited-1", w: 1727, h: 1676, dx: 2.5, dy: 4 },
     { file: "excited-2", w: 1835, h: 1805, dx: 0.5, dy: -24 },
+  ],
+  // Both sleeping frames are cropped to one shared box rather than to their own
+  // alpha bounds, so the breathing loop cannot drift: the offsets that hold the
+  // pair against the resting pose are identical, and the only movement left is
+  // the one the art draws.
+  sleeping: [
+    { file: "sleeping-1", w: 1473, h: 1459, dx: 0, dy: 0 },
+    { file: "sleeping-2", w: 1473, h: 1459, dx: 0, dy: 0 },
   ],
 };
 
@@ -220,15 +236,16 @@ function PetSprite({
 
   // The two-frame mood loop. Restarting at frame 0 on every mood change means a
   // new mood always opens on its first pose.
+  const frameMs = MOOD_FRAME_MS_OVERRIDES[mood] ?? MOOD_FRAME_MS;
   useEffect(() => {
     setMoodFrame(0);
     if (still || !frames) return;
     const id = setInterval(
       () => setMoodFrame((f) => (f + 1) % frames.length),
-      MOOD_FRAME_MS,
+      frameMs,
     );
     return () => clearInterval(id);
-  }, [frames, still]);
+  }, [frameMs, frames, still]);
 
   // Idle blinking, and only idle — the happy and excited art has no blink
   // frames, and a pet already animating a mood does not need a second animation
