@@ -213,7 +213,7 @@ export async function runStoryGrantWorker(
   let retries = 0;
   let learnerPageLimitReached = false;
   let cursor: StoryGrantDiscoveryCursor | undefined;
-  const failedLearnerIds = new Set<string>();
+  const attemptedLearnerIds = new Set<string>();
   let lastPageMayHaveMore = false;
   let deadlineReached = false;
   let knownDeadlineBacklog = false;
@@ -268,7 +268,7 @@ export async function runStoryGrantWorker(
       operation: () => findLearners(db, {
         asOf,
         after: cursor,
-        excludedLearnerIds: [...failedLearnerIds],
+        excludedLearnerIds: [...attemptedLearnerIds],
         onlyLearnerIds: options.onlyLearnerIds,
         limit: batchSize,
       }),
@@ -294,12 +294,15 @@ export async function runStoryGrantWorker(
         knownDeadlineBacklog = true;
         break;
       }
+      for (const learnerId of learnerChunk) {
+        attemptedLearnerIds.add(learnerId);
+      }
       const results = await Promise.all(learnerChunk.map((learnerId) => retry({
         scope: "learner",
         correlationId: learnerCorrelationId(learnerId),
         operation: () => reconcileLearner(learnerId, { asOf, db }),
       })));
-      for (const [index, result] of results.entries()) {
+      for (const result of results) {
         learnersProcessed += 1;
         retries += result.retries;
         if (result.ok) {
@@ -307,7 +310,6 @@ export async function runStoryGrantWorker(
           learnerPageLimitReached ||= result.value.hasMore;
         } else {
           failedLearners += 1;
-          failedLearnerIds.add(learnerChunk[index]!);
           // The retry helper already emitted one sanitized terminal record.
         }
       }
@@ -324,7 +326,7 @@ export async function runStoryGrantWorker(
       operation: () => findLearners(db, {
         asOf,
         after: cursor,
-        excludedLearnerIds: [...failedLearnerIds],
+        excludedLearnerIds: [...attemptedLearnerIds],
         onlyLearnerIds: options.onlyLearnerIds,
         limit: 1,
       }),
@@ -343,7 +345,7 @@ export async function runStoryGrantWorker(
       operation: () => findLearners(db, {
         asOf,
         after: cursor,
-        excludedLearnerIds: [...failedLearnerIds],
+        excludedLearnerIds: [...attemptedLearnerIds],
         onlyLearnerIds: options.onlyLearnerIds,
         limit: 1,
       }),

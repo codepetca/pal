@@ -1181,20 +1181,28 @@ test("deep queues cannot starve an ordinary learner behind the concurrency windo
   const reconciledLearners: string[] = [];
   const result = await runStoryGrantWorker({
     db: {} as Db,
+    batchSize: 10,
     concurrency: 10,
     retryBaseDelayMs: 0,
-    findLearners: async () => {
+    findLearners: async (_db, input) => {
       discoveryCalls += 1;
-      return discoveryCalls === 1
-        ? {
-            learnerIds: [...deepLearners, ordinaryLearner],
-            scannedRows: 12,
-            cursor: {
+      const candidateIds = discoveryCalls === 1
+        ? deepLearners.slice(0, 10)
+        : discoveryCalls === 2
+        ? [deepLearners[0]!, deepLearners[1]!, deepLearners[10]!, ordinaryLearner]
+        : [];
+      const excluded = new Set(input.excludedLearnerIds);
+      const learnerIds = candidateIds.filter((id) => !excluded.has(id));
+      return {
+        learnerIds,
+        scannedRows: candidateIds.length,
+        cursor: learnerIds.length > 0
+          ? {
               dueAt: new Date("2026-09-05T04:00:00.000Z"),
-              id: "ordinary-schedule",
-            },
-          }
-        : { learnerIds: [], scannedRows: 0 };
+              id: `${discoveryCalls}-${learnerIds.at(-1)!}`,
+            }
+          : undefined,
+      };
     },
     reconcileLearner: async (learnerId) => {
       reconciledLearners.push(learnerId);
@@ -1205,6 +1213,7 @@ test("deep queues cannot starve an ordinary learner behind the concurrency windo
   });
   assert.equal(reconciledLearners.length, 12);
   assert.ok(reconciledLearners.includes(ordinaryLearner));
+  assert.equal(new Set(reconciledLearners).size, reconciledLearners.length);
   assert.equal(result.learners, 12);
   assert.equal(result.grants, 265);
   assert.equal(result.learnerPageLimitReached, true);
