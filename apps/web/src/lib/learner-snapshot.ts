@@ -76,11 +76,64 @@ export class LearnerScopeError extends Error {
   }
 }
 
-function companionMood(value: string, expiresAt: Date | null): PalCompanionMood {
-  if (expiresAt && expiresAt.getTime() <= Date.now()) return "neutral";
-  return ["neutral", "happy", "excited", "sleeping"].includes(value)
-    ? (value as PalCompanionMood)
-    : "neutral";
+const COMPANION_MOODS: readonly string[] = [
+  "neutral",
+  "happy",
+  "excited",
+  "sleeping",
+];
+
+// Pip settles down for the night between these local times. The window wraps
+// midnight, so it is a union of two ranges rather than one span.
+const SLEEP_STARTS_AT_MINUTE = 21 * 60 + 30;
+const SLEEP_ENDS_AT_MINUTE = 7 * 60 + 30;
+
+function minuteOfDayInTimeZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const value = (type: "hour" | "minute") =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+  // Some locales render midnight as hour 24; normalise so the comparison below
+  // sees a value in [0, 1440).
+  return (value("hour") % 24) * 60 + value("minute");
+}
+
+function isSleepingHour(asOf: Date, timeZone: string): boolean {
+  const minute = minuteOfDayInTimeZone(asOf, timeZone);
+  return minute >= SLEEP_STARTS_AT_MINUTE || minute < SLEEP_ENDS_AT_MINUTE;
+}
+
+/**
+ * Projects the pet's displayed mood.
+ *
+ * Sleeping is decided here rather than by a rule because the engine has no
+ * clock, and a `PET_MOOD` effect cannot express "until 07:30 local" — effect
+ * values are literals. Nothing about learner state changes: the stored mood is
+ * untouched and a later daytime read shows it again.
+ *
+ * Only a resting pet sleeps. A mood still inside its window — the `happy` a
+ * completion set, the `excited` a level-up set — interrupts the night and runs
+ * to its own expiry, so a late-evening celebration is never swallowed.
+ */
+export function companionMood(
+  value: string,
+  expiresAt: Date | null,
+  asOf: Date,
+  timeZone: string | undefined,
+): PalCompanionMood {
+  const expired = expiresAt !== null && expiresAt.getTime() <= asOf.getTime();
+  const stored: PalCompanionMood =
+    !expired && COMPANION_MOODS.includes(value)
+      ? (value as PalCompanionMood)
+      : "neutral";
+  if (stored !== "neutral") return stored;
+  // Falling back to UTC matches how the achievement period query treats a term
+  // with no authoritative timezone.
+  return isSleepingHour(asOf, timeZone ?? "UTC") ? "sleeping" : "neutral";
 }
 
 function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
@@ -608,6 +661,8 @@ export async function loadLearnerSnapshot(
       const mood = companionMood(
         pet?.mood ?? "neutral",
         pet?.moodExpiresAt ?? null,
+        asOf,
+        typeof termTimezone === "string" ? termTimezone : undefined,
       );
       const companionRevealed =
         progression === undefined || progression.companionReveal.status === "earned";
