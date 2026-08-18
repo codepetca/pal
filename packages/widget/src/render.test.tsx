@@ -194,6 +194,33 @@ test("story celebration centers the collectible without explanatory copy", () =>
   assert.doesNotMatch(html, /Storybook sketch/);
 });
 
+test("achievement celebration centers its earned badge without explanatory copy", () => {
+  const client = createFixturePalClient();
+  client.dispatch("item-opened-early", { itemToken: "celebration-item" });
+  const snapshot = client.peek();
+  const reward = snapshot.rewards.find(
+    (candidate) => candidate.achievement?.key === "ready-early",
+  );
+  assert.ok(reward);
+  snapshot.rewards = [reward];
+
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="achievement-celebration"
+    >
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+
+  assert.match(html, /data-pal-reward-kind="achievement"/);
+  assert.match(html, />Ready Early<\/h2>/);
+  assert.match(html, /badge-ready-early-v1\.png/);
+  assert.doesNotMatch(html, /Opened a learning item soon after it was released/);
+  assert.doesNotMatch(html, /Achievement earned/);
+});
+
 test("roadmap omits the title chip until the learner earns a title", () => {
   const snapshot = createEmptyFixtureSnapshot();
   const client = createFixturePalClient(snapshot);
