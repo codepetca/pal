@@ -228,6 +228,21 @@ apps/web/public/assets/badges/  — achievement art
   resized on demand, and downscale before shipping anything to the widget.
 - Asset changes ship in their own PR — never bundled with game logic.
 
+#### Badge framing contract
+
+The widget drops each badge into a fixed circular slot with `object-fit: contain`, so the
+browser frames the art by its **canvas**, not by the artwork inside it. Art that sits
+off-centre in its own canvas, or that fills a different share of it, renders visibly
+misaligned or mis-sized next to its neighbours in the achievement trail. Every file in
+`apps/web/public/assets/badges/` must therefore be:
+
+- a 512×512 RGBA PNG (transparent margin, never an opaque backdrop square),
+- centred — the artwork's alpha bounding box centred on the canvas, and
+- uniformly sized — the bounding box's longest edge spanning 85% of the canvas.
+
+`apps/web/src/lib/badge-art-framing.test.ts` enforces all three, so new badge art fails CI
+until it is framed to match.
+
 ### Where assets live, and when that changes
 
 In the repo through M2 — free, no infrastructure, and art deploys atomically with the code that
