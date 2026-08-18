@@ -179,10 +179,11 @@ test(
         const sourceEventId = crypto.randomUUID();
         await upgrade!.query(
           `INSERT INTO events (
-             id, integration_id, learner_id, idempotency_key, event_type, occurred_at
+             id, integration_id, learner_id, idempotency_key, event_type, occurred_at,
+             metadata
            ) VALUES ($1, $2, $3, $4,
-             'daily_log_week.configured', '2026-08-31T12:00:00Z')`,
-          [sourceEventId, integrationId, learnerId, `${name}-event`],
+             'daily_log_week.configured', '2026-08-31T12:00:00Z', $5)`,
+          [sourceEventId, integrationId, learnerId, `${name}-event`, metadata],
         );
         await upgrade!.query(
           `INSERT INTO learner_facts (
@@ -203,11 +204,31 @@ test(
         week_index: 1,
         week_start_day: "2026-08-31",
       });
+      const timezoneNames = new Set(
+        (await upgrade.query(`SELECT lower(name) AS name FROM pg_timezone_names`))
+          .rows.map((row) => String(row.name)),
+      );
+      const icuOnlyTimezone = [
+        "Canada/East-Saskatchewan",
+        "Canada/Eastern",
+        "US/Eastern",
+        "Mexico/General",
+        "Brazil/East",
+        "Australia/ACT",
+      ].find((candidate) => {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: candidate }).format(0);
+          return !timezoneNames.has(candidate.toLowerCase());
+        } catch {
+          return false;
+        }
+      });
+      assert.ok(icuOnlyTimezone, "test requires an ICU-valid PostgreSQL-absent alias");
       await insertOldWriterFact("icu-timezone-alias", {
         term_token: "icu-timezone-alias-term",
         term_start_day: "2026-08-31",
         term_end_day: "2026-10-09",
-        term_timezone: "US/Eastern",
+        term_timezone: icuOnlyTimezone,
         term_week_count: 6,
         week_index: 1,
         week_start_day: "2026-08-31",
@@ -221,6 +242,15 @@ test(
         week_index: 1,
         week_start_day: "0000-08-31",
       });
+      await insertOldWriterFact("year-zero-cross-year", {
+        term_token: "year-zero-cross-year-term",
+        term_start_day: "0000-12-01",
+        term_end_day: "0001-01-31",
+        term_timezone: "America/Toronto",
+        term_week_count: 6,
+        week_index: 1,
+        week_start_day: "0000-12-01",
+      });
       const oldWriterSchedules = await upgrade.query(
         `SELECT period_key, due_at
          FROM story_collectible_schedules
@@ -230,6 +260,7 @@ test(
           "lowercase-timezone-period",
           "icu-timezone-alias-period",
           "year-zero-period",
+          "year-zero-cross-year-period",
         ]],
       );
       assert.equal(oldWriterSchedules.rowCount, 1);

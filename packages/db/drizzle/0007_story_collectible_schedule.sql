@@ -122,8 +122,8 @@ $$ LANGUAGE plpgsql STABLE;
 CREATE FUNCTION "public"."enqueue_story_collectible_schedule"() RETURNS trigger AS $$
 DECLARE
 	"due_at_value" timestamp with time zone;
-	"compatibility_metadata" jsonb;
 	"has_legacy_only_value" boolean := false;
+	"legacy_source_matches" boolean := false;
 BEGIN
 	IF NEW."event_type" <> 'daily_log_week.configured'
 		OR NEW."period_key" IS NULL
@@ -147,7 +147,6 @@ BEGIN
 		-- not know, plus ISO year zero. Let those old-writer facts commit during
 		-- the short cutover; the new application canonicalizes/rejects them before
 		-- persistence. All other malformed direct facts remain rejected below.
-		"compatibility_metadata" := NEW."metadata";
 		IF (
 			jsonb_typeof(NEW."metadata"->'term_timezone') = 'string'
 			AND NOT EXISTS (
@@ -157,42 +156,31 @@ BEGIN
 					"pg_catalog"."lower"(NEW."metadata"->>'term_timezone')
 			)
 		) THEN
-			"compatibility_metadata" := jsonb_set(
-				"compatibility_metadata",
-				'{term_timezone}',
-				'"UTC"'::jsonb
-			);
 			"has_legacy_only_value" := true;
 		END IF;
 		IF coalesce(NEW."metadata"->>'term_start_day', '') LIKE '0000-%' THEN
-			"compatibility_metadata" := jsonb_set(
-				"compatibility_metadata",
-				'{term_start_day}',
-				to_jsonb('2000-' || substring(NEW."metadata"->>'term_start_day' FROM 6))
-			);
 			"has_legacy_only_value" := true;
 		END IF;
 		IF coalesce(NEW."metadata"->>'term_end_day', '') LIKE '0000-%' THEN
-			"compatibility_metadata" := jsonb_set(
-				"compatibility_metadata",
-				'{term_end_day}',
-				to_jsonb('2000-' || substring(NEW."metadata"->>'term_end_day' FROM 6))
-			);
 			"has_legacy_only_value" := true;
 		END IF;
 		IF coalesce(NEW."metadata"->>'week_start_day', '') LIKE '0000-%' THEN
-			"compatibility_metadata" := jsonb_set(
-				"compatibility_metadata",
-				'{week_start_day}',
-				to_jsonb('2000-' || substring(NEW."metadata"->>'week_start_day' FROM 6))
-			);
 			"has_legacy_only_value" := true;
 		END IF;
-		IF "has_legacy_only_value"
-			AND "public"."calculate_story_collectible_due_at"(
-				"compatibility_metadata"
-			) IS NOT NULL
-		THEN
+		IF "has_legacy_only_value" THEN
+			SELECT EXISTS (
+				SELECT 1
+				FROM "public"."events" AS "source_event"
+				WHERE "source_event"."id" = NEW."source_event_id"
+					AND "source_event"."learner_id" = NEW."learner_id"
+					AND "source_event"."integration_id" = NEW."integration_id"
+					AND "source_event"."event_type" = NEW."event_type"
+					AND "source_event"."occurred_at" = NEW."occurred_at"
+					AND "source_event"."metadata" = NEW."metadata"
+			)
+			INTO "legacy_source_matches";
+		END IF;
+		IF "legacy_source_matches" THEN
 			RETURN NEW;
 		END IF;
 		RAISE EXCEPTION 'weekly configuration fact has no valid story due boundary'

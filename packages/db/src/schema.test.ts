@@ -1334,6 +1334,18 @@ test(
           },
         },
         {
+          name: "unknown-timezone",
+          metadata: {
+            term_token: `unknown-timezone-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-10-09",
+            term_timezone: "Definitely/Not_A_Zone",
+            term_week_count: 6,
+            week_start_day: "2026-08-31",
+            week_index: 1,
+          },
+        },
+        {
           name: "adaptive-week-out-of-range",
           metadata: {
             term_token: `adaptive-range-${suffix}`,
