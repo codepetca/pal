@@ -1532,6 +1532,28 @@ test(
           expected: "2026-09-05T04:00:00.000Z",
         },
         {
+          name: "legacy-midweek-week-two",
+          metadata: {
+            term_token: `legacy-midweek-week-two-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-12-16",
+            term_timezone: "America/Toronto",
+            week_index: 2,
+          },
+          expected: "2026-09-12T04:00:00.000Z",
+        },
+        {
+          name: "legacy-midweek-final-week",
+          metadata: {
+            term_token: `legacy-midweek-final-week-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-12-16",
+            term_timezone: "America/Toronto",
+            week_index: 16,
+          },
+          expected: "2026-12-17T05:00:00.000Z",
+        },
+        {
           name: "weekend",
           metadata: {
             term_token: `weekend-${suffix}`,
@@ -1569,6 +1591,19 @@ test(
             week_index: 6,
           },
           expected: "2026-10-07T10:00:00.000Z",
+        },
+        {
+          name: "short-both-edges",
+          metadata: {
+            term_token: `short-both-edges-${suffix}`,
+            term_start_day: "2026-09-02",
+            term_end_day: "2026-10-07",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2026-10-05",
+            week_index: 6,
+          },
+          expected: "2026-10-08T04:00:00.000Z",
         },
       ] as const;
       for (const scenario of scenarios) {
