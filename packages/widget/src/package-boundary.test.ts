@@ -48,6 +48,10 @@ const turboConfigSource = readFileSync(
   new URL("../../../turbo.json", import.meta.url),
   "utf8",
 );
+const architectureSource = readFileSync(
+  new URL("../../../docs/architecture.md", import.meta.url),
+  "utf8",
+);
 const vercelConfig = JSON.parse(
   readFileSync(
     new URL("../../../apps/web/vercel.json", import.meta.url),
@@ -99,6 +103,15 @@ function runReleaseGuard(version: string | undefined, tag: string) {
     },
   );
 }
+
+test("story scheduling documentation keeps the prospective no-backfill boundary", () => {
+  assert.match(architectureSource, /does not scan or backfill historical/);
+  assert.match(
+    architectureSource,
+    /prospective from the PR70 trigger\s+boundary/,
+  );
+  assert.doesNotMatch(architectureSource, /migration backfill safely skips/);
+});
 
 test("package metadata exposes only compiled public entry points", () => {
   assert.equal(widgetPackage.name, "@codepet/pal-widget");

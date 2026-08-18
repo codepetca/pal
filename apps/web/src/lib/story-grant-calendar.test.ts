@@ -114,6 +114,17 @@ test("term slack permits a delayed Week 1 without leaving Monday-Friday", () => 
   assert.equal(storyCollectibleDueDay(delayed), "2026-09-12");
 });
 
+test("a middle-week weekday marker normalizes to Monday and becomes due Saturday", () => {
+  const middle = calendar({
+    term_end_day: "2026-10-09",
+    term_week_count: 6,
+    week_start_day: "2026-09-09",
+    week_index: 2,
+  });
+  assert.equal(storyWeekCalendar(middle)?.weekStartDay, "2026-09-07");
+  assert.equal(storyCollectibleDueDay(middle), "2026-09-12");
+});
+
 test("a weekend final-week marker resolves to the preceding Monday", () => {
   const finalWeek = calendar({
     term_start_day: "2026-05-11",

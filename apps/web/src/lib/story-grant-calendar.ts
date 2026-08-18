@@ -34,8 +34,9 @@ function mondayOfCalendarWeek(day: string): string | null {
  * Resolves a story ordinal onto Pal's Monday-Friday instructional calendar.
  * Week 1 begins on the first instructional day on/after the term start. Week 2
  * begins on the following Monday, and later ordinals advance in seven-day
- * steps. Explicit starts may add breaks, but weekend starts normalize to the
- * following Monday and cannot overlap adjacent term-edge weeks.
+ * steps. Explicit starts may add breaks. Only the first and final weeks may be
+ * short: middle weekdays normalize to their Monday, middle weekends normalize
+ * to the following Monday, and starts cannot overlap adjacent term-edge weeks.
  */
 export function storyWeekStartDay(
   metadata: Record<string, unknown>,
@@ -66,10 +67,17 @@ export function storyWeekStartDay(
     : secondStart
       ? addCalendarDays(secondStart, ((weekIndex as number) - 2) * 7)
       : null;
+  const explicitWeekday = typeof metadata.week_start_day === "string"
+    ? isoWeekday(metadata.week_start_day)
+    : null;
   const explicit = typeof metadata.week_start_day === "string"
     ? (weekIndex as number) === (termWeekCount as number)
       ? mondayOfCalendarWeek(metadata.week_start_day)
-      : followingInstructionalDay(metadata.week_start_day)
+      : explicitWeekday !== null && explicitWeekday > 5
+        ? followingInstructionalDay(metadata.week_start_day)
+        : (weekIndex as number) === 1
+          ? followingInstructionalDay(metadata.week_start_day)
+          : mondayOfCalendarWeek(metadata.week_start_day)
     : null;
   if (metadata.week_start_day !== undefined && explicit === null) return null;
   const actualStart = explicit ?? defaultStart;

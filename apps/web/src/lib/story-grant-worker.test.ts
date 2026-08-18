@@ -822,6 +822,63 @@ test(
 );
 
 test(
+  "an adaptive middle-week marker still uses Monday-Friday and becomes due Saturday",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    const externalLearnerId = `worker-middle-week-${crypto.randomUUID()}`;
+    const periodKey = `worker-middle-week-period-${crypto.randomUUID()}`;
+    try {
+      await configure(
+        integration.id,
+        externalLearnerId,
+        configuredWeek(
+          periodKey,
+          `worker-middle-week-term-${crypto.randomUUID()}`,
+          2,
+          "2026-09-09",
+        ),
+      );
+      for (const activityDay of ["2026-09-07", "2026-09-11"]) {
+        const activity = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          dailyLog(periodKey, activityDay),
+          crypto.randomUUID(),
+        );
+        assert.equal(activity.status, "processed");
+      }
+      const weekendActivity = await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        dailyLog(periodKey, "2026-09-12"),
+        crypto.randomUUID(),
+      );
+      assert.deepEqual(weekendActivity, {
+        status: "rejected",
+        error: "inconsistent_activity_day",
+      });
+      const learnerId = await getOrCreateLearnerIdentity(
+        getDb(),
+        integration.id,
+        externalLearnerId,
+      );
+      const result = await runStoryGrantWorker({
+        asOf: new Date("2026-09-12T12:00:00.000Z"),
+        onlyLearnerIds: [learnerId],
+      });
+      assert.equal(result.grants, 1);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
+    }
+  },
+);
+
+test(
   "week-end reconciliation ignores the next instructional start and supports midweek term bounds",
   { skip: !process.env.DATABASE_URL },
   async () => {

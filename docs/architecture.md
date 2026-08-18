@@ -203,7 +203,9 @@ fact is stored, a database trigger materializes its due boundary in the typed
 weeks become due Saturday, while a midweek final week becomes due the following
 day. It never waits for the next instructional week, so holidays and breaks
 cannot delay ownership. New malformed calendars fail closed; the migration
-backfill safely skips malformed legacy rows.
+only aligns the due-date function and does not scan or backfill historical
+schedules or rewards. Queue ownership remains prospective from the PR70 trigger
+boundary.
 
 The worker pages through the partial pending-due index with a stable
 `(due_at, id)` cursor, then reconciles every overdue post-rollout row for each
