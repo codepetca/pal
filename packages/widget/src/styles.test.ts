@@ -67,6 +67,13 @@ test("widget controls and motion meet the accessibility contract", () => {
   assert.match(styles, /\.pal-spinner,[\s\S]*\.pal-celebration[\s\S]*animation: none/);
 });
 
+test("modal backdrop fills its containing block", () => {
+  const backdropRule =
+    styles.match(/\.pal-celebration-backdrop \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(backdropRule, /position: absolute/);
+  assert.match(backdropRule, /inset: 0/);
+});
+
 test("responsive behavior follows the host viewport contract", () => {
   assert.match(styles, /data-pal-viewport="narrow"/);
   assert.match(
