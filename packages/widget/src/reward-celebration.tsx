@@ -30,7 +30,6 @@ export function PalRewardCelebration({
   const reward = snapshot?.rewards[0];
   const rewardId = reward?.id;
   const continueButtonRef = useRef<HTMLButtonElement>(null);
-  const descriptionId = useId();
   const titleId = useId();
 
   useEffect(() => {
@@ -70,19 +69,29 @@ export function PalRewardCelebration({
   const achievement = reward.achievement;
   const grantReward = achievement ? undefined : reward;
   const storyReward = grantReward?.kind === "story";
-  const title = achievement?.title ?? grantReward?.title ?? "";
-  const description = achievement?.description ?? grantReward?.description ?? "";
+  const titleReward = Boolean(grantReward?.titleAward);
+  const rewardKind = titleReward
+    ? "title"
+    : achievement
+      ? "achievement"
+      : storyReward
+        ? "story"
+        : "reward";
+  const title = titleReward
+    ? grantReward?.titleAward
+    : achievement?.title ?? grantReward?.collectibleTitle ?? grantReward?.title ?? "";
   const assetUrl = achievement?.badge.assetUrl ?? grantReward?.assetUrl;
   const icon = achievement?.badge.icon ?? grantReward?.icon;
+  const showArtwork = !titleReward;
 
   return (
     <section
-      aria-describedby={hostManaged ? undefined : descriptionId}
       aria-labelledby={hostManaged ? undefined : titleId}
       aria-modal={!hostManaged && modal ? "true" : undefined}
       className="pal-celebration"
       data-pal-density={density}
       data-pal-motion={motion}
+      data-pal-reward-kind={rewardKind}
       data-pal-theme={theme}
       data-pal-viewport={viewport}
       onKeyDown={(event) => {
@@ -97,50 +106,22 @@ export function PalRewardCelebration({
       }}
       role={hostManaged ? undefined : "dialog"}
     >
-      <div className="pal-celebration-burst" aria-hidden="true">
-        <span>✦</span><span>✧</span><span>✦</span>
-      </div>
-      <p className="pal-eyebrow">
-        {achievement
-          ? "Achievement earned"
-          : storyReward
-            ? "Story unlocked"
-            : "Reward earned"}
-      </p>
-      <h2 id={titleId}>{title}</h2>
-      <div className="pal-celebration-icon" aria-hidden="true">
-        {assetUrl ? (
-          <img
-            data-collectible-finish={grantReward?.collectibleFinish ?? "color"}
-            src={assetUrl}
-            alt=""
-            width="80"
-            height="80"
-          />
-        ) : (
-          icon ?? "★"
-        )}
-      </div>
-      {grantReward?.collectibleTitle ? (
-        <strong className="pal-celebration-collectible">
-          {grantReward.collectibleTitle}
-        </strong>
-      ) : null}
-      {storyReward && grantReward.collectibleFinish ? (
-        <span className="pal-celebration-finish">
-          {grantReward.collectibleFinish === "sketch"
-            ? "Storybook sketch"
-            : "Brought to life in full color"}
-        </span>
-      ) : null}
-      <p id={descriptionId}>{description}</p>
-      {grantReward?.titleAward ? (
-        <div className="pal-celebration-title">
-          <span>New title</span>
-          <strong>{grantReward.titleAward}</strong>
-          {grantReward.titleRevealCopy ? <p>{grantReward.titleRevealCopy}</p> : null}
+      {showArtwork ? (
+        <div className="pal-celebration-icon" aria-hidden="true">
+          {assetUrl ? (
+            <img
+              data-collectible-finish={grantReward?.collectibleFinish ?? "color"}
+              src={assetUrl}
+              alt=""
+              width="112"
+              height="112"
+            />
+          ) : (
+            icon ?? "★"
+          )}
         </div>
       ) : null}
+      <h2 id={titleId}>{title}</h2>
       {rewardError ? (
         <p className="pal-celebration-error" role="alert">
           We could not save that yet. Try again.
