@@ -113,12 +113,10 @@ BEGIN
 		END
 	);
 	"weekday" := extract(isodow from "week_start")::integer;
-	IF "weekday" > 5 THEN
-		"week_start" := CASE
-			WHEN "week_index_value" = "term_week_count_value"
-				THEN "week_start" - ("weekday" - 1)
-			ELSE "week_start" + (8 - "weekday")
-		END;
+	IF "week_index_value" = "term_week_count_value" THEN
+		"week_start" := "week_start" - ("weekday" - 1);
+	ELSIF "weekday" > 5 THEN
+		"week_start" := "week_start" + (8 - "weekday");
 	END IF;
 
 	IF "week_start" < "earliest_week_start"

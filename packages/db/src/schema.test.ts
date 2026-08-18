@@ -1593,6 +1593,19 @@ test(
           expected: "2026-08-29T04:00:00.000Z",
         },
         {
+          name: "friday-final-week-marker",
+          metadata: {
+            term_token: `friday-final-week-marker-${suffix}`,
+            term_start_day: "2026-08-31",
+            term_end_day: "2026-12-18",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-12-18",
+            week_index: 16,
+          },
+          expected: "2026-12-19T05:00:00.000Z",
+        },
+        {
           name: "dst",
           metadata: {
             term_token: `dst-${suffix}`,
