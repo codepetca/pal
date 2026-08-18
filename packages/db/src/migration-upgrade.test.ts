@@ -441,7 +441,7 @@ test(
         `INSERT INTO events (
            id, integration_id, learner_id, idempotency_key, event_type, occurred_at
          ) VALUES ($1, $2, $3, 'terminal-weekend-event',
-           'daily_log_week.configured', '2026-08-30T12:00:00Z')`,
+           'daily_log_week.configured', '2026-08-17T12:00:00Z')`,
         [terminalEventId, integrationId, learnerId],
       );
       await upgrade.query(
@@ -450,7 +450,7 @@ test(
            period_key, occurred_at, metadata, created_at
          ) VALUES ($1, $2, $3, 'daily_log_week.configured',
            'terminal-weekend-fact', 'terminal-weekend-period',
-           '2026-08-30T12:00:00Z', $4, '2026-08-30T12:00:00Z')`,
+           '2026-08-17T12:00:00Z', $4, '2026-08-17T12:00:00Z')`,
         [integrationId, learnerId, terminalEventId, {
           term_token: "terminal-weekend-term",
           term_start_day: "2026-05-11",
@@ -554,7 +554,7 @@ test(
           },
           {
             periodKey: "terminal-weekend-period",
-            dueAt: "2026-08-30T12:00:00.000Z",
+            dueAt: "2026-08-30T04:00:00.000Z",
             reconciledAt: null,
           },
         ],

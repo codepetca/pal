@@ -1616,7 +1616,8 @@ test(
             week_start_day: "2026-08-30",
             week_index: 16,
           },
-          expected: "2026-08-29T04:00:00.000Z",
+          createdAt: "2026-08-17T12:00:00.000Z",
+          expected: "2026-08-30T04:00:00.000Z",
         },
         {
           name: "friday-final-week-marker",

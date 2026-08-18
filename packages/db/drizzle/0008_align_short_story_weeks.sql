@@ -154,6 +154,7 @@ CREATE OR REPLACE FUNCTION "public"."enqueue_story_collectible_schedule"() RETUR
 DECLARE
 	"due_at_value" timestamp with time zone;
 	"terminal_weekend_value" boolean;
+	"terminal_open_at_value" timestamp with time zone;
 	"effective_due_at_value" timestamp with time zone;
 BEGIN
 	IF NEW."event_type" <> 'daily_log_week.configured'
@@ -203,9 +204,18 @@ BEGIN
 		AND extract(isodow FROM (NEW."metadata"->>'week_start_day')::date) > 5,
 		false
 	);
+	"terminal_open_at_value" := CASE
+		WHEN "terminal_weekend_value" THEN
+			(NEW."metadata"->>'week_start_day')::date::timestamp
+				AT TIME ZONE (NEW."metadata"->>'term_timezone')
+		ELSE NULL
+	END;
 	"effective_due_at_value" := CASE
-		WHEN "terminal_weekend_value" AND "due_at_value" < NEW."created_at"
-			THEN NEW."created_at"
+		WHEN "terminal_weekend_value" THEN greatest(
+			"due_at_value",
+			NEW."created_at",
+			"terminal_open_at_value"
+		)
 		ELSE "due_at_value"
 	END;
 
@@ -244,6 +254,7 @@ DECLARE
 	"source_effective_due_at" timestamp with time zone;
 	"source_created_at" timestamp with time zone;
 	"source_terminal_weekend" boolean;
+	"source_terminal_open_at" timestamp with time zone;
 BEGIN
 	IF TG_OP = 'INSERT' THEN
 		SELECT
@@ -275,9 +286,18 @@ BEGIN
 			AND extract(isodow FROM ("source_metadata"->>'week_start_day')::date) > 5,
 			false
 		);
+		"source_terminal_open_at" := CASE
+			WHEN "source_terminal_weekend" THEN
+				("source_metadata"->>'week_start_day')::date::timestamp
+					AT TIME ZONE ("source_metadata"->>'term_timezone')
+			ELSE NULL
+		END;
 		"source_effective_due_at" := CASE
-			WHEN "source_terminal_weekend" AND "source_due_at" < "source_created_at"
-				THEN "source_created_at"
+			WHEN "source_terminal_weekend" THEN greatest(
+				"source_due_at",
+				"source_created_at",
+				"source_terminal_open_at"
+			)
 			ELSE "source_due_at"
 		END;
 
@@ -356,7 +376,17 @@ WITH "pending_source" AS MATERIALIZED (
 	SELECT
 		"schedule"."id",
 		"schedule"."created_at",
-		"public"."calculate_story_collectible_due_at"("fact"."metadata") AS "normalized_due_at"
+		"public"."calculate_story_collectible_due_at"("fact"."metadata") AS "normalized_due_at",
+		coalesce(
+			("fact"."metadata"->>'week_index')::numeric =
+				("fact"."metadata"->>'term_week_count')::numeric
+			AND extract(
+				isodow FROM ("fact"."metadata"->>'week_start_day')::date
+			) > 5,
+			false
+		) AS "terminal_weekend",
+		("fact"."metadata"->>'week_start_day')::date::timestamp
+			AT TIME ZONE ("fact"."metadata"->>'term_timezone') AS "raw_open_at"
 	FROM "public"."story_collectible_schedules" AS "schedule"
 	INNER JOIN "public"."learner_facts" AS "fact"
 		ON "fact"."id" = "schedule"."source_fact_id"
@@ -364,19 +394,33 @@ WITH "pending_source" AS MATERIALIZED (
 	WHERE "schedule"."reconciled_at" IS NULL
 )
 UPDATE "public"."story_collectible_schedules" AS "schedule"
-SET "due_at" = greatest(
-	"pending_source"."normalized_due_at",
-	"pending_source"."created_at"
-)
+SET "due_at" = CASE
+	WHEN "pending_source"."terminal_weekend" THEN greatest(
+		"pending_source"."normalized_due_at",
+		"pending_source"."created_at",
+		"pending_source"."raw_open_at"
+	)
+	ELSE greatest(
+		"pending_source"."normalized_due_at",
+		"pending_source"."created_at"
+	)
+END
 FROM "pending_source"
 WHERE "schedule"."id" = "pending_source"."id"
 	-- Rows accepted by 0007 but invalid under the aligned calendar keep their
 	-- existing boundary. This avoids collapsing adjacent legacy weeks together.
 	AND "pending_source"."normalized_due_at" IS NOT NULL
-	AND "schedule"."due_at" IS DISTINCT FROM greatest(
-		"pending_source"."normalized_due_at",
-		"pending_source"."created_at"
-	);
+	AND "schedule"."due_at" IS DISTINCT FROM CASE
+		WHEN "pending_source"."terminal_weekend" THEN greatest(
+			"pending_source"."normalized_due_at",
+			"pending_source"."created_at",
+			"pending_source"."raw_open_at"
+		)
+		ELSE greatest(
+			"pending_source"."normalized_due_at",
+			"pending_source"."created_at"
+		)
+	END;
 --> statement-breakpoint
 CREATE TRIGGER "story_collectible_schedules_protect"
 BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
