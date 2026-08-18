@@ -77,12 +77,17 @@ test(
         ])
         .returning({ id: learners.id });
 
-      const [periodA, periodB] = await db
+      const [periodA, periodA2, periodB] = await db
         .insert(achievementPeriods)
         .values([
           {
             learnerId: learnerA.id,
             periodKey: `week-a-${suffix}`,
+            anchorAt: new Date(),
+          },
+          {
+            learnerId: learnerA.id,
+            periodKey: `week-a2-${suffix}`,
             anchorAt: new Date(),
           },
           {
@@ -446,6 +451,49 @@ test(
           .where(eq(storyPlanChapters.id, secondChapter.id)),
         foreignKeyViolation,
       );
+      await db
+        .update(storyPlanChapters)
+        .set({ periodKey: periodA2.periodKey })
+        .where(eq(storyPlanChapters.id, secondChapter.id));
+
+      await db.insert(learnerFacts).values([
+        {
+          integrationId: integrationA.id,
+          learnerId: learnerA.id,
+          sourceEventId: eventA.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `story-schedule-a-${suffix}`,
+          periodKey: periodA.periodKey,
+          occurredAt: new Date("2099-08-31T12:00:00.000Z"),
+          metadata: {
+            term_token: `story-schedule-term-${suffix}`,
+            term_start_day: "2099-08-31",
+            term_end_day: "2099-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2099-08-31",
+            week_index: 1,
+          },
+        },
+        {
+          integrationId: integrationA.id,
+          learnerId: learnerA.id,
+          sourceEventId: eventA.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `story-schedule-a2-${suffix}`,
+          periodKey: periodA2.periodKey,
+          occurredAt: new Date("2099-09-07T12:00:00.000Z"),
+          metadata: {
+            term_token: `story-schedule-term-${suffix}`,
+            term_start_day: "2099-08-31",
+            term_end_day: "2099-10-09",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2099-09-07",
+            week_index: 2,
+          },
+        },
+      ]);
 
       for (const invalidGrant of [
         {
@@ -678,6 +726,207 @@ test(
       await db
         .delete(integrations)
         .where(eq(integrations.id, integrationB.id));
+    }
+  },
+);
+
+test(
+  "story grants require a matching pending schedule across old-writer retries",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const db = getDb();
+    const suffix = crypto.randomUUID();
+    const [integration] = await db.insert(integrations).values({
+      slug: `story-grant-schedule-${suffix}`,
+      name: "Story Grant Schedule",
+      secretHash: `story-grant-schedule-secret-${suffix}`,
+      allowedEventTypes: [],
+    }).returning({ id: integrations.id });
+    try {
+      const [learner] = await db.insert(learners).values({
+        integrationId: integration.id,
+        externalLearnerId: `story-grant-schedule-learner-${suffix}`,
+      }).returning({ id: learners.id });
+      const periodKeys = ["missing", "terminal", "pending"].map(
+        (name) => `story-grant-${name}-${suffix}`,
+      );
+      await db.insert(achievementPeriods).values(periodKeys.map((periodKey) => ({
+        learnerId: learner.id,
+        periodKey,
+        anchorAt: new Date(),
+      })));
+      const plan = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(storyPlans).values({
+          learnerId: learner.id,
+          termKey: `story-grant-term-${suffix}`,
+          termStartDay: "2025-06-30",
+          storyId: "pips-first-recipe",
+          storyVersion: 1,
+          totalPeriods: 6,
+        }).returning({ id: storyPlans.id });
+        await tx.insert(storyPlanChapters).values(
+          Array.from({ length: 6 }, (_, index) => ({
+            storyPlanId: created.id,
+            learnerId: learner.id,
+            periodNumber: index + 1,
+            ...(index < periodKeys.length ? { periodKey: periodKeys[index] } : {}),
+            chapterId: `story-grant-chapter-${index + 1}-${suffix}`,
+          })),
+        );
+        return created;
+      });
+      const chapters = await db.select({
+        id: storyPlanChapters.id,
+        periodNumber: storyPlanChapters.periodNumber,
+      }).from(storyPlanChapters).where(eq(
+        storyPlanChapters.storyPlanId,
+        plan.id,
+      ));
+      const chapterByPeriod = new Map(
+        chapters.map((chapter) => [chapter.periodNumber, chapter.id]),
+      );
+
+      const [configurationEvent, completionEvent] = await db.insert(events).values([
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-grant-config-event-${suffix}`,
+          eventType: "daily_log_week.configured",
+          occurredAt: new Date("2025-06-30T12:00:00.000Z"),
+          metadata: {},
+        },
+        {
+          integrationId: integration.id,
+          learnerId: learner.id,
+          idempotencyKey: `story-grant-completion-event-${suffix}`,
+          eventType: "daily_log.completed",
+          occurredAt: new Date("2025-06-30T15:00:00.000Z"),
+          metadata: {},
+        },
+      ]).returning({ id: events.id });
+      const completionFacts = await db.insert(learnerFacts).values(
+        periodKeys.map((periodKey, index) => ({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          sourceEventId: completionEvent.id,
+          eventType: "daily_log.completed",
+          semanticKey: `story-grant-completion-${index}-${suffix}`,
+          periodKey,
+          occurredAt: new Date("2025-06-30T15:00:00.000Z"),
+          metadata: {},
+        })),
+      ).returning({ id: learnerFacts.id });
+      const insertGrant = (chapterNumber: number, sourceFactId: string) =>
+        db.insert(learnerRewardGrants).values({
+          learnerId: learner.id,
+          kind: "story_chapter",
+          sourceFactId,
+          storyPlanId: plan.id,
+          storyPlanChapterId: chapterByPeriod.get(chapterNumber)!,
+        }).onConflictDoNothing().returning({ id: learnerRewardGrants.id });
+
+      const shadowClient = await getPool().connect();
+      try {
+        await shadowClient.query(
+          `CREATE TEMP TABLE story_collectible_schedules (
+             learner_id uuid, period_key text, reconciled_at timestamp with time zone
+           )`,
+        );
+        await shadowClient.query(
+          `INSERT INTO pg_temp.story_collectible_schedules (
+             learner_id, period_key, reconciled_at
+           ) VALUES ($1, $2, NULL)`,
+          [learner.id, periodKeys[0]],
+        );
+        const missingScheduleGrant = await shadowClient.query(
+          `INSERT INTO public.learner_reward_grants (
+             learner_id, kind, source_fact_id, story_plan_id,
+             story_plan_chapter_id
+           ) VALUES ($1, 'story_chapter', $2, $3, $4)
+           RETURNING id`,
+          [
+            learner.id,
+            completionFacts[0]!.id,
+            plan.id,
+            chapterByPeriod.get(1)!,
+          ],
+        );
+        assert.deepEqual(missingScheduleGrant.rows, []);
+      } finally {
+        await shadowClient.query("DISCARD TEMP").catch(() => undefined);
+        shadowClient.release();
+      }
+
+      const terminalResult = await db.transaction(async (tx) => {
+        const [configurationFact] = await tx.insert(learnerFacts).values({
+          integrationId: integration.id,
+          learnerId: learner.id,
+          sourceEventId: configurationEvent.id,
+          eventType: "daily_log_week.configured",
+          semanticKey: `story-grant-terminal-config-${suffix}`,
+          periodKey: periodKeys[1],
+          occurredAt: new Date("2025-06-30T12:00:00.000Z"),
+          metadata: {
+            term_token: `story-grant-terminal-term-${suffix}`,
+            term_start_day: "2025-06-30",
+            term_end_day: "2025-08-08",
+            term_timezone: "America/Toronto",
+            term_week_count: 6,
+            week_start_day: "2025-06-30",
+            week_index: 1,
+          },
+        }).returning({ id: learnerFacts.id });
+        const attemptedGrant = await tx.insert(learnerRewardGrants).values({
+          learnerId: learner.id,
+          kind: "story_chapter",
+          sourceFactId: completionFacts[1]!.id,
+          storyPlanId: plan.id,
+          storyPlanChapterId: chapterByPeriod.get(2)!,
+        }).returning({ id: learnerRewardGrants.id });
+        return { configurationFact, attemptedGrant };
+      });
+      assert.ok(terminalResult.configurationFact.id);
+      assert.deepEqual(terminalResult.attemptedGrant, []);
+
+      await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: configurationEvent.id,
+        eventType: "daily_log_week.configured",
+        semanticKey: `story-grant-pending-config-${suffix}`,
+        periodKey: periodKeys[2],
+        occurredAt: new Date("2099-08-31T12:00:00.000Z"),
+        metadata: {
+          term_token: `story-grant-pending-term-${suffix}`,
+          term_start_day: "2099-08-31",
+          term_end_day: "2099-10-09",
+          term_timezone: "America/Toronto",
+          term_week_count: 6,
+          week_start_day: "2099-08-31",
+          week_index: 1,
+        },
+      });
+      const pendingGrant = await insertGrant(3, completionFacts[2]!.id);
+      assert.equal(pendingGrant.length, 1);
+      assert.deepEqual(await insertGrant(3, completionFacts[2]!.id), []);
+
+      const schedules = await db.select().from(storyCollectibleSchedules).where(
+        eq(storyCollectibleSchedules.learnerId, learner.id),
+      );
+      assert.equal(schedules.length, 2);
+      assert.ok(schedules.find(
+        (schedule) => schedule.periodKey === periodKeys[1],
+      )?.reconciledAt);
+      assert.equal(schedules.find(
+        (schedule) => schedule.periodKey === periodKeys[2],
+      )?.reconciledAt, null);
+      assert.equal((await db.select().from(learnerRewardGrants).where(and(
+        eq(learnerRewardGrants.learnerId, learner.id),
+        eq(learnerRewardGrants.kind, "story_chapter"),
+      ))).length, 1);
+    } finally {
+      await db.delete(integrations).where(eq(integrations.id, integration.id));
     }
   },
 );

@@ -308,7 +308,9 @@ export const storyPlanChapters = pgTable(
 // Append-only durable ownership ledger. Source facts group grants from one
 // accepted action; grant_order gives those action groups stable database order
 // even when timestamps collide. Story content is resolved from the exact
-// pinned plan assignment at read time and is never copied into this table.
+// pinned plan assignment at read time and is never copied into this table. A
+// migration trigger admits story ownership only while that assignment's typed
+// schedule is pending; this also contains old writers during rolling deploys.
 export const learnerRewardGrants = pgTable(
   "learner_reward_grants",
   {

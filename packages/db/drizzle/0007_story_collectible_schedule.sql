@@ -288,6 +288,49 @@ CREATE TRIGGER "story_collectible_schedules_protect"
 BEFORE INSERT OR UPDATE OR DELETE ON "public"."story_collectible_schedules"
 FOR EACH ROW EXECUTE FUNCTION "public"."protect_story_collectible_schedule"();
 --> statement-breakpoint
+CREATE FUNCTION "public"."require_pending_story_schedule_for_grant"() RETURNS trigger AS $$
+DECLARE
+	"chapter_period_key" text;
+BEGIN
+	IF NEW."kind" IS DISTINCT FROM 'story_chapter'
+		OR NEW."story_plan_id" IS NULL
+		OR NEW."story_plan_chapter_id" IS NULL
+	THEN
+		RETURN NEW;
+	END IF;
+
+	SELECT "story_plan_chapters"."period_key"
+	INTO "chapter_period_key"
+	FROM "public"."story_plan_chapters"
+	WHERE "story_plan_chapters"."id" = NEW."story_plan_chapter_id"
+		AND "story_plan_chapters"."story_plan_id" = NEW."story_plan_id"
+		AND "story_plan_chapters"."learner_id" = NEW."learner_id";
+
+	-- Leave unknown/cross-owner assignments to the existing composite foreign
+	-- key. A valid assignment is grantable only while its prospective schedule
+	-- remains pending. RETURN NULL keeps an old writer from rolling back the
+	-- accepted event during the migration-first deployment window.
+	IF NOT FOUND THEN
+		RETURN NEW;
+	END IF;
+	IF "chapter_period_key" IS NULL OR NOT EXISTS (
+		SELECT 1
+		FROM "public"."story_collectible_schedules" AS "schedule"
+		WHERE "schedule"."learner_id" = NEW."learner_id"
+			AND "schedule"."period_key" = "chapter_period_key"
+			AND "schedule"."reconciled_at" IS NULL
+	) THEN
+		RETURN NULL;
+	END IF;
+
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "learner_reward_grants_require_pending_story_schedule"
+BEFORE INSERT ON "public"."learner_reward_grants"
+FOR EACH ROW EXECUTE FUNCTION "public"."require_pending_story_schedule_for_grant"();
+--> statement-breakpoint
 CREATE FUNCTION "public"."protect_learner_fact_immutable"() RETURNS trigger AS $$
 BEGIN
 	IF TG_OP = 'DELETE' AND NOT EXISTS (
