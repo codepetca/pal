@@ -77,7 +77,15 @@ Authorization: Bearer <short-lived learner-scoped read token>
 Cross-origin browser requests are accepted only when their exact HTTPS origin appears
 in `PAL_ALLOWED_WIDGET_ORIGINS` (HTTP is allowed only for localhost development).
 Responses use `Cache-Control: no-store`; preflights allow only `Authorization`,
-`Content-Type`, and the learner route methods.
+`Content-Type`, `X-Pal-Collectible-Finish`, and the learner route methods.
+
+Clients that understand the optional schema-v1 `finish` and
+`collectibleFinish` fields send `X-Pal-Collectible-Finish: 1` on snapshot
+requests. Pal then includes earned sketch and color story collectibles. A
+schema-v1 client that omits the capability header receives the legacy-safe
+fallback: sketch-only story collectibles and their notices remain withheld,
+while color-complete collectibles remain visible. The current
+`@codepet/pal-widget` HTTP client sends this header automatically.
 
 The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is
