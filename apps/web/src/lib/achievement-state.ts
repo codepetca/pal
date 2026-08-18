@@ -140,6 +140,15 @@ function canonicalTimeZone(timeZone: string): string {
   return new Intl.DateTimeFormat("en", { timeZone }).resolvedOptions().timeZone;
 }
 
+function canonicalStoredTimeZone(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    return canonicalTimeZone(value);
+  } catch {
+    return null;
+  }
+}
+
 function termCalendarMetadata(
   event: IncomingEvent,
 ): TermCalendarMetadata | null {
@@ -168,10 +177,12 @@ function isCompatibleCalendarRevision(
     "term_token",
     "term_start_day",
     "term_end_day",
-    "term_timezone",
     "week_index",
   ] as const;
-  if (v1Keys.some((key) => left[key] !== right[key])) return false;
+  if (
+    v1Keys.some((key) => left[key] !== right[key]) ||
+    canonicalStoredTimeZone(left.term_timezone) !== right.term_timezone
+  ) return false;
 
   const leftAdaptive = left.term_week_count !== undefined;
   const rightAdaptive = right.term_week_count !== undefined;
@@ -190,7 +201,7 @@ function isCompatibleTermRevision(
   if (
     left.term_start_day !== right.term_start_day ||
     left.term_end_day !== right.term_end_day ||
-    left.term_timezone !== right.term_timezone
+    canonicalStoredTimeZone(left.term_timezone) !== right.term_timezone
   ) {
     return false;
   }
