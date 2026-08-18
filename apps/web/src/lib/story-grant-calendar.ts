@@ -195,7 +195,33 @@ export function storyCollectibleDueDay(
 ): string | null {
   const instructionalEnd = storyInstructionalEndDay(metadata);
   if (!instructionalEnd) return null;
-  return addCalendarDays(instructionalEnd, 1);
+  const instructionalDueDay = addCalendarDays(instructionalEnd, 1);
+  if (!instructionalDueDay) return null;
+
+  // Compatibility: the current producer can describe the final instructional
+  // week with a weekend week_start_day equal to the term end. Keep the
+  // Monday-Friday instructional span, but never reveal its collectible before
+  // that authoritative raw opening. The database schedule enforces the same
+  // rule; future producers should send the preceding Monday instead.
+  const rawWeekStartDay = metadata.week_start_day;
+  const weekIndex = metadata.week_index;
+  const termWeekCount = metadata.term_week_count;
+  if (
+    typeof rawWeekStartDay === "string" &&
+    Number.isInteger(weekIndex) &&
+    Number.isInteger(termWeekCount) &&
+    weekIndex === termWeekCount
+  ) {
+    const rawWeekday = isoWeekday(rawWeekStartDay);
+    if (
+      rawWeekday !== null &&
+      rawWeekday > 5 &&
+      rawWeekStartDay > instructionalDueDay
+    ) {
+      return rawWeekStartDay;
+    }
+  }
+  return instructionalDueDay;
 }
 
 export function isStoryCollectibleDue(

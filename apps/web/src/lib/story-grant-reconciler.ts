@@ -19,7 +19,7 @@ export const STORY_GRANT_RECONCILE_LIMIT = 24;
 /**
  * Reconciles one bounded page of overdue post-rollout story assignments for
  * one locked learner. Both event ingest and the scheduled worker call this
- * function; the worker drains additional pages in separate transactions.
+ * function; later worker invocations recover any additional pages.
  * It grants ownership only: Weekly Rhythm remains the durable authority for
  * sketch-versus-color presentation, XP, achievements, and activity state.
  *

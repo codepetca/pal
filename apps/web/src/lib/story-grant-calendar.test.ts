@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   isStoryCollectibleDue,
   storyCollectibleDueDay,
+  storyInstructionalEndDay,
   storyWeekCalendar,
 } from "@/lib/story-grant-calendar";
 
@@ -125,7 +126,7 @@ test("a middle-week weekday marker normalizes to Monday and becomes due Saturday
   assert.equal(storyCollectibleDueDay(middle), "2026-09-12");
 });
 
-test("a terminal weekend marker preserves the preceding instructional week", () => {
+test("a terminal weekend marker preserves the week but never reveals before raw opening", () => {
   const finalWeek = calendar({
     term_start_day: "2026-05-11",
     term_end_day: "2026-08-30",
@@ -134,7 +135,16 @@ test("a terminal weekend marker preserves the preceding instructional week", () 
     week_index: 16,
   });
   assert.equal(storyWeekCalendar(finalWeek)?.weekStartDay, "2026-08-24");
-  assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-29");
+  assert.equal(storyInstructionalEndDay(finalWeek), "2026-08-28");
+  assert.equal(storyCollectibleDueDay(finalWeek), "2026-08-30");
+  assert.equal(
+    isStoryCollectibleDue(finalWeek, new Date("2026-08-29T16:00:00.000Z")),
+    false,
+  );
+  assert.equal(
+    isStoryCollectibleDue(finalWeek, new Date("2026-08-30T16:00:00.000Z")),
+    true,
+  );
 });
 
 test("raw adaptive starts must fall inside the term before normalization", () => {
