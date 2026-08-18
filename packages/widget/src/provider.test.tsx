@@ -632,6 +632,10 @@ test("reward modal dismisses from its backdrop and restores its trigger", async 
     id: "reward-1",
     title: "Achievement earned",
     description: "A reward notice",
+  }, {
+    id: "reward-2",
+    title: "Second achievement",
+    description: "Another reward notice",
   });
   let acknowledgementCalls = 0;
   const client: PalClient = {
@@ -729,6 +733,22 @@ test("reward modal dismisses from its backdrop and restores its trigger", async 
       await new Promise<void>((resolve) => setImmediate(resolve));
     });
     assert.equal(acknowledgementCalls, 1);
+    assert.match(JSON.stringify(renderer!.toJSON()), /Second achievement/);
+    assert.equal(previousFocus.focusCount, 0);
+    assert.deepEqual(openChanges, [true]);
+
+    const nextBackdrop = renderer!.root.findByProps({
+      className: "pal-celebration-backdrop",
+    });
+    const nextBackdropTarget = {};
+    await act(async () => {
+      nextBackdrop.props.onClick({
+        target: nextBackdropTarget,
+        currentTarget: nextBackdropTarget,
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(acknowledgementCalls, 2);
     assert.equal(renderer!.toJSON(), null);
     assert.equal(previousFocus.focusCount, 1);
     assert.deepEqual(openChanges, [true, false]);
@@ -751,6 +771,85 @@ test("reward modal dismisses from its backdrop and restores its trigger", async 
       Reflect.deleteProperty(globalThis, "HTMLElement");
     }
   }
+});
+
+test("modal Escape dismissal is duplicate-safe and exposes retry only after failure", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Achievement earned",
+    description: "A reward notice",
+  });
+  const firstAcknowledgement = deferred<void>();
+  let acknowledgementCalls = 0;
+  const client: PalClient = {
+    getSnapshot: async () => snapshot,
+    markRewardSeen() {
+      acknowledgementCalls += 1;
+      return acknowledgementCalls === 1
+        ? firstAcknowledgement.promise
+        : Promise.resolve();
+    },
+  };
+  let renderer!: ReactTestRenderer;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="escape-reward"
+      >
+        <PalRewardCelebration modal />
+      </PalProvider>,
+    );
+  });
+
+  const dialog = renderer.root.findByType("section");
+  let escapePrevented = false;
+  await act(async () => {
+    dialog.props.onKeyDown({
+      key: "Escape",
+      preventDefault: () => {
+        escapePrevented = true;
+      },
+    });
+    await Promise.resolve();
+  });
+  assert.equal(escapePrevented, true);
+  assert.equal(acknowledgementCalls, 1);
+  assert.equal(dialog.props["aria-busy"], true);
+
+  const pendingBackdrop = renderer.root.findByProps({
+    className: "pal-celebration-backdrop",
+  });
+  const pendingBackdropTarget = {};
+  await act(async () => {
+    dialog.props.onKeyDown({ key: "Escape", preventDefault: () => undefined });
+    pendingBackdrop.props.onClick({
+      target: pendingBackdropTarget,
+      currentTarget: pendingBackdropTarget,
+    });
+    await Promise.resolve();
+  });
+  assert.equal(acknowledgementCalls, 1);
+
+  await act(async () => {
+    firstAcknowledgement.reject(new Error("Temporary acknowledgement failure"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  const retryButtons = renderer.root.findAllByType("button");
+  assert.equal(retryButtons.length, 1);
+  assert.equal(retryButtons[0]!.props.children, "Try again");
+  assert.equal(retryButtons[0]!.props.disabled, false);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Continue/);
+
+  await act(async () => {
+    retryButtons[0]!.props.onClick();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  assert.equal(acknowledgementCalls, 2);
+  assert.equal(renderer.toJSON(), null);
 });
 
 test("a host-managed reward does not publish a competing open lifecycle", async () => {

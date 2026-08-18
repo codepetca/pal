@@ -29,20 +29,21 @@ export function PalRewardCelebration({
   } = usePalWidget();
   const reward = snapshot?.rewards[0];
   const rewardId = reward?.id;
+  const open = Boolean(rewardId);
   const actionButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const titleId = useId();
 
   useEffect(() => {
-    if (!rewardId || hostManaged) return;
+    if (!open || hostManaged) return;
     onOpenChange?.(true);
     return () => onOpenChange?.(false);
-  }, [hostManaged, onOpenChange, rewardId]);
+  }, [hostManaged, onOpenChange, open]);
 
   useEffect(() => {
     if (
       hostManaged ||
-      !rewardId ||
+      !open ||
       typeof document === "undefined" ||
       typeof HTMLElement === "undefined"
     ) {
@@ -63,7 +64,7 @@ export function PalRewardCelebration({
         queueMicrotask(restoreFocus);
       }
     };
-  }, [hostManaged, rewardId]);
+  }, [hostManaged, open]);
 
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
