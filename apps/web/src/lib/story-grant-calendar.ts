@@ -67,17 +67,24 @@ export function storyWeekStartDay(
     : secondStart
       ? addCalendarDays(secondStart, ((weekIndex as number) - 2) * 7)
       : null;
-  const explicitWeekday = typeof metadata.week_start_day === "string"
-    ? isoWeekday(metadata.week_start_day)
+  const rawExplicitStart = typeof metadata.week_start_day === "string"
+    ? addCalendarDays(metadata.week_start_day, 0)
     : null;
+  if (
+    metadata.week_start_day !== undefined &&
+    (rawExplicitStart === null ||
+      rawExplicitStart < termStartDay ||
+      rawExplicitStart > termEndDay)
+  ) return null;
+  const explicitWeekday = rawExplicitStart === null
+    ? null
+    : isoWeekday(rawExplicitStart);
   const explicit = typeof metadata.week_start_day === "string"
-    ? (weekIndex as number) === (termWeekCount as number)
-      ? mondayOfCalendarWeek(metadata.week_start_day)
-      : explicitWeekday !== null && explicitWeekday > 5
+    ? explicitWeekday !== null && explicitWeekday > 5
+      ? followingInstructionalDay(metadata.week_start_day)
+      : (weekIndex as number) === 1
         ? followingInstructionalDay(metadata.week_start_day)
-        : (weekIndex as number) === 1
-          ? followingInstructionalDay(metadata.week_start_day)
-          : mondayOfCalendarWeek(metadata.week_start_day)
+        : mondayOfCalendarWeek(metadata.week_start_day)
     : null;
   if (metadata.week_start_day !== undefined && explicit === null) return null;
   const actualStart = explicit ?? defaultStart;
