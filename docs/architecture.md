@@ -205,7 +205,8 @@ day. It never waits for the next instructional week, so holidays and breaks
 cannot delay ownership. New malformed calendars fail closed. The terminal-weekend
 guard closes schedules whose producer `occurred_at` is after the authoritative
 final Sunday; delayed outbox delivery does not change that chronology. The
-compatibility migrations create no ownership and do not enroll historical facts.
+compatibility migration series creates no ownership and does not enroll historical
+facts.
 Queue ownership remains prospective from the PR70 trigger boundary.
 
 The worker pages through the partial pending-due index with a stable
