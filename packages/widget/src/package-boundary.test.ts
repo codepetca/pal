@@ -104,8 +104,11 @@ function runReleaseGuard(version: string | undefined, tag: string) {
   );
 }
 
-test("story scheduling documentation keeps the prospective no-backfill boundary", () => {
-  assert.match(architectureSource, /does not scan or backfill historical/);
+test("story scheduling documentation keeps the prospective ownership boundary", () => {
+  assert.match(
+    architectureSource,
+    /creates no ownership and does not enroll historical\s+facts/,
+  );
   assert.match(
     architectureSource,
     /prospective from the PR70 trigger\s+boundary/,
