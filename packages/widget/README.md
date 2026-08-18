@@ -47,6 +47,11 @@ The host owns placement. Pal owns everything rendered inside each component.
 `PalCollection` renders the optional durable keepsakes in a v1 learner snapshot;
 older snapshots without `collection` remain valid.
 
+In standalone `modal` mode, `PalRewardCelebration` renders an absolute backdrop
+that fills its nearest positioned ancestor, or the initial containing block when
+there is none. Mount it in a positioned host layer when the modal should stay
+within a specific application region.
+
 Achievement celebrations are display-ready DTOs selected by Pal's authenticated
 server. Each carries the earned achievement instance ID, stable achievement key,
 canonical name, description, and badge presentation. The widget renders that DTO

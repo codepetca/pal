@@ -626,16 +626,23 @@ test("a category reshuffle cannot evict an unacknowledged reward", async () => {
   );
 });
 
-test("reward celebration is a focus-managed dialog that restores its trigger", async () => {
+test("reward modal dismisses from its backdrop and restores its trigger", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({
     id: "reward-1",
     title: "Achievement earned",
     description: "A reward notice",
+  }, {
+    id: "reward-2",
+    title: "Second achievement",
+    description: "Another reward notice",
   });
+  let acknowledgementCalls = 0;
   const client: PalClient = {
     getSnapshot: async () => snapshot,
-    markRewardSeen: async () => undefined,
+    markRewardSeen: async () => {
+      acknowledgementCalls += 1;
+    },
   };
   class FakeElement {
     focusCount = 0;
@@ -646,7 +653,7 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
     }
   }
   const previousFocus = new FakeElement();
-  const continueButton = new FakeElement();
+  const dialogElement = new FakeElement();
   const openChanges: boolean[] = [];
   const originalDocument = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -682,16 +689,21 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
         </PalProvider>,
         {
           createNodeMock(element) {
-            return element.type === "button" ? continueButton : null;
+            return element.type === "section" ? dialogElement : null;
           },
         },
       );
     });
 
     const dialog = renderer!.root.findByType("section");
+    const backdrop = renderer!.root.findByProps({
+      className: "pal-celebration-backdrop",
+    });
     assert.equal(dialog.props.role, "dialog");
     assert.equal(dialog.props["aria-modal"], "true");
-    assert.equal(continueButton.focusCount, 1);
+    assert.equal(dialog.props.tabIndex, -1);
+    assert.equal(dialogElement.focusCount, 1);
+    assert.equal(renderer!.root.findAllByType("button").length, 0);
     assert.deepEqual(openChanges, [true]);
 
     let tabPrevented = false;
@@ -704,7 +716,42 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
       });
     });
     assert.equal(tabPrevented, true);
-    assert.equal(continueButton.focusCount, 2);
+    assert.equal(dialogElement.focusCount, 2);
+
+    await act(async () => {
+      backdrop.props.onClick({ target: {}, currentTarget: {} });
+      await Promise.resolve();
+    });
+    assert.equal(acknowledgementCalls, 0);
+
+    const backdropTarget = {};
+    await act(async () => {
+      backdrop.props.onClick({
+        target: backdropTarget,
+        currentTarget: backdropTarget,
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(acknowledgementCalls, 1);
+    assert.match(JSON.stringify(renderer!.toJSON()), /Second achievement/);
+    assert.equal(previousFocus.focusCount, 0);
+    assert.deepEqual(openChanges, [true]);
+
+    const nextBackdrop = renderer!.root.findByProps({
+      className: "pal-celebration-backdrop",
+    });
+    const nextBackdropTarget = {};
+    await act(async () => {
+      nextBackdrop.props.onClick({
+        target: nextBackdropTarget,
+        currentTarget: nextBackdropTarget,
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(acknowledgementCalls, 2);
+    assert.equal(renderer!.toJSON(), null);
+    assert.equal(previousFocus.focusCount, 1);
+    assert.deepEqual(openChanges, [true, false]);
 
     await act(async () => {
       renderer?.unmount();
@@ -722,6 +769,227 @@ test("reward celebration is a focus-managed dialog that restores its trigger", a
       Object.defineProperty(globalThis, "HTMLElement", originalHTMLElement);
     } else {
       Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+  }
+});
+
+test("modal Escape dismissal is duplicate-safe and exposes retry only after failure", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewards.push({
+    id: "reward-1",
+    title: "Achievement earned",
+    description: "A reward notice",
+  });
+  const firstAcknowledgement = deferred<void>();
+  let acknowledgementCalls = 0;
+  const client: PalClient = {
+    getSnapshot: async () => snapshot,
+    markRewardSeen() {
+      acknowledgementCalls += 1;
+      return acknowledgementCalls === 1
+        ? firstAcknowledgement.promise
+        : Promise.resolve();
+    },
+  };
+  let renderer!: ReactTestRenderer;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="escape-reward"
+      >
+        <PalRewardCelebration modal />
+      </PalProvider>,
+    );
+  });
+
+  const dialog = renderer.root.findByType("section");
+  let escapePrevented = false;
+  await act(async () => {
+    dialog.props.onKeyDown({
+      key: "Escape",
+      preventDefault: () => {
+        escapePrevented = true;
+      },
+    });
+    await Promise.resolve();
+  });
+  assert.equal(escapePrevented, true);
+  assert.equal(acknowledgementCalls, 1);
+  assert.equal(dialog.props["aria-busy"], true);
+
+  const pendingBackdrop = renderer.root.findByProps({
+    className: "pal-celebration-backdrop",
+  });
+  const pendingBackdropTarget = {};
+  await act(async () => {
+    dialog.props.onKeyDown({ key: "Escape", preventDefault: () => undefined });
+    pendingBackdrop.props.onClick({
+      target: pendingBackdropTarget,
+      currentTarget: pendingBackdropTarget,
+    });
+    await Promise.resolve();
+  });
+  assert.equal(acknowledgementCalls, 1);
+
+  await act(async () => {
+    firstAcknowledgement.reject(new Error("Temporary acknowledgement failure"));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  const retryButtons = renderer.root.findAllByType("button");
+  assert.equal(retryButtons.length, 1);
+  assert.equal(retryButtons[0]!.props.children, "Try again");
+  assert.equal(retryButtons[0]!.props.disabled, false);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Continue/);
+
+  await act(async () => {
+    retryButtons[0]!.props.onClick();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+  assert.equal(acknowledgementCalls, 2);
+  assert.equal(renderer.toJSON(), null);
+});
+
+test("a refilled reward cancels stale focus restoration", async () => {
+  const firstPage = createFixtureSnapshot();
+  firstPage.rewards = [{
+    id: "reward-1",
+    title: "First achievement",
+    description: "The final reward on the visible page.",
+  }];
+  const nextPage = structuredClone(firstPage);
+  nextPage.rewards = [{
+    id: "reward-2",
+    title: "Refilled achievement",
+    description: "The first reward on the next page.",
+  }];
+  const refill = deferred<typeof nextPage>();
+  let snapshotCalls = 0;
+  const client: PalClient = {
+    getSnapshot() {
+      snapshotCalls += 1;
+      return snapshotCalls === 1 ? Promise.resolve(firstPage) : refill.promise;
+    },
+    markRewardSeen: async () => undefined,
+  };
+  class FakeElement {
+    focusCount = 0;
+    isConnected = true;
+
+    focus() {
+      this.focusCount += 1;
+    }
+  }
+  const previousFocus = new FakeElement();
+  const dialogElement = new FakeElement();
+  const animationFrames: FrameRequestCallback[] = [];
+  const openChanges: boolean[] = [];
+  const handleOpenChange = (open: boolean) => openChanges.push(open);
+  const originalDocument = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "document",
+  );
+  const originalHTMLElement = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "HTMLElement",
+  );
+  const originalRequestAnimationFrame = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "requestAnimationFrame",
+  );
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer: ReactTestRenderer | undefined;
+
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    value: FakeElement,
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { activeElement: previousFocus },
+  });
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    configurable: true,
+    value: (callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    },
+  });
+
+  function Probe() {
+    widget = usePalWidget();
+    return (
+      <PalRewardCelebration
+        modal
+        onOpenChange={handleOpenChange}
+      />
+    );
+  }
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={client}
+          initialSnapshot={firstPage}
+          scopeKey="fixture-refill-focus"
+        >
+          <Probe />
+        </PalProvider>,
+        {
+          createNodeMock(element) {
+            return element.type === "section" ? dialogElement : null;
+          },
+        },
+      );
+    });
+    assert.equal(dialogElement.focusCount, 1);
+
+    await act(async () => {
+      await widget.dismissReward("reward-1");
+    });
+    assert.equal(renderer!.toJSON(), null);
+    assert.equal(animationFrames.length, 1);
+
+    animationFrames.shift()?.(0);
+    assert.equal(animationFrames.length, 1);
+
+    await act(async () => {
+      refill.resolve(nextPage);
+      await refill.promise;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.match(JSON.stringify(renderer!.toJSON()), /Refilled achievement/);
+    assert.equal(dialogElement.focusCount, 2);
+    assert.equal(previousFocus.focusCount, 0);
+
+    animationFrames.shift()?.(16);
+    assert.equal(previousFocus.focusCount, 0);
+    assert.deepEqual(openChanges, [true, false, true]);
+  } finally {
+    await act(async () => {
+      renderer?.unmount();
+    });
+    if (originalDocument) {
+      Object.defineProperty(globalThis, "document", originalDocument);
+    } else {
+      Reflect.deleteProperty(globalThis, "document");
+    }
+    if (originalHTMLElement) {
+      Object.defineProperty(globalThis, "HTMLElement", originalHTMLElement);
+    } else {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+    if (originalRequestAnimationFrame) {
+      Object.defineProperty(
+        globalThis,
+        "requestAnimationFrame",
+        originalRequestAnimationFrame,
+      );
+    } else {
+      Reflect.deleteProperty(globalThis, "requestAnimationFrame");
     }
   }
 });

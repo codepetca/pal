@@ -43,7 +43,8 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /Earned/);
   assert.match(html, /Mystery companion/);
   assert.match(html, /Weekly Rhythm/);
-  assert.match(html, /Achievement earned/);
+  assert.match(html, /data-pal-reward-kind="achievement"/);
+  assert.doesNotMatch(html, /Achievement earned/);
   assert.match(html, /badge-checkin-7-day-v1\.png/);
   assert.ok(
     snapshot.rewards.some(
@@ -58,6 +59,22 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.match(html, /data-pal-motion="reduced"/);
   assert.match(html, /data-pal-viewport="narrow"/);
   assert.doesNotMatch(html, /aria-label="New Pal reward"/);
+});
+
+test("modal celebration uses backdrop dismissal without a continue button", () => {
+  const client = createFixturePalClient();
+  client.dispatch("item-opened-early", { itemToken: "modal-celebration-item" });
+  const snapshot = client.peek();
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="modal-reward">
+      <PalRewardCelebration modal />
+    </PalProvider>,
+  );
+
+  assert.match(html, /class="pal-celebration-backdrop"/);
+  assert.match(html, /aria-modal="true"/);
+  assert.match(html, /tabindex="-1"/);
+  assert.doesNotMatch(html, />Continue<\/button>/);
 });
 
 test("roadmap hides future weeks and renders visible weeks newest first", () => {
@@ -168,7 +185,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Semester Legend/);
 });
 
-test("story celebration names the sketch finish without relying on color", () => {
+test("story celebration centers the collectible without explanatory copy", () => {
   const snapshot = createFixtureSnapshot(1, 6);
   snapshot.rewards = [{
     id: "story-sketch",
@@ -185,7 +202,39 @@ test("story celebration names the sketch finish without relying on color", () =>
       <PalRewardCelebration />
     </PalProvider>,
   );
-  assert.match(html, />Storybook sketch</);
+  assert.match(html, /data-pal-reward-kind="story"/);
+  assert.match(html, />Mystery Egg</);
+  assert.match(html, /reward-mystery-egg-v1\.png/);
+  assert.doesNotMatch(html, />A new chapter</);
+  assert.doesNotMatch(html, /The egg waits beside the lamp/);
+  assert.doesNotMatch(html, /Storybook sketch/);
+});
+
+test("achievement celebration centers its earned badge without explanatory copy", () => {
+  const client = createFixturePalClient();
+  client.dispatch("item-opened-early", { itemToken: "celebration-item" });
+  const snapshot = client.peek();
+  const reward = snapshot.rewards.find(
+    (candidate) => candidate.achievement?.key === "ready-early",
+  );
+  assert.ok(reward);
+  snapshot.rewards = [reward];
+
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={snapshot}
+      scopeKey="achievement-celebration"
+    >
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+
+  assert.match(html, /data-pal-reward-kind="achievement"/);
+  assert.match(html, />Ready Early<\/h2>/);
+  assert.match(html, /badge-ready-early-v1\.png/);
+  assert.doesNotMatch(html, /Opened a learning item soon after it was released/);
+  assert.doesNotMatch(html, /Achievement earned/);
 });
 
 test("roadmap omits the title chip until the learner earns a title", () => {
@@ -365,7 +414,26 @@ test("host-managed rewards leave dialog and focus ownership to the host", () => 
   assert.doesNotMatch(html, /aria-describedby=/);
 });
 
-test("story reveal presents headline, collectible, story, then title", () => {
+test("host-managed modal content retains its acknowledgement action", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "host-managed-modal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="host-managed-modal-learner"
+    >
+      <PalRewardCelebration hostManaged modal />
+    </PalProvider>,
+  );
+
+  assert.match(html, />Continue<\/button>/);
+  assert.doesNotMatch(html, /pal-celebration-backdrop/);
+  assert.doesNotMatch(html, /role="dialog"/);
+  assert.doesNotMatch(html, /aria-modal=/);
+});
+
+test("a title reward shows only the earned title and its action", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({
     id: "story-reveal",
@@ -389,16 +457,13 @@ test("story reveal presents headline, collectible, story, then title", () => {
   );
 
   const celebration = html.slice(html.indexOf('class="pal-celebration"'));
-  const headline = celebration.indexOf("Keep the light on");
-  const artwork = celebration.indexOf("reward-warming-lantern-v1.png");
-  const collectible = celebration.indexOf("Warming Lantern");
-  const story = celebration.indexOf("The coldest night arrived");
-  const title = celebration.indexOf("Gentle Keeper");
-  assert.ok(headline >= 0);
-  assert.ok(headline < artwork);
-  assert.ok(artwork < collectible);
-  assert.ok(collectible < story);
-  assert.ok(story < title);
-  assert.match(html, /Story unlocked/);
-  assert.match(html, /New title/);
+  assert.match(celebration, /data-pal-reward-kind="title"/);
+  assert.match(celebration, /<h2[^>]*>Gentle Keeper<\/h2>/);
+  assert.match(celebration, />Continue<\/button>/);
+  assert.doesNotMatch(celebration, /Keep the light on/);
+  assert.doesNotMatch(celebration, /reward-warming-lantern-v1\.png/);
+  assert.doesNotMatch(celebration, /Warming Lantern/);
+  assert.doesNotMatch(celebration, /The coldest night arrived/);
+  assert.doesNotMatch(celebration, /Story unlocked/);
+  assert.doesNotMatch(celebration, /New title/);
 });
