@@ -101,8 +101,9 @@ BEGIN
 		ELSE "first_normal_monday" + (("week_index_value" - 2) * 7)
 	END;
 	"latest_week_start" := CASE
-		WHEN "week_index_value" >= 1
-			THEN "final_monday" - (("term_week_count_value" - "week_index_value") * 7)
+		WHEN "week_index_value" = 1
+			THEN "final_monday" - (("term_week_count_value" - 2) * 7) - 3
+		ELSE "final_monday" - (("term_week_count_value" - "week_index_value") * 7)
 	END;
 	"week_start" := coalesce(
 		"week_start",
