@@ -31,6 +31,7 @@ export async function reconcileDueStoryGrants(
     learnerId: string;
     asOf?: Date;
     limit?: number;
+    shouldStop?: () => boolean;
   },
 ): Promise<StoryGrantReconciliationResult> {
   const asOf = input.asOf ?? new Date();
@@ -91,7 +92,9 @@ export async function reconcileDueStoryGrants(
   const candidates = discoveredCandidates.slice(0, limit);
 
   let granted = 0;
+  let processed = 0;
   for (const candidate of candidates) {
+    if (input.shouldStop?.()) break;
     if (!candidate.existingGrantId) {
       if (await insertStoryChapterGrant(db, {
         learnerId: input.learnerId,
@@ -111,11 +114,12 @@ export async function reconcileDueStoryGrants(
           isNull(storyCollectibleSchedules.reconciledAt),
         ),
       );
+    processed += 1;
   }
   return {
-    candidates: candidates.length,
-    due: candidates.length,
+    candidates: processed,
+    due: processed,
     granted,
-    hasMore,
+    hasMore: hasMore || processed < candidates.length,
   };
 }

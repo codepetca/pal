@@ -131,10 +131,21 @@ export async function reconcileDueStoryGrantsForLearner(
   input: {
     asOf: Date;
     db?: Db;
+    deadline?: Date;
+    now?: () => Date;
   },
 ): Promise<StoryGrantReconciliationResult> {
   const db = input.db ?? getDb();
+  const now = input.now ?? (() => new Date());
+  const isPastDeadline = () =>
+    input.deadline !== undefined && now().getTime() >= input.deadline.getTime();
+  if (isPastDeadline()) {
+    return { candidates: 0, due: 0, granted: 0, hasMore: true };
+  }
   return db.transaction(async (tx) => {
+    if (isPastDeadline()) {
+      return { candidates: 0, due: 0, granted: 0, hasMore: true };
+    }
     const [learner] = await tx
       .select({ id: learners.id })
       .from(learners)
@@ -150,9 +161,13 @@ export async function reconcileDueStoryGrantsForLearner(
     await tx.execute(
       sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`,
     );
+    if (isPastDeadline()) {
+      return { candidates: 0, due: 0, granted: 0, hasMore: true };
+    }
     return reconcileDueStoryGrants(tx, {
       learnerId,
       asOf: input.asOf,
+      shouldStop: isPastDeadline,
     });
   });
 }
@@ -226,9 +241,12 @@ export async function runStoryGrantWorker(
     operation: () => Promise<T>;
   }): Promise<
     | { ok: true; value: T; retries: number }
-    | { ok: false; retries: number }
+    | { ok: false; retries: number; reason: "deadline" | "terminal" }
   > => {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (isPastDeadline()) {
+        return { ok: false, retries: attempt - 1, reason: "deadline" };
+      }
       try {
         return {
           ok: true,
@@ -248,10 +266,17 @@ export async function runStoryGrantWorker(
         };
         if (finalAttempt) {
           console.error("[pal] scheduled story grant operation failed", details);
-          return { ok: false, retries: attempt - 1 };
+          return { ok: false, retries: attempt - 1, reason: "terminal" };
+        }
+        if (isPastDeadline()) {
+          return { ok: false, retries: attempt - 1, reason: "deadline" };
+        }
+        const retryDelayMs = retryBaseDelayMs * 2 ** (attempt - 1);
+        if (now().getTime() + retryDelayMs >= deadline.getTime()) {
+          return { ok: false, retries: attempt - 1, reason: "deadline" };
         }
         console.warn("[pal] retrying scheduled story grant operation", details);
-        await waitForRetry(retryBaseDelayMs * 2 ** (attempt - 1));
+        await waitForRetry(retryDelayMs);
       }
     }
     throw new Error("unreachable story grant retry state");
@@ -275,6 +300,11 @@ export async function runStoryGrantWorker(
     });
     retries += discovery.retries;
     if (!discovery.ok) {
+      if (discovery.reason === "deadline") {
+        deadlineReached = true;
+        knownDeadlineBacklog = true;
+        break;
+      }
       throw new Error("scheduled story grant discovery failed after retries");
     }
     const { learnerIds } = discovery.value;
@@ -300,7 +330,12 @@ export async function runStoryGrantWorker(
       const results = await Promise.all(learnerChunk.map((learnerId) => retry({
         scope: "learner",
         correlationId: learnerCorrelationId(learnerId),
-        operation: () => reconcileLearner(learnerId, { asOf, db }),
+        operation: () => reconcileLearner(learnerId, {
+          asOf,
+          db,
+          deadline,
+          now,
+        }),
       })));
       for (const result of results) {
         learnersProcessed += 1;
@@ -308,6 +343,13 @@ export async function runStoryGrantWorker(
         if (result.ok) {
           grants += result.value.granted;
           learnerPageLimitReached ||= result.value.hasMore;
+          if (isPastDeadline() && result.value.hasMore) {
+            deadlineReached = true;
+            knownDeadlineBacklog = true;
+          }
+        } else if (result.reason === "deadline") {
+          deadlineReached = true;
+          knownDeadlineBacklog = true;
         } else {
           failedLearners += 1;
           // The retry helper already emitted one sanitized terminal record.
@@ -333,9 +375,16 @@ export async function runStoryGrantWorker(
     });
     retries += lookahead.retries;
     if (!lookahead.ok) {
-      throw new Error("scheduled story grant capacity lookahead failed after retries");
+      if (lookahead.reason === "deadline") {
+        deadlineReached = true;
+        knownDeadlineBacklog = true;
+        batchLimitReached = true;
+      } else {
+        throw new Error("scheduled story grant capacity lookahead failed after retries");
+      }
+    } else {
+      batchLimitReached = lookahead.value.learnerIds.length > 0;
     }
-    batchLimitReached = lookahead.value.learnerIds.length > 0;
   }
 
   if (deadlineReached && !knownDeadlineBacklog && lastPageMayHaveMore) {
@@ -352,9 +401,14 @@ export async function runStoryGrantWorker(
     });
     retries += lookahead.retries;
     if (!lookahead.ok) {
-      throw new Error("scheduled story grant deadline lookahead failed after retries");
+      if (lookahead.reason === "deadline") {
+        knownDeadlineBacklog = true;
+      } else {
+        throw new Error("scheduled story grant deadline lookahead failed after retries");
+      }
+    } else {
+      knownDeadlineBacklog = lookahead.value.learnerIds.length > 0;
     }
-    knownDeadlineBacklog = lookahead.value.learnerIds.length > 0;
   }
 
   return {

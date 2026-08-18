@@ -1258,6 +1258,83 @@ test("worker stops before its deadline and reports known remaining work", async 
   });
 });
 
+test("deadline expiry prevents another discovery retry", async () => {
+  const currentTime = Date.parse("2026-09-05T12:00:00.000Z");
+  let discoveryAttempts = 0;
+  const result = await runStoryGrantWorker({
+    db: {} as Db,
+    asOf: new Date(currentTime),
+    deadline: new Date(currentTime + 10),
+    now: () => new Date(currentTime),
+    retryBaseDelayMs: 10,
+    findLearners: async () => {
+      discoveryAttempts += 1;
+      throw Object.assign(new Error("transient discovery failure"), {
+        code: "40001",
+      });
+    },
+  });
+  assert.equal(discoveryAttempts, 1);
+  assert.equal(result.batches, 0);
+  assert.equal(result.failedLearners, 0);
+  assert.equal(result.retries, 0);
+  assert.equal(result.deadlineReached, true);
+});
+
+test("deadline expiry prevents another learner retry", async () => {
+  let currentTime = Date.parse("2026-09-05T12:00:00.000Z");
+  let learnerAttempts = 0;
+  let discoveryCalls = 0;
+  const result = await runStoryGrantWorker({
+    db: {} as Db,
+    asOf: new Date(currentTime),
+    deadline: new Date(currentTime + 10),
+    now: () => new Date(currentTime),
+    retryBaseDelayMs: 0,
+    findLearners: async () => {
+      discoveryCalls += 1;
+      return discoveryCalls === 1
+        ? {
+            learnerIds: ["deadline-learner"],
+            scannedRows: 1,
+            cursor: {
+              dueAt: new Date("2026-09-05T04:00:00.000Z"),
+              id: "deadline-schedule",
+            },
+          }
+        : { learnerIds: [], scannedRows: 0 };
+    },
+    reconcileLearner: async () => {
+      learnerAttempts += 1;
+      currentTime += 10;
+      throw Object.assign(new Error("learner lock timeout"), {
+        code: "55P03",
+      });
+    },
+  });
+  assert.equal(learnerAttempts, 1);
+  assert.equal(result.learners, 1);
+  assert.equal(result.failedLearners, 0);
+  assert.equal(result.retries, 0);
+  assert.equal(result.deadlineReached, true);
+});
+
+test("learner reconciliation refuses new transaction work at the deadline", async () => {
+  const deadline = new Date("2026-09-05T12:00:00.000Z");
+  const result = await reconcileDueStoryGrantsForLearner("deadline-learner", {
+    asOf: deadline,
+    deadline,
+    now: () => deadline,
+    db: {} as Db,
+  });
+  assert.deepEqual(result, {
+    candidates: 0,
+    due: 0,
+    granted: 0,
+    hasMore: true,
+  });
+});
+
 test(
   "cron route rejects invalid deployment/auth configuration and runs when valid",
   { skip: !process.env.DATABASE_URL },
