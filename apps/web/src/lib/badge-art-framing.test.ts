@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 /**
@@ -15,7 +16,17 @@ import { inflateSync } from "node:zlib";
  * cannot reintroduce that drift.
  */
 
-const BADGE_DIR = join(process.cwd(), "public", "assets", "badges");
+// Resolved from this file rather than the process cwd, so the suite runs the
+// same way however it is invoked - `pnpm test`, turbo, or node pointed straight
+// at this one file from anywhere in the repo.
+const BADGE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "public",
+  "assets",
+  "badges",
+);
 
 /** Canonical badge canvas: square, and the same for every badge. */
 const CANVAS = 512;
@@ -77,6 +88,14 @@ function decodePngAlpha(buffer: Buffer): DecodedAlpha {
   const channels = 4;
   const raw = inflateSync(Buffer.concat(idat));
   const stride = width * channels;
+  // Each scanline is one filter byte plus its pixels. Check up front: a short
+  // stream would otherwise unfilter into NaN and store as transparent black,
+  // surfacing later as a confusing framing failure rather than a corrupt file.
+  assert.equal(
+    raw.length,
+    height * (stride + 1),
+    "badge art has a truncated or corrupt pixel stream",
+  );
   const pixels = Buffer.alloc(height * stride);
 
   let read = 0;
