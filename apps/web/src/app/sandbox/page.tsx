@@ -21,12 +21,6 @@ export default function SandboxPage() {
     <WidgetSandbox
       mode={mode}
       buildInfo={{
-        source:
-          process.env.VERCEL_ENV === "preview"
-            ? "Public fixture preview"
-            : mode === "persisted"
-              ? "Local persisted pipeline"
-              : "Local fixture",
         widgetVersion: widgetPackage.version,
         ...(revision ? { revision } : {}),
       }}
