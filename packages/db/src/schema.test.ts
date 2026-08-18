@@ -793,7 +793,7 @@ test(
           learnerId: learner.id,
           idempotencyKey: `story-grant-config-event-${suffix}`,
           eventType: "daily_log_week.configured",
-          occurredAt: new Date("2025-06-30T12:00:00.000Z"),
+          occurredAt: new Date("2025-07-06T12:00:00.000Z"),
           metadata: {},
         },
         {
@@ -866,7 +866,7 @@ test(
           eventType: "daily_log_week.configured",
           semanticKey: `story-grant-terminal-config-${suffix}`,
           periodKey: periodKeys[1],
-          occurredAt: new Date("2025-06-30T12:00:00.000Z"),
+          occurredAt: new Date("2025-07-06T12:00:00.000Z"),
           metadata: {
             term_token: `story-grant-terminal-term-${suffix}`,
             term_start_day: "2025-06-30",
@@ -1105,14 +1105,63 @@ test(
       assert.equal(schedules[0]!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
       assert.equal(schedules[0]!.reconciledAt, null);
 
+      const delayedPeriodKey = `story-schedule-delayed-period-${suffix}`;
+      const beforeBoundary = new Date("2026-09-04T20:00:00.000Z");
+      const delayedCreatedAt = new Date("2026-09-06T12:00:00.000Z");
+      const [delayedEvent] = await db.insert(events).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        idempotencyKey: `story-schedule-delayed-event-${suffix}`,
+        eventType: "daily_log_week.configured",
+        occurredAt: beforeBoundary,
+        metadata: {},
+      }).returning({ id: events.id });
+      const [delayedFact] = await db.insert(learnerFacts).values({
+        integrationId: integration.id,
+        learnerId: learner.id,
+        sourceEventId: delayedEvent.id,
+        eventType: "daily_log_week.configured",
+        semanticKey: `${delayedPeriodKey}:1`,
+        periodKey: delayedPeriodKey,
+        occurredAt: beforeBoundary,
+        metadata: {
+          ...calendar,
+          term_token: `story-schedule-delayed-term-${suffix}`,
+        },
+        createdAt: delayedCreatedAt,
+      }).returning({
+        id: learnerFacts.id,
+        createdAt: learnerFacts.createdAt,
+      });
+      const [delayedSchedule] = await db.select().from(storyCollectibleSchedules)
+        .where(eq(storyCollectibleSchedules.sourceFactId, delayedFact.id));
+      assert.equal(delayedSchedule!.dueAt.toISOString(), "2026-09-05T04:00:00.000Z");
+      assert.equal(delayedSchedule!.reconciledAt, null);
+      assert.equal(delayedSchedule!.createdAt.toISOString(), delayedCreatedAt.toISOString());
+
+      // The source-protection trigger reconstructs chronology from occurred_at.
+      // A receipt-time reconstruction would incorrectly close this delayed row.
+      await assert.rejects(
+        db.insert(storyCollectibleSchedules).values({
+          learnerId: learner.id,
+          periodKey: delayedPeriodKey,
+          sourceFactId: delayedFact.id,
+          dueAt: new Date("2026-09-05T04:00:00.000Z"),
+          createdAt: delayedFact.createdAt,
+          reconciledAt: delayedFact.createdAt,
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+
       const latePeriodKey = `story-schedule-late-period-${suffix}`;
+      const afterBoundary = new Date("2026-09-05T05:00:00.000Z");
       const lateCreatedAt = new Date("2026-09-06T12:00:00.000Z");
       const [lateEvent] = await db.insert(events).values({
         integrationId: integration.id,
         learnerId: learner.id,
         idempotencyKey: `story-schedule-late-event-${suffix}`,
         eventType: "daily_log_week.configured",
-        occurredAt: lateCreatedAt,
+        occurredAt: afterBoundary,
         metadata: {},
       }).returning({ id: events.id });
       const [lateFact] = await db.insert(learnerFacts).values({
@@ -1122,7 +1171,7 @@ test(
         eventType: "daily_log_week.configured",
         semanticKey: `${latePeriodKey}:1`,
         periodKey: latePeriodKey,
-        occurredAt: lateCreatedAt,
+        occurredAt: afterBoundary,
         metadata: {
           ...calendar,
           term_token: `story-schedule-late-term-${suffix}`,
@@ -1551,6 +1600,7 @@ test(
             term_timezone: "America/Toronto",
             week_index: 6,
           },
+          occurredAt: "2026-08-10T12:00:00.000Z",
           createdAt: "2026-08-10T12:00:00.000Z",
           expected: "2026-08-08T04:00:00.000Z",
           expectedReconciledAt: "2026-08-10T12:00:00.000Z",
@@ -1620,6 +1670,21 @@ test(
           expected: "2026-08-30T04:00:00.000Z",
         },
         {
+          name: "delayed-terminal-weekend",
+          metadata: {
+            term_token: `delayed-terminal-weekend-${suffix}`,
+            term_start_day: "2026-05-11",
+            term_end_day: "2026-08-30",
+            term_timezone: "America/Toronto",
+            term_week_count: 16,
+            week_start_day: "2026-08-30",
+            week_index: 16,
+          },
+          occurredAt: "2026-08-30T12:00:00.000Z",
+          createdAt: "2026-08-31T12:00:00.000Z",
+          expected: "2026-08-30T12:00:00.000Z",
+        },
+        {
           name: "late-terminal-weekend",
           metadata: {
             term_token: `late-terminal-weekend-${suffix}`,
@@ -1630,6 +1695,7 @@ test(
             week_start_day: "2026-08-30",
             week_index: 16,
           },
+          occurredAt: "2026-08-31T12:00:00.000Z",
           createdAt: "2026-08-31T12:00:00.000Z",
           expected: "2026-08-31T12:00:00.000Z",
           expectedReconciledAt: "2026-08-31T12:00:00.000Z",
@@ -1697,7 +1763,11 @@ test(
           learnerId: learner.id,
           idempotencyKey: `story-calendar-${scenario.name}-${suffix}`,
           eventType: "daily_log_week.configured",
-          occurredAt: new Date("2026-03-01T12:00:00.000Z"),
+          occurredAt: new Date(
+            "occurredAt" in scenario
+              ? scenario.occurredAt
+              : "2026-03-01T12:00:00.000Z",
+          ),
           metadata: {},
         }).returning({ id: events.id });
         await db.insert(learnerFacts).values({
@@ -1707,7 +1777,11 @@ test(
           eventType: "daily_log_week.configured",
           semanticKey: `story-calendar-${scenario.name}-${suffix}:1`,
           periodKey: `story-calendar-${scenario.name}-${suffix}`,
-          occurredAt: new Date("2026-03-01T12:00:00.000Z"),
+          occurredAt: new Date(
+            "occurredAt" in scenario
+              ? scenario.occurredAt
+              : "2026-03-01T12:00:00.000Z",
+          ),
           metadata: scenario.metadata,
           ...("createdAt" in scenario
             ? { createdAt: new Date(scenario.createdAt) }

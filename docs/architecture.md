@@ -203,9 +203,11 @@ fact is stored, a database trigger materializes its due boundary in the typed
 weeks become due Saturday, while a midweek final week becomes due the following
 day. It never waits for the next instructional week, so holidays and breaks
 cannot delay ownership. New malformed calendars fail closed. The terminal-weekend
-compatibility migration closes only pending schedules first delivered after the
-authoritative final Sunday; it creates no ownership and does not enroll historical
-facts. Queue ownership remains prospective from the PR70 trigger boundary.
+guard closes schedules whose producer `occurred_at` is after the authoritative
+final Sunday; delayed outbox delivery does not change that chronology. The
+compatibility migration series creates no ownership and does not enroll historical
+facts.
+Queue ownership remains prospective from the PR70 trigger boundary.
 
 The worker pages through the partial pending-due index with a stable
 `(due_at, id)` cursor, then reconciles at most 24 overdue rows per selected

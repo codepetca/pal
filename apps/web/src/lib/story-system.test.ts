@@ -531,9 +531,9 @@ test("an adaptive revision cannot move a legacy week into the future", { skip: !
       { asOf: new Date("2026-08-04T12:00:00.000Z") },
     );
     assert.notEqual(snapshot.roadmap.weeks[5]?.status, "future");
-    // The queue is prospective: this configuration arrived after its derived
-    // due day, so it pins placement without backfilling story ownership.
-    assert.equal(snapshot.progression?.collectibles[5]?.status, "locked");
+    // Receipt was delayed past the derived due day, but the immutable source
+    // timestamp preceded it, so the retry retains story eligibility.
+    assert.equal(snapshot.progression?.collectibles[5]?.status, "earned");
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

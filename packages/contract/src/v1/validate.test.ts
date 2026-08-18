@@ -141,6 +141,36 @@ test("a real in-term weekend week start remains contract-valid", () => {
   assert.equal(result.ok, true);
 });
 
+test("an adaptive Pika calendar preserves its producer timestamp exactly", () => {
+  const occurredAt = "2026-08-07T23:59:59.123Z";
+  const payload = {
+    schema_version: 1,
+    idempotency_key: "pika:daily-log-week:stable-retry",
+    learner_id: "opaque-retry-learner",
+    event_type: "daily_log_week.configured",
+    occurred_at: occurredAt,
+    metadata: {
+      period_key: "pika-week-2026-08-03",
+      config_version: 1,
+      period_status: "open",
+      eligible_days: 3,
+      term_token: "pika-term-2026-summer",
+      term_start_day: "2026-06-29",
+      term_end_day: "2026-08-30",
+      term_timezone: "America/Toronto",
+      term_week_count: 9,
+      week_start_day: "2026-08-03",
+      week_index: 6,
+    },
+  };
+
+  for (const delivery of [payload, structuredClone(payload)]) {
+    const result = validateV1Event(delivery);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.event.occurred_at, occurredAt);
+  }
+});
+
 test("a payload that is not an object is rejected without throwing", () => {
   for (const payload of [null, undefined, 42, "event", [], true]) {
     const result = validateV1Event(payload);
