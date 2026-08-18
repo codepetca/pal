@@ -1543,6 +1543,19 @@ test(
           expected: "2026-09-12T04:00:00.000Z",
         },
         {
+          name: "legacy-overdue",
+          metadata: {
+            term_token: `legacy-overdue-${suffix}`,
+            term_start_day: "2026-06-29",
+            term_end_day: "2026-10-23",
+            term_timezone: "America/Toronto",
+            week_index: 6,
+          },
+          createdAt: "2026-08-10T12:00:00.000Z",
+          expected: "2026-08-08T04:00:00.000Z",
+          expectedReconciledAt: "2026-08-10T12:00:00.000Z",
+        },
+        {
           name: "legacy-midweek-final-week",
           metadata: {
             term_token: `legacy-midweek-final-week-${suffix}`,
@@ -1680,10 +1693,19 @@ test(
           periodKey: `story-calendar-${scenario.name}-${suffix}`,
           occurredAt: new Date("2026-03-01T12:00:00.000Z"),
           metadata: scenario.metadata,
+          ...("createdAt" in scenario
+            ? { createdAt: new Date(scenario.createdAt) }
+            : {}),
         });
         const [schedule] = await db.select().from(storyCollectibleSchedules)
           .where(eq(storyCollectibleSchedules.learnerId, learner.id));
         assert.equal(schedule!.dueAt.toISOString(), scenario.expected);
+        if ("expectedReconciledAt" in scenario) {
+          assert.equal(
+            schedule!.reconciledAt?.toISOString(),
+            scenario.expectedReconciledAt,
+          );
+        }
       }
 
       const [decimalLearner] = await db.insert(learners).values({

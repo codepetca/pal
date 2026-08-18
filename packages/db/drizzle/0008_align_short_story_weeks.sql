@@ -197,10 +197,12 @@ BEGIN
 				CONSTRAINT = 'story_collectible_schedule_calendar_valid';
 	END IF;
 
-	"terminal_weekend_value" :=
+	"terminal_weekend_value" := coalesce(
 		(NEW."metadata"->>'week_index')::numeric =
 			(NEW."metadata"->>'term_week_count')::numeric
-		AND extract(isodow FROM (NEW."metadata"->>'week_start_day')::date) > 5;
+		AND extract(isodow FROM (NEW."metadata"->>'week_start_day')::date) > 5,
+		false
+	);
 	"effective_due_at_value" := CASE
 		WHEN "terminal_weekend_value" AND "due_at_value" < NEW."created_at"
 			THEN NEW."created_at"
@@ -267,10 +269,12 @@ BEGIN
 			RETURN NEW;
 		END IF;
 
-		"source_terminal_weekend" :=
+		"source_terminal_weekend" := coalesce(
 			("source_metadata"->>'week_index')::numeric =
 				("source_metadata"->>'term_week_count')::numeric
-			AND extract(isodow FROM ("source_metadata"->>'week_start_day')::date) > 5;
+			AND extract(isodow FROM ("source_metadata"->>'week_start_day')::date) > 5,
+			false
+		);
 		"source_effective_due_at" := CASE
 			WHEN "source_terminal_weekend" AND "source_due_at" < "source_created_at"
 				THEN "source_created_at"
