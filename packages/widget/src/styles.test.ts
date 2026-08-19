@@ -110,6 +110,26 @@ test("roadmap muted text preserves contrast in both themes", () => {
   }
 });
 
+test("roadmap centers the collectible branch and keeps badges to its right", () => {
+  const connectorRule =
+    styles.match(/\.pal-week:not\(:last-child\)::before \{([^}]+)\}/)?.[1] ??
+    "";
+  const weekRule = styles.match(/\n\.pal-week \{([^}]+)\}/)?.[1] ?? "";
+  const collectibleStackRule =
+    styles.match(/\.pal-week-collectible-stack \{([^}]+)\}/)?.[1] ?? "";
+  const weekContentRule =
+    styles.match(/\.pal-week-content \{([^}]+)\}/)?.[1] ?? "";
+
+  assert.match(connectorRule, /left: 50%/);
+  assert.match(connectorRule, /transform: translateX\(-50%\)/);
+  assert.match(
+    weekRule,
+    /grid-template-columns: minmax\(0, 1fr\) 5\.65rem minmax\(0, 1fr\)/,
+  );
+  assert.match(collectibleStackRule, /grid-column: 2/);
+  assert.match(weekContentRule, /grid-column: 3/);
+});
+
 test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {
   const tooltipRule =
     styles.match(/\.pal-badge-tooltip \{([^}]+)\}/)?.[1] ?? "";
