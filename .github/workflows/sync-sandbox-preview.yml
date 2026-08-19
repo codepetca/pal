@@ -1,0 +1,65 @@
+name: Sync sandbox preview
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-sandbox-preview
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Advance sandbox preview to the tested main revision
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/sandbox-preview:refs/remotes/origin/sandbox-preview
+
+          current_main=$(git rev-parse refs/remotes/origin/main)
+          if [[ "$SOURCE_SHA" != "$current_main" ]]; then
+            echo "Skipping stale CI result for $SOURCE_SHA; main is $current_main."
+            exit 0
+          fi
+
+          preview_head=$(git rev-parse refs/remotes/origin/sandbox-preview)
+          source_tree=$(git rev-parse "$SOURCE_SHA^{tree}")
+          preview_tree=$(git rev-parse "$preview_head^{tree}")
+          if [[ "$source_tree" == "$preview_tree" ]]; then
+            echo "sandbox-preview already has the tested main tree $source_tree."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          short_sha=${SOURCE_SHA:0:7}
+          preview_commit=$(
+            printf 'Refresh sandbox preview from main@%s\n' "$short_sha" |
+              git commit-tree "$source_tree" -p "$preview_head" -p "$SOURCE_SHA"
+          )
+
+          git push origin "$preview_commit:refs/heads/sandbox-preview"
