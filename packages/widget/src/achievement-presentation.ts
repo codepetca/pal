@@ -29,7 +29,7 @@ const ACHIEVEMENT_PRESENTATIONS: Readonly<
     description: "Joined a new classroom.",
     badge: Object.freeze({
       label: "Joined the Class",
-      assetUrl: "/assets/badges/badge-first-classroom-login-v1.png",
+      assetUrl: "/assets/badges/badge-joined-class-v1.png",
     }),
   }),
   [PAL_ACHIEVEMENT_KEYS.weeklyRhythm]: Object.freeze({

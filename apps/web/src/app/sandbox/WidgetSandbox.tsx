@@ -105,7 +105,7 @@ const SANDBOX_ACTION_GROUPS: Array<{
     id: "student",
     label: "Student initiated",
     actions: [
-      { action: "session-started", label: "Start session" },
+      { action: "session-started", label: "Logged in" },
       { action: "classroom-joined", label: "Join classroom" },
       { action: "daily-log-completed", label: "Complete daily log" },
       { action: "item-opened-early", label: "Open item early" },
