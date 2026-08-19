@@ -20,6 +20,10 @@ test("login and classroom achievements use distinct badge artwork", () => {
 
   assert.notEqual(firstLogin?.badge.assetUrl, joinedClass?.badge.assetUrl);
   assert.equal(
+    firstLogin?.badge.assetUrl,
+    "/assets/badges/badge-first-classroom-login-v1.png",
+  );
+  assert.equal(
     joinedClass?.badge.assetUrl,
     "/assets/badges/badge-joined-class-v1.png",
   );
