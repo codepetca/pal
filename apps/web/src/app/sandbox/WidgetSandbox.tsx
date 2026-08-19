@@ -31,6 +31,7 @@ import {
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import {
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
@@ -54,7 +55,6 @@ import {
   isInsideFictionalSemester,
   semesterWeekForDate,
   type SandboxAction,
-  type SandboxEventRequest,
 } from "./sandbox-events";
 import styles from "./widget-sandbox.module.css";
 
@@ -69,10 +69,6 @@ type HostView =
   | "settings";
 
 export type SandboxBuildInfo = {
-  source:
-    | "Local fixture"
-    | "Local persisted pipeline"
-    | "Public fixture preview";
   widgetVersion: string;
   revision?: string;
 };
@@ -100,57 +96,90 @@ const NAV_ITEMS = [
   icon: typeof NotePencil;
 }>;
 
-const SANDBOX_ACTIONS: Array<{
-  action: SandboxAction;
+const SANDBOX_ACTION_GROUPS: Array<{
+  id: "student" | "pika";
   label: string;
-  detail: string;
+  actions: Array<{ action: SandboxAction; label: string }>;
 }> = [
   {
-    action: "session-started",
-    label: "Start session",
-    detail: "platform.session.started",
+    id: "student",
+    label: "Student initiated",
+    actions: [
+      { action: "session-started", label: "Start session" },
+      { action: "classroom-joined", label: "Join classroom" },
+      { action: "daily-log-completed", label: "Complete daily log" },
+      { action: "item-opened-early", label: "Open item early" },
+      { action: "on-time-finish", label: "Finish on time" },
+      { action: "late-finish", label: "Finish late" },
+    ],
   },
   {
-    action: "classroom-joined",
-    label: "Join classroom",
-    detail: "classroom.joined",
-  },
-  {
-    action: "week-configured",
-    label: "Configure this week",
-    detail: "Creates a 5-day Weekly Rhythm target",
-  },
-  {
-    action: "short-week-configured",
-    label: "Make it a short week",
-    detail: "Uses a 2-day Weekly Rhythm goal within 3 eligible days",
-  },
-  {
-    action: "daily-log-completed",
-    label: "Complete daily log",
-    detail: "Builds toward a full-color weekly keepsake, and grants XP",
-  },
-  {
-    action: "item-opened-early",
-    label: "Open item early",
-    detail: "Awards Ready Early",
-  },
-  {
-    action: "on-time-finish",
-    label: "Finish on time",
-    detail: "Adds a badge, and makes the pet happy",
-  },
-  {
-    action: "late-finish",
-    label: "Finish late",
-    detail: "Adds a late completion badge",
-  },
-  {
-    action: "duplicate-replayed",
-    label: "Replay duplicate",
-    detail: "Must not change progress",
+    id: "pika",
+    label: "Pika initiated",
+    actions: [
+      { action: "week-configured", label: "Configure this week" },
+      { action: "short-week-configured", label: "Make it a short week" },
+    ],
   },
 ];
+
+function CompactMonthCalendar({
+  date,
+  startDate,
+}: {
+  date: Date;
+  startDate: Date;
+}) {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const currentDay = date.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+  const selectedDayKey = date.toISOString().slice(0, 10);
+  const startDayKey = startDate.toISOString().slice(0, 10);
+  const monthLabel = date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const selectedDateLabel = date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div
+      className={styles.monthStrip}
+      role="img"
+      aria-label={`${monthLabel} calendar. ${selectedDateLabel} selected. Elapsed semester days are highlighted.`}
+      style={{ "--month-days": daysInMonth } as CSSProperties}
+    >
+      {Array.from({ length: daysInMonth }, (_, index) => {
+        const day = index + 1;
+        const weekday = new Date(Date.UTC(year, month, day)).getUTCDay();
+        const dayKey = `${monthPrefix}${String(day).padStart(2, "0")}`;
+
+        return (
+          <span
+            aria-hidden="true"
+            className={styles.monthDay}
+            data-completed={
+              dayKey >= startDayKey && dayKey < selectedDayKey ? "true" : "false"
+            }
+            data-current={day === currentDay ? "true" : "false"}
+            data-weekend={weekday === 0 || weekday === 6 ? "true" : "false"}
+            key={day}
+          >
+            {day}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 function SandboxControls({
   buildInfo,
@@ -188,13 +217,18 @@ function SandboxControls({
   onTermWeeksChange: (weeks: number) => void;
 }) {
   const fixture = isFixtureClient(client);
-  const [log, setLog] = useState<string[]>([
-    fixture
-      ? "Fixture ready — every visible surface uses the public Pal widget."
-      : "Persisted sandbox ready — events use the real local pipeline.",
-  ]);
+  const compactWidgetVersion = buildInfo.widgetVersion.replace(
+    /^\d+\.\d+\.\d+-/,
+    "",
+  );
+  const buildStamp = [
+    `@codepet/pal-widget-${compactWidgetVersion}`,
+    buildInfo.revision,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const [busy, setBusy] = useState(false);
-  const lastRequest = useRef<SandboxEventRequest | null>(null);
+  const [controlError, setControlError] = useState<string | null>(null);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousCollapsed = useRef(collapsed);
@@ -206,7 +240,7 @@ function SandboxControls({
     previousCollapsed.current = collapsed;
   }, [collapsed]);
 
-  async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
+  async function post(path: string, body: unknown): Promise<void> {
     const res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -216,65 +250,48 @@ function SandboxControls({
     if (!res.ok) {
       throw new Error(String(data.error ?? `request failed (${res.status})`));
     }
-    return data;
   }
 
   async function dispatch(action: SandboxAction) {
     if (busy) return;
     setBusy(true);
+    setControlError(null);
     try {
+      const activityDay = simulatedDate.toISOString().slice(0, 10);
       if (isFixtureClient(client)) {
         const context: PalFixtureActionContext | undefined =
           action === "daily-log-completed"
-            ? { activityDay: simulatedDate.toISOString().slice(0, 10) }
+            ? { activityDay }
             : action === "item-opened-early" ||
                 action === "on-time-finish" ||
                 action === "late-finish"
               ? { itemToken: crypto.randomUUID() }
               : undefined;
-        const detail = client.dispatch(action as PalFixtureAction, context);
-        if (action === "reset") onReset();
-        setLog((current) => [detail, ...current].slice(0, 6));
+        client.dispatch(action as PalFixtureAction, context);
+        if (action === "reset") {
+          onReset();
+        }
         await onRefresh();
         return;
       }
 
       if (action === "reset") {
         await post("/api/sandbox/reset", { learner_id: learnerId });
-        lastRequest.current = null;
         client.invalidateAccessToken();
-        setLog((current) => ["Persisted learner reset", ...current].slice(0, 6));
         onReset();
         return;
       }
 
-      const requests =
-        action === "duplicate-replayed"
-          ? (lastRequest.current ? [lastRequest.current] : [])
-          : eventsForAction(action, simulatedDate, learnerId);
+      const requests = eventsForAction(action, simulatedDate, learnerId);
       if (requests.length > 0) {
-        let data: Record<string, unknown> = {};
         for (const request of requests) {
-          data = await post("/api/sandbox/events", request);
-          if (action !== "duplicate-replayed") lastRequest.current = request;
+          await post("/api/sandbox/events", request);
         }
-        const request = requests[requests.length - 1];
-        setLog((current) => [
-          `→ ${request.event_type}: ${String(data.status)}`,
-          ...current,
-        ].slice(0, 6));
-      } else {
-        const detail =
-          action === "duplicate-replayed"
-            ? "Nothing to replay — send a real event first"
-            : "This control does not emit an event";
-        setLog((current) => [detail, ...current].slice(0, 6));
       }
-
       await onRefresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sandbox request failed";
-      setLog((current) => [`Pipeline error: ${message}`, ...current].slice(0, 6));
+      setControlError(`Pipeline error: ${message}`);
     } finally {
       setBusy(false);
     }
@@ -283,11 +300,11 @@ function SandboxControls({
   async function advanceWeek() {
     if (busy || !canAddWeek) return;
     setBusy(true);
+    setControlError(null);
     try {
       if (isFixtureClient(client)) {
-        const detail = client.dispatch("advance-week");
+        client.dispatch("advance-week");
         onAddWeek();
-        setLog((current) => [detail, ...current].slice(0, 6));
         await onRefresh();
         return;
       }
@@ -299,17 +316,12 @@ function SandboxControls({
         learnerId,
       );
       if (!request) throw new Error("Could not configure the next sandbox week");
-      const data = await post("/api/sandbox/events", request);
-      lastRequest.current = request;
+      await post("/api/sandbox/events", request);
       onAddWeek();
-      setLog((current) => [
-        `→ advanced week: ${String(data.status)}`,
-        ...current,
-      ].slice(0, 6));
       await onRefresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sandbox request failed";
-      setLog((current) => [`Pipeline error: ${message}`, ...current].slice(0, 6));
+      setControlError(`Pipeline error: ${message}`);
     } finally {
       setBusy(false);
     }
@@ -318,14 +330,14 @@ function SandboxControls({
   async function changeTermWeeks(totalWeeks: number) {
     if (!fixture || busy || !client.setTermWeeks) return;
     setBusy(true);
+    setControlError(null);
     try {
       client.setTermWeeks(totalWeeks);
       onTermWeeksChange(totalWeeks);
-      setLog((current) => [
-        `Rebuilt fixture as a ${totalWeeks}-week story`,
-        ...current,
-      ].slice(0, 6));
       await onRefresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sandbox request failed";
+      setControlError(`Pipeline error: ${message}`);
     } finally {
       setBusy(false);
     }
@@ -371,59 +383,23 @@ function SandboxControls({
         <div id="sandbox-control-panel" className={styles.controlPanel}>
           {closeButton}
 
-          <header>
-            <div>
-              <span className={styles.fixtureLabel}>
-                {fixture ? "Production-shaped fixture" : "Real pipeline"}
-              </span>
-              <h2>Semester controls</h2>
-            </div>
-            {fixture ? (
-              <p>
-                Controls keep a bounded action history in this browser and ask
-                Pal&apos;s server projector for the same public snapshot rendered in
-                production.
-              </p>
-            ) : (
-              <p>
-                Controls send version 1 facts through Pal ingest. The roadmap,
-                companion, rewards, and acknowledgements all read persisted state.
-              </p>
-            )}
-          </header>
-
-          <dl className={styles.buildInfo} aria-label="Sandbox build information">
-            <div>
-              <dt>Widget source</dt>
-              <dd>{buildInfo.source}</dd>
-            </div>
-            <div>
-              <dt>Package baseline</dt>
-              <dd>@codepet/pal-widget {buildInfo.widgetVersion}</dd>
-            </div>
-            {buildInfo.revision ? (
-              <div>
-                <dt>Revision</dt>
-                <dd><code>{buildInfo.revision}</code></dd>
-              </div>
-            ) : null}
-          </dl>
+          <p className={styles.buildInfo} aria-label="Sandbox build information">
+            {buildStamp}
+          </p>
 
           <div className={styles.dateBar}>
-            <span className={styles.dateLabel}>
-              Semester week {currentSemesterWeek} of {totalSemesterWeeks} / daily-log date
-            </span>
             <span className={styles.dateValue}>
               {simulatedDate.toLocaleDateString("en-US", {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
-                year: "numeric",
+                timeZone: "UTC",
               })}
+              <small>W{currentSemesterWeek}/{totalSemesterWeeks}</small>
             </span>
             <div className={styles.dateButtons}>
               <button type="button" onClick={onAddDay} disabled={busy || !canAddDay} aria-label="Add 1 day">
-                +1 day
+                +day
               </button>
               <button
                 type="button"
@@ -437,44 +413,55 @@ function SandboxControls({
               >
                 {fixture && currentSemesterWeek === totalSemesterWeeks
                   ? "Finish story"
-                  : "+1 week"}
+                  : "+week"}
               </button>
             </div>
-            {fixture ? (
-              <label className={styles.termLength}>
-                Story length
-                <select
-                  aria-label="Fixture story length"
-                  disabled={busy}
-                  value={totalSemesterWeeks}
-                  onChange={(event) => void changeTermWeeks(Number(event.target.value))}
-                >
-                  {Array.from({ length: 19 }, (_, index) => index + 6).map((weeks) => (
-                    <option key={weeks} value={weeks}>{weeks} weeks</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <CompactMonthCalendar
+              date={simulatedDate}
+              startDate={new Date(FICTIONAL_SEMESTER_START_ISO)}
+            />
           </div>
 
           <div className={styles.controlActions}>
-            {SANDBOX_ACTIONS.map(({ action, label, detail }) => (
-              <button type="button" key={action} disabled={busy} onClick={() => void dispatch(action)}>
-                <strong>{label}</strong>
-                <span>{detail}</span>
-              </button>
+            {SANDBOX_ACTION_GROUPS.map((group) => (
+              <section className={styles.actionGroup} key={group.id}>
+                <h3>{group.label}</h3>
+                <div>
+                  {group.actions.map(({ action, label }) => (
+                    <button
+                      type="button"
+                      key={action}
+                      disabled={busy}
+                      onClick={() => void dispatch(action)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {group.id === "pika" && fixture ? (
+                  <label className={styles.termLength}>
+                    Story length
+                    <select
+                      aria-label="Fixture story length"
+                      disabled={busy}
+                      value={totalSemesterWeeks}
+                      onChange={(event) => void changeTermWeeks(Number(event.target.value))}
+                    >
+                      {Array.from({ length: 19 }, (_, index) => index + 6).map((weeks) => (
+                        <option key={weeks} value={weeks}>{weeks} weeks</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </section>
             ))}
           </div>
 
-          <div className={styles.controlLog} aria-live="polite">
-            <span>Recent results</span>
-            {sandboxError ? <p role="alert">Pipeline error: {sandboxError}</p> : null}
-            <ul>
-              {log.map((entry, index) => (
-                <li key={`${entry}-${index}`}>{entry}</li>
-              ))}
-            </ul>
-          </div>
+          {controlError || sandboxError ? (
+            <p className={styles.controlError} role="alert">
+              {controlError ?? `Pipeline error: ${sandboxError}`}
+            </p>
+          ) : null}
 
           <button
             className={styles.resetButton}

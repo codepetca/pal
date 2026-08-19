@@ -190,10 +190,12 @@ test("sandbox consumes only the widget public package boundary", () => {
 test("sandbox page is visible only in an allowed runtime and identifies its build", () => {
   assert.match(sandboxPageSource, /isSandboxPageAllowed\(\)/);
   assert.match(sandboxPageSource, /notFound\(\)/);
-  assert.match(sandboxPageSource, /Public fixture preview/);
-  assert.match(sandboxPageSource, /Local persisted pipeline/);
   assert.match(sandboxPageSource, /PAL_SANDBOX_MODE === "persisted"/);
   assert.match(sandboxPageSource, /widgetPackage\.version/);
+  assert.doesNotMatch(
+    sandboxPageSource,
+    /Public fixture preview|Local persisted pipeline|Local fixture/,
+  );
   assert.match(homePageSource, /isSandboxPageAllowed\(\)/);
   assert.match(homePageSource, /redirect\("\/sandbox"\)/);
   assert.doesNotMatch(homePageSource, /WidgetSandbox/);
@@ -244,11 +246,17 @@ test("sandbox uses one public widget boundary for fixture and persisted clients"
   assert.match(sandboxSource, /<PalAchievements \/>/);
   assert.match(sandboxSource, /<PalCompanion/);
   assert.match(sandboxSource, /<PalRewardCelebration/);
-  assert.match(sandboxSource, /Production-shaped fixture/);
-  assert.match(sandboxSource, /Real pipeline/);
-  assert.match(
+  assert.match(sandboxSource, /@codepet\/pal-widget-/);
+  assert.doesNotMatch(sandboxSource, /Production-shaped fixture|Real pipeline/);
+  assert.doesNotMatch(sandboxSource, /Controls keep a bounded action history/);
+  assert.doesNotMatch(sandboxSource, /Controls send version 1 facts/);
+  assert.match(sandboxSource, /Student initiated/);
+  assert.match(sandboxSource, /Pika initiated/);
+  assert.doesNotMatch(sandboxSource, /Recent results/);
+  assert.doesNotMatch(sandboxSource, /Replay duplicate/);
+  assert.doesNotMatch(
     sandboxSource,
-    /The roadmap,\s+companion, rewards, and acknowledgements all read persisted state/,
+    /Creates a 5-day Weekly Rhythm target|Awards Ready Early|Must not change progress/,
   );
   assert.doesNotMatch(sandboxSource, /initialSnapshot=/);
 });
@@ -304,6 +312,19 @@ test("sandbox controls manage focus and hide covered navigation from interaction
   assert.equal(
     sandboxSource.match(/inert=\{!controlsCollapsed \|\| undefined\}/g)?.length,
     2,
+  );
+});
+
+test("sandbox shows the current month as one accessible compact day strip", () => {
+  assert.match(sandboxSource, /function CompactMonthCalendar/);
+  assert.match(sandboxSource, /calendar\. \$\{selectedDateLabel\} selected\./);
+  assert.match(sandboxSource, /data-current=\{day === currentDay/);
+  assert.match(sandboxSource, /dayKey >= startDayKey && dayKey < selectedDayKey/);
+  assert.match(sandboxSource, /data-weekend=\{weekday === 0 \|\| weekday === 6/);
+  assert.match(sandboxSource, /Elapsed semester days are highlighted/);
+  assert.match(
+    sandboxStyles,
+    /grid-template-columns: repeat\(var\(--month-days\), minmax\(0, 1fr\)\)/,
   );
 });
 
