@@ -59,6 +59,14 @@ sandbox database, integration credential, or learner-token signing key. All pers
 sandbox APIs return 404 in previews and production. `https://pal.codepet.ca` remains
 the production API and cannot enable the sandbox page or mutation routes.
 
+The stable shared preview is
+[`sandbox-preview`](https://pal-git-sandbox-preview-stewarts-projects-cc2722c4.vercel.app/sandbox).
+After CI succeeds for the latest `main` commit, the `Sync sandbox preview` workflow
+advances that branch with a marker commit whose file tree exactly matches the tested
+`main` tree. The unique marker lets Vercel build the code as a Preview deployment even
+though the source commit already has a Production deployment. Stale or repeated CI
+completions are ignored, and pushes to `sandbox-preview` do not run the normal CI job.
+
 ### Environment reference
 
 For manual/local-Docker configuration, set:
