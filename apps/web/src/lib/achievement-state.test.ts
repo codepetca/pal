@@ -2322,6 +2322,16 @@ test(
         integration.id,
         externalLearnerId,
         event(
+          "platform.session.started",
+          {},
+          "2026-10-12T11:00:00.000Z",
+        ),
+        key(),
+      );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
           "daily_log_week.configured",
           {
             period_key: periodKey,
@@ -2340,6 +2350,16 @@ test(
         ),
         key(),
       );
+      await processEventInDb(
+        integration.id,
+        externalLearnerId,
+        event(
+          "classroom.joined",
+          { classroom_token: `late-join-class-${crypto.randomUUID()}` },
+          "2026-10-13T12:00:00.000Z",
+        ),
+        key(),
+      );
 
       const learnerId = await getOrCreateLearnerIdentity(
         getDb(),
@@ -2354,10 +2374,17 @@ test(
       );
       assert.equal(snapshot.roadmap.currentWeek, 7);
       assert.equal(snapshot.roadmap.weeks[0].achievements.length, 0);
-      assert.ok(
-        snapshot.roadmap.weeks[6].achievements.some(
-          (achievement) => achievement.title === "Weekly Rhythm",
+      assert.deepEqual(
+        new Set(
+          snapshot.roadmap.weeks[6].achievements.map(
+            (achievement) => achievement.title,
+          ),
         ),
+        new Set([
+          "First Pika Login",
+          "Joined the Class",
+          "Weekly Rhythm",
+        ]),
       );
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
