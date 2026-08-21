@@ -65,6 +65,18 @@ test("widget controls and motion meet the accessibility contract", () => {
   assert.match(styles, /data-pal-motion="reduced"/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(styles, /\.pal-spinner,[\s\S]*\.pal-celebration[\s\S]*animation: none/);
+  assert.match(
+    styles,
+    /data-pal-motion="reduced"[\s\S]*\.pal-celebration-fireworks span[\s\S]*animation: none/,
+  );
+  assert.match(
+    styles,
+    /data-pal-motion="reduced"[\s\S]*\.pal-celebration-fireworks::before[\s\S]*animation: none/,
+  );
+  assert.match(
+    styles,
+    /data-pal-motion="reduced"[\s\S]*data-pal-effect="fireworks"\]::before[\s\S]*animation: none/,
+  );
 });
 
 test("modal backdrop fills its containing block", () => {
@@ -72,6 +84,14 @@ test("modal backdrop fills its containing block", () => {
     styles.match(/\.pal-celebration-backdrop \{([^}]+)\}/)?.[1] ?? "";
   assert.match(backdropRule, /position: absolute/);
   assert.match(backdropRule, /inset: 0/);
+});
+
+test("fireworks can travel beyond the celebration card", () => {
+  const fireworksRule =
+    styles.match(/\.pal-celebration\[data-pal-effect="fireworks"\] \{([^}]+)\}/)?.[1] ?? "";
+  assert.match(fireworksRule, /overflow: visible/);
+  assert.match(styles, /--pal-firework-distance: 19rem/);
+  assert.match(styles, /@keyframes pal-level-up-brightness/);
 });
 
 test("responsive behavior follows the host viewport contract", () => {

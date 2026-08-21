@@ -52,6 +52,10 @@ that fills its nearest positioned ancestor, or the initial containing block when
 there is none. Mount it in a positioned host layer when the modal should stay
 within a specific application region.
 
+Pass `effect="fireworks"` for a brief decorative burst behind achievement and
+story artwork. The effect adds no content or interaction, restarts for each queued
+reward, and is removed when the widget or operating system requests reduced motion.
+
 Achievement celebrations are display-ready DTOs selected by Pal's authenticated
 server. Each carries the earned achievement instance ID, stable achievement key,
 canonical name, description, and badge presentation. The widget renders that DTO

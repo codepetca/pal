@@ -67,13 +67,16 @@ test("modal celebration uses backdrop dismissal without a continue button", () =
   const snapshot = client.peek();
   const html = renderToStaticMarkup(
     <PalProvider client={client} initialSnapshot={snapshot} scopeKey="modal-reward">
-      <PalRewardCelebration modal />
+      <PalRewardCelebration effect="fireworks" modal />
     </PalProvider>,
   );
 
   assert.match(html, /class="pal-celebration-backdrop"/);
+  assert.match(html, /data-pal-effect="fireworks"/);
   assert.match(html, /aria-modal="true"/);
   assert.match(html, /tabindex="-1"/);
+  assert.match(html, /class="pal-celebration-fireworks"/);
+  assert.equal((html.match(/<span><\/span>/g) ?? []).length, 24);
   assert.doesNotMatch(html, />Continue<\/button>/);
 });
 

@@ -1011,6 +1011,7 @@ function SandboxExperience({
           data-open={celebrationOpen ? "true" : "false"}
         >
           <PalRewardCelebration
+            effect="fireworks"
             modal
             onOpenChange={setCelebrationOpen}
           />

@@ -4,11 +4,15 @@ import { useEffect, useId, useRef } from "react";
 
 import { usePalWidget } from "./provider";
 
+const FIREWORK_PARTICLES = Array.from({ length: 24 }, (_, index) => index);
+
 export function PalRewardCelebration({
+  effect = "none",
   modal = false,
   hostManaged = false,
   onOpenChange,
 }: {
+  effect?: "none" | "fireworks";
   modal?: boolean;
   /**
    * Leaves dialog semantics, focus containment, Escape, and focus restoration
@@ -96,6 +100,7 @@ export function PalRewardCelebration({
       aria-modal={!hostManaged && modal ? "true" : undefined}
       className="pal-celebration"
       data-pal-density={density}
+      data-pal-effect={showArtwork ? effect : "none"}
       data-pal-motion={motion}
       data-pal-reward-kind={rewardKind}
       data-pal-theme={theme}
@@ -119,18 +124,31 @@ export function PalRewardCelebration({
       tabIndex={hostManaged ? undefined : -1}
     >
       {showArtwork ? (
-        <div className="pal-celebration-icon" aria-hidden="true">
-          {assetUrl ? (
-            <img
-              data-collectible-finish={grantReward?.collectibleFinish ?? "color"}
-              src={assetUrl}
-              alt=""
-              width="112"
-              height="112"
-            />
-          ) : (
-            icon ?? "★"
-          )}
+        <div className="pal-celebration-stage">
+          {effect === "fireworks" ? (
+            <div
+              aria-hidden="true"
+              className="pal-celebration-fireworks"
+              key={reward.id}
+            >
+              {FIREWORK_PARTICLES.map((particle) => (
+                <span key={particle} />
+              ))}
+            </div>
+          ) : null}
+          <div className="pal-celebration-icon" aria-hidden="true">
+            {assetUrl ? (
+              <img
+                data-collectible-finish={grantReward?.collectibleFinish ?? "color"}
+                src={assetUrl}
+                alt=""
+                width="112"
+                height="112"
+              />
+            ) : (
+              icon ?? "★"
+            )}
+          </div>
         </div>
       ) : null}
       <h2 id={titleId}>{title}</h2>
