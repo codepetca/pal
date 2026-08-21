@@ -160,6 +160,13 @@ const OPTIONAL_PRIORITY = {
   4: ["flicker-outside", "gentle-invitation", "waiting-gently", "recipe-for-two"],
 } as const;
 const OPTIONAL_ACT_ORDER = [3, 4, 2, 1, 3, 4, 3, 4, 1, 2, 1, 2, 1, 2, 3, 4] as const;
+const PIP_FINALE_CHAPTER_ID = "lumi-returns";
+const PIP_FINALE_COLLECTIBLE = {
+  id: "lumi-companion-v1",
+  title: "Meet Lumi",
+  assetUrl: "/assets/pets/lumi-v1.png",
+  kind: "companion",
+} as const;
 
 function planned(source: readonly (StoryChapterDefinition & { sourceChapterIds?: readonly string[] })[]): readonly PlannedStoryChapter[] {
   return source.map((chapter, index) => ({
@@ -191,13 +198,25 @@ function createPipPlan(totalPeriods: number): StoryPlanDefinition {
     }
     selectedChapters = chapters.filter((chapter) => selected.has(chapter.id));
   }
+  const plannedChapters = planned(selectedChapters);
+  const finale = plannedChapters[plannedChapters.length - 1];
+  if (
+    !finale ||
+    !finale.sourceChapterIds.includes(PIP_FINALE_CHAPTER_ID) ||
+    finale.collectible.id !== PIP_FINALE_COLLECTIBLE.id ||
+    finale.collectible.title !== PIP_FINALE_COLLECTIBLE.title ||
+    finale.collectible.assetUrl !== PIP_FINALE_COLLECTIBLE.assetUrl ||
+    finale.collectible.kind !== PIP_FINALE_COLLECTIBLE.kind
+  ) {
+    throw new Error("Pip's First Recipe must end with the Meet Lumi companion chapter");
+  }
   return {
     storyId: PIP_STORY_ID,
     version: PIP_STORY_VERSION,
     totalPeriods,
     companionCollectibleId: "pip-companion-v1",
     mysteryCollectibleId: "mystery-egg-v1",
-    chapters: planned(selectedChapters),
+    chapters: plannedChapters,
   };
 }
 
