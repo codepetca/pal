@@ -52,6 +52,10 @@ that fills its nearest positioned ancestor, or the initial containing block when
 there is none. Mount it in a positioned host layer when the modal should stay
 within a specific application region.
 
+Pass `effect="fireworks"` for a brief decorative burst behind achievement and
+story artwork. The effect adds no content or interaction, restarts for each queued
+reward, and is removed when the widget or operating system requests reduced motion.
+
 Achievement celebrations are display-ready DTOs selected by Pal's authenticated
 server. Each carries the earned achievement instance ID, stable achievement key,
 canonical name, description, and badge presentation. The widget renders that DTO
@@ -70,6 +74,10 @@ layer's close handler with `dismissReward(reward.id)`, and render
 intentionally ignored: the host owns the portal, dialog semantics, inert
 background, focus containment, Escape behavior, scroll lock, and focus
 restoration. Pal renders only the reward content and its acknowledgement action.
+When the host modal supplies every pointer and keyboard dismissal path, pass
+`hostManaged showDismissAction={false}` to remove the normal Continue button.
+The option applies only to host-managed content, and Pal still renders a Retry
+action if acknowledgement fails.
 Import `PAL_THEME_PROPERTIES` from
 `@codepet/pal-widget/theme-contract` to validate a host adapter without importing
 any Pal component or stylesheet.
