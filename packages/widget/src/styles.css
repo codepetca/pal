@@ -580,6 +580,33 @@
   opacity: 0.72;
 }
 
+.pal-celebration[data-pal-effect="fireworks"] {
+  overflow: visible;
+}
+
+.pal-celebration[data-pal-effect="fireworks"]::before {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgb(255 255 255 / 0.78),
+    rgb(255 255 255 / 0.34) 52%,
+    rgb(255 255 255 / 0.1)
+  );
+  box-shadow: 0 0 2.75rem var(--pal-effective-color-primary);
+  content: "";
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation:
+    pal-level-up-brightness
+    820ms
+    var(--pal-effective-motion-easing)
+    both;
+}
+
 .pal-celebration h2 {
   max-width: 100%;
   font-size: 1.3rem;
@@ -601,7 +628,122 @@
   font-size: 1.55rem;
 }
 
+.pal-celebration-stage {
+  position: relative;
+  display: grid;
+  width: 9rem;
+  height: 9rem;
+  place-items: center;
+  isolation: isolate;
+}
+
+.pal-celebration-fireworks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 40rem;
+  height: 40rem;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.pal-celebration-fireworks::before,
+.pal-celebration-fireworks::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3.75rem;
+  height: 3.75rem;
+  border: 2px solid var(--pal-effective-color-primary);
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 1rem var(--pal-effective-color-primary);
+  content: "";
+  animation:
+    pal-firework-ring
+    680ms
+    var(--pal-effective-motion-easing)
+    both;
+}
+
+.pal-celebration-fireworks::after {
+  border-color: var(--pal-effective-color-warning);
+  box-shadow: 0 0 1rem var(--pal-effective-color-warning);
+  animation-delay: 45ms;
+}
+
+.pal-celebration-fireworks span {
+  --pal-firework-angle: 0deg;
+  --pal-firework-distance: 17rem;
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.32rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  opacity: 0;
+  color: var(--pal-effective-color-primary);
+  background: currentColor;
+  box-shadow: 0 0 0.45rem currentColor;
+  animation:
+    pal-firework-spark
+    700ms
+    var(--pal-effective-motion-easing)
+    both;
+}
+
+.pal-celebration-fireworks span:nth-child(3n + 2) {
+  color: var(--pal-effective-color-warning);
+}
+
+.pal-celebration-fireworks span:nth-child(3n) {
+  --pal-firework-distance: 16rem;
+
+  width: 0.5rem;
+  height: 0.5rem;
+  color: var(--pal-effective-color-success);
+}
+
+.pal-celebration-fireworks span:nth-child(even) {
+  --pal-firework-distance: 19rem;
+
+  animation-delay: 20ms;
+}
+
+.pal-celebration-fireworks span:nth-child(4n) {
+  animation-delay: 45ms;
+}
+
+.pal-celebration-fireworks span:nth-child(1) { --pal-firework-angle: 0deg; }
+.pal-celebration-fireworks span:nth-child(2) { --pal-firework-angle: 15deg; }
+.pal-celebration-fireworks span:nth-child(3) { --pal-firework-angle: 30deg; }
+.pal-celebration-fireworks span:nth-child(4) { --pal-firework-angle: 45deg; }
+.pal-celebration-fireworks span:nth-child(5) { --pal-firework-angle: 60deg; }
+.pal-celebration-fireworks span:nth-child(6) { --pal-firework-angle: 75deg; }
+.pal-celebration-fireworks span:nth-child(7) { --pal-firework-angle: 90deg; }
+.pal-celebration-fireworks span:nth-child(8) { --pal-firework-angle: 105deg; }
+.pal-celebration-fireworks span:nth-child(9) { --pal-firework-angle: 120deg; }
+.pal-celebration-fireworks span:nth-child(10) { --pal-firework-angle: 135deg; }
+.pal-celebration-fireworks span:nth-child(11) { --pal-firework-angle: 150deg; }
+.pal-celebration-fireworks span:nth-child(12) { --pal-firework-angle: 165deg; }
+.pal-celebration-fireworks span:nth-child(13) { --pal-firework-angle: 180deg; }
+.pal-celebration-fireworks span:nth-child(14) { --pal-firework-angle: 195deg; }
+.pal-celebration-fireworks span:nth-child(15) { --pal-firework-angle: 210deg; }
+.pal-celebration-fireworks span:nth-child(16) { --pal-firework-angle: 225deg; }
+.pal-celebration-fireworks span:nth-child(17) { --pal-firework-angle: 240deg; }
+.pal-celebration-fireworks span:nth-child(18) { --pal-firework-angle: 255deg; }
+.pal-celebration-fireworks span:nth-child(19) { --pal-firework-angle: 270deg; }
+.pal-celebration-fireworks span:nth-child(20) { --pal-firework-angle: 285deg; }
+.pal-celebration-fireworks span:nth-child(21) { --pal-firework-angle: 300deg; }
+.pal-celebration-fireworks span:nth-child(22) { --pal-firework-angle: 315deg; }
+.pal-celebration-fireworks span:nth-child(23) { --pal-firework-angle: 330deg; }
+.pal-celebration-fireworks span:nth-child(24) { --pal-firework-angle: 345deg; }
+
 .pal-celebration-icon {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 7rem;
   height: 7rem;
@@ -643,6 +785,87 @@
   }
 }
 
+@keyframes pal-firework-spark {
+  0% {
+    opacity: 0;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--pal-firework-angle))
+      translateY(-2.4rem)
+      scale(0.2);
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  46% {
+    opacity: 0.9;
+  }
+
+  74% {
+    opacity: 0.26;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--pal-firework-angle))
+      translateY(calc(-1 * var(--pal-firework-distance)))
+      scale(0.75);
+  }
+
+  100% {
+    opacity: 0;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--pal-firework-angle))
+      translateY(calc(-1 * var(--pal-firework-distance)))
+      scale(0.75);
+  }
+}
+
+@keyframes pal-firework-ring {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65);
+  }
+
+  15% {
+    opacity: 0.75;
+  }
+
+  71% {
+    opacity: 0.14;
+    transform: translate(-50%, -50%) scale(5.25);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(5.25);
+  }
+}
+
+@keyframes pal-level-up-brightness {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 0.08;
+  }
+
+  30% {
+    opacity: 0.32;
+  }
+
+  50% {
+    opacity: 0.24;
+  }
+
+  76% {
+    opacity: 0.12;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :where(.pal-surface, .pal-companion, .pal-celebration) {
     --pal-effective-motion-fast: 0ms;
@@ -651,13 +874,21 @@
   }
 
   .pal-spinner,
-  .pal-celebration {
+  .pal-celebration,
+  .pal-celebration[data-pal-effect="fireworks"]::before,
+  .pal-celebration-fireworks::before,
+  .pal-celebration-fireworks::after,
+  .pal-celebration-fireworks span {
     animation: none;
   }
 }
 
 .pal-surface[data-pal-motion="reduced"] .pal-spinner,
-.pal-celebration[data-pal-motion="reduced"] {
+.pal-celebration[data-pal-motion="reduced"],
+.pal-celebration[data-pal-motion="reduced"][data-pal-effect="fireworks"]::before,
+.pal-celebration[data-pal-motion="reduced"] .pal-celebration-fireworks::before,
+.pal-celebration[data-pal-motion="reduced"] .pal-celebration-fireworks::after,
+.pal-celebration[data-pal-motion="reduced"] .pal-celebration-fireworks span {
   animation: none;
 }
 

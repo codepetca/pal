@@ -67,13 +67,16 @@ test("modal celebration uses backdrop dismissal without a continue button", () =
   const snapshot = client.peek();
   const html = renderToStaticMarkup(
     <PalProvider client={client} initialSnapshot={snapshot} scopeKey="modal-reward">
-      <PalRewardCelebration modal />
+      <PalRewardCelebration effect="fireworks" modal />
     </PalProvider>,
   );
 
   assert.match(html, /class="pal-celebration-backdrop"/);
+  assert.match(html, /data-pal-effect="fireworks"/);
   assert.match(html, /aria-modal="true"/);
   assert.match(html, /tabindex="-1"/);
+  assert.match(html, /class="pal-celebration-fireworks"/);
+  assert.equal((html.match(/<span><\/span>/g) ?? []).length, 24);
   assert.doesNotMatch(html, />Continue<\/button>/);
 });
 
@@ -431,6 +434,40 @@ test("host-managed modal content retains its acknowledgement action", () => {
   assert.doesNotMatch(html, /pal-celebration-backdrop/);
   assert.doesNotMatch(html, /role="dialog"/);
   assert.doesNotMatch(html, /aria-modal=/);
+});
+
+test("host-managed modal content can leave dismissal to the host", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "host-dismissed-modal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="host-dismissed-modal-learner"
+    >
+      <PalRewardCelebration hostManaged showDismissAction={false} />
+    </PalProvider>,
+  );
+
+  assert.doesNotMatch(html, />Continue<\/button>/);
+  assert.doesNotMatch(html, /pal-celebration-backdrop/);
+  assert.doesNotMatch(html, /role="dialog"/);
+});
+
+test("standalone content always retains a dismissal action", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "standalone-dismissal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="standalone-dismissal-learner"
+    >
+      <PalRewardCelebration showDismissAction={false} />
+    </PalProvider>,
+  );
+
+  assert.match(html, />Continue<\/button>/);
 });
 
 test("a title reward shows only the earned title and its action", () => {
