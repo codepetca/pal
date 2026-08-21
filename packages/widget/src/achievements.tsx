@@ -1,10 +1,51 @@
 "use client";
 
+import { useId, useState } from "react";
+
 import { usePalWidget } from "./provider";
 import type {
   PalAchievement,
   PalProgressionState,
 } from "./types";
+
+/**
+ * The story beat for one week, sitting in the empty left column of the week
+ * grid and pointing at that week's collectible. Collapsed it shows only the
+ * chapter headline, so a long trail stays scannable; expanding reveals the full
+ * passage that the reward celebration showed when the week was first earned.
+ */
+function WeekStory({
+  headline,
+  storyCopy,
+  weekLabel,
+}: {
+  headline: string;
+  storyCopy: string;
+  weekLabel: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
+
+  return (
+    <div className="pal-week-story" data-expanded={expanded ? "true" : "false"}>
+      <button
+        aria-controls={panelId}
+        aria-expanded={expanded}
+        className="pal-week-story-bubble"
+        onClick={() => setExpanded((open) => !open)}
+        type="button"
+      >
+        <span className="pal-week-story-headline">{headline}</span>
+        <span className="pal-week-story-hint">
+          {expanded ? "Hide story" : `Read ${weekLabel}'s story`}
+        </span>
+      </button>
+      <p className="pal-week-story-copy" hidden={!expanded} id={panelId}>
+        {storyCopy}
+      </p>
+    </div>
+  );
+}
 
 function AchievementBadge({
   achievement,
@@ -163,6 +204,9 @@ export function PalAchievements() {
               ? collectible
               : undefined;
 
+          const storyHeadline = earnedReward?.revealHeadline;
+          const storyCopy = earnedReward?.storyCopy;
+
           return (
             <li
               className="pal-week"
@@ -170,6 +214,13 @@ export function PalAchievements() {
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
             >
+              {storyHeadline && storyCopy ? (
+                <WeekStory
+                  headline={storyHeadline}
+                  storyCopy={storyCopy}
+                  weekLabel={week.label}
+                />
+              ) : null}
               <div className="pal-week-collectible-stack">
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>

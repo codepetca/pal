@@ -235,6 +235,125 @@
   white-space: nowrap;
 }
 
+/* Story beat for the week, in the otherwise empty left column of the week grid.
+   The tail points right, at that week's collectible, so the passage reads as
+   coming from that week rather than floating beside the trail. */
+.pal-week-story {
+  position: relative;
+  grid-column: 1;
+  margin-top: 2rem;
+  align-self: start;
+  justify-self: end;
+  max-width: min(22rem, 100%);
+  min-width: 0;
+}
+
+.pal-week-story-bubble {
+  display: grid;
+  width: 100%;
+  min-height: var(--pal-effective-control-min);
+  padding: 0.6rem 0.85rem;
+  gap: 0.15rem;
+  border: 1px solid var(--pal-effective-color-border);
+  border-radius: var(--pal-effective-radius-control);
+  color: var(--pal-effective-color-primary);
+  background: var(--pal-effective-color-surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.pal-week-story-bubble:focus-visible {
+  outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
+  outline-offset: var(--pal-effective-focus-offset);
+}
+
+.pal-week[data-week-status="current"] .pal-week-story-bubble {
+  border-color: var(--pal-effective-color-border-strong);
+  background: var(--pal-effective-color-surface-selected);
+}
+
+.pal-week-story-headline {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.pal-week-story-hint {
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Tail: an outer wedge in the border colour with an inner wedge in the bubble
+   fill laid over it, so the pointer keeps the bubble's 1px outline. */
+.pal-week-story::after,
+.pal-week-story::before {
+  position: absolute;
+  top: 1.35rem;
+  width: 0;
+  height: 0;
+  border-top: 0.5rem solid transparent;
+  border-bottom: 0.5rem solid transparent;
+  content: "";
+  pointer-events: none;
+}
+
+.pal-week-story::before {
+  right: -0.5rem;
+  border-left: 0.5rem solid var(--pal-effective-color-border);
+}
+
+.pal-week-story::after {
+  right: -0.36rem;
+  border-left: 0.5rem solid var(--pal-effective-color-surface);
+}
+
+.pal-week[data-week-status="current"] .pal-week-story::before {
+  border-left-color: var(--pal-effective-color-border-strong);
+}
+
+.pal-week[data-week-status="current"] .pal-week-story::after {
+  border-left-color: var(--pal-effective-color-surface-selected);
+}
+
+.pal-week-story-copy {
+  margin: 0.5rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--pal-effective-color-border);
+  border-radius: var(--pal-effective-radius-control);
+  color: var(--pal-effective-color-text-muted);
+  background: var(--pal-effective-color-surface);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.pal-week-story-copy[hidden] {
+  display: none;
+}
+
+.pal-week-story[data-expanded="true"] .pal-week-story-copy {
+  animation: pal-week-story-reveal var(--pal-effective-motion-standard) var(--pal-effective-motion-easing);
+}
+
+@keyframes pal-week-story-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pal-week-story[data-expanded="true"] .pal-week-story-copy {
+    animation: none;
+  }
+}
+
 .pal-week-content {
   display: flex;
   grid-column: 3;
@@ -670,6 +789,18 @@
 
 .pal-surface.pal-achievements[data-pal-viewport="narrow"] {
   padding: 1.25rem 0.75rem;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  max-width: 100%;
+  justify-self: stretch;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story::before,
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story::after {
+  display: none;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-content {

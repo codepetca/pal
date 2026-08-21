@@ -185,6 +185,61 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Semester Legend/);
 });
 
+test("an earned week shows its story beside the week, collapsed to the headline", () => {
+  const snapshot = createFixtureSnapshot(2);
+  snapshot.progression!.collectibles[0] = {
+    id: "earned-week-one",
+    chapterId: "egg-arrives",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Mystery Egg",
+    description: "An earned keepsake.",
+    revealHeadline: "Something Found You",
+    storyCopy: "A heavy storm passed over the town during the night.",
+    kind: "room",
+    finish: "color",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  };
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="story-week-learner"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /class="pal-week-story"/);
+  assert.match(html, />Something Found You</);
+  // The passage ships in the markup but stays hidden until the reader opens it,
+  // so a long trail is not a wall of text.
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /class="pal-week-story-copy" hidden=""/);
+  assert.match(html, /A heavy storm passed over the town during the night\./);
+});
+
+test("a week with no earned collectible has no story bubble", () => {
+  const snapshot = createFixtureSnapshot(2);
+  snapshot.progression!.collectibles = snapshot.progression!.collectibles.map(
+    (collectible) => ({ ...collectible, status: "locked" as const }),
+  );
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="locked-story-learner"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.doesNotMatch(html, /class="pal-week-story"/);
+});
+
 test("story celebration centers the collectible without explanatory copy", () => {
   const snapshot = createFixtureSnapshot(1, 6);
   snapshot.rewards = [{
