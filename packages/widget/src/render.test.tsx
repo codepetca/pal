@@ -436,6 +436,24 @@ test("host-managed modal content retains its acknowledgement action", () => {
   assert.doesNotMatch(html, /aria-modal=/);
 });
 
+test("host-managed modal content can leave dismissal to the host", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "host-dismissed-modal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="host-dismissed-modal-learner"
+    >
+      <PalRewardCelebration hostManaged showDismissAction={false} />
+    </PalProvider>,
+  );
+
+  assert.doesNotMatch(html, />Continue<\/button>/);
+  assert.doesNotMatch(html, /pal-celebration-backdrop/);
+  assert.doesNotMatch(html, /role="dialog"/);
+});
+
 test("a title reward shows only the earned title and its action", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({

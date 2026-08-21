@@ -10,6 +10,7 @@ export function PalRewardCelebration({
   effect = "none",
   modal = false,
   hostManaged = false,
+  showDismissAction = true,
   onOpenChange,
 }: {
   effect?: "none" | "fireworks";
@@ -19,6 +20,11 @@ export function PalRewardCelebration({
    * to the host application's approved modal owner.
    */
   hostManaged?: boolean;
+  /**
+   * Hides the normal acknowledgement button when the host modal provides its
+   * own dismissal affordance. A failed acknowledgement still renders Retry.
+   */
+  showDismissAction?: boolean;
   onOpenChange?: (open: boolean) => void;
 } = {}) {
   const {
@@ -157,7 +163,7 @@ export function PalRewardCelebration({
           We could not save that yet. Try again.
         </p>
       ) : null}
-      {!modal || hostManaged || rewardError ? (
+      {rewardError || (showDismissAction && (!modal || hostManaged)) ? (
         <button
           className="pal-button"
           type="button"
