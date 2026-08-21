@@ -22,7 +22,8 @@ export function PalRewardCelebration({
   hostManaged?: boolean;
   /**
    * Hides the normal acknowledgement button when the host modal provides its
-   * own dismissal affordance. A failed acknowledgement still renders Retry.
+   * own dismissal affordance. Only applies with `hostManaged`; a failed
+   * acknowledgement still renders Retry.
    */
   showDismissAction?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -163,7 +164,9 @@ export function PalRewardCelebration({
           We could not save that yet. Try again.
         </p>
       ) : null}
-      {rewardError || (showDismissAction && (!modal || hostManaged)) ? (
+      {rewardError ||
+      (!hostManaged && !modal) ||
+      (hostManaged && showDismissAction) ? (
         <button
           className="pal-button"
           type="button"

@@ -454,6 +454,22 @@ test("host-managed modal content can leave dismissal to the host", () => {
   assert.doesNotMatch(html, /role="dialog"/);
 });
 
+test("standalone content always retains a dismissal action", () => {
+  const client = createFixturePalClient();
+  client.dispatch("on-time-finish", { itemToken: "standalone-dismissal-item" });
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="standalone-dismissal-learner"
+    >
+      <PalRewardCelebration showDismissAction={false} />
+    </PalProvider>,
+  );
+
+  assert.match(html, />Continue<\/button>/);
+});
+
 test("a title reward shows only the earned title and its action", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({

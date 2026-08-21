@@ -75,8 +75,9 @@ intentionally ignored: the host owns the portal, dialog semantics, inert
 background, focus containment, Escape behavior, scroll lock, and focus
 restoration. Pal renders only the reward content and its acknowledgement action.
 When the host modal supplies every pointer and keyboard dismissal path, pass
-`showDismissAction={false}` to remove the normal Continue button. Pal still
-renders a Retry action if acknowledgement fails.
+`hostManaged showDismissAction={false}` to remove the normal Continue button.
+The option applies only to host-managed content, and Pal still renders a Retry
+action if acknowledgement fails.
 Import `PAL_THEME_PROPERTIES` from
 `@codepet/pal-widget/theme-contract` to validate a host adapter without importing
 any Pal component or stylesheet.
