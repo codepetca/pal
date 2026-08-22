@@ -235,25 +235,33 @@
   white-space: nowrap;
 }
 
-/* Story beat for the week, in the otherwise empty left column of the week grid.
-   The tail points right, at that week's collectible, so the passage reads as
-   coming from that week rather than floating beside the trail. */
+/* Story beat for the week, filling the otherwise empty left column of the week
+   grid, with a tail pointing right at that week's collectible.
+
+   Two constraints shape this. The collapsed bar is a single line, kept well
+   under the collectible's height so the collectible alone sets the row height.
+   And the passage is taken out of flow, so opening a story overlays whatever is
+   below rather than pushing the trail down - the spine holds still whether a
+   story is folded or open. */
 .pal-week-story {
   position: relative;
   grid-column: 1;
   margin-top: 2rem;
   align-self: start;
-  justify-self: end;
-  max-width: min(22rem, 100%);
+  justify-self: stretch;
   min-width: 0;
 }
 
 .pal-week-story-bubble {
-  display: grid;
-  width: 100%;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
   min-height: var(--pal-effective-control-min);
-  padding: 0.6rem 0.85rem;
-  gap: 0.15rem;
+  margin-left: auto;
+  padding: 0.4rem 0.85rem;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
   border: 1px solid var(--pal-effective-color-border);
   border-radius: var(--pal-effective-radius-control);
   color: var(--pal-effective-color-primary);
@@ -273,16 +281,26 @@
 }
 
 .pal-week-story-headline {
+  overflow: hidden;
   font-size: 0.95rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pal-week-story-hint {
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1.3;
+.pal-week-story-caret {
+  width: 0;
+  height: 0;
+  flex: none;
+  border-top: 0.3rem solid transparent;
+  border-bottom: 0.3rem solid transparent;
+  border-left: 0.36rem solid var(--pal-effective-color-text-muted);
+  transition: transform var(--pal-effective-motion-standard) var(--pal-effective-motion-easing);
+}
+
+.pal-week-story[data-expanded="true"] .pal-week-story-caret {
+  transform: rotate(90deg);
 }
 
 /* Tail: an outer wedge in the border colour with an inner wedge in the bubble
@@ -290,7 +308,7 @@
 .pal-week-story::after,
 .pal-week-story::before {
   position: absolute;
-  top: 1.35rem;
+  top: calc(var(--pal-effective-control-min) / 2 - 0.5rem);
   width: 0;
   height: 0;
   border-top: 0.5rem solid transparent;
@@ -317,22 +335,32 @@
   border-left-color: var(--pal-effective-color-surface-selected);
 }
 
-.pal-week-story-copy {
-  margin: 0.5rem 0 0;
+/* Out of flow on purpose: the trail must not move when this opens. */
+.pal-week-story-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  left: 0;
+  z-index: 3;
   padding: 0.7rem 0.85rem;
-  border: 1px solid var(--pal-effective-color-border);
+  border: 1px solid var(--pal-effective-color-border-strong);
   border-radius: var(--pal-effective-radius-control);
   color: var(--pal-effective-color-text-muted);
   background: var(--pal-effective-color-surface);
+  box-shadow: 0 6px 18px rgb(15 23 42 / 0.28);
+}
+
+.pal-week-story-panel[hidden] {
+  display: none;
+}
+
+.pal-week-story-panel p {
+  margin: 0;
   font-size: 0.85rem;
   line-height: 1.6;
 }
 
-.pal-week-story-copy[hidden] {
-  display: none;
-}
-
-.pal-week-story[data-expanded="true"] .pal-week-story-copy {
+.pal-week-story[data-expanded="true"] .pal-week-story-panel {
   animation: pal-week-story-reveal var(--pal-effective-motion-standard) var(--pal-effective-motion-easing);
 }
 
@@ -349,8 +377,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pal-week-story[data-expanded="true"] .pal-week-story-copy {
+  .pal-week-story[data-expanded="true"] .pal-week-story-panel {
     animation: none;
+  }
+
+  .pal-week-story-caret {
+    transition: none;
   }
 }
 
@@ -706,6 +738,34 @@
   max-width: 100%;
   font-size: 1.3rem;
   line-height: 1.2;
+}
+
+/* A story celebration carries the chapter's passage, so it needs a wider card
+   and a readable measure - the collectible-only kinds stay narrow. */
+.pal-celebration[data-pal-reward-kind="story"] {
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.pal-celebration-story {
+  display: grid;
+  max-width: 34ch;
+  gap: 0.35rem;
+}
+
+.pal-celebration-story-headline {
+  margin: 0;
+  color: var(--pal-effective-color-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.pal-celebration-story-copy {
+  margin: 0;
+  color: var(--pal-effective-color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+  text-wrap: pretty;
 }
 
 .pal-celebration[data-pal-reward-kind="title"] {

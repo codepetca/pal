@@ -217,7 +217,7 @@ test("an earned week shows its story beside the week, collapsed to the headline"
   // The passage ships in the markup but stays hidden until the reader opens it,
   // so a long trail is not a wall of text.
   assert.match(html, /aria-expanded="false"/);
-  assert.match(html, /class="pal-week-story-copy" hidden=""/);
+  assert.match(html, /class="pal-week-story-panel" hidden=""/);
   assert.match(html, /A heavy storm passed over the town during the night\./);
 });
 
@@ -240,7 +240,7 @@ test("a week with no earned collectible has no story bubble", () => {
   assert.doesNotMatch(html, /class="pal-week-story"/);
 });
 
-test("story celebration centers the collectible without explanatory copy", () => {
+test("story celebration carries the chapter's passage alongside the collectible", () => {
   const snapshot = createFixtureSnapshot(1, 6);
   snapshot.rewards = [{
     id: "story-sketch",
@@ -260,8 +260,10 @@ test("story celebration centers the collectible without explanatory copy", () =>
   assert.match(html, /data-pal-reward-kind="story"/);
   assert.match(html, />Mystery Egg</);
   assert.match(html, /reward-mystery-egg-v1\.png/);
-  assert.doesNotMatch(html, />A new chapter</);
-  assert.doesNotMatch(html, /The egg waits beside the lamp/);
+  // The reveal happens here, so the chapter headline and passage ride along
+  // with the collectible rather than waiting in the trail.
+  assert.match(html, />A new chapter</);
+  assert.match(html, /The egg waits beside the lamp/);
   assert.doesNotMatch(html, /Storybook sketch/);
 });
 

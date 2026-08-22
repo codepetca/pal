@@ -9,10 +9,15 @@ import type {
 } from "./types";
 
 /**
- * The story beat for one week, sitting in the empty left column of the week
- * grid and pointing at that week's collectible. Collapsed it shows only the
- * chapter headline, so a long trail stays scannable; expanding reveals the full
- * passage that the reward celebration showed when the week was first earned.
+ * The story beat for one week, spanning the empty left column of the week grid
+ * and pointing at that week's collectible. Collapsed it is a single thin line
+ * carrying the chapter headline, short enough that the collectible - not the
+ * story - keeps setting the row height.
+ *
+ * The passage itself is positioned out of flow, so opening a story overlays the
+ * trail instead of pushing the weeks below it down: the spine stays put whether
+ * a story is folded or not. The first reveal happens in the reward celebration
+ * when the week is claimed; this is where the reader comes back to re-read it.
  */
 function WeekStory({
   headline,
@@ -31,18 +36,17 @@ function WeekStory({
       <button
         aria-controls={panelId}
         aria-expanded={expanded}
+        aria-label={`${weekLabel}: ${headline}. ${expanded ? "Hide" : "Read"} the story.`}
         className="pal-week-story-bubble"
         onClick={() => setExpanded((open) => !open)}
         type="button"
       >
         <span className="pal-week-story-headline">{headline}</span>
-        <span className="pal-week-story-hint">
-          {expanded ? "Hide story" : `Read ${weekLabel}'s story`}
-        </span>
+        <span aria-hidden="true" className="pal-week-story-caret" />
       </button>
-      <p className="pal-week-story-copy" hidden={!expanded} id={panelId}>
-        {storyCopy}
-      </p>
+      <div className="pal-week-story-panel" hidden={!expanded} id={panelId}>
+        <p>{storyCopy}</p>
+      </div>
     </div>
   );
 }
