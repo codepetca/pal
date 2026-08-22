@@ -145,6 +145,19 @@ test("all supported plans are deterministic, complete, and deeply immutable", ()
     assert.ok(Object.isFrozen(left));
     assert.ok(Object.isFrozen(left.chapters));
     assert.ok(left.chapters.every((chapter) => Object.isFrozen(chapter) && Object.isFrozen(chapter.collectible)));
+    const finale = left.chapters[left.chapters.length - 1];
+    assert.equal(finale?.roadmapWeek, weeks);
+    assert.equal(finale?.sourceChapterIds.includes("lumi-returns"), true);
+    assert.deepEqual(finale?.collectible, {
+      id: "lumi-companion-v1",
+      title: "Meet Lumi",
+      kind: "companion",
+      assetUrl: "/assets/pets/lumi-v1.png",
+    });
+    assert.equal(
+      left.chapters.slice(0, -1).some((chapter) => chapter.collectible.id === "lumi-companion-v1"),
+      false,
+    );
   }
   const catalog = STORY_REGISTRY.requireCatalog(reference);
   assert.ok(Object.isFrozen(catalog));

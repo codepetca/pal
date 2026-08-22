@@ -68,30 +68,30 @@ type ChapterRow = readonly [
 ];
 
 const CHAPTER_ROWS: readonly ChapterRow[] = [
-  ["egg-arrives", 1, "core", "Something found you", "After the storm, a small golden egg rolled into the light. You made room for it before you knew who was inside.", "mystery-egg-v1", "Mystery Egg", "/assets/world/reward-mystery-egg-v1.png", "companion"],
-  ["soft-nest", 1, "optional", "A softer place", "The shell felt cold, so you tucked a cloud-soft blanket around it. The egg settled with a tiny sigh.", "cloud-blanket-v1", "Cloud Blanket", "/assets/world/reward-cloud-blanket-v1.png"],
+  ["egg-arrives", 1, "core", "Something Found You", "A heavy storm passed over the town during the night. When the rain finally slowed, a small golden egg rolled from the darkness and stopped at your door. The shell felt cold, but something inside tapped gently when you picked it up. Later that night, the egg quietly moved closer to your bed.", "mystery-egg-v1", "Mystery Egg", "/assets/world/reward-mystery-egg-v1.png", "companion"],
+  ["soft-nest", 1, "optional", "A Softer Place", "You made a warm nest using the softest blanket you could find. As soon as the egg touched it, the shell began to glow and a pair of pointed ears appeared in its shadow. The egg settled into the blanket and made a quiet, peaceful sound. Outside, another cold wind was beginning to rise.", "cloud-blanket-v1", "Cloud Blanket", "/assets/world/reward-cloud-blanket-v1.png"],
   ["tiny-sound", 1, "optional", "Did you hear that?", "Something tapped from inside. You hung a little star above the nest and listened.", "star-mobile-v1", "Star Mobile", "/assets/world/reward-star-mobile-v1.png"],
   ["room-ready", 1, "optional", "Room for someone new", "You found a cushion for whoever might hatch. Waiting felt easier when there was a place ready.", "cat-cushion-v1", "Cozy Cushion", "/assets/world/reward-cat-cushion-v1.png"],
   ["first-sprout", 1, "optional", "Growing together", "A green shoot appeared beside the egg. You watered it, and both small things kept growing.", "star-plant-v1", "Star Sprout", "/assets/world/reward-star-plant-v1.png"],
-  ["long-night", 1, "core", "Keep the light on", "The coldest night arrived. You left the lantern glowing until morning.", "warming-lantern-v1", "Warming Lantern", "/assets/world/reward-warming-lantern-v1.png", "room", ["gentle-keeper", "Gentle Keeper", "You stayed when Pip needed warmth.", "Pip remembers who kept the light on."]],
-  ["pip-hatches", 1, "core", "Hello, Pip", "At sunrise, the shell opened. Pip blinked at the room—and found you still there.", "pip-companion-v1", "Meet Pip", "/assets/pets/default.png", "companion"],
-  ["food-videos", 2, "optional", "One more video…", "Pip discovered cooking videos and watched far too many. One tiny recipe made Pip sit up.", "tiny-phone-v1", "Tiny Phone", "/assets/world/reward-tiny-phone-v1.png"],
+  ["long-night", 1, "core", "Keep the Light On", "The coldest night of the storm arrived and the room became dark. You placed a small lantern beside the egg and stayed nearby to keep it warm. The lantern flickered through the night, but it never went out. Just before sunrise, a bright crack appeared across the golden shell.", "warming-lantern-v1", "Warming Lantern", "/assets/world/reward-warming-lantern-v1.png", "room", ["gentle-keeper", "Gentle Keeper", "You stayed when Pip needed warmth.", "Pip remembers who kept the light on."]],
+  ["pip-hatches", 1, "core", "Hello, Pip", "The shell slowly opened and a small cat tumbled into the blanket. His name was Pip, and he looked around the room with wide, curious eyes. A soft golden light still glowed around his paws. Before long, Pip noticed a strange sound coming from somewhere beneath the broken pieces of his shell.", "pip-companion-v1", "Meet Pip", "/assets/pets/default.png", "companion"],
+  ["food-videos", 2, "optional", "One More Video", "The sound came from a tiny phone hidden beneath the eggshell. Its screen was filled with cooking videos showing cakes, soups, and warm bread. One video showed small snacks shaped like moons and covered in golden sugar. Pip watched it several times and began gathering anything that might help him make them.", "tiny-phone-v1", "Tiny Phone", "/assets/world/reward-tiny-phone-v1.png"],
   ["empty-cupboard", 2, "optional", "First, a plan", "The cupboard was almost empty. Pip packed a bag and made a plan.", "grocery-tote-v1", "Grocery Tote", "/assets/world/reward-grocery-tote-v1.png"],
   ["choose-ingredients", 2, "optional", "Just what we need", "There were dozens of tempting ingredients. Pip chose only what the recipe needed.", "ingredient-jars-v1", "Ingredient Jars", "/assets/world/reward-ingredient-jars-v1.png"],
   ["chef-scarf", 2, "optional", "Dressed for courage", "Pip was nervous, so the scarf became a chef's scarf for the day.", "star-scarf-v1", "Starlight Scarf", "/assets/world/reward-star-scarf-v1.png", "cosmetic"],
-  ["recipe-chosen", 2, "core", "Pip has a plan", "Pip copied the recipe carefully. “I think I can try,” Pip said.", "recipe-card-v1", "Recipe Card", "/assets/world/reward-recipe-card-v1.png", "room", ["brave-beginner", "Brave Beginner", "You helped Pip begin before everything felt certain.", "Starting before you feel ready is its own kind of brave."]],
-  ["flour-storm", 3, "optional", "Flour everywhere", "The first stir sent flour across the room. Pip's whiskers turned white.", "mixing-bowl-v1", "Mixing Bowl", "/assets/world/reward-mixing-bowl-v1.png"],
-  ["measure-carefully", 3, "optional", "A better measure", "Paws were not measuring cups, Pip learned. The little spoons were much more reliable.", "measuring-spoons-v1", "Measuring Spoons", "/assets/world/reward-measuring-spoons-v1.png"],
+  ["recipe-chosen", 2, "core", "Pip Has a Plan", "Pip copied the moon snack recipe onto a small card. He carefully drew every ingredient, bowl, and cooking step so nothing would be forgotten. The cupboard did not contain everything he needed, but there was enough to begin. The recipe also showed two plates, although only one cook stood in the picture.", "recipe-card-v1", "Recipe Card", "/assets/world/reward-recipe-card-v1.png", "room", ["brave-beginner", "Brave Beginner", "You helped Pip begin before everything felt certain.", "Starting before you feel ready is its own kind of brave."]],
+  ["flour-storm", 3, "optional", "Flour Everywhere", "Pip poured flour into a mixing bowl and stirred much too quickly. A white cloud filled the kitchen and covered his paws, whiskers, and tail. When the flour finally settled, Pip noticed a second set of tiny pawprints near the window. They disappeared beneath the curtain before he could follow them.", "mixing-bowl-v1", "Mixing Bowl", "/assets/world/reward-mixing-bowl-v1.png"],
+  ["measure-carefully", 3, "optional", "A Better Measure", "Pip tried measuring ingredients with his paws, but every amount was different. You found a set of small measuring spoons and helped him follow the recipe more carefully. Soon, the mixture began to glow with a soft silver light. For a moment, another light appeared outside the window and seemed to glow back.", "measuring-spoons-v1", "Measuring Spoons", "/assets/world/reward-measuring-spoons-v1.png"],
   ["waiting-is-hard", 3, "optional", "Let the timer remember", "Pip checked the oven every ten seconds. The timer promised it would remember.", "kitchen-timer-v1", "Kitchen Timer", "/assets/world/reward-kitchen-timer-v1.png"],
-  ["burnt-batch", 3, "core", "The first try", "The first batch came out dark and hard. Pip sat very still beside it. You sat there too.", "wooden-spoon-v1", "Wooden Spoon", "/assets/world/reward-wooden-spoon-v1.png"],
-  ["keep-the-pan", 3, "optional", "Tomorrow's pan", "Pip wanted to throw the pan away. Instead, Pip washed it and set it out for tomorrow.", "star-pan-v1", "Star Pan", "/assets/world/reward-star-pan-v1.png"],
-  ["second-try", 3, "core", "Pip did it", "The next batch rose, golden and warm. Pip took the smallest bite, then the biggest smile appeared.", "moon-snack-plate-v1", "Moon Snack Plate", "/assets/world/reward-moon-snack-plate-v1.png", "room", ["try-again-chef", "Try-Again Chef", "You stayed for another attempt.", "Trying again changed the ending."]],
-  ["flicker-outside", 4, "optional", "A flicker outside", "A pale flicker appeared beyond the window. Whenever Pip looked up, it disappeared.", "moon-window-charm-v1", "Moon Window Charm", "/assets/world/reward-moon-window-charm-v1.png"],
-  ["gentle-invitation", 4, "optional", "An invitation", "Pip drew a small moon and left it outside. An invitation, not a chase.", "little-invitation-v1", "Little Invitation", "/assets/world/reward-little-invitation-v1.png"],
-  ["waiting-gently", 4, "optional", "Waiting gently", "Pip waited with two empty places on the blanket. Nothing happened—and that was okay.", "picnic-blanket-v1", "Picnic Blanket", "/assets/world/reward-picnic-blanket-v1.png"],
-  ["share-the-snacks", 4, "core", "Half for someone else", "Pip left half the moon snacks in a little bowl. By morning, one was gone.", "sharing-bowl-v1", "Sharing Bowl", "/assets/world/reward-sharing-bowl-v1.png"],
+  ["burnt-batch", 3, "core", "The First Try", "The first batch stayed in the oven too long. The moon snacks came out dark, hard, and covered in smoke. Pip sat quietly beside the ruined tray and pushed the wooden spoon away. After the kitchen had cooled, he picked up the spoon again and placed it carefully beside the recipe card.", "wooden-spoon-v1", "Wooden Spoon", "/assets/world/reward-wooden-spoon-v1.png"],
+  ["keep-the-pan", 3, "optional", "Tomorrow’s Pan", "The burnt pan looked completely ruined, but you helped Pip wash away the soot. Beneath the black marks was a small golden star that neither of you had seen before. Pip dried the pan and placed it beside the ingredients for another attempt. That night, something tapped softly against the kitchen window.", "star-pan-v1", "Star Pan", "/assets/world/reward-star-pan-v1.png"],
+  ["second-try", 3, "core", "Pip Did It", "Pip followed every step more carefully the second time. The new batch rose perfectly and filled the room with a warm, sweet smell. He placed the golden moon snacks on a special plate and counted them twice. There was one snack more than the recipe should have made, and a pale shadow was waiting outside.", "moon-snack-plate-v1", "Moon Snack Plate", "/assets/world/reward-moon-snack-plate-v1.png", "room", ["try-again-chef", "Try-Again Chef", "You stayed for another attempt.", "Trying again changed the ending."]],
+  ["flicker-outside", 4, "optional", "A Flicker Outside", "The pale shadow returned each evening but disappeared whenever Pip moved closer. He placed a moon-shaped charm beside the window so the visitor could see it from outside. During the night, the charm rang even though the air was still. The next morning, a single silver hair was caught on its edge.", "moon-window-charm-v1", "Moon Window Charm", "/assets/world/reward-moon-window-charm-v1.png"],
+  ["gentle-invitation", 4, "optional", "An Invitation", "Pip drew a small moon on a card and placed it outside with one warm snack. He left the window and gave the visitor plenty of space. By morning, the snack had not been touched, but the card had been turned over. A tiny silver pawprint had appeared on the other side.", "little-invitation-v1", "Little Invitation", "/assets/world/reward-little-invitation-v1.png"],
+  ["waiting-gently", 4, "optional", "Waiting Gently", "Pip placed a picnic blanket near the window and prepared two comfortable spaces. He waited for most of the afternoon, but the visitor never appeared. The second place remained empty when the room became dark. During the night, one corner of the blanket slowly folded inward as if someone had rested there.", "picnic-blanket-v1", "Picnic Blanket", "/assets/world/reward-picnic-blanket-v1.png"],
+  ["share-the-snacks", 4, "core", "Half for Someone Else", "Pip placed half of the remaining moon snacks in a small bowl outside. This time, he left no card and did not wait beside the window. By morning, one snack was gone and a trail of silver light crossed the ground. At the end of the trail, two bright eyes watched quietly from the shadows.", "sharing-bowl-v1", "Sharing Bowl", "/assets/world/reward-sharing-bowl-v1.png"],
   ["recipe-for-two", 4, "optional", "For two", "Pip wrote the recipe down neatly. At the top of the page: “For two.”", "pip-cookbook-v1", "Pip's Cookbook", "/assets/world/reward-pip-cookbook-v1.png"],
-  ["lumi-returns", 4, "core", "Hello, Lumi", "That evening, Lumi returned and stayed. The safest place Pip knew had become big enough for a friend.", "lumi-companion-v1", "Meet Lumi", "/assets/pets/lumi-v1.png", "companion", ["true-friend", "True Friend", "Pip found the courage to make room for someone else.", "Care has a way of making more room."]],
+  ["lumi-returns", 4, "core", "Hello, Lumi", "The silver visitor finally stepped through the open window. Her name was Lumi, and she had followed the warming lantern during the storm but had been too frightened to come inside. Pip brought the final moon snack to the picnic blanket. Pip and Lumi shared it, and the room became a safe home for both of them.", "lumi-companion-v1", "Meet Lumi", "/assets/pets/lumi-v1.png", "companion", ["true-friend", "True Friend", "Pip found the courage to make room for someone else.", "Care has a way of making more room."]],
 ];
 
 const chapters = CHAPTER_ROWS.map((row): StoryChapterDefinition => ({
@@ -160,6 +160,13 @@ const OPTIONAL_PRIORITY = {
   4: ["flicker-outside", "gentle-invitation", "waiting-gently", "recipe-for-two"],
 } as const;
 const OPTIONAL_ACT_ORDER = [3, 4, 2, 1, 3, 4, 3, 4, 1, 2, 1, 2, 1, 2, 3, 4] as const;
+const PIP_FINALE_CHAPTER_ID = "lumi-returns";
+const PIP_FINALE_COLLECTIBLE = {
+  id: "lumi-companion-v1",
+  title: "Meet Lumi",
+  assetUrl: "/assets/pets/lumi-v1.png",
+  kind: "companion",
+} as const;
 
 function planned(source: readonly (StoryChapterDefinition & { sourceChapterIds?: readonly string[] })[]): readonly PlannedStoryChapter[] {
   return source.map((chapter, index) => ({
@@ -191,13 +198,25 @@ function createPipPlan(totalPeriods: number): StoryPlanDefinition {
     }
     selectedChapters = chapters.filter((chapter) => selected.has(chapter.id));
   }
+  const plannedChapters = planned(selectedChapters);
+  const finale = plannedChapters[plannedChapters.length - 1];
+  if (
+    !finale ||
+    !finale.sourceChapterIds.includes(PIP_FINALE_CHAPTER_ID) ||
+    finale.collectible.id !== PIP_FINALE_COLLECTIBLE.id ||
+    finale.collectible.title !== PIP_FINALE_COLLECTIBLE.title ||
+    finale.collectible.assetUrl !== PIP_FINALE_COLLECTIBLE.assetUrl ||
+    finale.collectible.kind !== PIP_FINALE_COLLECTIBLE.kind
+  ) {
+    throw new Error("Pip's First Recipe must end with the Meet Lumi companion chapter");
+  }
   return {
     storyId: PIP_STORY_ID,
     version: PIP_STORY_VERSION,
     totalPeriods,
     companionCollectibleId: "pip-companion-v1",
     mysteryCollectibleId: "mystery-egg-v1",
-    chapters: planned(selectedChapters),
+    chapters: plannedChapters,
   };
 }
 

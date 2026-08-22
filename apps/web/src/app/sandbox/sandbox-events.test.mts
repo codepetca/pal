@@ -47,6 +47,9 @@ test("builds all six contract-valid pilot facts", () => {
   assert.equal(dailyLog?.metadata.activity_day, "2026-04-14");
   assert.equal(dailyLog?.occurred_at.slice(0, 10), dailyLog?.metadata.activity_day);
 
+  assert.equal(events[0]?.occurred_at, simulatedDate.toISOString());
+  assert.equal(events[1]?.occurred_at, simulatedDate.toISOString());
+
   const completion = events[5];
   assert.equal(completion?.occurred_at, now.toISOString());
 

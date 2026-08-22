@@ -78,6 +78,28 @@ test("fixture actions update visible state while duplicate replay is inert", asy
   assert.deepEqual(afterDuplicate, beforeDuplicate);
 });
 
+test("late-join badges stay with the fixture's actual current week", () => {
+  const client = createFixturePalClient(createEmptyFixtureSnapshot());
+  for (let week = 1; week < 4; week += 1) {
+    client.dispatch("advance-week");
+  }
+
+  client.dispatch("session-started");
+  client.dispatch("classroom-joined");
+
+  const snapshot = client.peek();
+  const weekOneTitles = snapshot.roadmap.weeks[0]!.achievements.map(
+    (achievement) => achievement.title,
+  );
+  const weekFourTitles = snapshot.roadmap.weeks[3]!.achievements.map(
+    (achievement) => achievement.title,
+  );
+  assert.equal(weekOneTitles.includes("First Pika Login"), false);
+  assert.equal(weekOneTitles.includes("Joined the Class"), false);
+  assert.equal(weekFourTitles.includes("First Pika Login"), true);
+  assert.equal(weekFourTitles.includes("Joined the Class"), true);
+});
+
 test("deprecated reward-earned fixture action remains a compatible no-op", () => {
   const client = createFixturePalClient();
   const before = client.peek();

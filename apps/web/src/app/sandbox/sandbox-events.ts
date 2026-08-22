@@ -66,14 +66,14 @@ export function eventForAction(
       return {
         ...base,
         event_type: "platform.session.started",
-        occurred_at: reactionOccurredAt,
+        occurred_at: simulatedOccurredAt,
         metadata: {},
       };
     case "classroom-joined":
       return {
         ...base,
         event_type: "classroom.joined",
-        occurred_at: reactionOccurredAt,
+        occurred_at: simulatedOccurredAt,
         metadata: { classroom_token: "sandbox-classroom" },
       };
     case "week-configured":
