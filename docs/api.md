@@ -68,7 +68,7 @@ learner identity and returns a five-minute signed token plus `expires_at`. The r
 uses `Cache-Control: no-store`. Its subject is Pal's internal learner UUID; the external
 pseudonymous token is not placed in the browser token. Tokens are restricted to the Pal
 issuer, `pal-widget` audience, authenticated integration, learner, and the
-`learner:read` / `reward:ack` scopes.
+`learner:read`, `reward:ack`, and `reward:equip` scopes.
 
 ## Widget read contract
 
@@ -99,6 +99,15 @@ versioned independently from event ingestion and includes:
 - current companion state; and
 - unseen reward notices. Achievement notices include only the earned instance's
   stable key and canonical presentation-safe name, description, and badge.
+- optional schema-v1 `rewardLoadout` state containing owned companion/wallpaper
+  options and, independently, the one equipped grant ID for each slot.
+
+Usable story rewards are equipped with
+`POST /api/v1/learner/reward-loadout` and a bounded body of
+`{ "slot": "companion" | "wallpaper", "rewardGrantId": <owned UUID> | null }`.
+The route requires `reward:equip`, verifies the token's integration/learner pair,
+rejects unowned and reveal-only grants, and treats `null` as restoring the default
+for that slot. Keepsakes never call this endpoint.
 
 The widget receives no raw learner identifier. Pika's backend uses its integration
 credential to mint the learner-scoped token; that credential never enters the

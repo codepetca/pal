@@ -9,6 +9,7 @@ import {
   createFixtureSnapshot,
 } from "./fixture-client";
 import { PalProvider } from "./provider";
+import type { PalClient } from "./types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
@@ -159,6 +160,156 @@ test("past in-progress Weekly Rhythm keeps its persisted progress status", async
         node.props["aria-label"] === "Weekly Rhythm — 1 of 4 eligible days",
     );
     assert.equal(badge.props["data-achievement-result"], "in-progress");
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
+test("clicking the equipped wallpaper collectible clears its loadout slot", async () => {
+  const before = createFixtureSnapshot();
+  before.progression!.collectibles[0] = {
+    id: "courtyard-afternoons-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "Courtyard Afternoons",
+    description: "A warm courtyard.",
+    kind: "wallpaper",
+    finish: "color",
+    assetUrl: "/courtyard.png",
+  };
+  before.rewardLoadout = {
+    companion: { options: [] },
+    wallpaper: {
+      equippedGrantId: "grant-courtyard",
+      options: [{
+        grantId: "grant-courtyard",
+        rewardId: "courtyard-afternoons-v1",
+        category: "wallpaper",
+        title: "Courtyard Afternoons",
+        assetUrl: "/courtyard.png",
+      }],
+    },
+  };
+  const after = structuredClone(before);
+  delete after.rewardLoadout!.wallpaper.equippedGrantId;
+  const calls: Array<[string, string | null]> = [];
+  let cleared = false;
+  const client: PalClient = {
+    getSnapshot: async () => cleared ? after : before,
+    markRewardSeen: async () => undefined,
+    async setRewardLoadout(slot, rewardGrantId) {
+      calls.push([slot, rewardGrantId]);
+      cleared = true;
+    },
+  };
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider client={client} initialSnapshot={before} scopeKey="toggle-wallpaper">
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const equippedButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["data-loadout-equipped"] === "true",
+    );
+    await act(async () => {
+      equippedButton.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(calls, [["wallpaper", null]]);
+    const availableButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["data-loadout-equipped"] === "false",
+    );
+    assert.equal(availableButton.props["aria-pressed"], false);
+    assert.match(availableButton.props["aria-label"], /^Use Courtyard Afternoons/);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
+test("clicking another usable collectible replaces the active slot selection", async () => {
+  const before = createFixtureSnapshot();
+  before.progression!.collectibles[0] = {
+    id: "lumi-companion-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "Lumi",
+    description: "A gentle new friend.",
+    kind: "companion",
+    finish: "color",
+    assetUrl: "/lumi.png",
+  };
+  before.rewardLoadout = {
+    companion: {
+      equippedGrantId: "grant-pip",
+      options: [
+        {
+          grantId: "grant-pip",
+          rewardId: "young-pip-v1",
+          category: "companion",
+          title: "Pip",
+          assetUrl: "/pip.png",
+        },
+        {
+          grantId: "grant-lumi",
+          rewardId: "lumi-companion-v1",
+          category: "companion",
+          title: "Lumi",
+          assetUrl: "/lumi.png",
+        },
+      ],
+    },
+    wallpaper: { options: [] },
+  };
+  const after = structuredClone(before);
+  after.rewardLoadout!.companion.equippedGrantId = "grant-lumi";
+  after.progression!.companionReveal = { status: "earned", assetUrl: "/lumi.png" };
+  after.companion.name = "Lumi";
+  const calls: Array<[string, string | null]> = [];
+  let equipped = false;
+  const client: PalClient = {
+    getSnapshot: async () => equipped ? after : before,
+    markRewardSeen: async () => undefined,
+    async setRewardLoadout(slot, rewardGrantId) {
+      calls.push([slot, rewardGrantId]);
+      equipped = true;
+    },
+  };
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider client={client} initialSnapshot={before} scopeKey="replace-companion">
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const lumiButton = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        /Use Lumi as the active companion/.test(node.props["aria-label"] ?? ""),
+    );
+    await act(async () => {
+      lumiButton.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(calls, [["companion", "grant-lumi"]]);
+    const equippedButton = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        node.props["data-loadout-equipped"] === "true",
+    );
+    assert.match(equippedButton.props["aria-label"], /^Stop using Lumi/);
   } finally {
     await act(async () => renderer?.unmount());
   }

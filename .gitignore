@@ -11,5 +11,7 @@ dist
 .claude/worktrees/
 .codex-*.log
 .pnpm-store/
+.playwright-cli/
+output/
 .env*
 !.env.example

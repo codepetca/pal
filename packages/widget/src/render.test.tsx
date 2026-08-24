@@ -80,6 +80,112 @@ test("modal celebration uses backdrop dismissal without a continue button", () =
   assert.doesNotMatch(html, />Continue<\/button>/);
 });
 
+test("usable story rewards expose use-now and save-later while keepsakes retain continue", () => {
+  const client = createFixturePalClient();
+  const usable = client.peek();
+  usable.rewards = [{
+    id: "grant-wallpaper",
+    title: "A wide new view",
+    description: "Wallpaper earned",
+    kind: "story",
+    rewardCategory: "wallpaper",
+    collectibleTitle: "Courtyard Afternoons",
+    assetUrl: "/courtyard-light.png",
+    darkAssetUrl: "/courtyard-dark.png",
+  }];
+  const usableHtml = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={usable} scopeKey="usable-reward" theme="dark">
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+  assert.match(usableHtml, />Use now</);
+  assert.match(usableHtml, />Save for later</);
+  assert.match(usableHtml, /courtyard-dark\.png/);
+  assert.doesNotMatch(usableHtml, /courtyard-light\.png/);
+
+  usable.rewards[0]!.rewardCategory = "keepsake";
+  const keepsakeHtml = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={usable} scopeKey="keepsake-reward">
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+  assert.match(keepsakeHtml, />Continue</);
+  assert.doesNotMatch(keepsakeHtml, />Use now</);
+});
+
+test("earned usable collectibles render as equipped loadout buttons", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  snapshot.rewardLoadout = {
+    companion: {
+      equippedGrantId: "grant-pip",
+      options: [
+        { grantId: "grant-pip", rewardId: "pip", category: "companion", title: "Pip", assetUrl: "/pip.png" },
+        { grantId: "grant-lumi", rewardId: "lumi", category: "companion", title: "Lumi", assetUrl: "/lumi.png" },
+      ],
+    },
+    wallpaper: {
+      equippedGrantId: "grant-stream",
+      options: [
+        { grantId: "grant-stream", rewardId: "stream", category: "wallpaper", title: "The Stream Beyond", assetUrl: "/stream.png", darkAssetUrl: "/stream-dark.png" },
+      ],
+    },
+  };
+  snapshot.progression!.collectibles[0] = {
+    id: "stream",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "The Stream Beyond",
+    description: "A path beside the stream.",
+    kind: "wallpaper",
+    finish: "color",
+    assetUrl: "/stream.png",
+    darkAssetUrl: "/stream-dark.png",
+  };
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="loadout-controls" theme="dark">
+      <PalAchievements />
+      <PalCompanion />
+    </PalProvider>,
+  );
+  assert.match(html, /data-pal-wallpaper="equipped"/);
+  assert.match(html, /stream-dark\.png/);
+  assert.doesNotMatch(html, /url\(&quot;\/stream\.png/);
+  assert.match(html, /<button[^>]+data-loadout-equipped="true"[^>]+aria-pressed="true"/);
+  assert.match(html, /Stop using The Stream Beyond as the achievements wallpaper/);
+  assert.match(html, />Equipped</);
+  assert.doesNotMatch(html, /<select/);
+});
+
+test("roadmap weeks after the completed story do not show fabricated collectible slots", () => {
+  const client = createFixturePalClient();
+  const snapshot = client.peek();
+  const originalStoryWeeks = snapshot.progression?.collectibles.length ?? 0;
+  for (let number = snapshot.roadmap.weeks.length + 1; number <= 17; number += 1) {
+    snapshot.roadmap.weeks.push({
+      id: `week-${number}`,
+      number,
+      label: `Week ${number}`,
+      dateLabel: `Week ${number}`,
+      status: number === 17 ? "current" : "past",
+      summary: "No new story reward this week.",
+      achievements: [],
+    });
+  }
+  snapshot.roadmap.currentWeek = 17;
+
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="story-complete">
+      <PalAchievements />
+    </PalProvider>,
+  );
+
+  assert.match(html, /Week 17/);
+  assert.equal((html.match(/class="pal-week-collectible"/g) ?? []).length, originalStoryWeeks);
+  assert.doesNotMatch(html, /Week 17 collectible locked/);
+});
+
 test("roadmap hides future weeks and renders visible weeks newest first", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
@@ -162,6 +268,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
     /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
+  assert.doesNotMatch(html, />Equipped</);
 
   assert.doesNotMatch(html, /Up next/i);
   assert.equal((html.match(/>Mystery Egg</g) ?? []).length, 1);

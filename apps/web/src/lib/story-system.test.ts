@@ -15,8 +15,10 @@ import {
 } from "@pal/db";
 import {
   HOME_STORY_ID,
+  HOME_STORY_PERIODS,
   HOME_STORY_VERSION,
   STORY_REGISTRY,
+  storyForTerm,
   storyForTermStartDay,
 } from "@/lib/story-catalog";
 import {
@@ -101,7 +103,7 @@ test("client dependency graphs cannot reach server story authority", () => {
 });
 
 function persistedPlan(totalPeriods = 6): PersistedStoryPlan {
-  const reference = storyForTermStartDay("2026-08-31");
+  const reference = storyForTerm("2026-08-31", totalPeriods);
   const plan = STORY_REGISTRY.createPlan(totalPeriods, reference);
   return {
     ...plan,
@@ -136,11 +138,12 @@ function grant(
 }
 
 test("all supported plans are deterministic, complete, and deeply immutable", () => {
-  const reference = storyForTermStartDay("2026-08-31");
   for (let weeks = 6; weeks <= 24; weeks += 1) {
+    const reference = storyForTerm("2026-08-31", weeks);
     const left = STORY_REGISTRY.createPlan(weeks, reference);
     const right = STORY_REGISTRY.createPlan(weeks, reference);
-    assert.equal(left.chapters.length, weeks);
+    assert.equal(left.chapters.length, Math.min(weeks, HOME_STORY_PERIODS));
+    assert.equal(left.totalPeriods, Math.min(weeks, HOME_STORY_PERIODS));
     assert.deepEqual(
       left.chapters.map((chapter) => [chapter.roadmapWeek, chapter.id]),
       right.chapters.map((chapter) => [chapter.roadmapWeek, chapter.id]),
@@ -162,11 +165,116 @@ test("all supported plans are deterministic, complete, and deeply immutable", ()
       false,
     );
   }
-  const catalog = STORY_REGISTRY.requireCatalog(reference);
+  const catalog = STORY_REGISTRY.requireCatalog(storyForTermStartDay("2026-08-31"));
   assert.ok(Object.isFrozen(catalog));
   assert.throws(() => {
     (catalog.chapters[0] as { id: string }).id = "changed";
   }, TypeError);
+});
+
+test("A Place to Call Home is the default and caps longer terms at 16 chapters", () => {
+  const reference = { storyId: HOME_STORY_ID, version: HOME_STORY_VERSION };
+  const catalog = STORY_REGISTRY.requireCatalog(reference);
+  const plan = STORY_REGISTRY.createPlan(HOME_STORY_PERIODS, reference);
+
+  assert.equal(catalog.minPeriods, HOME_STORY_PERIODS);
+  assert.equal(catalog.maxPeriods, 24);
+  assert.equal(plan.companionCollectibleId, "young-pip-v1");
+  assert.equal(plan.chapters.length, HOME_STORY_PERIODS);
+  for (const chapter of plan.chapters) {
+    assert.equal(
+      fs.existsSync(path.resolve(process.cwd(), "public", chapter.collectible.assetUrl.slice(1))),
+      true,
+      `Missing story asset: ${chapter.collectible.assetUrl}`,
+    );
+    if (chapter.collectible.darkAssetUrl) {
+      assert.equal(
+        fs.existsSync(path.resolve(process.cwd(), "public", chapter.collectible.darkAssetUrl.slice(1))),
+        true,
+        `Missing dark story asset: ${chapter.collectible.darkAssetUrl}`,
+      );
+    }
+  }
+  assert.deepEqual(
+    plan.chapters.map((chapter) => chapter.revealHeadline),
+    [
+      "New Start",
+      "Dusty Discovery",
+      "Keeping warm",
+      "Room for One More",
+      "Flour prints",
+      "Unmeasured",
+      "Undeterred",
+      "Courtyard",
+      "Pantry Thief",
+      "Care",
+      "New Friend",
+      "Something Sweet",
+      "Moving beyond",
+      "The Path",
+      "Job done",
+      "Epilogue",
+    ],
+  );
+  assert.deepEqual(
+    plan.chapters.map((chapter) => chapter.collectible.kind),
+    [
+      "keepsake",
+      "keepsake",
+      "keepsake",
+      "companion",
+      "keepsake",
+      "keepsake",
+      "keepsake",
+      "wallpaper",
+      "keepsake",
+      "keepsake",
+      "companion",
+      "keepsake",
+      "wallpaper",
+      "keepsake",
+      "keepsake",
+      "keepsake",
+    ],
+  );
+  assert.equal(plan.chapters[1]?.collectible.title, "Strange Egg");
+  assert.deepEqual(
+    plan.chapters.map((chapter) => chapter.collectible.title),
+    [
+      "Trusty Lantern", "Strange Egg", "Makeshift Bed", "Pip",
+      "Flour Bag", "Measuring Cup", "Fresh Bread", "Courtyard Afternoons",
+      "Bitten Bread", "Care Kit/Bandages", "Lumi", "Cookie Plate",
+      "The Stream Beyond", "Stepping Stones", "Stream Picnic", "New Egg",
+    ],
+  );
+  assert.deepEqual(
+    plan.chapters
+      .filter((chapter) => chapter.collectible.kind === "wallpaper")
+      .map((chapter) => chapter.collectible.title),
+    ["Courtyard Afternoons", "The Stream Beyond"],
+  );
+  assert.equal(
+    plan.chapters
+      .filter((chapter) => chapter.collectible.kind === "wallpaper")
+      .every((chapter) => Boolean(chapter.collectible.darkAssetUrl)),
+    true,
+  );
+  assert.deepEqual(
+    plan.chapters.flatMap((chapter) => chapter.title?.label ?? []),
+    ["Undeterred", "Gentle Friend", "Pathmaker", "Homekeeper"],
+  );
+  assert.throws(() => STORY_REGISTRY.createPlan(15, reference), /16–24/);
+  const longPlan = STORY_REGISTRY.createPlan(24, reference);
+  assert.equal(longPlan.totalPeriods, HOME_STORY_PERIODS);
+  assert.equal(longPlan.chapters.length, HOME_STORY_PERIODS);
+  assert.deepEqual(storyForTermStartDay("9999-12-31"), {
+    storyId: HOME_STORY_ID,
+    version: 1,
+  });
+  assert.deepEqual(storyForTerm("2026-08-31", 6), {
+    storyId: "pips-first-recipe",
+    version: 1,
+  });
 });
 
 test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
@@ -513,6 +621,62 @@ test("two learners receive the same persisted sequence for the same term boundar
     assert.deepEqual(sequences[0], sequences[1]);
   } finally {
     await Promise.all(learners.map((externalLearnerId) => resetLearnerInDb(integration.id, externalLearnerId)));
+  }
+});
+
+test("week 17 continues normally without scheduling a new story achievement", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const externalLearnerId = `post-story-week-${crypto.randomUUID()}`;
+  const termKey = `post-story-term-${crypto.randomUUID()}`;
+  const periodKey = `post-story-period-${crypto.randomUUID()}`;
+  const configuration = configuredWeek(periodKey, termKey);
+  configuration.occurred_at = "2026-12-21T12:00:00.000Z";
+  configuration.metadata.term_end_day = "2027-01-15";
+  configuration.metadata.term_week_count = 20;
+  configuration.metadata.week_start_day = "2026-12-21";
+  configuration.metadata.week_index = 17;
+
+  try {
+    const result = await processEventInDb(
+      integration.id,
+      externalLearnerId,
+      configuration,
+      crypto.randomUUID(),
+    );
+    assert.equal(result.status, "processed");
+
+    const learnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      externalLearnerId,
+    );
+    const [plan] = await getDb()
+      .select()
+      .from(storyPlans)
+      .where(eq(storyPlans.learnerId, learnerId));
+    assert.equal(plan?.storyId, HOME_STORY_ID);
+    assert.equal(plan?.totalPeriods, HOME_STORY_PERIODS);
+    assert.equal(
+      (await getDb()
+        .select()
+        .from(storyPlanChapters)
+        .where(eq(storyPlanChapters.storyPlanId, plan!.id))).length,
+      HOME_STORY_PERIODS,
+    );
+    assert.equal(
+      (await getDb()
+        .select()
+        .from(storyCollectibleSchedules)
+        .where(
+          and(
+            eq(storyCollectibleSchedules.learnerId, learnerId),
+            eq(storyCollectibleSchedules.periodKey, periodKey),
+          ),
+        )).length,
+      0,
+    );
+  } finally {
+    await resetLearnerInDb(integration.id, externalLearnerId);
   }
 });
 

@@ -169,3 +169,28 @@ test("reward acknowledgement retries use the same learner-scoped endpoint", asyn
     "https://pal.example/api/v1/learner/rewards/reward%2Fwith%20spaces/seen",
   ]);
 });
+
+test("reward customization posts only a slot and owned grant id", async () => {
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  const client = createPalHttpClient({
+    apiBaseUrl: "https://pal.example",
+    getAccessToken: async () => "learner-token",
+    fetchImplementation: async (input, init) => {
+      requests.push({ input: String(input), init });
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  await client.setRewardLoadout!("wallpaper", "grant-8");
+
+  assert.equal(requests[0]?.input, "https://pal.example/api/v1/learner/reward-loadout");
+  assert.equal(requests[0]?.init?.method, "POST");
+  assert.equal(
+    new Headers(requests[0]?.init?.headers).get("authorization"),
+    "Bearer learner-token",
+  );
+  assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), {
+    slot: "wallpaper",
+    rewardGrantId: "grant-8",
+  });
+});

@@ -33,7 +33,10 @@ import {
   type LearnerState,
   type ProcessResult,
 } from "@pal/engine";
-import { ensureStoryPlanForEvent } from "@/lib/story-plan";
+import {
+  ensureStoryPlanDefinitionForEvent,
+  ensureStoryPlanForEvent,
+} from "@/lib/story-plan";
 import {
   BEHAVIOR_TITLES,
   grantBehaviorTitle,
@@ -240,6 +243,11 @@ export async function processEventInDb(
         error: configurationError,
       };
     }
+
+    // Pin the term's story assignments before the weekly fact trigger decides
+    // whether this period has collectible work. Longer terms intentionally
+    // have no assignment after the story's final chapter.
+    await ensureStoryPlanDefinitionForEvent(tx, learnerId, event);
 
     // 5. The unique constraint remains the final delivery-idempotency guard.
     // The learner lock serializes this integration's normal per-learner path;

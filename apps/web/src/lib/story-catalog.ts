@@ -374,7 +374,7 @@ export const STORY_REGISTRY = createStoryRegistry([pipCatalog, homeCatalog]);
 export const STORY_RELEASE_SCHEDULE = deepFreeze([
   {
     eligibleFromTermStartDay: "0001-01-01",
-    story: { storyId: PIP_STORY_ID, version: PIP_STORY_VERSION },
+    story: { storyId: HOME_STORY_ID, version: HOME_STORY_VERSION },
   },
 ] as const);
 
@@ -384,4 +384,12 @@ export function storyForTermStartDay(termStartDay: string): StoryReference {
     .find((candidate) => candidate.eligibleFromTermStartDay <= termStartDay);
   if (!release) throw new Error("No story release is eligible for this term start");
   return release.story;
+}
+
+/** Short terms retain the adaptive legacy story; Home is the default from 16 weeks onward. */
+export function storyForTerm(termStartDay: string, totalPeriods: number): StoryReference {
+  if (totalPeriods < HOME_STORY_PERIODS) {
+    return { storyId: PIP_STORY_ID, version: PIP_STORY_VERSION };
+  }
+  return storyForTermStartDay(termStartDay);
 }

@@ -17,6 +17,7 @@ import {
   getDb,
   learnerFacts,
   learnerRewardGrants,
+  learnerRewardLoadouts,
   learners,
   petState,
   rewardNotices,
@@ -44,6 +45,7 @@ import {
   loadPersistedStoryPlansByIds,
 } from "@/lib/story-plan";
 import { mergePendingRewardQueues } from "@/lib/reward-queue";
+import { projectRewardLoadout } from "@/lib/reward-loadout";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
@@ -109,8 +111,8 @@ function companionMood(value: string, expiresAt: Date | null): PalCompanionMood 
     : "neutral";
 }
 
-function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
-  const subject = companionRevealed ? "Pip" : "Your companion";
+function moodMessage(mood: PalCompanionMood, companionName?: string): string {
+  const subject = companionName ?? "Your companion";
   switch (mood) {
     case "happy":
       return `${subject} is happy about your progress.`;
@@ -119,9 +121,9 @@ function moodMessage(mood: PalCompanionMood, companionRevealed = true): string {
     case "sleeping":
       return `${subject} is taking a rest.`;
     default:
-      return companionRevealed
-        ? "Complete positive learning actions to encourage Pip."
-        : "Complete positive learning actions to encourage your companion.";
+      return `Complete positive learning actions to encourage ${
+        companionName ?? "your companion"
+      }.`;
   }
 }
 
@@ -350,6 +352,8 @@ export async function loadLearnerSnapshot(
     asOf?: Date;
     /** False for schema-v1 widget builds that cannot render sketch ownership. */
     supportsCollectibleFinish?: boolean;
+    /** False for schema-v1 widget builds released before interactive loadouts. */
+    supportsRewardLoadout?: boolean;
     /** True for schema-v1 widgets that require legacy kinds and one slot per term week. */
     legacyStoryShape?: boolean;
   } = {},
@@ -438,6 +442,10 @@ export async function loadLearnerSnapshot(
         .from(learnerRewardGrants)
         .where(eq(learnerRewardGrants.learnerId, learnerId))
         .orderBy(asc(learnerRewardGrants.grantOrder));
+      const loadoutRows = await tx
+        .select()
+        .from(learnerRewardLoadouts)
+        .where(eq(learnerRewardLoadouts.learnerId, learnerId));
 
       const latestCalendarFact = selectCurrentTermFact(
         calendarFacts,
@@ -711,9 +719,11 @@ export async function loadLearnerSnapshot(
           ),
         ),
       );
+      const legacyStoryShape = options.legacyStoryShape ??
+        options.supportsRewardLoadout === false;
       const storyProjectionOptions = {
         colorChapterAssignmentIds,
-        legacyCollectibleKinds: options.legacyStoryShape === true,
+        legacyCollectibleKinds: legacyStoryShape,
       };
       const projectableGrantRows = options.supportsCollectibleFinish === false
         ? grantRows.filter((grant) =>
@@ -730,9 +740,26 @@ export async function loadLearnerSnapshot(
             storyProjectionOptions,
           )
         : undefined;
-      const responseProgression = options.legacyStoryShape === true
-        ? legacyProgressionCardinality(progression, weeks.length)
+      const rewardLoadout = projectRewardLoadout(
+        projectableGrantRows,
+        storyPlansById,
+        loadoutRows,
+      );
+      const equippedCompanion = rewardLoadout.companion.options.find(
+        (option) => option.grantId === rewardLoadout.companion.equippedGrantId,
+      );
+      const displayedProgression = progression && equippedCompanion
+        ? {
+            ...progression,
+            companionReveal: {
+              status: "earned" as const,
+              assetUrl: equippedCompanion.assetUrl,
+            },
+        }
         : progression;
+      const responseProgression = legacyStoryShape
+        ? legacyProgressionCardinality(displayedProgression, weeks.length)
+        : displayedProgression;
 
       const eco = economyRows[0];
       const pet = petRows[0];
@@ -741,9 +768,12 @@ export async function loadLearnerSnapshot(
         pet?.moodExpiresAt ?? null,
       );
       const companionRevealed =
-        progression === undefined || progression.companionReveal.status === "earned";
+        displayedProgression === undefined || displayedProgression.companionReveal.status === "earned";
+      const companionName = equippedCompanion?.title ?? (
+        companionRevealed ? "Pip" : "Mystery companion"
+      );
       const companion = {
-        name: companionRevealed ? "Pip" : "Mystery companion",
+        name: companionName,
         mood,
         moodLabel: mood[0].toUpperCase() + mood.slice(1),
         level: eco?.level ?? 1,
@@ -753,7 +783,10 @@ export async function loadLearnerSnapshot(
           0,
           PROGRESSION_POLICY.levelUpCostXp - (eco?.xp ?? 0),
         ),
-        message: moodMessage(mood, companionRevealed),
+        message: moodMessage(
+          mood,
+          companionRevealed ? companionName : undefined,
+        ),
         ...(persistedStoryPlan
           ? {}
           : { assetUrl: "/assets/pets/default.png" }),
@@ -794,6 +827,7 @@ export async function loadLearnerSnapshot(
           }),
         ),
         ...(responseProgression ? { progression: responseProgression } : {}),
+        ...(options.supportsRewardLoadout === false ? {} : { rewardLoadout }),
       };
     },
     {

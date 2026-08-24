@@ -3,7 +3,7 @@ import { learnerFacts, storyPlanChapters, storyPlans, type Db } from "@pal/db";
 import type { IncomingEvent } from "@pal/engine";
 import {
   STORY_REGISTRY,
-  storyForTermStartDay,
+  storyForTerm,
   type PlannedStoryChapter,
   type StoryReference,
 } from "@/lib/story-catalog";
@@ -103,6 +103,59 @@ async function resolveStoryPlanRow(db: Db, learnerId: string, termKey: string) {
   return plan;
 }
 
+async function ensureStoryPlanDefinition(
+  db: Db,
+  learnerId: string,
+  termPeriod: TermPeriod,
+): Promise<StoryPlanRow> {
+  let plan = await resolveStoryPlanRow(db, learnerId, termPeriod.termKey);
+  if (!plan) {
+    const reference = storyForTerm(termPeriod.termStartDay, termPeriod.totalPeriods);
+    const generated = STORY_REGISTRY.createPlan(termPeriod.totalPeriods, reference);
+    const [created] = await db
+      .insert(storyPlans)
+      .values({
+        learnerId,
+        termKey: termPeriod.termKey,
+        termStartDay: termPeriod.termStartDay,
+        storyId: generated.storyId,
+        storyVersion: generated.version,
+        totalPeriods: generated.totalPeriods,
+      })
+      .onConflictDoNothing()
+      .returning();
+    plan = created ?? (await resolveStoryPlanRow(db, learnerId, termPeriod.termKey));
+    if (!plan) throw new Error("Failed to create or resolve the learner story plan");
+    if (created) {
+      await db.insert(storyPlanChapters).values(
+        generated.chapters.map((chapter) => ({
+          storyPlanId: created.id,
+          learnerId,
+          periodNumber: chapter.roadmapWeek,
+          chapterId: chapter.id,
+        })),
+      );
+    }
+  }
+  return plan;
+}
+
+/**
+ * Creates the immutable plan skeleton before a weekly configuration fact is
+ * inserted, allowing the database scheduler to distinguish story weeks from
+ * later term weeks that intentionally have no chapter.
+ */
+export async function ensureStoryPlanDefinitionForEvent(
+  db: Db,
+  learnerId: string,
+  event: IncomingEvent,
+): Promise<void> {
+  if (event.event_type !== "daily_log_week.configured") return;
+  const termPeriod = termPeriodFromMetadata(event.metadata);
+  if (!termPeriod) return;
+  await ensureStoryPlanDefinition(db, learnerId, termPeriod);
+}
+
 function materializePersistedStoryPlan(
   plan: StoryPlanRow,
   rows: readonly StoryPlanChapterRow[],
@@ -147,35 +200,7 @@ export async function ensureStoryPlanForEvent(
 ): Promise<void> {
   const termPeriod = await termPeriodForEvent(db, learnerId, event);
   if (!termPeriod) return;
-  let plan = await resolveStoryPlanRow(db, learnerId, termPeriod.termKey);
-  if (!plan) {
-    const reference = storyForTermStartDay(termPeriod.termStartDay);
-    const generated = STORY_REGISTRY.createPlan(termPeriod.totalPeriods, reference);
-    const [created] = await db
-      .insert(storyPlans)
-      .values({
-        learnerId,
-        termKey: termPeriod.termKey,
-        termStartDay: termPeriod.termStartDay,
-        storyId: generated.storyId,
-        storyVersion: generated.version,
-        totalPeriods: generated.totalPeriods,
-      })
-      .onConflictDoNothing()
-      .returning();
-    plan = created ?? (await resolveStoryPlanRow(db, learnerId, termPeriod.termKey));
-    if (!plan) throw new Error("Failed to create or resolve the learner story plan");
-    if (created) {
-      await db.insert(storyPlanChapters).values(
-        generated.chapters.map((chapter) => ({
-          storyPlanId: created.id,
-          learnerId,
-          periodNumber: chapter.roadmapWeek,
-          chapterId: chapter.id,
-        })),
-      );
-    }
-  }
+  const plan = await ensureStoryPlanDefinition(db, learnerId, termPeriod);
   const pinnedReference = { storyId: plan.storyId, version: plan.storyVersion };
   const pinnedCatalog = STORY_REGISTRY.getCatalog(pinnedReference);
   const expectedStoryPeriods = pinnedCatalog
@@ -217,7 +242,7 @@ export async function ensureStoryPlanForEvent(
   }
 }
 
-/** Loads the exact persisted order. Catalog defaults are never consulted. */
+/** Loads the exact persisted story order. Longer terms may have later weeks without story assignments. */
 export async function loadPersistedStoryPlan(
   db: Db,
   learnerId: string,

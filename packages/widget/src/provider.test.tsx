@@ -77,6 +77,55 @@ test("a scope change never paints the previous learner snapshot", async () => {
   assert.match(failedLoad, /Achievements unavailable/);
 });
 
+test("reward loadout writes refresh the equipped snapshot in the same learner scope", async () => {
+  const before = createFixtureSnapshot();
+  before.rewardLoadout = {
+    companion: { options: [] },
+    wallpaper: {
+      options: [{
+        grantId: "grant-wallpaper",
+        rewardId: "courtyard-afternoons-v1",
+        category: "wallpaper",
+        title: "Courtyard Afternoons",
+        assetUrl: "/courtyard.png",
+      }],
+    },
+  };
+  const after = structuredClone(before);
+  after.rewardLoadout!.wallpaper.equippedGrantId = "grant-wallpaper";
+  let equipped = false;
+  const calls: Array<[string, string | null]> = [];
+  const client: PalClient = {
+    getSnapshot: async () => equipped ? after : before,
+    markRewardSeen: async () => undefined,
+    async setRewardLoadout(slot, grantId) {
+      calls.push([slot, grantId]);
+      equipped = true;
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  function Probe() {
+    widget = usePalWidget();
+    return null;
+  }
+
+  await act(async () => {
+    create(
+      <PalProvider client={client} initialSnapshot={before} scopeKey="loadout-scope">
+        <Probe />
+      </PalProvider>,
+    );
+  });
+  await act(async () => {
+    assert.equal(await widget.setRewardLoadout("wallpaper", "grant-wallpaper"), true);
+  });
+
+  assert.deepEqual(calls, [["wallpaper", "grant-wallpaper"]]);
+  assert.equal(widget.snapshot?.rewardLoadout?.wallpaper.equippedGrantId, "grant-wallpaper");
+  assert.equal(widget.loadoutPending, false);
+  assert.equal(widget.loadoutError, null);
+});
+
 test("reward acknowledgement is duplicate-safe, recoverable, and removed after success", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.rewards.push({

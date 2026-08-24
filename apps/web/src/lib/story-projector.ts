@@ -137,6 +137,9 @@ export function projectStoryProgression(
         kind: collectibleKind(chapter.collectible.kind, options),
         finish,
         assetUrl: chapter.collectible.assetUrl,
+        ...(chapter.collectible.darkAssetUrl
+          ? { darkAssetUrl: chapter.collectible.darkAssetUrl }
+          : {}),
       };
     }
     const status = foundNext ? "locked" : "next";
@@ -220,7 +223,11 @@ export function projectUnseenGrantRewards(
             kind: "story" as const,
             collectibleTitle: chapter.collectible.title,
             collectibleFinish: collectibleFinish(chapter.assignmentId, options),
+            rewardCategory: chapter.collectible.kind,
             assetUrl: chapter.collectible.assetUrl,
+            ...(chapter.collectible.darkAssetUrl
+              ? { darkAssetUrl: chapter.collectible.darkAssetUrl }
+              : {}),
             ...(chapter.title
               ? { titleAward: chapter.title.label, titleRevealCopy: chapter.title.revealCopy }
               : {}),

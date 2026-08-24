@@ -6,7 +6,7 @@ export const PAL_READ_TOKEN_AUDIENCE = "pal-widget";
 export const PAL_READ_TOKEN_TTL_SECONDS = 5 * 60;
 export const PAL_READ_TOKEN_CLOCK_TOLERANCE_SECONDS = 30;
 
-export type PalReadScope = "learner:read" | "reward:ack";
+export type PalReadScope = "learner:read" | "reward:ack" | "reward:equip";
 
 export interface PalReadTokenClaims {
   learnerId: string;
@@ -64,7 +64,7 @@ export async function mintPalReadToken(input: {
   const expiresAtSeconds = issuedAt + PAL_READ_TOKEN_TTL_SECONDS;
   const token = await new SignJWT({
     integration_id: input.integrationId,
-    scope: "learner:read reward:ack",
+    scope: "learner:read reward:ack reward:equip",
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuer(PAL_READ_TOKEN_ISSUER)
