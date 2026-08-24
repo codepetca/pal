@@ -8,6 +8,7 @@ import {
   integrations,
   learnerFacts,
   learnerRewardGrants,
+  learnerRewardLoadouts,
   learners,
   rewardNotices,
   storyCollectibleSchedules,
@@ -15,9 +16,36 @@ import {
   storyPlans,
   weeklyRhythmConfigs,
 } from "./schema";
-import { getDb, getPool } from "./client";
+import { getDb, getPool, type Db } from "./client";
 
 let openedDatabase = false;
+
+async function pinTestStoryPlan(
+  db: Db,
+  learnerId: string,
+  termKey: string,
+  termStartDay: string,
+  totalPeriods = 16,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [plan] = await tx.insert(storyPlans).values({
+      learnerId,
+      termKey,
+      termStartDay,
+      storyId: "schema-test-story",
+      storyVersion: 1,
+      totalPeriods,
+    }).returning({ id: storyPlans.id });
+    await tx.insert(storyPlanChapters).values(
+      Array.from({ length: totalPeriods }, (_, index) => ({
+        storyPlanId: plan!.id,
+        learnerId,
+        periodNumber: index + 1,
+        chapterId: `schema-test-chapter-${index + 1}`,
+      })),
+    );
+  });
+}
 
 function foreignKeyViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -553,8 +581,41 @@ test(
           sourceFactId: factA.id,
           behaviorTitleId: "rhythm-builder",
         })
-        .returning({ grantOrder: learnerRewardGrants.grantOrder });
+        .returning({
+          id: learnerRewardGrants.id,
+          grantOrder: learnerRewardGrants.grantOrder,
+        });
       assert.ok(behaviorGrant.grantOrder > storyGrant.grantOrder);
+
+      await db.insert(learnerRewardLoadouts).values({
+        learnerId: learnerA.id,
+        slot: "companion",
+        rewardGrantId: storyGrant.id,
+      });
+      await assert.rejects(
+        db.insert(learnerRewardLoadouts).values({
+          learnerId: learnerA.id,
+          slot: "background",
+          rewardGrantId: behaviorGrant.id,
+        }),
+        (error) => postgresViolation(error, "23514"),
+      );
+      await assert.rejects(
+        db.insert(learnerRewardLoadouts).values({
+          learnerId: learnerA.id,
+          slot: "companion",
+          rewardGrantId: behaviorGrant.id,
+        }),
+        (error) => postgresViolation(error, "23505"),
+      );
+      await assert.rejects(
+        db.insert(learnerRewardLoadouts).values({
+          learnerId: learnerB.id,
+          slot: "wallpaper",
+          rewardGrantId: behaviorGrant.id,
+        }),
+        foreignKeyViolation,
+      );
 
       await assert.rejects(
         db.insert(learnerRewardGrants).values({
@@ -1421,6 +1482,13 @@ test(
       week_index: 1,
     };
     try {
+      await pinTestStoryPlan(
+        db,
+        learner.id,
+        calendar.term_token,
+        calendar.term_start_day,
+        calendar.term_week_count,
+      );
       await client.query(
         `CREATE TEMP TABLE story_collectible_schedules
            (LIKE public.story_collectible_schedules INCLUDING ALL);
@@ -1770,6 +1838,12 @@ test(
           ),
           metadata: {},
         }).returning({ id: events.id });
+        await pinTestStoryPlan(
+          db,
+          learner.id,
+          scenario.metadata.term_token,
+          scenario.metadata.term_start_day,
+        );
         await db.insert(learnerFacts).values({
           integrationId: integration.id,
           learnerId: learner.id,
@@ -1819,6 +1893,12 @@ test(
         "week_start_day": "2026-08-31",
         "week_index": 1.0
       }`;
+      await pinTestStoryPlan(
+        db,
+        decimalLearner.id,
+        `integral-decimal-${suffix}`,
+        "2026-08-31",
+      );
       await db.execute(sql`
         INSERT INTO public.learner_facts (
           integration_id, learner_id, source_event_id, event_type, semantic_key,
