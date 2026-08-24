@@ -6,7 +6,7 @@ import {
   type Db,
   type LearnerRewardLoadout,
 } from "@pal/db";
-import type { PalRewardCategory } from "@codepet/pal-widget";
+import type { PalCollectibleKind } from "@codepet/pal-widget";
 import type { PalRewardLoadoutState } from "@codepet/pal-widget";
 import {
   loadPersistedStoryPlansByIds,
@@ -14,6 +14,10 @@ import {
 } from "@/lib/story-plan";
 
 export type RewardLoadoutSlot = "companion" | "wallpaper";
+const MAX_PROJECTED_OPTIONS_PER_SLOT = 32;
+
+type ProjectedOption = PalRewardLoadoutState["companion"]["options"][number];
+type LoadoutCandidate = ProjectedOption & { grantOrder: bigint };
 
 export class RewardLoadoutWriteError extends Error {
   constructor(
@@ -26,7 +30,7 @@ export class RewardLoadoutWriteError extends Error {
 }
 
 export function rewardLoadoutSlot(
-  category: PalRewardCategory,
+  category: PalCollectibleKind,
 ): RewardLoadoutSlot | undefined {
   return category === "companion" || category === "wallpaper"
     ? category
@@ -48,20 +52,25 @@ export function projectRewardLoadout(
   plans: ReadonlyMap<string, PersistedStoryPlan>,
   loadout: readonly LearnerRewardLoadout[],
 ): PalRewardLoadoutState {
-  const options: PalRewardLoadoutState = {
-    companion: { options: [] },
-    wallpaper: { options: [] },
+  const candidates: Record<RewardLoadoutSlot, LoadoutCandidate[]> = {
+    companion: [],
+    wallpaper: [],
   };
   for (const grant of grants) {
     if (grant.kind !== "story_chapter" || !grant.storyPlanId || !grant.storyPlanChapterId) continue;
-    const chapter = plans
-      .get(grant.storyPlanId)
-      ?.chapters.find((candidate) => candidate.assignmentId === grant.storyPlanChapterId);
+    const plan = plans.get(grant.storyPlanId);
+    const chapter = plan?.chapters.find(
+      (candidate) => candidate.assignmentId === grant.storyPlanChapterId,
+    );
     if (!chapter) continue;
+    // Pip v1 classified its concealed egg as a companion for presentation.
+    // It is not a selectable companion and must remain concealed until hatching.
+    if (chapter.collectible.id === plan?.mysteryCollectibleId) continue;
     const slot = rewardLoadoutSlot(chapter.collectible.kind);
     if (!slot) continue;
-    options[slot].options.push({
+    candidates[slot].push({
       grantId: grant.id,
+      grantOrder: grant.grantOrder,
       rewardId: chapter.collectible.id,
       category: slot,
       title: chapter.collectible.title,
@@ -71,21 +80,53 @@ export function projectRewardLoadout(
         : {}),
     });
   }
-  for (const equipped of loadout) {
-    const slot = equipped.slot as RewardLoadoutSlot;
-    if (
-      (slot === "companion" || slot === "wallpaper") &&
-      options[slot].options.some((option) => option.grantId === equipped.rewardGrantId)
-    ) {
-      options[slot].equippedGrantId = equipped.rewardGrantId;
-    }
-  }
-  // Preserve the deployed first-companion reveal for learners created before
-  // loadouts existed. Later companions remain saved, not auto-equipped.
-  if (!options.companion.equippedGrantId && options.companion.options[0]) {
-    options.companion.equippedGrantId = options.companion.options[0].grantId;
-  }
-  return options;
+  const projectSlot = (slot: RewardLoadoutSlot): PalRewardLoadoutState[typeof slot] => {
+    const ordered = candidates[slot].toSorted((left, right) =>
+      left.grantOrder === right.grantOrder
+        ? 0
+        : left.grantOrder > right.grantOrder ? -1 : 1,
+    );
+    const newestByReward = ordered.filter(
+      (candidate, index) =>
+        ordered.findIndex((other) => other.rewardId === candidate.rewardId) === index,
+    );
+    const persisted = loadout.find((row) => row.slot === slot);
+    const persistedCandidate = persisted
+      ? candidates[slot].find((candidate) => candidate.grantId === persisted.rewardGrantId)
+      : undefined;
+    const firstCompanion = slot === "companion" && !persisted
+      ? candidates.companion.toSorted((left, right) =>
+          left.grantOrder === right.grantOrder
+            ? 0
+            : left.grantOrder < right.grantOrder ? -1 : 1,
+        )[0]
+      : undefined;
+    const equippedRewardId = persistedCandidate?.rewardId ?? firstCompanion?.rewardId;
+    const equippedOption = newestByReward.find(
+      (candidate) => candidate.rewardId === equippedRewardId,
+    );
+    const bounded = [
+      ...(equippedOption ? [equippedOption] : []),
+      ...newestByReward.filter((candidate) => candidate !== equippedOption),
+    ].slice(0, MAX_PROJECTED_OPTIONS_PER_SLOT);
+    const projected = bounded.map((candidate): ProjectedOption => ({
+      grantId: candidate.grantId,
+      rewardId: candidate.rewardId,
+      category: candidate.category,
+      title: candidate.title,
+      assetUrl: candidate.assetUrl,
+      ...(candidate.darkAssetUrl ? { darkAssetUrl: candidate.darkAssetUrl } : {}),
+    }));
+    return {
+      options: projected,
+      ...(equippedOption ? { equippedGrantId: equippedOption.grantId } : {}),
+    };
+  };
+
+  return {
+    companion: projectSlot("companion"),
+    wallpaper: projectSlot("wallpaper"),
+  };
 }
 
 /**
@@ -126,6 +167,11 @@ async function equipStoryReward(
       (candidate) => candidate.assignmentId === grant.storyPlanChapterId,
     );
   if (!chapter) throw new Error("Owned story reward has no catalog definition");
+
+  const plan = plans.get(grant.storyPlanId);
+  if (chapter.collectible.id === plan?.mysteryCollectibleId) {
+    throw new Error("Concealed story rewards are not loadout options");
+  }
 
   const slot = rewardLoadoutSlot(chapter.collectible.kind);
   if (!slot) throw new Error("This story reward is reveal-only");

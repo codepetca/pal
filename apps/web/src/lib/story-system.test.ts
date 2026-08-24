@@ -277,6 +277,38 @@ test("A Place to Call Home is the default and caps longer terms at 16 chapters",
   });
 });
 
+test("the persisted Pip v1 catalog retains its original reward categories", () => {
+  const catalog = STORY_REGISTRY.requireCatalog({
+    storyId: "pips-first-recipe",
+    version: 1,
+  });
+  assert.equal(catalog.resolveChapter("egg-arrives")?.collectible.kind, "companion");
+  assert.equal(catalog.resolveChapter("soft-nest")?.collectible.kind, "room");
+  assert.equal(catalog.resolveChapter("chef-scarf")?.collectible.kind, "cosmetic");
+  assert.equal(catalog.resolveChapter("recipe-chosen")?.collectible.kind, "room");
+  assert.equal(catalog.resolveChapter("second-try")?.collectible.kind, "room");
+});
+
+test("legacy widget projection maps new Story V2 categories without changing the catalog", () => {
+  const plan = persistedPlan(16);
+  const chapter = plan.chapters[0]!;
+  const storyGrant = grant(1, {
+    kind: "story_chapter",
+    storyPlanId: plan.id,
+    storyPlanChapterId: chapter.assignmentId,
+  });
+  const plans = new Map([[plan.id, plan]]);
+
+  const modern = projectStoryProgression(plan, [storyGrant], plans).collectibles[0];
+  const legacy = projectStoryProgression(plan, [storyGrant], plans, {
+    legacyCollectibleKinds: true,
+  }).collectibles[0];
+  assert.equal(modern?.status, "earned");
+  assert.equal(legacy?.status, "earned");
+  if (modern?.status === "earned") assert.equal(modern.kind, "keepsake");
+  if (legacy?.status === "earned") assert.equal(legacy.kind, "cosmetic");
+});
+
 test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
   const plan = persistedPlan();
   const priorPlan: PersistedStoryPlan = {

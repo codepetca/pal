@@ -29,6 +29,47 @@ function uuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+async function readBoundedBody(
+  request: NextRequest,
+  maxBytes: number,
+): Promise<string | null> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (!Number.isSafeInteger(declaredBytes) || declaredBytes < 0 || declaredBytes > maxBytes) {
+      return null;
+    }
+  }
+
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
+}
+
 export async function OPTIONS(request: NextRequest) {
   const cors = widgetCorsHeaders(request);
   return cors
@@ -56,14 +97,8 @@ export async function POST(request: NextRequest) {
   }
   try {
     const claims = await verifyPalReadToken(token, "reward:equip");
-    if (Number(request.headers.get("content-length") ?? 0) > 2_048) {
-      return NextResponse.json(
-        { error: "invalid_request" },
-        { status: 422, headers: responseHeaders(cors) },
-      );
-    }
-    const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 2_048) {
+    const rawBody = await readBoundedBody(request, 2_048);
+    if (rawBody === null) {
       return NextResponse.json(
         { error: "invalid_request" },
         { status: 422, headers: responseHeaders(cors) },

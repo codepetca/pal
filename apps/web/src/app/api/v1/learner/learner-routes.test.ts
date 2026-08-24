@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { NextRequest } from "next/server";
-import { getDb, getPool, storyPlanChapters, storyPlans } from "@pal/db";
+import {
+  getDb,
+  getPool,
+  learnerRewardGrants,
+  storyPlanChapters,
+  storyPlans,
+} from "@pal/db";
+import { and, eq } from "drizzle-orm";
 import {
   getOrCreateLearnerIdentity,
   processEventInDb,
@@ -194,6 +201,37 @@ test("loadout writes require an allowed origin, equip scope, and bounded valid b
   const oversizedResponse = await setRewardLoadout(oversized);
   assert.equal(oversizedResponse.status, 422);
   assert.equal((await oversizedResponse.json()).error, "invalid_request");
+
+  let chunksProduced = 0;
+  let streamCancelled = false;
+  const chunkedBody = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      chunksProduced += 1;
+      controller.enqueue(new Uint8Array(1_024));
+      if (chunksProduced === 100) controller.close();
+    },
+    cancel() {
+      streamCancelled = true;
+    },
+  });
+  const chunked = new NextRequest(
+    "http://localhost/api/v1/learner/reward-loadout",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: allowedOrigin,
+        "Content-Type": "application/json",
+      },
+      body: chunkedBody,
+      duplex: "half",
+    } as never,
+  );
+  const chunkedResponse = await setRewardLoadout(chunked);
+  assert.equal(chunkedResponse.status, 422);
+  assert.equal((await chunkedResponse.json()).error, "invalid_request");
+  assert.equal(streamCancelled, true);
+  assert.ok(chunksProduced < 100);
 });
 
 test(
@@ -359,6 +397,7 @@ test(
       const legacy = (await legacyResponse.json()) as {
         progression?: { collectibles: Array<{ status: string; kind?: string }> };
         rewards: Array<{ kind?: string }>;
+        rewardLoadout?: unknown;
       };
       assert.equal(legacy.progression?.collectibles.length, 20);
       assert.equal(
@@ -368,6 +407,7 @@ test(
         false,
       );
       assert.equal(legacy.rewards.some((reward) => reward.kind === "story"), false);
+      assert.equal(legacy.rewardLoadout, undefined);
 
       const capableRequest = request(
         "/api/v1/learner/snapshot",
@@ -415,6 +455,7 @@ test(
         progression?: {
           collectibles: Array<{ status: string; finish?: string; kind?: string }>;
         };
+        rewardLoadout?: unknown;
       };
       assert.equal(current.progression?.collectibles.length, 16);
       assert.deepEqual(
@@ -430,6 +471,7 @@ test(
         ),
         true,
       );
+      assert.ok(current.rewardLoadout);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -534,7 +576,7 @@ test(
       });
       const snapshotRequest = () => {
         const next = request("/api/v1/learner/snapshot", token, allowedOrigin);
-        next.headers.set("X-Pal-Collectible-Finish", "1");
+        next.headers.set("X-Pal-Collectible-Finish", "2");
         return next;
       };
       const before = (await (await getSnapshot(snapshotRequest())).json()) as {
@@ -568,6 +610,26 @@ test(
       }));
       assert.equal(wrongSlot.status, 422);
       assert.equal((await wrongSlot.json()).error, "reward_not_usable");
+
+      const [concealedGrant] = await getDb()
+        .select({ id: learnerRewardGrants.id })
+        .from(learnerRewardGrants)
+        .innerJoin(
+          storyPlanChapters,
+          eq(learnerRewardGrants.storyPlanChapterId, storyPlanChapters.id),
+        )
+        .where(and(
+          eq(learnerRewardGrants.learnerId, learnerId),
+          eq(storyPlanChapters.chapterId, "dusty-discovery"),
+        ))
+        .limit(1);
+      assert.ok(concealedGrant);
+      const concealed = await setRewardLoadout(loadoutRequest(token, {
+        slot: "companion",
+        rewardGrantId: concealedGrant.id,
+      }));
+      assert.equal(concealed.status, 422);
+      assert.equal((await concealed.json()).error, "reward_not_usable");
 
       const cleared = await setRewardLoadout(loadoutRequest(token, {
         slot: "wallpaper",

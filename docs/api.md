@@ -85,11 +85,15 @@ Responses use `Cache-Control: no-store`; preflights allow only `Authorization`,
 
 Clients that understand the optional schema-v1 `finish` and
 `collectibleFinish` fields send `X-Pal-Collectible-Finish: 1` on snapshot
-requests. Pal then includes earned sketch and color story collectibles. A
+requests. Clients that also understand the Story V2 `keepsake`/`wallpaper`
+categories and `rewardLoadout` state send value `2`. Value `1` receives legacy
+`room`/`cosmetic` category names and no loadout state, so an API deployment does
+not break an already-published schema-v1 widget. Pal includes earned sketch and
+color story collectibles for either capability value. A
 schema-v1 client that omits the capability header receives the legacy-safe
 fallback: sketch-only story collectibles and their notices remain withheld,
 while color-complete collectibles remain visible. The current
-`@codepet/pal-widget` HTTP client sends this header automatically.
+`@codepet/pal-widget` HTTP client sends value `2` automatically.
 
 The public TypeScript source of truth for the initial snapshot is
 [`packages/widget/src/types.ts`](../packages/widget/src/types.ts). The snapshot is

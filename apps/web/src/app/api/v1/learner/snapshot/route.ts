@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
       {
         supportsCollectibleFinish:
           collectibleCapability === "1" || collectibleCapability === "2",
+        supportsRewardLoadout: collectibleCapability === "2",
         legacyStoryShape: collectibleCapability !== "2",
       },
     );

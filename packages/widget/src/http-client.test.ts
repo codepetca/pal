@@ -36,7 +36,7 @@ test("HTTP client keeps the integration secret out and uses a learner token", as
   );
   assert.equal(
     new Headers(requests[0]?.init?.headers).get("x-pal-collectible-finish"),
-    "1",
+    "2",
   );
 });
 

@@ -2,6 +2,7 @@ import type {
   PalCollectibleUnlock,
   PalCollectibleKind,
   PalProgressionState,
+  PalRewardCategory,
   PalRewardNotice,
   PalTitleUnlock,
 } from "@codepet/pal-widget";
@@ -24,6 +25,12 @@ function collectibleKind(
   if (category === "keepsake") return "cosmetic";
   if (category === "wallpaper") return "room";
   return category;
+}
+
+function rewardCategory(category: PalCollectibleKind): PalRewardCategory | undefined {
+  return category === "companion" || category === "keepsake" || category === "wallpaper"
+    ? category
+    : undefined;
 }
 
 function collectibleFinish(
@@ -215,15 +222,18 @@ export function projectUnseenGrantRewards(
       const chapter = grantPlan.chapters.find(
         (candidate) => candidate.assignmentId === grant.storyPlanChapterId,
       );
-      return chapter
-        ? [{
+      if (!chapter) return [];
+      const category = chapter.collectible.id === grantPlan.mysteryCollectibleId
+        ? undefined
+        : rewardCategory(chapter.collectible.kind);
+      return [{
             id: grant.id,
             title: chapter.revealHeadline,
             description: chapter.storyCopy,
             kind: "story" as const,
             collectibleTitle: chapter.collectible.title,
             collectibleFinish: collectibleFinish(chapter.assignmentId, options),
-            rewardCategory: chapter.collectible.kind,
+            ...(category ? { rewardCategory: category } : {}),
             assetUrl: chapter.collectible.assetUrl,
             ...(chapter.collectible.darkAssetUrl
               ? { darkAssetUrl: chapter.collectible.darkAssetUrl }
@@ -231,7 +241,6 @@ export function projectUnseenGrantRewards(
             ...(chapter.title
               ? { titleAward: chapter.title.label, titleRevealCopy: chapter.title.revealCopy }
               : {}),
-          }]
-        : [];
+          }];
     });
 }

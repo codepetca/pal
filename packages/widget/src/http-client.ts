@@ -108,7 +108,7 @@ export function createPalHttpClient({
       const response = await authorizedFetch(snapshotPath, {
         method: "GET",
         signal,
-        headers: { "X-Pal-Collectible-Finish": "1" },
+        headers: { "X-Pal-Collectible-Finish": "2" },
       });
       return parsePalWidgetSnapshot(await response.json(), {
         assetBaseUrl: baseUrl.toString(),
