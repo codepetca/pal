@@ -309,6 +309,22 @@ test("legacy widget projection maps new Story V2 categories without changing the
   if (legacy?.status === "earned") assert.equal(legacy.kind, "cosmetic");
 });
 
+test("the concealed Pip v1 egg notice never advertises a loadout action", () => {
+  const plan = persistedPlan(6);
+  const egg = plan.chapters[0]!;
+  const notice = projectUnseenGrantRewards(
+    [grant(1, {
+      kind: "story_chapter",
+      storyPlanId: plan.id,
+      storyPlanChapterId: egg.assignmentId,
+    })],
+    new Map([[plan.id, plan]]),
+  )[0];
+
+  assert.ok(notice);
+  assert.equal(notice.rewardCategory, undefined);
+});
+
 test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
   const plan = persistedPlan();
   const priorPlan: PersistedStoryPlan = {
@@ -707,6 +723,20 @@ test("week 17 continues normally without scheduling a new story achievement", { 
         )).length,
       0,
     );
+    const legacy = await loadLearnerSnapshot(
+      integration.id,
+      learnerId,
+      getDb(),
+      {
+        asOf: new Date("2026-12-21T12:00:00.000Z"),
+        supportsCollectibleFinish: true,
+        supportsRewardLoadout: false,
+      },
+    );
+    assert.equal(legacy.roadmap.weeks.length, 20);
+    assert.equal(legacy.progression?.collectibles.length, 20);
+    assert.equal(legacy.progression?.collectibles[19]?.status, "locked");
+    assert.equal(legacy.rewardLoadout, undefined);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
