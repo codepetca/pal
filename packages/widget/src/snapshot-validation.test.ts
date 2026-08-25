@@ -334,8 +334,14 @@ test("snapshot parser accepts only sketch or color collectible finishes", () => 
   );
 });
 
-test("snapshot parser accepts registered Story V2 reward categories", () => {
-  for (const kind of ["companion", "keepsake", "wallpaper"] as const) {
+test("snapshot parser accepts every public collectible kind", () => {
+  for (const kind of [
+    "companion",
+    "keepsake",
+    "wallpaper",
+    "room",
+    "cosmetic",
+  ] as const) {
     const fixture = createFixtureSnapshot(2);
     fixture.progression!.collectibles[0] = {
       id: `story-v2-${kind}`,
