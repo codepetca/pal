@@ -12,7 +12,12 @@ export type PalAchievementStatus =
 export type PalWeekStatus = "past" | "current" | "future";
 export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
 export type PalUnlockStatus = "earned" | "next" | "locked";
-export type PalCollectibleKind = "companion" | "room" | "cosmetic";
+export type PalCollectibleKind =
+  | "companion"
+  | "keepsake"
+  | "wallpaper"
+  | "room"
+  | "cosmetic";
 export type PalCollectibleFinish = "sketch" | "color";
 
 export interface PalProgress {

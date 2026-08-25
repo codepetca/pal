@@ -4,6 +4,9 @@ export const MIN_STORY_PERIODS = 6;
 export const MAX_STORY_PERIODS = 24;
 export const PIP_STORY_ID = "pips-first-recipe";
 export const PIP_STORY_VERSION = 1;
+export const HOME_STORY_ID = "a-place-to-call-home";
+export const HOME_STORY_VERSION = 1;
+export const HOME_STORY_PERIODS = 16;
 
 export interface StoryReference {
   storyId: string;
@@ -28,6 +31,7 @@ export interface StoryChapterDefinition {
     title: string;
     kind: PalCollectibleKind;
     assetUrl: string;
+    darkAssetUrl?: string;
   };
   title?: StoryTitleDefinition;
 }
@@ -65,6 +69,7 @@ type ChapterRow = readonly [
   assetUrl: string,
   collectibleKind?: PalCollectibleKind,
   title?: readonly [string, string, string, string],
+  darkAssetUrl?: string,
 ];
 
 const CHAPTER_ROWS: readonly ChapterRow[] = [
@@ -94,30 +99,59 @@ const CHAPTER_ROWS: readonly ChapterRow[] = [
   ["lumi-returns", 4, "core", "Hello, Lumi", "That evening, Lumi returned and stayed. The safest place Pip knew had become big enough for a friend.", "lumi-companion-v1", "Meet Lumi", "/assets/pets/lumi-v1.png", "companion", ["true-friend", "True Friend", "Pip found the courage to make room for someone else.", "Care has a way of making more room."]],
 ];
 
-const chapters = CHAPTER_ROWS.map((row): StoryChapterDefinition => ({
-  id: row[0],
-  act: row[1],
-  kind: row[2],
-  revealHeadline: row[3],
-  storyCopy: row[4],
-  collectible: {
-    id: row[5],
-    title: row[6],
-    assetUrl: row[7],
-    kind: row[8] ?? "room",
-  },
-  ...(row[9]
-    ? {
-        title: {
-          id: row[9][0],
-          label: row[9][1],
-          description: row[9][2],
-          revealCopy: row[9][3],
-        },
-      }
-    : {}),
-}));
+const HOME_CHAPTER_ROWS: readonly ChapterRow[] = [
+  ["new-start", 1, "core", "New Start", "You enter a dark, unfamiliar place with your trusty lantern. Warm light spreads, and it begins to feel full of possibility.", "warming-lantern-v1", "Trusty Lantern", "/assets/world/reward-warming-lantern-v1.png"],
+  ["dusty-discovery", 1, "core", "Dusty Discovery", "A small shadow flits around the lantern and disappears behind a dusty cloth. You pull back the cloth. Something beneath it gleams in the lantern light.", "mystery-egg-v1", "Strange Egg", "/assets/world/reward-mystery-egg-v1.png"],
+  ["warm-place", 1, "core", "Keeping warm", "You fold pieces of soft cloth around a pillow to make a warm bed. You place the egg in the middle and set your lantern nearby to keep it warm. Each night, you check on it before going to sleep.", "makeshift-bed-v1", "Makeshift Bed", "/assets/world/reward-makeshift-bed-v2.png"],
+  ["room-for-one-more", 1, "core", "Room for One More", "Once your space is tidy, you climb into bed and drift off to sleep. In the morning, you wake to something warm and furry tucked beneath the covers. The cushion beside the lantern is empty. Pip has found a new place to sleep.", "young-pip-v1", "Pip", "/assets/pets/young-pip-v1.png", "companion"],
+  ["flour-footprints", 2, "core", "Flour prints", "As you go about your cleaning, you hear a muffled thump from another room. Pip appears, dusted white from nose to tail. Retracing the steps, you find an open bag of flour standing in the pantry.", "flour-bag-v1", "Flour Bag", "/assets/world/reward-flour-bag-v1.png"],
+  ["baking-is-hard", 2, "core", "Unmeasured", "Feeling hungry, you decide to bake bread for yourself and your new companion. How hard could it be? You rush, guessing at each step, and the bread comes out hard and cracked. While cleaning up, you find a measuring cup tucked in a drawer. Next time, you’ll use the proper tools.", "measuring-cup-v1", "Measuring Cup", "/assets/world/reward-measuring-cup-v1.png"],
+  ["try-again", 2, "core", "Undeterred", "Frustrated but undeterred, you begin again. This time, you use the measuring cup and work carefully. Soon, the aroma of freshly baked bread fills the house, and one warm, soft bun rests on the table.", "fresh-bread-v1", "Fresh Bread", "/assets/world/reward-fresh-bread-v1.png", "keepsake", ["undeterred", "Undeterred", "You kept going after a difficult first try.", "Trying again changed what came next."]],
+  ["big-eater", 2, "core", "Courtyard", "Pip loves your baking and is always ready for another piece. You are happy together, spending warm afternoons in the courtyard and watching small birds fuss about the yard as they tuck scraps into a nook above the window.", "courtyard-afternoons-v1", "Courtyard Afternoons", "/assets/world/wallpaper-courtyard-afternoons-v4.png", "wallpaper", undefined, "/assets/world/wallpaper-courtyard-afternoons-dark-v4.png"],
+  ["pantry-thief", 3, "core", "Pantry Thief", "You set the lantern in the pantry while searching for something to eat. A familiar shadow circles its light, snatches some bread, and darts away. Pip chases it toward the courtyard. By the time the creature drops the bread and slips outside, a large chunk is gone. You quickly shut the door behind it.", "bitten-bread-v1", "Bitten Bread", "/assets/world/reward-bitten-bread-v1.png"],
+  ["soft-place", 3, "core", "Care", "The next morning, Pip scratches at the closed door. Outside, the small winged creature lies curled beneath the step, hungry, injured, and frightened. You open the door and sit nearby. When the creature edges toward the lantern’s warmth, you make a soft place beside it and carefully wrap the injured wing with clean bandages.", "care-kit-v1", "Care Kit/Bandages", "/assets/world/reward-bandages-v1.png"],
+  ["new-friend", 3, "core", "New Friend", "Over the next few days, you leave bread and water nearby and care for the injured wing. Pip keeps protective watch. One morning, Lumi opens both wings fully in the lantern light.", "lumi-companion-v1", "Lumi", "/assets/pets/lumi-v1.png", "companion", ["gentle-friend", "Gentle Friend", "You made a frightened visitor feel safe.", "Gentleness made room for a new friend."]],
+  ["something-sweet", 3, "core", "Something Sweet", "Soon, Pip and Lumi are playing together throughout the house. Watching them, you decide to make some treats. You find sugar and a small cup in the pantry, using the cup as a makeshift circular cutter to make golden cookies.", "cookie-plate-v1", "Cookie Plate", "/assets/world/reward-round-cookie-v1.png"],
+  ["beyond-courtyard", 4, "core", "Moving beyond", "Now fully recovered, Lumi flits beyond the courtyard and circles back until you and Pip follow. A trail through the tall grass leads to a clear stream, where sunlight moves across smooth stones. The ground between you and the water is muddy and difficult to cross.", "stream-beyond-v1", "The Stream Beyond", "/assets/world/wallpaper-stream-beyond-v16.png", "wallpaper", undefined, "/assets/world/wallpaper-stream-beyond-dark-v16.png"],
+  ["path-to-stream", 4, "core", "The Path", "You decide to build a path to the stream. It is hard work. Day after day, you clear weeds and set flat stones into the mud. Lumi scouts ahead, Pip tests each stone, and little by little the path reaches the water.", "stepping-stones-v1", "Stepping Stones", "/assets/world/reward-stepping-stone-v1.png"],
+  ["by-stream", 4, "core", "Job done", "The new path soon becomes familiar beneath your feet. You follow it often to picnic by the stream, carrying warm bread and cookies in your basket. Pip and Lumi enjoy every visit. You feel content and quietly proud of what the three of you built together.", "stream-picnic-v1", "Stream Picnic", "/assets/world/reward-picnic-basket-v2.png", "keepsake", ["pathmaker", "Pathmaker", "You helped build a path worth returning to.", "A patient path became part of home."]],
+  ["epilogue", 4, "core", "Epilogue", "Twilight settles over the courtyard. You watch your dear friends disappear into the house and remember when this place was empty. You turn your lantern toward your home for one last look. Its light catches something pale within a small pile of twigs above the window.", "new-egg-v1", "New Egg", "/assets/world/reward-new-egg-v1.png", "keepsake", ["homekeeper", "Homekeeper", "You made an empty place feel like home.", "Care, patience, and friendship made this place a home."]],
+];
+
+function chaptersFromRows(
+  rows: readonly ChapterRow[],
+  defaultKind: PalCollectibleKind,
+): readonly StoryChapterDefinition[] {
+  return rows.map((row): StoryChapterDefinition => ({
+    id: row[0],
+    act: row[1],
+    kind: row[2],
+    revealHeadline: row[3],
+    storyCopy: row[4],
+    collectible: {
+      id: row[5],
+      title: row[6],
+      assetUrl: row[7],
+      kind: row[8] ?? defaultKind,
+      ...(row[10] ? { darkAssetUrl: row[10] } : {}),
+    },
+    ...(row[9]
+      ? {
+          title: {
+            id: row[9][0],
+            label: row[9][1],
+            description: row[9][2],
+            revealCopy: row[9][3],
+          },
+        }
+      : {}),
+  }));
+}
+
+const chapters = chaptersFromRows(CHAPTER_ROWS, "room");
+const homeChapters = chaptersFromRows(HOME_CHAPTER_ROWS, "keepsake");
 const chapterById = new Map(chapters.map((chapter) => [chapter.id, chapter]));
+const homeChapterById = new Map(homeChapters.map((chapter) => [chapter.id, chapter]));
 
 function requireChapter(id: string): StoryChapterDefinition {
   const chapter = chapterById.get(id);
@@ -201,6 +235,20 @@ function createPipPlan(totalPeriods: number): StoryPlanDefinition {
   };
 }
 
+function createHomePlan(totalPeriods: number): StoryPlanDefinition {
+  if (!Number.isInteger(totalPeriods) || totalPeriods < HOME_STORY_PERIODS || totalPeriods > MAX_STORY_PERIODS) {
+    throw new Error(`A Place to Call Home supports terms with ${HOME_STORY_PERIODS}–${MAX_STORY_PERIODS} instructional periods`);
+  }
+  return {
+    storyId: HOME_STORY_ID,
+    version: HOME_STORY_VERSION,
+    totalPeriods: HOME_STORY_PERIODS,
+    companionCollectibleId: "young-pip-v1",
+    mysteryCollectibleId: "mystery-egg-v1",
+    chapters: planned(homeChapters),
+  };
+}
+
 function deepFreeze<T>(value: T, seen = new WeakSet<object>()): T {
   if ((typeof value !== "object" && typeof value !== "function") || value === null) return value;
   const object = value as object;
@@ -240,8 +288,12 @@ export function createStoryRegistry(catalogs: readonly StoryCatalog[]): StoryReg
     }
     for (let periods = catalog.minPeriods; periods <= catalog.maxPeriods; periods += 1) {
       const plan = catalog.createPlan(periods);
-      if (plan.chapters.length !== periods || plan.chapters.some((chapter, index) => chapter.roadmapWeek !== index + 1)) {
-        throw new Error(`Story catalog ${storyKey(catalog)} must return one contiguous chapter per period`);
+      if (
+        plan.totalPeriods > periods ||
+        plan.chapters.length !== plan.totalPeriods ||
+        plan.chapters.some((chapter, index) => chapter.roadmapWeek !== index + 1)
+      ) {
+        throw new Error(`Story catalog ${storyKey(catalog)} must return one contiguous chapter per story period without exceeding the term`);
       }
     }
   }
@@ -282,7 +334,23 @@ const pipCatalog: StoryCatalog = {
   },
 };
 
-export const STORY_REGISTRY = createStoryRegistry([pipCatalog]);
+const homeCatalog: StoryCatalog = {
+  storyId: HOME_STORY_ID,
+  version: HOME_STORY_VERSION,
+  minPeriods: HOME_STORY_PERIODS,
+  maxPeriods: MAX_STORY_PERIODS,
+  companionCollectibleId: "young-pip-v1",
+  mysteryCollectibleId: "mystery-egg-v1",
+  chapters: homeChapters,
+  resolveChapter(chapterId: string) {
+    return homeChapterById.get(chapterId);
+  },
+  createPlan(totalPeriods: number) {
+    return deepFreeze(createHomePlan(totalPeriods));
+  },
+};
+
+export const STORY_REGISTRY = createStoryRegistry([pipCatalog, homeCatalog]);
 
 export const STORY_RELEASE_SCHEDULE = deepFreeze([
   {
