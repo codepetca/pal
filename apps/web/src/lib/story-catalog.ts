@@ -230,7 +230,7 @@ function createPipPlan(totalPeriods: number): StoryPlanDefinition {
     version: PIP_STORY_VERSION,
     totalPeriods,
     companionCollectibleId: "pip-companion-v1",
-    mysteryCollectibleId: "home-mystery-egg-v1",
+    mysteryCollectibleId: "mystery-egg-v1",
     chapters: planned(selectedChapters),
   };
 }
@@ -244,7 +244,7 @@ function createHomePlan(totalPeriods: number): StoryPlanDefinition {
     version: HOME_STORY_VERSION,
     totalPeriods: HOME_STORY_PERIODS,
     companionCollectibleId: "young-pip-v1",
-    mysteryCollectibleId: "mystery-egg-v1",
+    mysteryCollectibleId: "home-mystery-egg-v1",
     chapters: planned(homeChapters),
   };
 }
@@ -323,7 +323,7 @@ const pipCatalog: StoryCatalog = {
   minPeriods: MIN_STORY_PERIODS,
   maxPeriods: MAX_STORY_PERIODS,
   companionCollectibleId: "pip-companion-v1",
-  mysteryCollectibleId: "home-mystery-egg-v1",
+  mysteryCollectibleId: "mystery-egg-v1",
   chapters,
   resolveChapter(chapterId: string) {
     const chapter = resolvePipChapter(chapterId);
@@ -340,7 +340,7 @@ const homeCatalog: StoryCatalog = {
   minPeriods: HOME_STORY_PERIODS,
   maxPeriods: MAX_STORY_PERIODS,
   companionCollectibleId: "young-pip-v1",
-  mysteryCollectibleId: "mystery-egg-v1",
+  mysteryCollectibleId: "home-mystery-egg-v1",
   chapters: homeChapters,
   resolveChapter(chapterId: string) {
     return homeChapterById.get(chapterId);

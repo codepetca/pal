@@ -18,6 +18,13 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
 
   assert.equal(plan.totalPeriods, HOME_STORY_PERIODS);
   assert.equal(plan.chapters.length, HOME_STORY_PERIODS);
+  assert.equal(plan.mysteryCollectibleId, "home-mystery-egg-v1");
+  assert.equal(
+    plan.chapters.some(
+      (chapter) => chapter.collectible.id === plan.mysteryCollectibleId,
+    ),
+    true,
+  );
   assert.equal(plan.chapters[6]?.collectible.kind, "cosmetic");
   assert.equal(plan.chapters[7]?.collectible.kind, "room");
   assert.match(plan.chapters[7]?.collectible.darkAssetUrl ?? "", /-dark-v4\.png$/);
@@ -30,6 +37,8 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
   const pipCollectibleIds = new Set(
     pipPlan.chapters.map((chapter) => chapter.collectible.id),
   );
+  assert.equal(pipPlan.mysteryCollectibleId, "mystery-egg-v1");
+  assert.equal(pipCollectibleIds.has(pipPlan.mysteryCollectibleId), true);
   assert.equal(
     plan.chapters.some((chapter) => pipCollectibleIds.has(chapter.collectible.id)),
     false,
