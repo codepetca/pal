@@ -1,5 +1,6 @@
 import type {
   PalCollectibleUnlock,
+  PalCollectibleKind,
   PalProgressionState,
   PalRewardNotice,
   PalTitleUnlock,
@@ -11,6 +12,18 @@ import type { PersistedStoryPlan } from "@/lib/story-plan";
 export interface StoryProjectionOptions {
   /** Assignment IDs whose Weekly Rhythm was earned; all other owned chapters render as sketches. */
   colorChapterAssignmentIds?: ReadonlySet<string>;
+  /** Map Story V2 category names for schema-v1 widgets. */
+  legacyCollectibleKinds?: boolean;
+}
+
+function collectibleKind(
+  category: PalCollectibleKind,
+  options: StoryProjectionOptions,
+): PalCollectibleKind {
+  if (!options.legacyCollectibleKinds) return category;
+  if (category === "keepsake") return "cosmetic";
+  if (category === "wallpaper") return "room";
+  return category;
 }
 
 function collectibleFinish(
@@ -121,7 +134,7 @@ export function projectStoryProgression(
         ...(chapter.title
           ? { titleAward: chapter.title.label, titleRevealCopy: chapter.title.revealCopy }
           : {}),
-        kind: chapter.collectible.kind,
+        kind: collectibleKind(chapter.collectible.kind, options),
         finish,
         assetUrl: chapter.collectible.assetUrl,
       };
