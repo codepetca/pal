@@ -29,7 +29,11 @@ export function centerElementWithinScrollContainer(
   const targetRect = target.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
   const targetCenter =
-    targetRect.top - containerRect.top + container.scrollTop + targetRect.height / 2;
+    targetRect.top -
+    containerRect.top -
+    container.clientTop +
+    container.scrollTop +
+    targetRect.height / 2;
   const top = Math.max(
     0,
     Math.min(

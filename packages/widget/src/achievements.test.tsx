@@ -135,6 +135,7 @@ test("achievement trail centers once for each learner scope", async () => {
   } as Document;
   const scrollContainer = {
     clientHeight: 400,
+    clientTop: 0,
     getBoundingClientRect: () => ({ top: 100 }) as DOMRect,
     ownerDocument,
     parentElement: body,

@@ -8,6 +8,7 @@ import {
 
 type MockElement = {
   clientHeight: number;
+  clientTop: number;
   getBoundingClientRect: () => DOMRect;
   ownerDocument: MockDocument;
   parentElement: MockElement | null;
@@ -31,6 +32,7 @@ function createTree() {
   const document = {} as MockDocument;
   const element = (overflowY = "visible"): MockElement => ({
     clientHeight: 0,
+    clientTop: 0,
     getBoundingClientRect: () => rect(0, 0),
     ownerDocument: document,
     parentElement: null,
@@ -88,4 +90,25 @@ test("centers within the scrollport and clamps to its scroll range", () => {
   );
 
   assert.deepEqual(calls, [{ behavior: "smooth", top: 450 }]);
+});
+
+test("measures from the inner edge of a bordered scrollport", () => {
+  const { element } = createTree();
+  const calls: ScrollToOptions[] = [];
+  const scrollport = element("auto");
+  scrollport.clientHeight = 300;
+  scrollport.clientTop = 10;
+  scrollport.scrollHeight = 1_000;
+  scrollport.getBoundingClientRect = () => rect(50, 320);
+  scrollport.scrollTo = (options) => calls.push(options);
+  const target = element();
+  target.getBoundingClientRect = () => rect(160, 100);
+
+  centerElementWithinScrollContainer(
+    target as unknown as HTMLElement,
+    scrollport as unknown as HTMLElement,
+    "auto",
+  );
+
+  assert.deepEqual(calls, [{ behavior: "auto", top: 0 }]);
 });
