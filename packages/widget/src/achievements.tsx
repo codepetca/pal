@@ -3,6 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { usePalWidget } from "./provider";
+import {
+  centerElementWithinScrollContainer,
+  findNearestVerticalScrollContainer,
+} from "./scroll-container";
 import type {
   PalAchievement,
   PalProgressionState,
@@ -160,6 +164,7 @@ export function PalAchievements() {
     viewport,
   } = usePalWidget();
   const currentWeekFocalRef = useRef<HTMLDivElement>(null);
+  const roadmapRef = useRef<HTMLOListElement>(null);
   const centeredScopeKeyRef = useRef<string | null>(null);
   const currentWeekNumber = snapshot?.roadmap.currentWeek;
 
@@ -175,17 +180,25 @@ export function PalAchievements() {
 
     const frame = window.requestAnimationFrame(() => {
       const currentWeekFocal = currentWeekFocalRef.current;
-      if (!currentWeekFocal) return;
+      const roadmap = roadmapRef.current;
+      if (!currentWeekFocal || !roadmap) return;
 
       centeredScopeKeyRef.current = scopeKey;
+      const scrollContainer = findNearestVerticalScrollContainer(currentWeekFocal);
+      if (!scrollContainer) return;
+      const focalHeight = currentWeekFocal.getBoundingClientRect().height;
+      roadmap.style.setProperty(
+        "--pal-achievement-scroll-padding",
+        `${Math.max(0, (scrollContainer.clientHeight - focalHeight) / 2)}px`,
+      );
       const prefersReducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches ?? false;
-      currentWeekFocal.scrollIntoView({
-        behavior: motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
-        block: "center",
-        inline: "nearest",
-      });
+      centerElementWithinScrollContainer(
+        currentWeekFocal,
+        scrollContainer,
+        motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
+      );
     });
 
     return () => window.cancelAnimationFrame?.(frame);
@@ -260,7 +273,7 @@ export function PalAchievements() {
         <strong className="pal-current-title">{progression.currentTitle}</strong>
       ) : null}
 
-      <ol className="pal-roadmap-list">
+      <ol className="pal-roadmap-list" ref={roadmapRef}>
         {visibleWeeks.map((week) => {
           const isCurrent = week.number === snapshot.roadmap.currentWeek;
           const visibleAchievements = week.achievements;
