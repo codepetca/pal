@@ -94,20 +94,28 @@ export function projectRewardLoadout(
     const persistedCandidate = persisted
       ? candidates[slot].find((candidate) => candidate.grantId === persisted.rewardGrantId)
       : undefined;
-    const firstCompanion = slot === "companion" && !persisted
+    const firstCompanion = slot === "companion"
       ? candidates.companion.toSorted((left, right) =>
           left.grantOrder === right.grantOrder
             ? 0
             : left.grantOrder < right.grantOrder ? -1 : 1,
         )[0]
       : undefined;
-    const equippedRewardId = persistedCandidate?.rewardId ?? firstCompanion?.rewardId;
+    const fallbackOption = newestByReward.find(
+      (candidate) => candidate.rewardId === firstCompanion?.rewardId,
+    );
+    const equippedRewardId = persistedCandidate?.rewardId ?? fallbackOption?.rewardId;
     const equippedOption = newestByReward.find(
       (candidate) => candidate.rewardId === equippedRewardId,
     );
+    const retained: LoadoutCandidate[] = [];
+    if (equippedOption) retained.push(equippedOption);
+    if (fallbackOption && fallbackOption !== equippedOption) {
+      retained.push(fallbackOption);
+    }
     const bounded = [
-      ...(equippedOption ? [equippedOption] : []),
-      ...newestByReward.filter((candidate) => candidate !== equippedOption),
+      ...retained,
+      ...newestByReward.filter((candidate) => !retained.includes(candidate)),
     ].slice(0, MAX_PROJECTED_OPTIONS_PER_SLOT);
     const projected = bounded.map((candidate): ProjectedOption => ({
       grantId: candidate.grantId,
@@ -119,6 +127,9 @@ export function projectRewardLoadout(
     }));
     return {
       options: projected,
+      ...(fallbackOption && bounded.includes(fallbackOption)
+        ? { fallbackGrantId: fallbackOption.grantId }
+        : {}),
       ...(equippedOption ? { equippedGrantId: equippedOption.grantId } : {}),
     };
   };
@@ -153,7 +164,10 @@ async function equipStoryReward(
     )
     .limit(1);
   if (!grant?.storyPlanId || !grant.storyPlanChapterId) {
-    throw new Error("Owned story reward not found");
+    throw new RewardLoadoutWriteError(
+      "reward_not_usable",
+      "Owned story reward not found",
+    );
   }
 
   const plans = await loadPersistedStoryPlansByIds(
@@ -166,17 +180,33 @@ async function equipStoryReward(
     ?.chapters.find(
       (candidate) => candidate.assignmentId === grant.storyPlanChapterId,
     );
-  if (!chapter) throw new Error("Owned story reward has no catalog definition");
+  if (!chapter) {
+    throw new RewardLoadoutWriteError(
+      "reward_not_usable",
+      "Owned story reward has no catalog definition",
+    );
+  }
 
   const plan = plans.get(grant.storyPlanId);
   if (chapter.collectible.id === plan?.mysteryCollectibleId) {
-    throw new Error("Concealed story rewards are not loadout options");
+    throw new RewardLoadoutWriteError(
+      "reward_not_usable",
+      "Concealed story rewards are not loadout options",
+    );
   }
 
   const slot = rewardLoadoutSlot(chapter.collectible.kind);
-  if (!slot) throw new Error("This story reward is reveal-only");
+  if (!slot) {
+    throw new RewardLoadoutWriteError(
+      "reward_not_usable",
+      "This story reward is reveal-only",
+    );
+  }
   if (input.expectedSlot && input.expectedSlot !== slot) {
-    throw new Error("Story reward does not belong to the requested slot");
+    throw new RewardLoadoutWriteError(
+      "reward_not_usable",
+      "Story reward does not belong to the requested slot",
+    );
   }
 
   const [loadout] = await db
@@ -246,20 +276,10 @@ export async function setStoryRewardLoadout(
       return;
     }
 
-    try {
-      await equipStoryReward(tx, {
-        learnerId: input.learnerId,
-        rewardGrantId: input.rewardGrantId,
-        expectedSlot: input.slot,
-      });
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        /not found|no catalog|reveal-only|requested slot/i.test(error.message)
-      ) {
-        throw new RewardLoadoutWriteError("reward_not_usable", error.message);
-      }
-      throw error;
-    }
+    await equipStoryReward(tx, {
+      learnerId: input.learnerId,
+      rewardGrantId: input.rewardGrantId,
+      expectedSlot: input.slot,
+    });
   });
 }

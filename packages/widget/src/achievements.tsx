@@ -251,6 +251,10 @@ export function PalAchievements() {
           const equipped = Boolean(
             usableReward && usableReward.grantId === equippedGrantId,
           );
+          const fallbackCompanion = Boolean(
+            usableReward?.category === "companion" &&
+            usableReward.grantId === snapshot.rewardLoadout?.companion.fallbackGrantId,
+          );
           const collectibleArtwork = (
             <>
               <span className="pal-week-collectible-art" aria-hidden="true">
@@ -270,7 +274,7 @@ export function PalAchievements() {
               ) : null}
               {equipped ? (
                 <span className="pal-week-collectible-status" aria-hidden="true">
-                  Equipped
+                  {fallbackCompanion ? "Default companion" : "Equipped"}
                 </span>
               ) : null}
             </>
@@ -297,7 +301,7 @@ export function PalAchievements() {
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>
                 </header>
-                {collectible && earnedReward && usableReward ? (
+                {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (
                   <button
                     className="pal-week-collectible"
                     type="button"
@@ -320,7 +324,9 @@ export function PalAchievements() {
                     data-unlock-status={earnedReward ? "earned" : "locked"}
                     data-collectible-finish={earnedReward?.finish ?? "color"}
                     aria-label={earnedReward
-                      ? `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
+                      ? equipped && fallbackCompanion
+                        ? `${earnedReward.title} is the default active companion`
+                        : `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
                       : `${week.label} collectible locked`}
                     role="img"
                   >

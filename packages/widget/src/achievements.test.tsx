@@ -314,3 +314,63 @@ test("clicking another usable collectible replaces the active slot selection", a
     await act(async () => renderer?.unmount());
   }
 });
+
+test("the active fallback companion is presented as a non-toggleable default", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.progression!.collectibles[0] = {
+    id: "young-pip-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "Pip",
+    description: "Your first companion.",
+    kind: "companion",
+    finish: "color",
+    assetUrl: "/pip.png",
+  };
+  snapshot.rewardLoadout = {
+    companion: {
+      fallbackGrantId: "grant-pip",
+      equippedGrantId: "grant-pip",
+      options: [{
+        grantId: "grant-pip",
+        rewardId: "young-pip-v1",
+        category: "companion",
+        title: "Pip",
+        assetUrl: "/pip.png",
+      }],
+    },
+    wallpaper: { options: [] },
+  };
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={{
+          getSnapshot: async () => snapshot,
+          markRewardSeen: async () => undefined,
+        }}
+        initialSnapshot={snapshot}
+        scopeKey="fallback-companion"
+      >
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    assert.equal(
+      renderer!.root.findAll(
+        (node) => node.type === "button" && /Pip/.test(node.props["aria-label"] ?? ""),
+      ).length,
+      0,
+    );
+    const fallback = renderer!.root.find(
+      (node) => node.type === "div" && node.props["aria-label"] === "Pip is the default active companion",
+    );
+    assert.ok(fallback);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});

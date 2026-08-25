@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createFixtureSnapshot,
+  parsePalWidgetSnapshot,
+} from "@codepet/pal-widget";
+import {
   projectRewardLoadout,
   rewardLoadoutSlot,
 } from "@/lib/reward-loadout";
@@ -14,7 +18,11 @@ test("only companions and wallpapers have loadout slots", () => {
 
 function plan(
   id: string,
-  rewards: readonly { assignmentId: string; rewardId: string }[],
+  rewards: readonly {
+    assignmentId: string;
+    rewardId: string;
+    kind?: "companion" | "wallpaper";
+  }[],
 ): PersistedStoryPlan {
   return {
     id,
@@ -39,7 +47,7 @@ function plan(
       collectible: {
         id: reward.rewardId,
         title: reward.rewardId,
-        kind: "wallpaper" as const,
+        kind: reward.kind ?? "wallpaper",
         assetUrl: `/assets/${reward.rewardId}.png`,
       },
     })),
@@ -89,4 +97,66 @@ test("loadout projection remains bounded while retaining the equipped reward", (
   assert.equal(projected.wallpaper.options.length, 32);
   assert.equal(projected.wallpaper.equippedGrantId, "grant-0");
   assert.ok(projected.wallpaper.options.some((option) => option.grantId === "grant-0"));
+});
+
+test("companion projection identifies Pip as the fallback without making it toggleable", () => {
+  const storyPlan = plan("companion-plan", [
+    { assignmentId: "pip", rewardId: "pip", kind: "companion" },
+    { assignmentId: "lumi", rewardId: "lumi", kind: "companion" },
+  ]);
+  const grants = [
+    grant("grant-pip", storyPlan.id, "pip", 1),
+    grant("grant-lumi", storyPlan.id, "lumi", 2),
+  ] as never;
+  const plans = new Map([[storyPlan.id, storyPlan]]);
+
+  const fallback = projectRewardLoadout(grants, plans, []);
+  assert.equal(fallback.companion.fallbackGrantId, "grant-pip");
+  assert.equal(fallback.companion.equippedGrantId, "grant-pip");
+
+  const selected = projectRewardLoadout(
+    grants,
+    plans,
+    [{ slot: "companion", rewardGrantId: "grant-lumi" }] as never,
+  );
+  assert.equal(selected.companion.fallbackGrantId, "grant-pip");
+  assert.equal(selected.companion.equippedGrantId, "grant-lumi");
+});
+
+test("bounded companion projection retains distinct equipped and fallback options", () => {
+  const rewards = Array.from({ length: 35 }, (_, index) => ({
+    assignmentId: `companion-assignment-${index}`,
+    rewardId: index === 0 ? "pip" : `companion-${index}`,
+    kind: "companion" as const,
+  }));
+  const firstPlan = plan("companion-plan-one", rewards.slice(0, 18));
+  const secondPlan = plan("companion-plan-two", rewards.slice(18));
+  const grants = [
+    ...firstPlan.chapters.map((chapter, index) =>
+      grant(`companion-grant-${index}`, firstPlan.id, chapter.assignmentId, index + 1),
+    ),
+    ...secondPlan.chapters.map((chapter, index) =>
+      grant(
+        `companion-grant-${index + 18}`,
+        secondPlan.id,
+        chapter.assignmentId,
+        index + 19,
+      ),
+    ),
+  ];
+  const projected = projectRewardLoadout(
+    grants as never,
+    new Map([[firstPlan.id, firstPlan], [secondPlan.id, secondPlan]]),
+    [{ slot: "companion", rewardGrantId: "companion-grant-34" }] as never,
+  );
+
+  assert.equal(projected.companion.options.length, 32);
+  assert.equal(projected.companion.equippedGrantId, "companion-grant-34");
+  assert.equal(projected.companion.fallbackGrantId, "companion-grant-0");
+  assert.ok(projected.companion.options.some(
+    (option) => option.grantId === projected.companion.fallbackGrantId,
+  ));
+  const snapshot = createFixtureSnapshot();
+  snapshot.rewardLoadout = projected;
+  assert.deepEqual(parsePalWidgetSnapshot(snapshot).rewardLoadout, projected);
 });
