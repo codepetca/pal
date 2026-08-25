@@ -87,6 +87,21 @@ function siblingAssetUrl(restUrl: string, file: string): string {
   return `${restUrl.slice(0, restUrl.lastIndexOf("/") + 1)}${file}`;
 }
 
+/**
+ * Keeps Pip's collectible portrait separate from his living widget art.
+ *
+ * Story V2 awards `young-pip-v1.png`, but Pip's authored blink and mood frames
+ * use `default.png` as their registered resting pose. Both files are served
+ * from the same asset directory, including when an integration rebases Pal's
+ * relative URLs onto its own origin.
+ */
+function companionPresentationUrl(assetUrl: string): string {
+  return assetUrl.replace(
+    /(^|\/)young-pip-v1\.png(?=([?#]|$))/,
+    "$1default.png",
+  );
+}
+
 function hasSiblingAnimationSet(restUrl: string): boolean {
   const assetPath = restUrl.split(/[?#]/, 1)[0] ?? "";
   const fileName = assetPath.slice(assetPath.lastIndexOf("/") + 1);
@@ -361,6 +376,9 @@ function PalCompanion(
   const companionAssetUrl = companionReveal
     ? companionReveal.assetUrl
     : companion.assetUrl;
+  const companionPresentationAssetUrl = companionAssetUrl
+    ? companionPresentationUrl(companionAssetUrl)
+    : undefined;
   const companionScale = Number.isFinite(scale)
     ? Math.min(1.2, Math.max(0.4, scale))
     : 1;
@@ -410,13 +428,13 @@ function PalCompanion(
               />
             </div>
           ) : null
-        ) : companionAssetUrl ? (
+        ) : companionPresentationAssetUrl ? (
           <div className="pal-companion-art">
             <PetSprite
-              key={companionAssetUrl}
+              key={companionPresentationAssetUrl}
               mood={companion.mood}
               motion={motion}
-              restUrl={companionAssetUrl}
+              restUrl={companionPresentationAssetUrl}
             />
           </div>
         ) : (
