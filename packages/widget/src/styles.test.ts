@@ -165,8 +165,25 @@ test("roadmap gives the current week a larger focal treatment without scroll tra
     )?.[1] ?? "";
   const achievementsRule =
     styles.match(/\.pal-achievements \{([^}]+)\}/)?.[1] ?? "";
+  const narrowRoadmapRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-roadmap-list \{([^}]+)\}/,
+    )?.[1] ?? "";
 
-  assert.match(roadmapRule, /padding-block-end:/);
+  assert.match(
+    roadmapRule,
+    /padding-block-start: max\(7rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.match(
+    roadmapRule,
+    /padding-block-end: max\(7rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.doesNotMatch(roadmapRule, /28rem/);
+  assert.match(
+    narrowRoadmapRule,
+    /padding-block-end: max\(5rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.doesNotMatch(narrowRoadmapRule, /34rem/);
   assert.match(currentStackRule, /transform: scale\(1\.18\)/);
   assert.doesNotMatch(roadmapRule, /scroll-snap/);
   assert.doesNotMatch(achievementsRule, /overflow:/);

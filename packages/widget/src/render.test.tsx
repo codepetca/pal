@@ -392,6 +392,28 @@ test("story celebration focuses on the collectible without repeating the passage
   assert.doesNotMatch(html, /Storybook sketch/);
 });
 
+test("legacy story celebration uses a neutral title instead of narrative copy", () => {
+  const snapshot = createFixtureSnapshot(1, 6);
+  snapshot.rewards = [{
+    id: "legacy-story",
+    kind: "story",
+    title: "A light in the storm",
+    description: "The lantern flickered through the longest night.",
+    assetUrl: "/assets/world/reward-warming-lantern-v1.png",
+  }];
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="legacy-story">
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+
+  assert.match(html, /<h2[^>]*>New collectible<\/h2>/);
+  assert.match(html, /reward-warming-lantern-v1\.png/);
+  assert.doesNotMatch(html, /A light in the storm/);
+  assert.doesNotMatch(html, /The lantern flickered through the longest night/);
+});
+
 test("achievement celebration centers its earned badge without explanatory copy", () => {
   const client = createFixturePalClient();
   client.dispatch("item-opened-early", { itemToken: "celebration-item" });

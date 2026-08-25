@@ -191,8 +191,8 @@
   display: grid;
   gap: clamp(1.5rem, 3vw, 2.5rem);
   margin: 0 auto;
-  padding-block-start: clamp(7rem, 42vh, 28rem);
-  padding-block-end: clamp(7rem, 42vh, 28rem);
+  padding-block-start: max(7rem, calc(50vh - 5rem));
+  padding-block-end: max(7rem, calc(50vh - 5rem));
 }
 
 .pal-week:not(:last-child)::before {
@@ -1119,8 +1119,8 @@
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-roadmap-list {
-  padding-block-start: clamp(5rem, 42vh, 34rem);
-  padding-block-end: clamp(5rem, 42vh, 34rem);
+  padding-block-start: max(5rem, calc(50vh - 5rem));
+  padding-block-end: max(5rem, calc(50vh - 5rem));
 }
 
 .pal-surface[data-pal-viewport="narrow"]

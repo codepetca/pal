@@ -100,7 +100,11 @@ export function PalRewardCelebration({
         : "reward";
   const title = titleReward
     ? grantReward?.titleAward
-    : achievement?.title ?? grantReward?.collectibleTitle ?? grantReward?.title ?? "";
+    : achievement?.title ?? (
+      storyReward
+        ? grantReward?.collectibleTitle ?? "New collectible"
+        : grantReward?.collectibleTitle ?? grantReward?.title ?? ""
+    );
   const assetUrl = achievement?.badge.assetUrl ?? (
     theme === "dark"
       ? grantReward?.darkAssetUrl ?? grantReward?.assetUrl
