@@ -15,6 +15,30 @@ test("snapshot parser accepts the bounded v1 fixture", () => {
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 });
 
+test("snapshot parser validates the server-resolved feature policy", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.featurePolicy = { achievements: { titles: true } };
+  assert.deepEqual(
+    parsePalWidgetSnapshot(fixture).featurePolicy,
+    fixture.featurePolicy,
+  );
+
+  const malformed = structuredClone(fixture) as unknown as {
+    featurePolicy: { achievements: { titles: unknown } };
+  };
+  malformed.featurePolicy.achievements.titles = "true";
+  assert.throws(
+    () => parsePalWidgetSnapshot(malformed),
+    /snapshot\.featurePolicy\.achievements\.titles.*boolean/i,
+  );
+});
+
+test("snapshot parser keeps feature policy optional for older schema-v1 hosts", () => {
+  const fixture = createFixtureSnapshot();
+  delete fixture.featurePolicy;
+  assert.equal(parsePalWidgetSnapshot(fixture).featurePolicy, undefined);
+});
+
 test("snapshot parser accepts owned loadout options and rejects cross-slot equipment", () => {
   const fixture = createFixtureSnapshot();
   fixture.rewardLoadout = {

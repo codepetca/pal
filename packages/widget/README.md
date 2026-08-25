@@ -46,6 +46,9 @@ import {
 The host owns placement. Pal owns everything rendered inside each component.
 `PalCollection` renders the optional durable keepsakes in a v1 learner snapshot;
 older snapshots without `collection` remain valid.
+The optional `featurePolicy` is resolved by Pal and controls learner-facing
+subfeatures such as achievement titles. Older snapshots that omit it use the
+package's safe defaults; hosts should not duplicate those switches.
 
 In standalone `modal` mode, `PalRewardCelebration` renders an absolute backdrop
 that fills its nearest positioned ancestor, or the initial containing block when

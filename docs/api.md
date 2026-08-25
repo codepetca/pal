@@ -103,6 +103,8 @@ versioned independently from event ingestion and includes:
 - current companion state; and
 - unseen reward notices. Achievement notices include only the earned instance's
   stable key and canonical presentation-safe name, description, and badge.
+- optional schema-v1 `featurePolicy` resolved by Pal; its achievement switches
+  shape learner-facing data without changing canonical ownership.
 - optional schema-v1 `rewardLoadout` state containing owned companion/wallpaper
   options and, independently, the one equipped grant ID for each slot.
 

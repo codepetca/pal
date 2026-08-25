@@ -4,10 +4,12 @@ import {
 } from "@codepet/pal-widget/fixture";
 import type {
   PalAchievement,
+  PalFeaturePolicy,
   PalProgressionState,
   PalRewardNotice,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
+import { DEFAULT_PAL_FEATURE_POLICY } from "@codepet/pal-widget/feature-policy";
 import type { FixtureStoryRequest } from "@/app/sandbox/fixture-story-contract";
 import {
   STORY_REGISTRY,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/story-catalog";
 import type { BehaviorTitleId } from "@/lib/reward-grants";
 import { mergePendingRewardQueues } from "@/lib/reward-queue";
+import { resolvePalFeaturePolicy } from "@/lib/pal-feature-policy";
 import type { PersistedStoryPlan } from "@/lib/story-plan";
 import {
   projectStoryProgression,
@@ -25,12 +28,17 @@ import {
 /** In-memory ledger for fixtures; projection is shared verbatim with production. */
 export class StoryFixtureLedger {
   readonly #plan: PersistedStoryPlan;
+  readonly #featurePolicy: PalFeaturePolicy;
   readonly #grants: ProjectableRewardGrant[] = [];
   readonly #colorChapterAssignmentIds = new Set<string>();
   #nextOrder = BigInt(1);
 
-  constructor(plan: PersistedStoryPlan) {
+  constructor(
+    plan: PersistedStoryPlan,
+    featurePolicy: PalFeaturePolicy = DEFAULT_PAL_FEATURE_POLICY,
+  ) {
     this.#plan = plan;
+    this.#featurePolicy = featurePolicy;
   }
 
   grantStoryChapter(
@@ -92,6 +100,7 @@ export class StoryFixtureLedger {
   progression(): PalProgressionState {
     return projectStoryProgression(this.#plan, this.#grants, undefined, {
       colorChapterAssignmentIds: this.#colorChapterAssignmentIds,
+      featurePolicy: this.#featurePolicy,
     });
   }
 
@@ -99,7 +108,10 @@ export class StoryFixtureLedger {
     return projectUnseenGrantRewards(
       this.#grants,
       new Map([[this.#plan.id, this.#plan]]),
-      { colorChapterAssignmentIds: this.#colorChapterAssignmentIds },
+      {
+        colorChapterAssignmentIds: this.#colorChapterAssignmentIds,
+        featurePolicy: this.#featurePolicy,
+      },
     );
   }
 
@@ -176,9 +188,10 @@ function fixtureCompanionMessage(
 /** Replays bounded synthetic fixture actions through an in-memory grant ledger. */
 export async function projectStoryFixture(
   request: FixtureStoryRequest,
+  featurePolicy: PalFeaturePolicy = resolvePalFeaturePolicy(),
 ): Promise<PalWidgetSnapshot> {
   const plan = fixturePlan(request.termWeeks);
-  const ledger = new StoryFixtureLedger(plan);
+  const ledger = new StoryFixtureLedger(plan, featurePolicy);
   const presentation = createFixturePalClient(
     createEmptyFixtureSnapshot(request.termWeeks),
   );
@@ -238,6 +251,7 @@ export async function projectStoryFixture(
   }
 
   const snapshot = await presentation.getSnapshot();
+  snapshot.featurePolicy = featurePolicy;
   const progression = ledger.progression();
   const companionRevealed = progression.companionReveal.status === "earned";
   snapshot.companion.name = companionRevealed ? "Pip" : "Mystery companion";

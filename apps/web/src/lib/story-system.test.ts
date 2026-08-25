@@ -468,16 +468,40 @@ test("durable title grants stay concealed while titles are disabled", () => {
     plan,
     [story, sameActionBehavior, laterBehavior],
     undefined,
-    { titlesVisible: true },
+    { featurePolicy: { achievements: { titles: true } } },
   );
   assert.equal(enabled.currentTitle, "On-Time Pro");
   assert.equal(
     projectUnseenGrantRewards(
       [laterBehavior],
       undefined,
-      { titlesVisible: true },
+      { featurePolicy: { achievements: { titles: true } } },
     )[0]?.titleAward,
     "On-Time Pro",
+  );
+});
+
+test("one server policy enables title projection and advertises that policy", async () => {
+  const snapshot = await projectStoryFixture(
+    {
+      termWeeks: 16,
+      commands: [{
+        type: "action",
+        id: "enabled-on-time-title",
+        action: "on-time-finish",
+        context: { itemToken: "enabled-title-item" },
+      }],
+    },
+    { achievements: { titles: true } },
+  );
+
+  assert.deepEqual(snapshot.featurePolicy, {
+    achievements: { titles: true },
+  });
+  assert.equal(snapshot.progression?.currentTitle, "On-Time Pro");
+  assert.equal(
+    snapshot.rewards.some((reward) => reward.titleAward === "On-Time Pro"),
+    true,
   );
 });
 
@@ -1157,11 +1181,14 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       }
     }
     const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
-    const consumedGrants = await getDb().select().from(learnerRewardGrants)
+    const projectedGrants = await getDb().select().from(learnerRewardGrants)
       .where(eq(learnerRewardGrants.learnerId, learnerId));
-    assert.ok(consumedGrants.find((grant) => grant.kind === "behavior_title")?.seenAt);
     assert.equal(
-      consumedGrants.find((grant) => grant.kind === "story_chapter")?.seenAt,
+      projectedGrants.find((grant) => grant.kind === "behavior_title")?.seenAt,
+      null,
+    );
+    assert.equal(
+      projectedGrants.find((grant) => grant.kind === "story_chapter")?.seenAt,
       null,
     );
     assert.deepEqual(fixture.progression(), snapshot.progression);
@@ -1192,6 +1219,12 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.deepEqual(afterBreak.progression?.titles, []);
     assert.equal(afterBreak.progression?.currentTitle, undefined);
+    const afterRepeatedSnapshot = await getDb().select().from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId));
+    assert.equal(
+      afterRepeatedSnapshot.find((grant) => grant.kind === "behavior_title")?.seenAt,
+      null,
+    );
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
@@ -1255,7 +1288,7 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
   }
 });
 
-test("a calendarless behavior title is stored but concealed without losing ownership", { skip: !process.env.DATABASE_URL }, async () => {
+test("a calendarless behavior title stays canonical and snapshots do not consume it", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `calendarless-title-${crypto.randomUUID()}`;
   try {
@@ -1296,12 +1329,19 @@ test("a calendarless behavior title is stored but concealed without losing owner
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
     assert.equal(notice, undefined);
 
-    const [consumed] = await getDb()
+    const [stillUnseen] = await getDb()
       .select()
       .from(learnerRewardGrants)
       .where(eq(learnerRewardGrants.id, grant.id));
-    assert.ok(consumed?.seenAt);
-    const consumedAt = consumed.seenAt.getTime();
+    assert.equal(stillUnseen?.seenAt, null);
+
+    const repeated = await loadLearnerSnapshot(integration.id, learnerId);
+    assert.equal(repeated.rewards.some((reward) => reward.id === grant.id), false);
+    const [afterRepeatedRead] = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.id, grant.id));
+    assert.equal(afterRepeatedRead?.seenAt, null);
 
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
     const after = await loadLearnerSnapshot(integration.id, learnerId);
@@ -1311,7 +1351,6 @@ test("a calendarless behavior title is stored but concealed without losing owner
       .from(learnerRewardGrants)
       .where(eq(learnerRewardGrants.id, grant.id));
     assert.ok(owned?.seenAt);
-    assert.equal(owned.seenAt.getTime(), consumedAt);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

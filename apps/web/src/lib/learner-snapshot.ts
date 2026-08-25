@@ -30,12 +30,12 @@ import type {
   PalAchievementCelebrationNotice,
   PalCollectionItem,
   PalCompanionMood,
+  PalFeaturePolicy,
   PalProgressionState,
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 import { resolvePalAchievementPresentation } from "@codepet/pal-widget/achievement-presentation";
-import { PAL_ACHIEVEMENT_TITLES_VISIBLE } from "@codepet/pal-widget/feature-policy";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import {
   ACHIEVEMENT_KEYS,
@@ -47,6 +47,7 @@ import {
 } from "@/lib/story-plan";
 import { mergePendingRewardQueues } from "@/lib/reward-queue";
 import { projectRewardLoadout } from "@/lib/reward-loadout";
+import { resolvePalFeaturePolicy } from "@/lib/pal-feature-policy";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
@@ -357,8 +358,11 @@ export async function loadLearnerSnapshot(
     supportsRewardLoadout?: boolean;
     /** True for schema-v1 widgets that require legacy kinds and one slot per term week. */
     legacyStoryShape?: boolean;
+    /** Explicit seam for tests and future integration-level policy resolution. */
+    featurePolicy?: PalFeaturePolicy;
   } = {},
 ): Promise<PalWidgetSnapshot> {
+  const featurePolicy = options.featurePolicy ?? resolvePalFeaturePolicy();
   return db.transaction(
     async (tx) => {
       const [learner] = await tx
@@ -373,17 +377,6 @@ export async function loadLearnerSnapshot(
         .limit(1);
       if (!learner) throw new LearnerScopeError();
       await options.afterScopeVerified?.();
-
-      if (!PAL_ACHIEVEMENT_TITLES_VISIBLE) {
-        await tx
-          .update(learnerRewardGrants)
-          .set({ seenAt: new Date() })
-          .where(and(
-            eq(learnerRewardGrants.learnerId, learnerId),
-            eq(learnerRewardGrants.kind, "behavior_title"),
-            isNull(learnerRewardGrants.seenAt),
-          ));
-      }
 
       const economyRows = await tx
         .select()
@@ -735,6 +728,7 @@ export async function loadLearnerSnapshot(
         options.supportsRewardLoadout === false;
       const storyProjectionOptions = {
         colorChapterAssignmentIds,
+        featurePolicy,
         legacyCollectibleKinds: legacyStoryShape,
       };
       const projectableGrantRows = options.supportsCollectibleFinish === false
@@ -805,6 +799,7 @@ export async function loadLearnerSnapshot(
       };
       return {
         schemaVersion: 1,
+        featurePolicy,
         roadmap: {
           semesterLabel: "Achievement semester",
           currentWeek,
@@ -843,7 +838,7 @@ export async function loadLearnerSnapshot(
       };
     },
     {
-      accessMode: "read write",
+      accessMode: "read only",
       isolationLevel: "repeatable read",
     },
   );

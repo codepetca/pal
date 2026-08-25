@@ -1,12 +1,13 @@
 import type {
   PalCollectibleUnlock,
   PalCollectibleKind,
+  PalFeaturePolicy,
   PalProgressionState,
   PalRewardCategory,
   PalRewardNotice,
   PalTitleUnlock,
 } from "@codepet/pal-widget";
-import { PAL_ACHIEVEMENT_TITLES_VISIBLE } from "@codepet/pal-widget/feature-policy";
+import { DEFAULT_PAL_FEATURE_POLICY } from "@codepet/pal-widget/feature-policy";
 import type { LearnerRewardGrant } from "@pal/db";
 import { resolveBehaviorTitle } from "@/lib/reward-grants";
 import type { PersistedStoryPlan } from "@/lib/story-plan";
@@ -16,8 +17,8 @@ export interface StoryProjectionOptions {
   colorChapterAssignmentIds?: ReadonlySet<string>;
   /** Map Story V2 category names for schema-v1 widgets. */
   legacyCollectibleKinds?: boolean;
-  /** Learner-facing title presentation is temporarily disabled by default. */
-  titlesVisible?: boolean;
+  /** Server-resolved learner-facing feature policy. */
+  featurePolicy?: PalFeaturePolicy;
 }
 
 function collectibleKind(
@@ -115,7 +116,9 @@ export function projectStoryProgression(
   plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map([[plan.id, plan]]),
   options: StoryProjectionOptions = {},
 ): PalProgressionState {
-  const titlesVisible = options.titlesVisible ?? PAL_ACHIEVEMENT_TITLES_VISIBLE;
+  const titlesVisible = (
+    options.featurePolicy ?? DEFAULT_PAL_FEATURE_POLICY
+  ).achievements.titles;
   const storyGrants = new Map(
     grants.flatMap((grant) =>
       grant.kind === "story_chapter" &&
@@ -200,7 +203,9 @@ export function projectUnseenGrantRewards(
   plansById: ReadonlyMap<string, PersistedStoryPlan> = new Map(),
   options: StoryProjectionOptions = {},
 ): PalRewardNotice[] {
-  const titlesVisible = options.titlesVisible ?? PAL_ACHIEVEMENT_TITLES_VISIBLE;
+  const titlesVisible = (
+    options.featurePolicy ?? DEFAULT_PAL_FEATURE_POLICY
+  ).achievements.titles;
   return grants
     .filter((grant) => grant.seenAt === null)
     .toSorted((left, right) => {

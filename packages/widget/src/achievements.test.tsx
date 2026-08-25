@@ -14,7 +14,7 @@ import type { PalClient } from "./types";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-test("achievement trail omits future weeks and orders visible weeks newest first", async () => {
+test("achievement trail omits future weeks and orders visible weeks chronologically", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.roadmap.weeks[3]!.status = "future";
   snapshot.roadmap.weeks[4]!.status = "current";
@@ -40,13 +40,31 @@ test("achievement trail omits future weeks and orders visible weeks newest first
 
     assert.deepEqual(
       weeks.map((week) => week.props["data-week-status"]),
-      ["current", "past", "past", "past"],
+      ["past", "past", "past", "current"],
     );
     assert.deepEqual(
       weeks.map((week) =>
         week.find((node) => node.type === "h3").children.join(""),
       ),
-      ["Week 4", "Week 3", "Week 2", "Week 1"],
+      ["Week 1", "Week 2", "Week 3", "Week 4"],
+    );
+    const currentWeek = weeks.at(-1)!;
+    assert.equal(currentWeek.props["aria-current"], "step");
+    assert.equal(
+      currentWeek.findAll(
+        (node) => node.props.className === "pal-week-current-label",
+      ).length,
+      1,
+    );
+    assert.equal(
+      currentWeek.find(
+        (node) => node.props.className === "pal-week-current-label",
+      ).children.join(""),
+      "Current week",
+    );
+    assert.equal(
+      weeks.slice(0, -1).some((week) => week.props["aria-current"]),
+      false,
     );
     assert.equal(
       renderer!.root.findAll(
@@ -89,6 +107,72 @@ test("achievement trail omits future weeks and orders visible weeks newest first
     assert.deepEqual(progressLabel.children, ["2", "/", "4"]);
   } finally {
     await act(async () => renderer?.unmount());
+  }
+});
+
+test("achievement trail centers once for each learner scope", async () => {
+  const learnerA = createFixtureSnapshot(4);
+  const learnerB = createFixtureSnapshot(4);
+  const clientA = createFixturePalClient(learnerA);
+  const clientB = createFixturePalClient(learnerB);
+  const scrollCalls: ScrollIntoViewOptions[] = [];
+  const originalWindow = globalThis.window;
+  let renderer: ReactTestRenderer | undefined;
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      cancelAnimationFrame() {},
+      matchMedia: () => ({ matches: false }),
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        callback(0);
+        return 1;
+      },
+    },
+  });
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          scopeKey="learner-a"
+        >
+          <PalAchievements />
+        </PalProvider>,
+        {
+          createNodeMock(element) {
+            return element.type === "div" &&
+              (element.props as Record<string, unknown>).className ===
+                "pal-week-collectible-stack"
+              ? {
+                  scrollIntoView(options: ScrollIntoViewOptions) {
+                    scrollCalls.push(options);
+                  },
+                }
+              : null;
+          },
+        },
+      );
+    });
+    assert.equal(scrollCalls.length, 1);
+
+    await act(async () => {
+      renderer!.update(
+        <PalProvider client={clientB} scopeKey="learner-b">
+          <PalAchievements />
+        </PalProvider>,
+      );
+      await Promise.resolve();
+    });
+    assert.equal(scrollCalls.length, 2);
+  } finally {
+    await act(async () => renderer?.unmount());
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
   }
 });
 

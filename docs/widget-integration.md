@@ -48,6 +48,13 @@ The public client returns a versioned learner snapshot. The widget renders store
 Pal state; it never interprets Pika events or calculates achievement progress in the
 browser.
 
+Pal also resolves the snapshot's optional `featurePolicy`. Its achievement keys
+control learner-facing projection, not canonical earning: for example, disabling
+`achievements.titles` removes title inventory and notices before reward pagination
+without deleting or acknowledging the underlying grants. Older schema-v1 hosts
+that omit the policy use the widget's safe defaults. Hosts should not maintain a
+second copy of these subfeature switches.
+
 `PalCompanion` is the complete cat visual surface.
 Pal owns its artwork, animation, internal sizing, and transparent-pixel hit testing.
 The host may set `scale` and attach standard pointer handlers, but owns the containing

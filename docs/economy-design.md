@@ -158,12 +158,13 @@ older widget/API pair.
   visible history; a story title wins when
   one action awards multiple titles at the same time. Historical achievements
   never create reward grants; every new grant has an exact source fact. Title
-  presentation is temporarily disabled: ownership continues to be recorded,
-  while snapshots and the portable widget conceal title inventories, equipped
-  titles, title-only notices, and title copy attached to story rewards. The
-  authenticated snapshot transaction idempotently consumes concealed
-  behavior-title notices so they cannot block later rewards or reappear after
-  title presentation is restored; the ownership grant itself remains durable.
+  presentation is temporarily disabled by the server-resolved snapshot feature
+  policy: ownership continues to be recorded, while projectors conceal title
+  inventories, equipped titles, title-only notices, and title copy attached to
+  story rewards before the visible reward page is assembled. Snapshot reads
+  never acknowledge concealed notices or otherwise mutate canonical grants.
+  The optional schema-v1 policy field lets Pal re-enable titles without a widget
+  rebuild; older hosts safely fall back to titles hidden.
 - The widget gives every roadmap week with a story chapter a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once the chapter is granted, that week's slot reveals one

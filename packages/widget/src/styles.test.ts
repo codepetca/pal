@@ -100,6 +100,13 @@ test("responsive behavior follows the host viewport contract", () => {
     styles,
     /\.pal-surface\.pal-achievements\[data-pal-viewport="narrow"\]/,
   );
+  const narrowTooltipRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-badge-tooltip \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowTooltipRule, /right: 0/);
+  assert.match(narrowTooltipRule, /left: auto/);
+  assert.match(styles, /data-week-status="current"[\s\S]*transform: scale\(1\.1\)/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
@@ -147,7 +154,41 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
     /grid-template-columns: minmax\(0, 1fr\) 5\.65rem minmax\(0, 1fr\)/,
   );
   assert.match(collectibleStackRule, /grid-column: 2/);
+  assert.match(collectibleStackRule, /align-content: start/);
+  assert.match(collectibleStackRule, /align-self: start/);
   assert.match(weekContentRule, /grid-column: 3/);
+});
+
+test("roadmap gives the current week a larger focal treatment without scroll trapping", () => {
+  const roadmapRule = styles.match(/\.pal-roadmap-list \{([^}]+)\}/)?.[1] ?? "";
+  const currentStackRule =
+    styles.match(
+      /\.pal-week\[data-week-status="current"\] \.pal-week-collectible-stack \{([^}]+)\}/,
+    )?.[1] ?? "";
+  const achievementsRule =
+    styles.match(/\.pal-achievements \{([^}]+)\}/)?.[1] ?? "";
+  const narrowRoadmapRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-roadmap-list \{([^}]+)\}/,
+    )?.[1] ?? "";
+
+  assert.match(
+    roadmapRule,
+    /padding-block-start: max\(7rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.match(
+    roadmapRule,
+    /padding-block-end: max\(7rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.doesNotMatch(roadmapRule, /28rem/);
+  assert.match(
+    narrowRoadmapRule,
+    /padding-block-end: max\(5rem, calc\(50vh - 5rem\)\)/,
+  );
+  assert.doesNotMatch(narrowRoadmapRule, /34rem/);
+  assert.match(currentStackRule, /transform: scale\(1\.18\)/);
+  assert.doesNotMatch(roadmapRule, /scroll-snap/);
+  assert.doesNotMatch(achievementsRule, /overflow:/);
 });
 
 test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {
