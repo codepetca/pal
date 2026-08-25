@@ -345,6 +345,10 @@ test("an earned week keeps its story readable on wide and narrow hosts", () => {
   assert.match(narrowHtml, /aria-expanded="false"/);
   assert.match(narrowHtml, /class="pal-week-story-panel" hidden=""/);
   assert.match(narrowHtml, /A heavy storm passed over the town during the night\./);
+  assert.ok(
+    narrowHtml.indexOf("pal-week-story-bubble") <
+      narrowHtml.indexOf("pal-week-collectible-stack"),
+  );
 });
 
 test("a week with no earned collectible has no story bubble", () => {

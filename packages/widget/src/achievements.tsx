@@ -16,7 +16,8 @@ import type {
  *
  * Stories start open in wide hosts because this page owns the chapter narrative.
  * Narrow hosts keep the same durable narrative in a compact, collapsed
- * disclosure below the week's collectible and achievements.
+ * disclosure above the week's collectible and achievements so visual and
+ * keyboard focus order remain aligned.
  */
 function WeekStory({
   headline,

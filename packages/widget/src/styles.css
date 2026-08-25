@@ -1127,7 +1127,7 @@
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-story {
   grid-column: 1 / -1;
-  grid-row: 2;
+  grid-row: 1;
   width: min(100%, 22rem);
   margin-top: 0.35rem;
   justify-self: center;
