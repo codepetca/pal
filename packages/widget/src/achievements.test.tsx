@@ -115,9 +115,51 @@ test("achievement trail centers once for each learner scope", async () => {
   const learnerB = createFixtureSnapshot(4);
   const clientA = createFixturePalClient(learnerA);
   const clientB = createFixturePalClient(learnerB);
-  const scrollCalls: ScrollIntoViewOptions[] = [];
+  const scrollCalls: ScrollToOptions[] = [];
+  const paddingCalls: Array<[string, string]> = [];
   const originalWindow = globalThis.window;
   let renderer: ReactTestRenderer | undefined;
+
+  const body = {} as HTMLElement;
+  const documentElement = {} as HTMLElement;
+  const ownerDocument = {
+    body,
+    documentElement,
+    defaultView: {
+      getComputedStyle(element: HTMLElement) {
+        return (element as HTMLElement & {
+          style?: { overflowY: string };
+        }).style ?? { overflowY: "visible" } as CSSStyleDeclaration;
+      },
+    },
+  } as Document;
+  const scrollContainer = {
+    clientHeight: 400,
+    clientTop: 0,
+    getBoundingClientRect: () => ({ top: 100 }) as DOMRect,
+    ownerDocument,
+    parentElement: body,
+    scrollHeight: 1_200,
+    scrollTo(options: ScrollToOptions) {
+      scrollCalls.push(options);
+    },
+    scrollTop: 0,
+    style: { overflowY: "auto" },
+  } as unknown as HTMLElement;
+  const roadmapNode = {
+    ownerDocument,
+    parentElement: scrollContainer,
+    style: {
+      setProperty(name: string, value: string) {
+        paddingCalls.push([name, value]);
+      },
+    },
+  } as unknown as HTMLOListElement;
+  const focalNode = {
+    getBoundingClientRect: () => ({ height: 100, top: 500 }) as DOMRect,
+    ownerDocument,
+    parentElement: roadmapNode,
+  } as unknown as HTMLDivElement;
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -143,20 +185,25 @@ test("achievement trail centers once for each learner scope", async () => {
         </PalProvider>,
         {
           createNodeMock(element) {
+            if (element.type === "ol" &&
+              (element.props as Record<string, unknown>).className === "pal-roadmap-list") {
+              return roadmapNode;
+            }
             return element.type === "div" &&
               (element.props as Record<string, unknown>).className ===
                 "pal-week-collectible-stack"
-              ? {
-                  scrollIntoView(options: ScrollIntoViewOptions) {
-                    scrollCalls.push(options);
-                  },
-                }
+              ? focalNode
               : null;
           },
         },
       );
     });
     assert.equal(scrollCalls.length, 1);
+    assert.deepEqual(scrollCalls[0], { behavior: "smooth", top: 250 });
+    assert.deepEqual(paddingCalls[0], [
+      "--pal-achievement-scroll-padding",
+      "150px",
+    ]);
 
     await act(async () => {
       renderer!.update(

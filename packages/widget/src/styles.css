@@ -187,12 +187,13 @@
 }
 
 .pal-roadmap-list {
+  --pal-achievement-scroll-padding: 0px;
   position: relative;
   display: grid;
   gap: clamp(1.5rem, 3vw, 2.5rem);
   margin: 0 auto;
-  padding-block-start: max(7rem, calc(50vh - 5rem));
-  padding-block-end: max(7rem, calc(50vh - 5rem));
+  padding-block-start: max(7rem, var(--pal-achievement-scroll-padding));
+  padding-block-end: max(7rem, var(--pal-achievement-scroll-padding));
 }
 
 .pal-week:not(:last-child)::before {
@@ -1121,8 +1122,8 @@
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-roadmap-list {
-  padding-block-start: max(5rem, calc(50vh - 5rem));
-  padding-block-end: max(5rem, calc(50vh - 5rem));
+  padding-block-start: max(5rem, var(--pal-achievement-scroll-padding));
+  padding-block-end: max(5rem, var(--pal-achievement-scroll-padding));
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-story {

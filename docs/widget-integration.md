@@ -48,6 +48,12 @@ The public client returns a versioned learner snapshot. The widget renders store
 Pal state; it never interprets Pika events or calculates achievement progress in the
 browser.
 
+`PalAchievements` centers the current week once per learner scope inside the
+nearest ancestor with explicit `overflow-y: auto` or `scroll`. The widget derives
+its edge spacing from that scrollport and stops before the document root; it never
+moves the host page. A host that wants initial centering must therefore mount the
+roadmap in its own content scrollport.
+
 Pal also resolves the snapshot's optional `featurePolicy`. Its achievement keys
 control learner-facing projection, not canonical earning: for example, disabling
 `achievements.titles` removes title inventory and notices before reward pagination
