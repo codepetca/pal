@@ -18,6 +18,14 @@ const MAX_PROJECTED_OPTIONS_PER_SLOT = 32;
 
 type ProjectedOption = PalRewardLoadoutState["companion"]["options"][number];
 type LoadoutCandidate = ProjectedOption & { grantOrder: bigint };
+type ProjectableLoadoutGrant = Pick<
+  typeof learnerRewardGrants.$inferSelect,
+  "id" | "grantOrder" | "kind" | "storyPlanId" | "storyPlanChapterId"
+>;
+export type ProjectableRewardLoadout = Pick<
+  LearnerRewardLoadout,
+  "slot" | "rewardGrantId" | "hidden"
+>;
 
 export class RewardLoadoutWriteError extends Error {
   constructor(
@@ -48,9 +56,9 @@ export async function loadRewardLoadout(
 }
 
 export function projectRewardLoadout(
-  grants: readonly (typeof learnerRewardGrants.$inferSelect)[],
+  grants: readonly ProjectableLoadoutGrant[],
   plans: ReadonlyMap<string, PersistedStoryPlan>,
-  loadout: readonly LearnerRewardLoadout[],
+  loadout: readonly ProjectableRewardLoadout[],
 ): PalRewardLoadoutState {
   const candidates: Record<RewardLoadoutSlot, LoadoutCandidate[]> = {
     companion: [],
@@ -131,6 +139,7 @@ export function projectRewardLoadout(
         ? { fallbackGrantId: fallbackOption.grantId }
         : {}),
       ...(equippedOption ? { equippedGrantId: equippedOption.grantId } : {}),
+      ...(slot === "companion" && persisted?.hidden ? { hidden: true } : {}),
     };
   };
 
@@ -218,7 +227,7 @@ async function equipStoryReward(
     })
     .onConflictDoUpdate({
       target: [learnerRewardLoadouts.learnerId, learnerRewardLoadouts.slot],
-      set: { rewardGrantId: grant.id, updatedAt: new Date() },
+      set: { rewardGrantId: grant.id, hidden: false, updatedAt: new Date() },
     })
     .returning();
   if (!loadout) throw new Error("Failed to equip story reward");
@@ -237,6 +246,47 @@ async function clearRewardLoadoutSlot(
         eq(learnerRewardLoadouts.slot, input.slot),
       ),
   );
+}
+
+async function setCompanionVisibilityState(
+  db: Db,
+  input: { learnerId: string; hidden: boolean },
+): Promise<void> {
+  const [selected] = await db
+    .select()
+    .from(learnerRewardLoadouts)
+    .where(
+      and(
+        eq(learnerRewardLoadouts.learnerId, input.learnerId),
+        eq(learnerRewardLoadouts.slot, "companion"),
+      ),
+    )
+    .limit(1);
+  if (selected) {
+    await db
+      .update(learnerRewardLoadouts)
+      .set({ hidden: input.hidden, updatedAt: new Date() })
+      .where(eq(learnerRewardLoadouts.id, selected.id));
+    return;
+  }
+
+  if (!input.hidden) return;
+
+  const grants = await db
+    .select()
+    .from(learnerRewardGrants)
+    .where(eq(learnerRewardGrants.learnerId, input.learnerId));
+  const planIds = grants.flatMap((grant) => grant.storyPlanId ? [grant.storyPlanId] : []);
+  const plans = await loadPersistedStoryPlansByIds(db, input.learnerId, planIds);
+  const fallbackGrantId = projectRewardLoadout(grants, plans, [])
+    .companion.fallbackGrantId;
+  if (!fallbackGrantId) return;
+  await db.insert(learnerRewardLoadouts).values({
+    learnerId: input.learnerId,
+    slot: "companion",
+    rewardGrantId: fallbackGrantId,
+    hidden: true,
+  });
 }
 
 /**
@@ -281,5 +331,33 @@ export async function setStoryRewardLoadout(
       rewardGrantId: input.rewardGrantId,
       expectedSlot: input.slot,
     });
+  });
+}
+
+export async function setCompanionVisibility(
+  db: Db,
+  input: {
+    integrationId: string;
+    learnerId: string;
+    hidden: boolean;
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [scopedLearner] = await tx
+      .select({ id: learners.id })
+      .from(learners)
+      .where(and(
+        eq(learners.id, input.learnerId),
+        eq(learners.integrationId, input.integrationId),
+      ))
+      .for("update")
+      .limit(1);
+    if (!scopedLearner) {
+      throw new RewardLoadoutWriteError(
+        "learner_not_found",
+        "Learner not found for this integration",
+      );
+    }
+    await setCompanionVisibilityState(tx, input);
   });
 }

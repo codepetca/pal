@@ -9,6 +9,45 @@ import { PalProvider } from "./provider";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
+test("the companion surface is absent when the selected companion is hidden", async () => {
+  const snapshot = createFixtureSnapshot(5);
+  snapshot.rewardLoadout = {
+    companion: {
+      equippedGrantId: "grant-pip",
+      hidden: true,
+      options: [{
+        grantId: "grant-pip",
+        rewardId: "young-pip-v1",
+        category: "companion",
+        title: "Pip",
+        assetUrl: "/pets/default.png",
+      }],
+    },
+    wallpaper: { options: [] },
+  };
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={{
+          getSnapshot: async () => snapshot,
+          markRewardSeen: async () => undefined,
+        }}
+        initialSnapshot={snapshot}
+        scopeKey="hidden-companion"
+      >
+        <PalCompanion />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    assert.equal(renderer!.toJSON(), null);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
 test("a missing mood frame falls back to the supplied rest image", async () => {
   const originalWindow = globalThis.window;
   let renderer: ReturnType<typeof create> | undefined;

@@ -151,6 +151,7 @@ export function PalAchievements() {
     motion,
     refresh,
     setRewardLoadout,
+    setCompanionVisibility,
     snapshot,
     state,
     theme,
@@ -205,12 +206,16 @@ export function PalAchievements() {
       {...appearance}
       aria-label="Achievement trail"
       data-pal-wallpaper={equippedWallpaper ? "equipped" : "default"}
-      style={equippedWallpaperUrl
-        ? { backgroundImage: theme === "dark"
-            ? `linear-gradient(rgba(8, 18, 45, .42), rgba(8, 18, 45, .72)), url("${equippedWallpaperUrl}")`
-            : `linear-gradient(rgba(255, 250, 243, .72), rgba(255, 250, 243, .9)), url("${equippedWallpaperUrl}")` }
-        : undefined}
     >
+      {equippedWallpaperUrl ? (
+        <div
+          aria-hidden="true"
+          className="pal-achievements-wallpaper"
+          style={{ backgroundImage: theme === "dark"
+            ? `linear-gradient(rgba(8, 18, 45, .28), rgba(8, 18, 45, .58)), url("${equippedWallpaperUrl}")`
+            : `linear-gradient(rgba(255, 250, 243, .55), rgba(255, 250, 243, .78)), url("${equippedWallpaperUrl}")` }}
+        />
+      ) : null}
       {loadoutError && loadoutErrorSlot ? (
         <p className="pal-loadout-error" role="alert">
           {loadoutErrorSlot === "wallpaper"
@@ -223,7 +228,13 @@ export function PalAchievements() {
       ) : null}
 
       {progression?.currentTitle ? (
-        <strong className="pal-current-title">{progression.currentTitle}</strong>
+        <div
+          aria-label={`Current title: ${progression.currentTitle}`}
+          className="pal-current-title"
+        >
+          <span>Current title</span>
+          <strong>{progression.currentTitle}</strong>
+        </div>
       ) : null}
 
       <ol className="pal-roadmap-list">
@@ -251,16 +262,21 @@ export function PalAchievements() {
           const equipped = Boolean(
             usableReward && usableReward.grantId === equippedGrantId,
           );
-          const fallbackCompanion = Boolean(
+          const companionHidden = Boolean(
             usableReward?.category === "companion" &&
-            usableReward.grantId === snapshot.rewardLoadout?.companion.fallbackGrantId,
+            snapshot.rewardLoadout?.companion.hidden,
           );
+          const active = equipped && !companionHidden;
           const collectibleArtwork = (
             <>
               <span className="pal-week-collectible-art" aria-hidden="true">
                 {earnedReward ? (
                   <img
-                    src={theme === "dark" ? earnedReward.darkAssetUrl ?? earnedReward.assetUrl : earnedReward.assetUrl}
+                    src={earnedReward.kind === "wallpaper"
+                      ? earnedReward.assetUrl
+                      : theme === "dark"
+                        ? earnedReward.darkAssetUrl ?? earnedReward.assetUrl
+                        : earnedReward.assetUrl}
                     alt=""
                     width="64"
                     height="64"
@@ -272,9 +288,9 @@ export function PalAchievements() {
               {earnedReward ? (
                 <strong aria-hidden="true">{earnedReward.title}</strong>
               ) : null}
-              {equipped ? (
+              {active || (equipped && companionHidden) ? (
                 <span className="pal-week-collectible-status" aria-hidden="true">
-                  {fallbackCompanion ? "Default companion" : "Equipped"}
+                  {equipped && companionHidden ? "Pet hidden" : "Equipped"}
                 </span>
               ) : null}
             </>
@@ -301,19 +317,32 @@ export function PalAchievements() {
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>
                 </header>
-                {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (
+                {collectible && earnedReward && usableReward ? (
                   <button
                     className="pal-week-collectible"
                     type="button"
                     disabled={loadoutPending}
                     data-unlock-status="earned"
                     data-collectible-finish={earnedReward.finish ?? "color"}
-                    data-loadout-equipped={equipped ? "true" : "false"}
-                    aria-pressed={equipped}
-                    aria-label={`${equipped ? "Stop using" : "Use"} ${earnedReward.title} as ${usableReward.category === "wallpaper" ? "the achievements wallpaper" : "the active companion"}`}
-                    onClick={() => void setRewardLoadout(
-                      usableReward.category,
-                      equipped ? null : usableReward.grantId,
+                    data-collectible-kind={usableReward.category}
+                    data-loadout-equipped={active ? "true" : "false"}
+                    aria-pressed={active}
+                    aria-label={usableReward.category === "wallpaper"
+                      ? `${active ? "Stop using" : "Use"} ${earnedReward.title} as the achievements wallpaper`
+                      : equipped && companionHidden
+                        ? `Show ${earnedReward.title} companion`
+                        : active
+                          ? `Hide ${earnedReward.title} companion`
+                          : `Use ${earnedReward.title} as the active companion`}
+                    onClick={() => void (
+                      usableReward.category === "wallpaper"
+                        ? setRewardLoadout(
+                            "wallpaper",
+                            active ? null : usableReward.grantId,
+                          )
+                        : active
+                          ? setCompanionVisibility(true)
+                          : setRewardLoadout("companion", usableReward.grantId)
                     )}
                   >
                     {collectibleArtwork}
@@ -323,10 +352,9 @@ export function PalAchievements() {
                     className="pal-week-collectible"
                     data-unlock-status={earnedReward ? "earned" : "locked"}
                     data-collectible-finish={earnedReward?.finish ?? "color"}
+                    data-collectible-kind={earnedReward?.kind}
                     aria-label={earnedReward
-                      ? equipped && fallbackCompanion
-                        ? `${earnedReward.title} is the default active companion`
-                        : `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
+                      ? `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
                       : `${week.label} collectible locked`}
                     role="img"
                   >

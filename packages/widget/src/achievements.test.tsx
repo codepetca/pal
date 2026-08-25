@@ -309,15 +309,15 @@ test("clicking another usable collectible replaces the active slot selection", a
         node.type === "button" &&
         node.props["data-loadout-equipped"] === "true",
     );
-    assert.match(equippedButton.props["aria-label"], /^Stop using Lumi/);
+    assert.equal(equippedButton.props["aria-label"], "Hide Lumi companion");
   } finally {
     await act(async () => renderer?.unmount());
   }
 });
 
-test("the active fallback companion is presented as a non-toggleable default", async () => {
-  const snapshot = createFixtureSnapshot();
-  snapshot.progression!.collectibles[0] = {
+test("clicking the active fallback companion hides the pet and can show it again", async () => {
+  const visible = createFixtureSnapshot();
+  visible.progression!.collectibles[0] = {
     id: "young-pip-v1",
     roadmapWeek: 1,
     status: "earned",
@@ -328,7 +328,7 @@ test("the active fallback companion is presented as a non-toggleable default", a
     finish: "color",
     assetUrl: "/pip.png",
   };
-  snapshot.rewardLoadout = {
+  visible.rewardLoadout = {
     companion: {
       fallbackGrantId: "grant-pip",
       equippedGrantId: "grant-pip",
@@ -342,16 +342,29 @@ test("the active fallback companion is presented as a non-toggleable default", a
     },
     wallpaper: { options: [] },
   };
+  const hidden = structuredClone(visible);
+  hidden.rewardLoadout!.companion.hidden = true;
+  const calls: Array<[string, string | null]> = [];
+  const visibilityCalls: boolean[] = [];
+  let current = visible;
   let renderer: ReactTestRenderer | undefined;
 
   await act(async () => {
     renderer = create(
       <PalProvider
         client={{
-          getSnapshot: async () => snapshot,
+          getSnapshot: async () => current,
           markRewardSeen: async () => undefined,
+          async setRewardLoadout(slot, rewardGrantId) {
+            calls.push([slot, rewardGrantId]);
+            current = visible;
+          },
+          async setCompanionVisibility(hiddenValue) {
+            visibilityCalls.push(hiddenValue);
+            current = hiddenValue ? hidden : visible;
+          },
         }}
-        initialSnapshot={snapshot}
+        initialSnapshot={visible}
         scopeKey="fallback-companion"
       >
         <PalAchievements />
@@ -360,16 +373,83 @@ test("the active fallback companion is presented as a non-toggleable default", a
   });
 
   try {
-    assert.equal(
-      renderer!.root.findAll(
-        (node) => node.type === "button" && /Pip/.test(node.props["aria-label"] ?? ""),
-      ).length,
-      0,
+    const hideButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["aria-label"] === "Hide Pip companion",
     );
-    const fallback = renderer!.root.find(
-      (node) => node.type === "div" && node.props["aria-label"] === "Pip is the default active companion",
+    await act(async () => {
+      hideButton.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(visibilityCalls, [true]);
+    assert.deepEqual(calls, []);
+    const showButton = renderer!.root.find(
+      (node) => node.type === "button" && node.props["aria-label"] === "Show Pip companion",
     );
-    assert.ok(fallback);
+    await act(async () => {
+      showButton.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.deepEqual(visibilityCalls, [true]);
+    assert.deepEqual(calls, [["companion", "grant-pip"]]);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
+test("wallpaper collectibles keep their light artwork in dark mode", async () => {
+  const snapshot = createFixtureSnapshot();
+  snapshot.progression!.collectibles[0] = {
+    id: "stream-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "The Stream Beyond",
+    description: "A stream beyond the courtyard.",
+    kind: "wallpaper",
+    finish: "color",
+    assetUrl: "/stream-light.png",
+    darkAssetUrl: "/stream-dark.png",
+  };
+  snapshot.rewardLoadout = {
+    companion: { options: [] },
+    wallpaper: {
+      equippedGrantId: "grant-stream",
+      options: [{
+        grantId: "grant-stream",
+        rewardId: "stream-v1",
+        category: "wallpaper",
+        title: "The Stream Beyond",
+        assetUrl: "/stream-light.png",
+        darkAssetUrl: "/stream-dark.png",
+      }],
+    },
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={{
+          getSnapshot: async () => snapshot,
+          markRewardSeen: async () => undefined,
+        }}
+        initialSnapshot={snapshot}
+        scopeKey="dark-wallpaper-thumbnail"
+        theme="dark"
+      >
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const wallpaper = renderer!.root.find(
+      (node) => node.type === "div" && node.props.className === "pal-achievements-wallpaper",
+    );
+    assert.match(wallpaper.props.style.backgroundImage, /stream-dark\.png/);
+    const collectible = renderer!.root.find(
+      (node) => node.type === "button" && node.props["data-collectible-kind"] === "wallpaper",
+    );
+    assert.equal(collectible.findByType("img").props.src, "/stream-light.png");
   } finally {
     await act(async () => renderer?.unmount());
   }

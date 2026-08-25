@@ -85,3 +85,59 @@ complete trail. The one-pixel source/implementation height difference is ignored
   less clean than the live preview, but does not affect the rendered page.
 
 final result: passed
+
+---
+
+# Wallpaper Fit Design QA
+
+- Source visual truth: `output/playwright/widget-ux-audit-current/01-wallpaper-cover-crop.png`
+- Implementation screenshot: `output/playwright/widget-ux-audit-current/02-wallpaper-contained-sticky.png`
+- Scrolled implementation screenshot: `output/playwright/widget-ux-audit-current/03-wallpaper-sticky-scrolled.png`
+- Combined comparison: `output/playwright/widget-ux-audit-current/04-before-after-comparison.png`
+- State: persisted sandbox, dark theme, Week 8, Courtyard Afternoons equipped
+- CSS viewport: 1910 × 1074; reported device pixel ratio: 0.67
+- Source pixels: 2851 × 1603
+- Implementation pixels: 2851 × 1603
+- Density normalization: none required; source and implementation captures have identical pixel dimensions and state
+
+## Full-view comparison evidence
+
+The source capture scales the 3:2 wallpaper with `cover` against the full achievement timeline, cropping the outer courtyard artwork. The implementation uses a viewport-height sticky backdrop with the illustration sized using `contain`. The full canopy, hillside, foreground shrubs, and fence are now visible without distortion. The combined comparison places the source on the left and implementation on the right.
+
+## Focused comparison evidence
+
+A focused crop was not needed because the changed surface is the full achievement background and both captures have identical viewport, content, theme, and control state. The full-view comparison keeps the relevant artwork and surrounding UI readable.
+
+## Required fidelity surfaces
+
+- Fonts and typography: unchanged; hierarchy, weights, wrapping, and title placement match the source state.
+- Spacing and layout rhythm: unchanged; timeline alignment, padding, card sizing, and week spacing match the source state.
+- Colors and visual tokens: unchanged dark-theme tokens and wallpaper overlay; contrast remains consistent with the source state.
+- Image quality and asset fidelity: improved; the original raster asset is preserved at its natural aspect ratio with no crop, stretch, replacement, or generated approximation.
+- Copy and content: unchanged.
+
+## Findings
+
+No actionable P0, P1, or P2 differences remain. The blank canvas outside the application capture is identical in both images and is not part of the widget surface.
+
+## Interaction and browser checks
+
+- Equipped Courtyard Afternoons through its collectible button and confirmed the pressed/equipped state.
+- Scrolled the achievement timeline and confirmed the sticky backdrop remains anchored while content moves.
+- Browser console warnings/errors checked: none.
+
+## Comparison history
+
+1. Earlier finding: P2 wallpaper crop. `background-size: cover` removed approximately 27% of the image width at Week 8 and would crop more as the timeline grew.
+2. Fix: moved wallpaper rendering to a viewport-height sticky backdrop; used separate full-surface overlay and `contain` artwork sizing with bottom-center positioning.
+3. Post-fix evidence: `02-wallpaper-contained-sticky.png` shows the full composition; `03-wallpaper-sticky-scrolled.png` shows it remains stable while scrolling.
+
+## Implementation checklist
+
+- [x] Preserve the original wallpaper asset and aspect ratio.
+- [x] Decouple wallpaper sizing from timeline document height.
+- [x] Keep the background stable during scrolling.
+- [x] Preserve dark/light overlays and responsive padding.
+- [x] Verify equip interaction, tests, typecheck, build, lint, and browser console.
+
+final result: passed

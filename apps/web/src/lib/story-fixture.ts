@@ -15,12 +15,24 @@ import {
 } from "@/lib/story-catalog";
 import type { BehaviorTitleId } from "@/lib/reward-grants";
 import { mergePendingRewardQueues } from "@/lib/reward-queue";
+import {
+  projectRewardLoadout,
+  type ProjectableRewardLoadout,
+  type RewardLoadoutSlot,
+} from "@/lib/reward-loadout";
 import type { PersistedStoryPlan } from "@/lib/story-plan";
 import {
   projectStoryProgression,
   projectUnseenGrantRewards,
   type ProjectableRewardGrant,
 } from "@/lib/story-projector";
+
+export class InvalidFixtureStoryCommandError extends Error {
+  constructor() {
+    super("Fixture story command is invalid for the projected history");
+    this.name = "InvalidFixtureStoryCommandError";
+  }
+}
 
 /** In-memory ledger for fixtures; projection is shared verbatim with production. */
 export class StoryFixtureLedger {
@@ -156,9 +168,9 @@ function earnedOnTimeIds(snapshot: PalWidgetSnapshot): Set<string> {
 
 function fixtureCompanionMessage(
   mood: PalWidgetSnapshot["companion"]["mood"],
-  companionRevealed: boolean,
+  companionName?: string,
 ): string {
-  const subject = companionRevealed ? "Pip" : "Your companion";
+  const subject = companionName ?? "Your companion";
   switch (mood) {
     case "happy":
       return `${subject} is happy about your progress.`;
@@ -167,8 +179,8 @@ function fixtureCompanionMessage(
     case "sleeping":
       return `${subject} is taking a rest.`;
     default:
-      return companionRevealed
-        ? "Complete positive learning actions to encourage Pip."
+      return companionName
+        ? `Complete positive learning actions to encourage ${companionName}.`
         : "Complete positive learning actions to encourage your companion.";
   }
 }
@@ -182,11 +194,46 @@ export async function projectStoryFixture(
   const presentation = createFixturePalClient(
     createEmptyFixtureSnapshot(request.termWeeks),
   );
+  const plans = new Map([[plan.id, plan]]);
+  let loadout: ProjectableRewardLoadout[] = [];
+
+  const setLoadout = (
+    slot: RewardLoadoutSlot,
+    rewardGrantId: string | null,
+  ): void => {
+    loadout = loadout.filter((row) => row.slot !== slot);
+    if (rewardGrantId === null) return;
+    const option = projectRewardLoadout(ledger.grants(), plans, loadout)[slot]
+      .options.find((candidate) => candidate.grantId === rewardGrantId);
+    if (!option) throw new InvalidFixtureStoryCommandError();
+    loadout.push({ slot, rewardGrantId, hidden: false });
+  };
 
   for (const command of request.commands) {
     if (command.type === "acknowledge") {
       await presentation.markRewardSeen(command.rewardId);
       ledger.markSeen(command.rewardId);
+      continue;
+    }
+    if (command.type === "set-loadout") {
+      setLoadout(command.slot, command.rewardGrantId);
+      continue;
+    }
+    if (command.type === "set-companion-visibility") {
+      const selected = loadout.find((row) => row.slot === "companion");
+      if (selected) {
+        selected.hidden = command.hidden;
+      } else if (command.hidden) {
+        const fallbackGrantId = projectRewardLoadout(ledger.grants(), plans, [])
+          .companion.fallbackGrantId;
+        if (fallbackGrantId) {
+          loadout.push({
+            slot: "companion",
+            rewardGrantId: fallbackGrantId,
+            hidden: true,
+          });
+        }
+      }
       continue;
     }
 
@@ -239,13 +286,30 @@ export async function projectStoryFixture(
 
   const snapshot = await presentation.getSnapshot();
   const progression = ledger.progression();
-  const companionRevealed = progression.companionReveal.status === "earned";
-  snapshot.companion.name = companionRevealed ? "Pip" : "Mystery companion";
+  const rewardLoadout = projectRewardLoadout(ledger.grants(), plans, loadout);
+  const equippedCompanion = rewardLoadout.companion.options.find(
+    (option) => option.grantId === rewardLoadout.companion.equippedGrantId,
+  );
+  const displayedProgression = equippedCompanion
+    ? {
+        ...progression,
+        companionReveal: {
+          status: "earned" as const,
+          assetUrl: equippedCompanion.assetUrl,
+        },
+      }
+    : progression;
+  const companionRevealed = displayedProgression.companionReveal.status === "earned";
+  const companionName = equippedCompanion?.title ?? (
+    companionRevealed ? "Pip" : undefined
+  );
+  snapshot.companion.name = companionName ?? "Mystery companion";
   snapshot.companion.message = fixtureCompanionMessage(
     snapshot.companion.mood,
-    companionRevealed,
+    companionName,
   );
-  snapshot.progression = progression;
+  snapshot.progression = displayedProgression;
+  snapshot.rewardLoadout = rewardLoadout;
   snapshot.rewards = mergePendingRewardQueues(
     ledger.rewards(),
     snapshot.rewards,

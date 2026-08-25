@@ -33,6 +33,48 @@ test("fixture story route rejects malformed commands", async () => {
   assert.equal(response.status, 422);
 });
 
+test("fixture story route rejects loadout grants invalid for their replay history", async () => {
+  const earnedCompanionHistory = Array.from({ length: 4 }, (_, index) => ({
+    type: "action",
+    id: `advance-${index + 1}`,
+    action: "advance-week",
+  }));
+  const invalidHistories = [
+    [{
+      type: "set-loadout",
+      slot: "wallpaper",
+      rewardGrantId: "not-owned",
+    }],
+    [{
+      type: "set-loadout",
+      slot: "companion",
+      rewardGrantId: "fixture-grant-4",
+    }],
+    [
+      ...earnedCompanionHistory,
+      {
+        type: "set-loadout",
+        slot: "wallpaper",
+        rewardGrantId: "fixture-grant-4",
+      },
+    ],
+  ];
+
+  for (const commands of invalidHistories) {
+    const response = await POST(
+      new NextRequest("https://pal.example/api/sandbox/fixture-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ termWeeks: 16, commands }),
+      }),
+    );
+    assert.equal(response.status, 422);
+    assert.deepEqual(await response.json(), {
+      error: "invalid_fixture_story_request",
+    });
+  }
+});
+
 test("fixture story route rejects private fields at every request level", async () => {
   const privateRequests = [
     {

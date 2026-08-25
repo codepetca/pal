@@ -113,6 +113,11 @@ The route requires `reward:equip`, verifies the token's integration/learner pair
 rejects unowned and reveal-only grants, and treats `null` as restoring the default
 for that slot. Keepsakes never call this endpoint.
 
+Current widgets can independently hide or show the selected companion with
+`{ "slot": "companion", "hidden": true | false }`. This does not change the
+selected companion. The explicit visibility shape keeps the existing
+`rewardGrantId: null` restore-default behavior backward compatible.
+
 The widget receives no raw learner identifier. Pika's backend uses its integration
 credential to mint the learner-scoped token; that credential never enters the
 browser. Acknowledging a reward notice changes notification presentation only and

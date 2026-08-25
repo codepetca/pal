@@ -99,7 +99,7 @@ test("loadout projection remains bounded while retaining the equipped reward", (
   assert.ok(projected.wallpaper.options.some((option) => option.grantId === "grant-0"));
 });
 
-test("companion projection identifies Pip as the fallback without making it toggleable", () => {
+test("companion projection identifies Pip as the fallback and preserves hidden state", () => {
   const storyPlan = plan("companion-plan", [
     { assignmentId: "pip", rewardId: "pip", kind: "companion" },
     { assignmentId: "lumi", rewardId: "lumi", kind: "companion" },
@@ -121,6 +121,14 @@ test("companion projection identifies Pip as the fallback without making it togg
   );
   assert.equal(selected.companion.fallbackGrantId, "grant-pip");
   assert.equal(selected.companion.equippedGrantId, "grant-lumi");
+
+  const hidden = projectRewardLoadout(
+    grants,
+    plans,
+    [{ slot: "companion", rewardGrantId: "grant-lumi", hidden: true }] as never,
+  );
+  assert.equal(hidden.companion.equippedGrantId, "grant-lumi");
+  assert.equal(hidden.companion.hidden, true);
 });
 
 test("bounded companion projection retains distinct equipped and fallback options", () => {

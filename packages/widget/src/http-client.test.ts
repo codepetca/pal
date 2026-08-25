@@ -170,7 +170,7 @@ test("reward acknowledgement retries use the same learner-scoped endpoint", asyn
   ]);
 });
 
-test("reward customization posts only a slot and owned grant id", async () => {
+test("reward customization posts bounded loadout and companion visibility bodies", async () => {
   const requests: Array<{ input: string; init?: RequestInit }> = [];
   const client = createPalHttpClient({
     apiBaseUrl: "https://pal.example",
@@ -182,6 +182,7 @@ test("reward customization posts only a slot and owned grant id", async () => {
   });
 
   await client.setRewardLoadout!("wallpaper", "grant-8");
+  await client.setCompanionVisibility!(true);
 
   assert.equal(requests[0]?.input, "https://pal.example/api/v1/learner/reward-loadout");
   assert.equal(requests[0]?.init?.method, "POST");
@@ -192,5 +193,9 @@ test("reward customization posts only a slot and owned grant id", async () => {
   assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), {
     slot: "wallpaper",
     rewardGrantId: "grant-8",
+  });
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+    slot: "companion",
+    hidden: true,
   });
 });

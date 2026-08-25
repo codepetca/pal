@@ -117,8 +117,13 @@
 }
 
 .pal-achievements {
+  --pal-achievements-padding-block: clamp(1.5rem, 4vw, 3rem);
+  --pal-achievements-padding-inline: clamp(1.5rem, 4vw, 3rem);
+  position: relative;
+  isolation: isolate;
   min-height: 100%;
-  padding: clamp(1.5rem, 4vw, 3rem);
+  padding: var(--pal-achievements-padding-block)
+    var(--pal-achievements-padding-inline);
   background: var(--pal-effective-color-page);
 }
 
@@ -128,9 +133,29 @@
   --pal-effective-color-border: #4b5563;
   --pal-effective-color-text: #f9fafb;
   --pal-effective-color-text-muted: #d1d5db;
-  background-position: center;
+}
+
+.pal-achievements-wallpaper {
+  position: sticky;
+  z-index: 0;
+  top: 0;
+  display: block;
+  height: 100dvh;
+  margin-block-start: calc(-1 * var(--pal-achievements-padding-block));
+  margin-block-end: calc(-100dvh + var(--pal-achievements-padding-block));
+  margin-inline: calc(-1 * var(--pal-achievements-padding-inline));
+  pointer-events: none;
+  background-color: var(--pal-effective-color-page);
+  background-position: center, center bottom;
   background-repeat: no-repeat;
-  background-size: cover;
+  background-size: 100% 100%, contain;
+  transition: background-image var(--pal-effective-motion-standard)
+    var(--pal-effective-motion-easing);
+}
+
+.pal-achievements > :not(.pal-achievements-wallpaper) {
+  position: relative;
+  z-index: 1;
 }
 
 .pal-loadout-error {
@@ -268,6 +293,15 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.pal-week-collectible[data-collectible-kind="wallpaper"] .pal-week-collectible-art {
+  width: 4.25rem;
+  height: 2.55rem;
+  padding: .2rem;
+  border: 1px solid #e5e7eb;
+  border-radius: .45rem;
+  background: #fff;
 }
 
 .pal-week-collectible[data-collectible-finish="sketch"] .pal-week-collectible-art img,
@@ -445,14 +479,29 @@
 }
 
 .pal-current-title {
-  display: inline-flex;
-  margin-bottom: clamp(1.5rem, 3vw, 2.5rem);
-  padding: 0.45rem 0.7rem;
+  display: flex;
+  width: fit-content;
+  margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
+  padding: 0.5rem 0.8rem;
+  align-items: baseline;
+  gap: .45rem;
   border: 1px solid var(--pal-effective-color-border);
   border-radius: 999px;
   color: var(--pal-effective-color-primary);
   background: var(--pal-effective-color-surface);
   font-size: 0.82rem;
+}
+
+.pal-current-title span {
+  color: var(--pal-effective-color-text-muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.pal-current-title strong {
+  font-weight: 800;
 }
 
 .pal-week-header {
@@ -844,6 +893,25 @@
   text-wrap: pretty;
 }
 
+.pal-celebration-title-award {
+  display: flex;
+  margin-top: .45rem;
+  padding: .55rem .7rem;
+  align-items: baseline;
+  justify-content: center;
+  gap: .45rem;
+  border-radius: var(--pal-effective-radius-control);
+  color: var(--pal-effective-color-primary);
+  background: var(--pal-effective-color-surface-selected);
+}
+
+.pal-celebration-title-award span {
+  font-size: .68rem;
+  font-weight: 750;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
 .pal-celebration[data-pal-reward-kind="title"] {
   width: min(20rem, calc(100vw - 2rem));
   padding-block: 2rem;
@@ -1135,7 +1203,8 @@
 }
 
 .pal-surface.pal-achievements[data-pal-viewport="narrow"] {
-  padding: 1.25rem 0.75rem;
+  --pal-achievements-padding-block: 1.25rem;
+  --pal-achievements-padding-inline: 0.75rem;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-story {

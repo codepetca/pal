@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@pal/db";
 import {
   RewardLoadoutWriteError,
+  setCompanionVisibility,
   setStoryRewardLoadout,
   type RewardLoadoutSlot,
 } from "@/lib/reward-loadout";
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     const body = parsedBody as Record<string, unknown>;
     if (
       Object.keys(body).some(
-        (key) => key !== "slot" && key !== "rewardGrantId",
+        (key) => key !== "slot" && key !== "rewardGrantId" && key !== "hidden",
       )
     ) {
       return NextResponse.json(
@@ -128,9 +129,13 @@ export async function POST(request: NextRequest) {
     }
     const slot = body.slot;
     const rewardGrantId = body.rewardGrantId;
+    const hidden = body.hidden;
+    const visibilityRequest = slot === "companion" && typeof hidden === "boolean" &&
+      rewardGrantId === undefined;
     if (
       (slot !== "companion" && slot !== "wallpaper") ||
-      (rewardGrantId !== null && !uuid(rewardGrantId))
+      (!visibilityRequest && (hidden !== undefined ||
+        (rewardGrantId !== null && !uuid(rewardGrantId))))
     ) {
       return NextResponse.json(
         { error: "invalid_request" },
@@ -139,12 +144,20 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getDb();
-    await setStoryRewardLoadout(db, {
-      integrationId: claims.integrationId,
-      learnerId: claims.learnerId,
-      slot: slot as RewardLoadoutSlot,
-      rewardGrantId,
-    });
+    if (visibilityRequest) {
+      await setCompanionVisibility(db, {
+        integrationId: claims.integrationId,
+        learnerId: claims.learnerId,
+        hidden,
+      });
+    } else {
+      await setStoryRewardLoadout(db, {
+        integrationId: claims.integrationId,
+        learnerId: claims.learnerId,
+        slot: slot as RewardLoadoutSlot,
+        rewardGrantId: rewardGrantId as string | null,
+      });
+    }
     return new NextResponse(null, { status: 204, headers: responseHeaders(cors) });
   } catch (error) {
     if (error instanceof InvalidReadTokenError) {

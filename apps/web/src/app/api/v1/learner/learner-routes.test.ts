@@ -57,7 +57,9 @@ function request(
 
 function loadoutRequest(
   token: string,
-  body: { slot: "companion" | "wallpaper"; rewardGrantId: string | null },
+  body:
+    | { slot: "companion" | "wallpaper"; rewardGrantId: string | null }
+    | { slot: "companion"; hidden: boolean },
 ): NextRequest {
   return new NextRequest("http://localhost/api/v1/learner/reward-loadout", {
     method: "POST",
@@ -183,6 +185,22 @@ test("loadout writes require an allowed origin, equip scope, and bounded valid b
   const invalidResponse = await setRewardLoadout(invalid);
   assert.equal(invalidResponse.status, 422);
   assert.equal((await invalidResponse.json()).error, "invalid_request");
+
+  const invalidVisibility = new NextRequest(
+    "http://localhost/api/v1/learner/reward-loadout",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: allowedOrigin,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ slot: "wallpaper", hidden: true }),
+    },
+  );
+  const invalidVisibilityResponse = await setRewardLoadout(invalidVisibility);
+  assert.equal(invalidVisibilityResponse.status, 422);
+  assert.equal((await invalidVisibilityResponse.json()).error, "invalid_request");
 
   const oversized = new NextRequest("http://localhost/api/v1/learner/reward-loadout", {
     method: "POST",
@@ -517,7 +535,7 @@ test(
 );
 
 test(
-  "equips and clears an owned wallpaper through the learner-scoped API",
+  "persists wallpaper loadout and companion visibility through the learner API",
   { skip: !process.env.DATABASE_URL },
   async () => {
     openedDatabase = true;
@@ -581,6 +599,12 @@ test(
       };
       const before = (await (await getSnapshot(snapshotRequest())).json()) as {
         rewardLoadout: {
+          companion: {
+            equippedGrantId?: string;
+            fallbackGrantId?: string;
+            hidden?: boolean;
+            options: Array<{ grantId: string; rewardId: string }>;
+          };
           wallpaper: {
             equippedGrantId?: string;
             options: Array<{ grantId: string; rewardId: string }>;
@@ -592,6 +616,12 @@ test(
       );
       assert.ok(wallpaper);
       assert.equal(before.rewardLoadout.wallpaper.equippedGrantId, undefined);
+      const pip = before.rewardLoadout.companion.options.find(
+        (option) => option.rewardId === "young-pip-v1",
+      );
+      assert.ok(pip);
+      assert.equal(before.rewardLoadout.companion.equippedGrantId, pip.grantId);
+      assert.equal(before.rewardLoadout.companion.hidden, undefined);
 
       const equipped = await setRewardLoadout(loadoutRequest(token, {
         slot: "wallpaper",
@@ -638,6 +668,24 @@ test(
       assert.equal(cleared.status, 204);
       const afterClear = (await (await getSnapshot(snapshotRequest())).json()) as typeof before;
       assert.equal(afterClear.rewardLoadout.wallpaper.equippedGrantId, undefined);
+
+      const hidden = await setRewardLoadout(loadoutRequest(token, {
+        slot: "companion",
+        hidden: true,
+      }));
+      assert.equal(hidden.status, 204);
+      const afterHide = (await (await getSnapshot(snapshotRequest())).json()) as typeof before;
+      assert.equal(afterHide.rewardLoadout.companion.equippedGrantId, pip.grantId);
+      assert.equal(afterHide.rewardLoadout.companion.hidden, true);
+
+      const legacyClear = await setRewardLoadout(loadoutRequest(token, {
+        slot: "companion",
+        rewardGrantId: null,
+      }));
+      assert.equal(legacyClear.status, 204);
+      const afterLegacyClear = (await (await getSnapshot(snapshotRequest())).json()) as typeof before;
+      assert.equal(afterLegacyClear.rewardLoadout.companion.equippedGrantId, pip.grantId);
+      assert.equal(afterLegacyClear.rewardLoadout.companion.hidden, undefined);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
