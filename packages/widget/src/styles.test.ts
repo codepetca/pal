@@ -49,6 +49,17 @@ test("widget exposes portable theme fallbacks and dark mode", () => {
   assert.match(styles, /font: inherit/);
 });
 
+test("achievement wallpapers stay viewport-sized without cropping their artwork", () => {
+  const wallpaperRule = styles.match(
+    /\.pal-achievements-wallpaper\s*\{([\s\S]*?)\n\}/,
+  )?.[1] ?? "";
+
+  assert.match(wallpaperRule, /position: sticky/);
+  assert.match(wallpaperRule, /height: 100dvh/);
+  assert.match(wallpaperRule, /background-size: 100% 100%, contain/);
+  assert.doesNotMatch(wallpaperRule, /background-size: cover/);
+});
+
 test("every public theme property is consumed and portable", () => {
   for (const property of PAL_THEME_PROPERTIES) {
     assert.match(
@@ -151,6 +162,8 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
 });
 
 test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {
+  const achievementsRule =
+    styles.match(/\.pal-achievements \{([^}]+)\}/)?.[1] ?? "";
   const tooltipRule =
     styles.match(/\.pal-badge-tooltip \{([^}]+)\}/)?.[1] ?? "";
   const tooltipBridgeRule =
@@ -166,6 +179,7 @@ test("badge tooltips stay hoverable while the pointer enters the disclosure", ()
   assert.match(tooltipBridgeRule, /height: 0\.6rem/);
   assert.match(visibleTooltipRule, /visibility: visible/);
   assert.match(visibleTooltipRule, /pointer-events: auto/);
+  assert.doesNotMatch(achievementsRule, /overflow:\s*(?:clip|hidden)/);
 });
 
 test("badges share one circular footprint and keep a minimum 44px target", () => {

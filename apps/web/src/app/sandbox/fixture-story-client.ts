@@ -67,6 +67,14 @@ export function createStoryFixturePalClient(
         rewards: snapshot.rewards.filter((reward) => reward.id !== rewardId),
       };
     },
+    async setRewardLoadout(slot, rewardGrantId, signal) {
+      if (signal?.aborted) throw signal.reason;
+      recordCommand({ type: "set-loadout", slot, rewardGrantId });
+    },
+    async setCompanionVisibility(hidden, signal) {
+      if (signal?.aborted) throw signal.reason;
+      recordCommand({ type: "set-companion-visibility", hidden });
+    },
     dispatch(action: PalFixtureAction, context?: PalFixtureActionContext) {
       const detail = presentation.dispatch(action, context);
       if (action === "reset") {

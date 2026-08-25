@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFixtureStoryRequest } from "@/app/sandbox/fixture-story-contract";
 import { isSandboxPageAllowed } from "@/lib/sandbox-learner";
-import { projectStoryFixture } from "@/lib/story-fixture";
+import {
+  InvalidFixtureStoryCommandError,
+  projectStoryFixture,
+} from "@/lib/story-fixture";
 
 export const dynamic = "force-dynamic";
 const MAX_FIXTURE_BODY_BYTES = 65_536;
@@ -59,5 +62,12 @@ export async function POST(request: NextRequest) {
   const parsed = parseFixtureStoryRequest(result.body);
   if (!parsed) return noStore({ error: "invalid_fixture_story_request" }, 422);
 
-  return noStore(await projectStoryFixture(parsed));
+  try {
+    return noStore(await projectStoryFixture(parsed));
+  } catch (error) {
+    if (error instanceof InvalidFixtureStoryCommandError) {
+      return noStore({ error: "invalid_fixture_story_request" }, 422);
+    }
+    throw error;
+  }
 }

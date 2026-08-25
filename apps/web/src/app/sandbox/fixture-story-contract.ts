@@ -1,6 +1,7 @@
 import type {
   PalFixtureAction,
   PalFixtureActionContext,
+  PalRewardLoadoutSlot,
 } from "@codepet/pal-widget";
 
 export const MAX_FIXTURE_COMMANDS = 96;
@@ -30,6 +31,15 @@ export type FixtureStoryCommand =
   | {
       type: "acknowledge";
       rewardId: string;
+    }
+  | {
+      type: "set-loadout";
+      slot: PalRewardLoadoutSlot;
+      rewardGrantId: string | null;
+    }
+  | {
+      type: "set-companion-visibility";
+      hidden: boolean;
     };
 
 export interface FixtureStoryRequest {
@@ -111,6 +121,28 @@ export function parseFixtureStoryRequest(value: unknown): FixtureStoryRequest | 
       const rewardId = boundedText(command.rewardId);
       if (!rewardId) return undefined;
       commands.push({ type: "acknowledge", rewardId });
+      continue;
+    }
+    if (command.type === "set-loadout") {
+      if (!hasOnlyKeys(command, ["type", "slot", "rewardGrantId"])) return undefined;
+      if (command.slot !== "companion" && command.slot !== "wallpaper") return undefined;
+      const rewardGrantId = command.rewardGrantId === null
+        ? null
+        : boundedText(command.rewardGrantId);
+      if (rewardGrantId === undefined) return undefined;
+      commands.push({
+        type: "set-loadout",
+        slot: command.slot,
+        rewardGrantId,
+      });
+      continue;
+    }
+    if (command.type === "set-companion-visibility") {
+      if (
+        !hasOnlyKeys(command, ["type", "hidden"]) ||
+        typeof command.hidden !== "boolean"
+      ) return undefined;
+      commands.push({ type: "set-companion-visibility", hidden: command.hidden });
       continue;
     }
     const id = boundedText(command.id);

@@ -223,9 +223,11 @@ export interface PalUsableStoryReward {
 }
 
 export interface PalRewardLoadoutSlotState {
-  /** Default companion restored when no explicit companion is selected. */
+  /** Default companion used before the learner makes an explicit selection. */
   fallbackGrantId?: string;
   equippedGrantId?: string;
+  /** Whether the equipped companion is hidden from the pet widget surface. */
+  hidden?: boolean;
   options: PalUsableStoryReward[];
 }
 
@@ -254,6 +256,11 @@ export interface PalClient {
   setRewardLoadout?(
     slot: PalRewardLoadoutSlot,
     rewardGrantId: string | null,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  /** Optional companion surface visibility control for current clients. */
+  setCompanionVisibility?(
+    hidden: boolean,
     signal?: AbortSignal,
   ): Promise<void>;
 }

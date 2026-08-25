@@ -90,24 +90,19 @@ export function PalRewardCelebration({
   const achievement = reward.achievement;
   const grantReward = achievement ? undefined : reward;
   const storyReward = grantReward?.kind === "story";
-  const titleReward = Boolean(grantReward?.titleAward);
-  const rewardKind = titleReward
-    ? "title"
-    : achievement
+  const rewardKind = achievement
       ? "achievement"
       : storyReward
         ? "story"
         : "reward";
-  const title = titleReward
-    ? grantReward?.titleAward
-    : achievement?.title ?? grantReward?.collectibleTitle ?? grantReward?.title ?? "";
+  const title = achievement?.title ?? grantReward?.collectibleTitle ?? grantReward?.title ?? "";
   const assetUrl = achievement?.badge.assetUrl ?? (
     theme === "dark"
       ? grantReward?.darkAssetUrl ?? grantReward?.assetUrl
       : grantReward?.assetUrl
   );
   const icon = achievement?.badge.icon ?? grantReward?.icon;
-  const showArtwork = !titleReward;
+  const showArtwork = true;
   const usableSlot = reward.rewardCategory === "companion" || reward.rewardCategory === "wallpaper"
     ? reward.rewardCategory
     : undefined;
@@ -182,6 +177,12 @@ export function PalRewardCelebration({
             <p className="pal-celebration-story-headline">{grantReward.title}</p>
           ) : null}
           <p className="pal-celebration-story-copy">{grantReward.description}</p>
+          {grantReward.titleAward ? (
+            <p className="pal-celebration-title-award">
+              <span>New title</span>
+              <strong>{grantReward.titleAward}</strong>
+            </p>
+          ) : null}
         </div>
       ) : null}
       {rewardError || relevantLoadoutError ? (

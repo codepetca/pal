@@ -349,6 +349,7 @@ function PalCompanion(
 ) {
   const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
   if (state === "error" || !snapshot) return null;
+  if (snapshot.rewardLoadout?.companion.hidden) return null;
 
   const companion = snapshot.companion;
   const progression = snapshot.progression;

@@ -129,5 +129,13 @@ export function createPalHttpClient({
         body: JSON.stringify({ slot, rewardGrantId }),
       });
     },
+    async setCompanionVisibility(hidden, signal) {
+      await authorizedFetch(rewardLoadoutPath, {
+        method: "POST",
+        signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slot: "companion", hidden }),
+      });
+    },
   };
 }

@@ -115,6 +115,81 @@ test("advancing the fixture guarantees the prior story keepsake as a sketch", as
   );
 });
 
+test("interactive fixture applies wallpaper and companion collectible controls", async () => {
+  const fetchFixture: typeof fetch = async (_input, init) => {
+    const parsed = parseFixtureStoryRequest(JSON.parse(String(init?.body)));
+    assert.ok(parsed);
+    return Response.json(await projectStoryFixture(parsed));
+  };
+  const client = createStoryFixturePalClient("https://pal.example", fetchFixture);
+
+  let snapshot = await client.getSnapshot();
+  while (
+    !snapshot.rewardLoadout ||
+    snapshot.rewardLoadout.companion.options.length < 2 ||
+    snapshot.rewardLoadout.wallpaper.options.length === 0
+  ) {
+    client.dispatch("advance-week");
+    snapshot = await client.getSnapshot();
+  }
+
+  assert.ok(snapshot.rewardLoadout);
+  const companion = snapshot.rewardLoadout.companion.options.find(
+    (option) => option.grantId === snapshot.rewardLoadout?.companion.fallbackGrantId,
+  );
+  const alternateCompanion = snapshot.rewardLoadout.companion.options.find(
+    (option) => option.grantId !== snapshot.rewardLoadout?.companion.fallbackGrantId,
+  );
+  const wallpaper = snapshot.rewardLoadout.wallpaper.options[0];
+  assert.ok(companion);
+  assert.ok(alternateCompanion);
+  assert.ok(wallpaper);
+
+  await client.setCompanionVisibility?.(true);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.companion.equippedGrantId, companion.grantId);
+  assert.equal(snapshot.rewardLoadout?.companion.hidden, true);
+
+  await client.setRewardLoadout?.("companion", companion.grantId);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.companion.equippedGrantId, companion.grantId);
+  assert.equal(snapshot.rewardLoadout?.companion.hidden, undefined);
+
+  await client.setRewardLoadout?.("companion", alternateCompanion.grantId);
+  snapshot = await client.getSnapshot();
+  assert.equal(
+    snapshot.rewardLoadout?.companion.equippedGrantId,
+    alternateCompanion.grantId,
+  );
+  assert.equal(snapshot.companion.name, alternateCompanion.title);
+  assert.deepEqual(snapshot.progression?.companionReveal, {
+    status: "earned",
+    assetUrl: alternateCompanion.assetUrl,
+  });
+  assert.equal(snapshot.companion.message.includes(alternateCompanion.title), true);
+
+  await client.setCompanionVisibility?.(true);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.companion.hidden, true);
+  await client.setRewardLoadout?.("companion", alternateCompanion.grantId);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.companion.hidden, undefined);
+  assert.equal(snapshot.companion.name, alternateCompanion.title);
+  assert.deepEqual(snapshot.progression?.companionReveal, {
+    status: "earned",
+    assetUrl: alternateCompanion.assetUrl,
+  });
+  assert.equal(snapshot.companion.message.includes(alternateCompanion.title), true);
+
+  await client.setRewardLoadout?.("wallpaper", wallpaper.grantId);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.wallpaper.equippedGrantId, wallpaper.grantId);
+
+  await client.setRewardLoadout?.("wallpaper", null);
+  snapshot = await client.getSnapshot();
+  assert.equal(snapshot.rewardLoadout?.wallpaper.equippedGrantId, undefined);
+});
+
 test("fixture story request rejects private or unbounded commands", () => {
   assert.equal(
     parseFixtureStoryRequest({
@@ -161,6 +236,24 @@ test("fixture story request rejects private or unbounded commands", () => {
   );
   assert.equal(
     parseFixtureStoryRequest({ termWeeks: 25, commands: [] }),
+    undefined,
+  );
+  assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      commands: [{
+        type: "set-loadout",
+        slot: "keepsake",
+        rewardGrantId: "fixture-grant-1",
+      }],
+    }),
+    undefined,
+  );
+  assert.equal(
+    parseFixtureStoryRequest({
+      termWeeks: 16,
+      commands: [{ type: "set-companion-visibility", hidden: "yes" }],
+    }),
     undefined,
   );
   assert.equal(

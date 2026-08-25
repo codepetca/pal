@@ -37,6 +37,7 @@ interface PalContextValue {
     slot: PalRewardLoadoutSlot,
     rewardGrantId: string | null,
   ) => Promise<boolean>;
+  setCompanionVisibility: (hidden: boolean) => Promise<boolean>;
   snapshot: PalWidgetSnapshot | null;
   state: PalLoadState;
   density: PalDensity;
@@ -590,6 +591,53 @@ export function PalProvider({
     [client, refreshSnapshot, scopeKey],
   );
 
+  const setCompanionVisibility = useCallback(
+    async (hidden: boolean) => {
+      const requestScope = requestScopeRef.current;
+      if (
+        requestScope.client !== client ||
+        requestScope.scopeKey !== scopeKey ||
+        requestScope.controller.signal.aborted
+      ) return false;
+      const setter = requestScope.client.setCompanionVisibility;
+      if (!setter) {
+        const nextError = new Error("This Pal client does not support companion visibility");
+        setLoadoutState({ error: nextError, pending: false, scopeKey, slot: "companion" });
+        onErrorRef.current?.(nextError);
+        return false;
+      }
+      const { signal } = requestScope.controller;
+      setLoadoutState({ error: null, pending: true, scopeKey, slot: "companion" });
+      try {
+        await setter(hidden, signal);
+        if (signal.aborted || activeScopeRef.current !== scopeKey) return false;
+        const refreshed = await refreshSnapshot();
+        if (mountedRef.current && activeScopeRef.current === scopeKey) {
+          setLoadoutState(refreshed
+            ? { error: null, pending: false, scopeKey, slot: null }
+            : {
+                error: new Error("Pal saved the companion visibility but could not refresh it"),
+                pending: false,
+                scopeKey,
+                slot: "companion",
+              });
+        }
+        return refreshed;
+      } catch (cause) {
+        if (isAbortError(cause, signal)) return false;
+        const nextError = cause instanceof Error
+          ? cause
+          : new Error("Pal could not update companion visibility");
+        if (mountedRef.current && activeScopeRef.current === scopeKey) {
+          setLoadoutState({ error: nextError, pending: false, scopeKey, slot: "companion" });
+          onErrorRef.current?.(nextError);
+        }
+        return false;
+      }
+    },
+    [client, refreshSnapshot, scopeKey],
+  );
+
   const value = useMemo(
     () => ({
       dismissReward,
@@ -601,6 +649,7 @@ export function PalProvider({
       refresh,
       rewardError: currentRewardState.error,
       setRewardLoadout,
+      setCompanionVisibility,
       snapshot: currentResource.snapshot,
       state: currentResource.state,
       density,
@@ -622,6 +671,7 @@ export function PalProvider({
       motion,
       refresh,
       setRewardLoadout,
+      setCompanionVisibility,
       theme,
       viewport,
     ],

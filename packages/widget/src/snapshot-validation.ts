@@ -83,6 +83,11 @@ function optionalText(
   return value === undefined ? undefined : text(value, path, maxLength);
 }
 
+function booleanValue(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") return fail(path, "expected a boolean");
+  return value;
+}
+
 function secureAssetOrigin(url: URL, path: string): string {
   const localDevelopmentHost =
     url.hostname === "localhost" ||
@@ -527,6 +532,12 @@ function parseRewardLoadout(
       slotSource.fallbackGrantId,
       `${slotPath}.fallbackGrantId`,
     );
+    const hidden = slotSource.hidden === undefined
+      ? undefined
+      : booleanValue(slotSource.hidden, `${slotPath}.hidden`);
+    if (hidden !== undefined && slot !== "companion") {
+      fail(`${slotPath}.hidden`, "is only supported for companions");
+    }
     if (fallbackGrantId !== undefined && slot !== "companion") {
       fail(`${slotPath}.fallbackGrantId`, "is only supported for companions");
     }
@@ -545,6 +556,7 @@ function parseRewardLoadout(
     return {
       ...(fallbackGrantId === undefined ? {} : { fallbackGrantId }),
       ...(equippedGrantId === undefined ? {} : { equippedGrantId }),
+      ...(hidden === undefined ? {} : { hidden }),
       options,
     };
   };
