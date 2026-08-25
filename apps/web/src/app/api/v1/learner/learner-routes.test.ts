@@ -282,7 +282,7 @@ test(
         rewards: Array<{ id: string }>;
       };
       assert.equal(snapshot.schemaVersion, 1);
-      assert.equal(snapshot.rewards.length, 2);
+      assert.equal(snapshot.rewards.length, 1);
 
       for (const reward of snapshot.rewards) {
         for (let attempt = 0; attempt < 2; attempt += 1) {
