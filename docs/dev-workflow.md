@@ -78,6 +78,7 @@ For manual/local-Docker configuration, set:
 | `PAL_SANDBOX_MODE` | `fixture` (default) or `persisted` | Selecting the local sandbox source; previews always force `fixture` |
 | `PAL_READ_TOKEN_SIGNING_SECRET` | A third distinct 32+ character signing key generated with `openssl rand -hex 32` | Minting or verifying learner read tokens |
 | `PAL_ALLOWED_WIDGET_ORIGINS` | Comma-separated exact Pika HTTPS origins; use `http://localhost:3001` for local Pika | Calling learner snapshot/reward APIs from a browser |
+| `PAL_ACHIEVEMENT_TITLES_VISIBLE` | `true` or `false` (defaults to `false`) | Enabling learner-facing title inventory, equipped titles, and title notices |
 | `CRON_SECRET` | A URL-safe 32-256 character secret generated with `openssl rand -base64 48 | tr -d '=+/'` | Authenticating Vercel's daily story-collectible worker |
 | `DATABASE_URL` | Ask the team lead for the dev connection string | After the M1 schema lands |
 

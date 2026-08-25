@@ -13,6 +13,7 @@ import {
   resolvePalAchievementPresentation,
 } from "./achievement-presentation";
 import { collectionItemsForUnlocks } from "./collection";
+import { DEFAULT_PAL_FEATURE_POLICY } from "./feature-policy";
 import type {
   PalAchievement,
   PalAchievementKey,
@@ -163,6 +164,7 @@ export function createEmptyFixtureSnapshot(totalWeeks = 16): PalWidgetSnapshot {
   };
   return {
     schemaVersion: 1,
+    featurePolicy: DEFAULT_PAL_FEATURE_POLICY,
     roadmap: {
       semesterLabel: "Achievement semester",
       currentWeek,
@@ -207,6 +209,7 @@ export function createFixtureSnapshot(
 
   return {
     schemaVersion: 1,
+    featurePolicy: DEFAULT_PAL_FEATURE_POLICY,
     roadmap: {
       semesterLabel: "Fall semester",
       currentWeek: boundedCurrentWeek,

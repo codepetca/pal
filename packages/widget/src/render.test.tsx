@@ -668,3 +668,29 @@ test("a story reward ignores its title award while titles are disabled", () => {
   assert.doesNotMatch(celebration, /Story unlocked/);
   assert.doesNotMatch(celebration, /New title/);
 });
+
+test("a snapshot policy can restore title celebrations", () => {
+  const snapshot = createFixtureSnapshot(3);
+  snapshot.featurePolicy = { achievements: { titles: true } };
+  snapshot.rewards.unshift({
+    id: "title-reveal",
+    title: "Gentle Keeper earned",
+    description: "You made space for someone else.",
+    titleAward: "Gentle Keeper",
+  });
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="title-reveal-learner"
+      motion="reduced"
+    >
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+
+  const celebration = html.slice(html.indexOf('class="pal-celebration"'));
+  assert.match(celebration, /data-pal-reward-kind="title"/);
+  assert.match(celebration, /<h2[^>]*>Gentle Keeper<\/h2>/);
+});

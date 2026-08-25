@@ -12,6 +12,7 @@ import type {
   PalCompanionState,
   PalCollectionItem,
   PalCollectionState,
+  PalFeaturePolicy,
   PalProgress,
   PalProgressionState,
   PalRewardNotice,
@@ -161,6 +162,23 @@ function integer(value: unknown, path: string, minimum = 0): number {
     return fail(path, `expected an integer greater than or equal to ${minimum}`);
   }
   return value as number;
+}
+
+function booleanValue(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    return fail(path, "expected a boolean");
+  }
+  return value;
+}
+
+function parseFeaturePolicy(value: unknown, path: string): PalFeaturePolicy {
+  const source = record(value, path);
+  const achievements = record(source.achievements, `${path}.achievements`);
+  return {
+    achievements: {
+      titles: booleanValue(achievements.titles, `${path}.achievements.titles`),
+    },
+  };
 }
 
 function optionalInteger(
@@ -895,8 +913,12 @@ export function parsePalWidgetSnapshot(
         "snapshot.rewardLoadout",
         assetPolicy,
       );
+  const featurePolicy = source.featurePolicy === undefined
+    ? undefined
+    : parseFeaturePolicy(source.featurePolicy, "snapshot.featurePolicy");
   return {
     schemaVersion: 1,
+    ...(featurePolicy === undefined ? {} : { featurePolicy }),
     roadmap: {
       semesterLabel: text(
         roadmap.semesterLabel,

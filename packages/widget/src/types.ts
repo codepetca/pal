@@ -21,6 +21,13 @@ export type PalRewardCategory = "companion" | "keepsake" | "wallpaper";
 export type PalCollectibleKind = PalRewardCategory | "room" | "cosmetic";
 export type PalCollectibleFinish = "sketch" | "color";
 
+/** Server-resolved learner-facing feature policy. */
+export interface PalFeaturePolicy {
+  achievements: {
+    titles: boolean;
+  };
+}
+
 export interface PalProgress {
   current: number;
   target: number;
@@ -236,6 +243,8 @@ export interface PalRewardLoadoutState {
 
 export interface PalWidgetSnapshot {
   schemaVersion: 1;
+  /** Optional so schema-v1 widgets can still consume snapshots from older hosts. */
+  featurePolicy?: PalFeaturePolicy;
   roadmap: PalRoadmapSnapshot;
   companion: PalCompanionState;
   /** Durable world keepsakes. Optional for backward-compatible v1 snapshots. */
