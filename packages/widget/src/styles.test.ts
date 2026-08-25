@@ -100,6 +100,13 @@ test("responsive behavior follows the host viewport contract", () => {
     styles,
     /\.pal-surface\.pal-achievements\[data-pal-viewport="narrow"\]/,
   );
+  const narrowTooltipRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-badge-tooltip \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowTooltipRule, /right: 0/);
+  assert.match(narrowTooltipRule, /left: auto/);
+  assert.match(styles, /data-week-status="current"[\s\S]*transform: scale\(1\.1\)/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
@@ -148,6 +155,21 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   );
   assert.match(collectibleStackRule, /grid-column: 2/);
   assert.match(weekContentRule, /grid-column: 3/);
+});
+
+test("roadmap gives the current week a larger focal treatment without scroll trapping", () => {
+  const roadmapRule = styles.match(/\.pal-roadmap-list \{([^}]+)\}/)?.[1] ?? "";
+  const currentStackRule =
+    styles.match(
+      /\.pal-week\[data-week-status="current"\] \.pal-week-collectible-stack \{([^}]+)\}/,
+    )?.[1] ?? "";
+  const achievementsRule =
+    styles.match(/\.pal-achievements \{([^}]+)\}/)?.[1] ?? "";
+
+  assert.match(roadmapRule, /padding-block-end:/);
+  assert.match(currentStackRule, /transform: scale\(1\.18\)/);
+  assert.doesNotMatch(roadmapRule, /scroll-snap/);
+  assert.doesNotMatch(achievementsRule, /overflow:/);
 });
 
 test("badge tooltips stay hoverable while the pointer enters the disclosure", () => {

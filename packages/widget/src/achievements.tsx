@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { usePalWidget } from "./provider";
 import type {
@@ -156,6 +156,37 @@ export function PalAchievements() {
     theme,
     viewport,
   } = usePalWidget();
+  const currentWeekRef = useRef<HTMLLIElement>(null);
+  const hasCenteredCurrentWeekRef = useRef(false);
+  const currentWeekNumber = snapshot?.roadmap.currentWeek;
+
+  useEffect(() => {
+    if (
+      hasCenteredCurrentWeekRef.current ||
+      currentWeekNumber === undefined ||
+      typeof window === "undefined" ||
+      typeof window.requestAnimationFrame !== "function"
+    ) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const currentWeek = currentWeekRef.current;
+      if (!currentWeek) return;
+
+      hasCenteredCurrentWeekRef.current = true;
+      const prefersReducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches ?? false;
+      currentWeek.scrollIntoView({
+        behavior: motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    });
+
+    return () => window.cancelAnimationFrame?.(frame);
+  }, [currentWeekNumber, motion]);
 
   const appearance = {
     "data-pal-density": density,
@@ -189,7 +220,7 @@ export function PalAchievements() {
 
   const visibleWeeks = snapshot.roadmap.weeks
     .filter((week) => week.number <= snapshot.roadmap.currentWeek)
-    .sort((a, b) => b.number - a.number);
+    .sort((a, b) => a.number - b.number);
   const progression: PalProgressionState | undefined = snapshot.progression;
   const wallpaper = snapshot.rewardLoadout?.wallpaper;
   const equippedWallpaper = wallpaper?.options.find(
@@ -289,6 +320,7 @@ export function PalAchievements() {
               data-week-status={isCurrent ? "current" : "past"}
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
+              ref={isCurrent ? currentWeekRef : undefined}
             >
               {storyHeadline && storyCopy ? (
                 <WeekStory
@@ -299,6 +331,9 @@ export function PalAchievements() {
               ) : null}
               <div className="pal-week-collectible-stack">
                 <header className="pal-week-header">
+                  {isCurrent ? (
+                    <span className="pal-week-current-label">Current week</span>
+                  ) : null}
                   <h3>{week.label}</h3>
                 </header>
                 {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (

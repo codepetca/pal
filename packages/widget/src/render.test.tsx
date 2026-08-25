@@ -36,6 +36,7 @@ test("public surfaces render meaningful status without relying on color", () => 
 
   assert.doesNotMatch(html, />Achievements</);
   assert.match(html, /aria-current="step"/);
+  assert.match(html, /class="pal-week-current-label">Current week</);
   assert.match(html, /4 of 4 eligible days/);
   assert.match(html, /class="pal-badge-progress-ring"/);
   assert.match(html, /stroke-dasharray="100 0"/);
@@ -186,7 +187,7 @@ test("roadmap weeks after the completed story do not show fabricated collectible
   assert.doesNotMatch(html, /Week 17 collectible locked/);
 });
 
-test("roadmap hides future weeks and renders visible weeks newest first", () => {
+test("roadmap hides future weeks and renders visible weeks chronologically", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
     <PalProvider
@@ -207,9 +208,9 @@ test("roadmap hides future weeks and renders visible weeks newest first", () => 
   const weekThree = html.indexOf(">Week 3<");
   const weekTwo = html.indexOf(">Week 2<");
   const weekOne = html.indexOf(">Week 1<");
-  assert.ok(weekFour < weekThree);
-  assert.ok(weekThree < weekTwo);
-  assert.ok(weekTwo < weekOne);
+  assert.ok(weekOne < weekTwo);
+  assert.ok(weekTwo < weekThree);
+  assert.ok(weekThree < weekFour);
 });
 
 test("roadmap keeps a schema-v1 preterm snapshot renderable", () => {
@@ -265,7 +266,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   );
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><span class="pal-week-current-label">Current week<\/span><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
   assert.doesNotMatch(html, />Equipped</);

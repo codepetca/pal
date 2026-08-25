@@ -14,7 +14,7 @@ import type { PalClient } from "./types";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-test("achievement trail omits future weeks and orders visible weeks newest first", async () => {
+test("achievement trail omits future weeks and orders visible weeks chronologically", async () => {
   const snapshot = createFixtureSnapshot();
   snapshot.roadmap.weeks[3]!.status = "future";
   snapshot.roadmap.weeks[4]!.status = "current";
@@ -40,13 +40,31 @@ test("achievement trail omits future weeks and orders visible weeks newest first
 
     assert.deepEqual(
       weeks.map((week) => week.props["data-week-status"]),
-      ["current", "past", "past", "past"],
+      ["past", "past", "past", "current"],
     );
     assert.deepEqual(
       weeks.map((week) =>
         week.find((node) => node.type === "h3").children.join(""),
       ),
-      ["Week 4", "Week 3", "Week 2", "Week 1"],
+      ["Week 1", "Week 2", "Week 3", "Week 4"],
+    );
+    const currentWeek = weeks.at(-1)!;
+    assert.equal(currentWeek.props["aria-current"], "step");
+    assert.equal(
+      currentWeek.findAll(
+        (node) => node.props.className === "pal-week-current-label",
+      ).length,
+      1,
+    );
+    assert.equal(
+      currentWeek.find(
+        (node) => node.props.className === "pal-week-current-label",
+      ).children.join(""),
+      "Current week",
+    );
+    assert.equal(
+      weeks.slice(0, -1).some((week) => week.props["aria-current"]),
+      false,
     );
     assert.equal(
       renderer!.root.findAll(
