@@ -36,6 +36,7 @@ test("public surfaces render meaningful status without relying on color", () => 
 
   assert.doesNotMatch(html, />Achievements</);
   assert.match(html, /aria-current="step"/);
+  assert.match(html, /class="pal-week-current-label">Current week</);
   assert.match(html, /4 of 4 eligible days/);
   assert.match(html, /class="pal-badge-progress-ring"/);
   assert.match(html, /stroke-dasharray="100 0"/);
@@ -186,7 +187,7 @@ test("roadmap weeks after the completed story do not show fabricated collectible
   assert.doesNotMatch(html, /Week 17 collectible locked/);
 });
 
-test("roadmap hides future weeks and renders visible weeks newest first", () => {
+test("roadmap hides future weeks and renders visible weeks chronologically", () => {
   const client = createFixturePalClient();
   const html = renderToStaticMarkup(
     <PalProvider
@@ -207,9 +208,9 @@ test("roadmap hides future weeks and renders visible weeks newest first", () => 
   const weekThree = html.indexOf(">Week 3<");
   const weekTwo = html.indexOf(">Week 2<");
   const weekOne = html.indexOf(">Week 1<");
-  assert.ok(weekFour < weekThree);
-  assert.ok(weekThree < weekTwo);
-  assert.ok(weekTwo < weekOne);
+  assert.ok(weekOne < weekTwo);
+  assert.ok(weekTwo < weekThree);
+  assert.ok(weekThree < weekFour);
 });
 
 test("roadmap keeps a schema-v1 preterm snapshot renderable", () => {
@@ -265,7 +266,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   );
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><span class="pal-week-current-label">Current week<\/span><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
   assert.doesNotMatch(html, />Equipped</);
@@ -295,7 +296,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Semester Legend/);
 });
 
-test("an earned week shows its story beside the week, collapsed to the headline", () => {
+test("an earned week shows its story beside the week, expanded by default", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles[0] = {
     id: "earned-week-one",
@@ -324,11 +325,27 @@ test("an earned week shows its story beside the week, collapsed to the headline"
 
   assert.match(html, /class="pal-week-story"/);
   assert.match(html, />Something Found You</);
-  // The passage ships in the markup but stays hidden until the reader opens it,
-  // so a long trail is not a wall of text.
-  assert.match(html, /aria-expanded="false"/);
-  assert.match(html, /class="pal-week-story-panel" hidden=""/);
+  assert.match(html, /aria-expanded="true"/);
+  assert.match(html, /class="pal-week-story-panel"/);
+  assert.doesNotMatch(html, /class="pal-week-story-panel" hidden=""/);
   assert.match(html, /A heavy storm passed over the town during the night\./);
+
+  const narrowHtml = renderToStaticMarkup(
+    <PalProvider
+      client={client}
+      initialSnapshot={client.peek()}
+      scopeKey="story-week-learner-narrow"
+      viewport="narrow"
+    >
+      <PalAchievements />
+    </PalProvider>,
+  );
+  assert.doesNotMatch(narrowHtml, /class="pal-week-story"/);
+  assert.doesNotMatch(narrowHtml, /Something Found You/);
+  assert.doesNotMatch(
+    narrowHtml,
+    /A heavy storm passed over the town during the night\./,
+  );
 });
 
 test("a week with no earned collectible has no story bubble", () => {
@@ -350,7 +367,7 @@ test("a week with no earned collectible has no story bubble", () => {
   assert.doesNotMatch(html, /class="pal-week-story"/);
 });
 
-test("story celebration carries the chapter's passage alongside the collectible", () => {
+test("story celebration focuses on the collectible without repeating the passage", () => {
   const snapshot = createFixtureSnapshot(1, 6);
   snapshot.rewards = [{
     id: "story-sketch",
@@ -370,11 +387,31 @@ test("story celebration carries the chapter's passage alongside the collectible"
   assert.match(html, /data-pal-reward-kind="story"/);
   assert.match(html, />Mystery Egg</);
   assert.match(html, /reward-mystery-egg-v1\.png/);
-  // The reveal happens here, so the chapter headline and passage ride along
-  // with the collectible rather than waiting in the trail.
-  assert.match(html, />A new chapter</);
-  assert.match(html, /The egg waits beside the lamp/);
+  assert.doesNotMatch(html, />A new chapter</);
+  assert.doesNotMatch(html, /The egg waits beside the lamp/);
   assert.doesNotMatch(html, /Storybook sketch/);
+});
+
+test("legacy story celebration uses a neutral title instead of narrative copy", () => {
+  const snapshot = createFixtureSnapshot(1, 6);
+  snapshot.rewards = [{
+    id: "legacy-story",
+    kind: "story",
+    title: "A light in the storm",
+    description: "The lantern flickered through the longest night.",
+    assetUrl: "/assets/world/reward-warming-lantern-v1.png",
+  }];
+  const client = createFixturePalClient(snapshot);
+  const html = renderToStaticMarkup(
+    <PalProvider client={client} initialSnapshot={snapshot} scopeKey="legacy-story">
+      <PalRewardCelebration />
+    </PalProvider>,
+  );
+
+  assert.match(html, /<h2[^>]*>New collectible<\/h2>/);
+  assert.match(html, /reward-warming-lantern-v1\.png/);
+  assert.doesNotMatch(html, /A light in the storm/);
+  assert.doesNotMatch(html, /The lantern flickered through the longest night/);
 });
 
 test("achievement celebration centers its earned badge without explanatory copy", () => {
@@ -634,7 +671,7 @@ test("standalone content always retains a dismissal action", () => {
   assert.match(html, />Continue<\/button>/);
 });
 
-test("a story reward ignores its title award while titles are disabled", () => {
+test("a story reward omits narrative and title-award copy while titles are disabled", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({
     id: "story-reveal",
@@ -661,9 +698,9 @@ test("a story reward ignores its title award while titles are disabled", () => {
   assert.match(celebration, /data-pal-reward-kind="story"/);
   assert.match(celebration, /<h2[^>]*>Warming Lantern<\/h2>/);
   assert.match(celebration, />Continue<\/button>/);
-  assert.match(celebration, /Keep the light on/);
+  assert.doesNotMatch(celebration, /Keep the light on/);
   assert.match(celebration, /reward-warming-lantern-v1\.png/);
-  assert.match(celebration, /The coldest night arrived/);
+  assert.doesNotMatch(celebration, /The coldest night arrived/);
   assert.doesNotMatch(celebration, /Gentle Keeper/);
   assert.doesNotMatch(celebration, /Story unlocked/);
   assert.doesNotMatch(celebration, /New title/);

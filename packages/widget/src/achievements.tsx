@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { usePalWidget } from "./provider";
 import type {
@@ -14,10 +14,9 @@ import type {
  * carrying the chapter headline, short enough that the collectible - not the
  * story - keeps setting the row height.
  *
- * The passage itself is positioned out of flow, so opening a story overlays the
- * trail instead of pushing the weeks below it down: the spine stays put whether
- * a story is folded or not. The first reveal happens in the reward celebration
- * when the week is claimed; this is where the reader comes back to re-read it.
+ * Stories start open because this page owns the chapter narrative. The passage
+ * participates in the row layout so several open chapters never overlap;
+ * narrow hosts omit stories entirely to preserve the centered trail.
  */
 function WeekStory({
   headline,
@@ -28,7 +27,7 @@ function WeekStory({
   storyCopy: string;
   weekLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const panelId = useId();
 
   return (
@@ -150,12 +149,44 @@ export function PalAchievements() {
     loadoutPending,
     motion,
     refresh,
+    scopeKey,
     setRewardLoadout,
     snapshot,
     state,
     theme,
     viewport,
   } = usePalWidget();
+  const currentWeekFocalRef = useRef<HTMLDivElement>(null);
+  const centeredScopeKeyRef = useRef<string | null>(null);
+  const currentWeekNumber = snapshot?.roadmap.currentWeek;
+
+  useEffect(() => {
+    if (
+      centeredScopeKeyRef.current === scopeKey ||
+      currentWeekNumber === undefined ||
+      typeof window === "undefined" ||
+      typeof window.requestAnimationFrame !== "function"
+    ) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const currentWeekFocal = currentWeekFocalRef.current;
+      if (!currentWeekFocal) return;
+
+      centeredScopeKeyRef.current = scopeKey;
+      const prefersReducedMotion = window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)",
+      ).matches ?? false;
+      currentWeekFocal.scrollIntoView({
+        behavior: motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    });
+
+    return () => window.cancelAnimationFrame?.(frame);
+  }, [currentWeekNumber, motion, scopeKey]);
 
   const appearance = {
     "data-pal-density": density,
@@ -189,7 +220,7 @@ export function PalAchievements() {
 
   const visibleWeeks = snapshot.roadmap.weeks
     .filter((week) => week.number <= snapshot.roadmap.currentWeek)
-    .sort((a, b) => b.number - a.number);
+    .sort((a, b) => a.number - b.number);
   const progression: PalProgressionState | undefined = snapshot.progression;
   const wallpaper = snapshot.rewardLoadout?.wallpaper;
   const equippedWallpaper = wallpaper?.options.find(
@@ -290,15 +321,21 @@ export function PalAchievements() {
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
             >
-              {storyHeadline && storyCopy ? (
+              {viewport !== "narrow" && storyHeadline && storyCopy ? (
                 <WeekStory
                   headline={storyHeadline}
                   storyCopy={storyCopy}
                   weekLabel={week.label}
                 />
               ) : null}
-              <div className="pal-week-collectible-stack">
+              <div
+                className="pal-week-collectible-stack"
+                ref={isCurrent ? currentWeekFocalRef : undefined}
+              >
                 <header className="pal-week-header">
+                  {isCurrent ? (
+                    <span className="pal-week-current-label">Current week</span>
+                  ) : null}
                   <h3>{week.label}</h3>
                 </header>
                 {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (
