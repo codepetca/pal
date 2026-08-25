@@ -102,9 +102,11 @@ it does not mutate that state or bypass the rule engine. Keeping the field
 optional preserves schema-version-1 compatibility for integrations pinned to an
 older widget/API pair.
 
-- A deterministic story plan selects one chapter for each supported 6–24 week
-  instructional term. Eight core chapters preserve the emotional arc while
-  optional chapters let longer terms breathe.
+- A deterministic story plan is pinned inside the supported 6–24-week academic
+  term envelope. `A Place to Call Home` is the default for new 16–24-week terms
+  and ends after its fixed 16 chapters; Week 17 and later retain ordinary
+  roadmap achievements without fabricating or scheduling another story reward.
+  Shorter terms keep the registered elastic `Pip's First Recipe` v1 plan.
 - The first calendar-bearing weekly configuration persists the complete plan
   under the learner row lock. Each later configuration binds its opaque period
   to that plan's matching ordinal; snapshots read this stored order rather than
@@ -114,8 +116,8 @@ older widget/API pair.
   reference is used only for new plans; persisted plans and reward notices
   continue resolving through their assigned version, so a new story or Pip v2
   does not require a database or learning-event contract change.
-- Every configured instructional period becomes due on the local calendar day
-  after its own instructional end: Saturday after a normal Friday, or the next
+- Every configured instructional period that has a pinned story chapter becomes
+  due on the local calendar day after its own instructional end: Saturday after a normal Friday, or the next
   day when the authoritative term ends midweek. The first partial week begins on
   `term_start_day`; later normal weeks begin Monday. A later instructional week,
   holiday, or break never moves the current period's due day. Boundaries use the
@@ -148,14 +150,14 @@ older widget/API pair.
   plan and durable awards once, then emits a single display-ready
   `companionReveal` decision. The companion surface renders that decision and
   never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
-- Story titles are Gentle Keeper, Brave Beginner, Try-Again Chef, and True
-  Friend. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
+- Current Home story titles are Undeterred, Gentle Friend, Pathmaker, and
+  Homekeeper. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
   Each award stores both source occurrence and PAL grant order. The display
   keeps the most recently granted title across later snapshots without delayed
   delivery rewriting the learner's visible history; a story title wins when
   one action awards multiple titles at the same time. Historical achievements
   never create reward grants; every new grant has an exact source fact.
-- The widget gives every roadmap week a collectible-style slot while concealing
+- The widget gives every roadmap week with a story chapter a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once the chapter is granted, that week's slot reveals one
   sketch or full-color collectible (at most one reward per period). Older
@@ -167,7 +169,7 @@ older widget/API pair.
 - The active daily scheduler catches up overdue post-rollout assignments in
   one fair bounded page per learner, leaving deeper or deadline-exceeding work
   for the next daily run. Story copy, collectible briefs, and scheduling rules are defined in
-  [Pip's First Recipe — Story Collection Design](story-collection-design.md).
+  [A Place to Call Home — Story Collection Design](story-collection-design.md).
 
 The first milestone uses `world-study-bird-v1`, not the legacy
 `world-bird-v1` ID that the original policy awarded for a seven-day streak.

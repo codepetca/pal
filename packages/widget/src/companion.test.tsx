@@ -144,3 +144,56 @@ test("the companion mounts only frames used by the current mood", async () => {
     });
   }
 });
+
+test("a named companion never borrows the default companion animation set", async () => {
+  const originalWindow = globalThis.window;
+  let renderer: ReturnType<typeof create> | undefined;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener() {},
+        removeEventListener() {},
+      }),
+    },
+  });
+
+  try {
+    const snapshot = createFixtureSnapshot(5);
+    snapshot.companion.mood = "happy";
+    snapshot.progression!.companionReveal = {
+      status: "earned",
+      assetUrl: "/assets/pets/lumi-v1.png",
+    };
+
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={{
+            getSnapshot: async () => snapshot,
+            markRewardSeen: async () => undefined,
+          }}
+          initialSnapshot={snapshot}
+          motion="system"
+          scopeKey="named-static-companion"
+        >
+          <PalCompanion />
+        </PalProvider>,
+      );
+    });
+
+    const sources = renderer!.root
+      .findAll(
+        (node) => node.type === "img" && node.props.className === "pal-companion-sprite",
+      )
+      .map((image) => image.props.src);
+    assert.deepEqual(sources, ["/assets/pets/lumi-v1.png"]);
+  } finally {
+    await act(async () => renderer?.unmount());
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});

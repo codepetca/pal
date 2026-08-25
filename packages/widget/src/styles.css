@@ -122,6 +122,55 @@
   background: var(--pal-effective-color-page);
 }
 
+.pal-achievements[data-pal-wallpaper="equipped"] {
+  --pal-effective-color-surface: #111827;
+  --pal-effective-color-surface-muted: #1f2937;
+  --pal-effective-color-border: #4b5563;
+  --pal-effective-color-text: #f9fafb;
+  --pal-effective-color-text-muted: #d1d5db;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.pal-loadout-error {
+  margin-block-end: .75rem;
+  color: var(--pal-effective-color-warning);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.pal-week-collectible:is(button) {
+  position: relative;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pal-week-collectible:is(button):focus-visible {
+  outline: var(--pal-effective-focus-width) solid var(--pal-effective-focus-color);
+  outline-offset: 2px;
+}
+
+.pal-week-collectible:is(button):disabled {
+  cursor: wait;
+  opacity: .7;
+}
+
+.pal-week-collectible[data-loadout-equipped="true"] {
+  border-color: var(--pal-effective-color-success);
+  box-shadow: 0 0 0 3px var(--pal-effective-color-surface-selected);
+}
+
+.pal-week-collectible-status {
+  margin-block-start: .2rem;
+  color: var(--pal-effective-color-success);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .pal-eyebrow {
   color: var(--pal-effective-color-primary);
   font-size: 0.75rem;
@@ -947,6 +996,13 @@
 
 .pal-celebration .pal-button {
   width: 100%;
+}
+
+.pal-celebration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .6rem;
 }
 
 @keyframes pal-spin {

@@ -15,6 +15,9 @@ import type {
   PalProgress,
   PalProgressionState,
   PalRewardNotice,
+  PalRewardCategory,
+  PalRewardLoadoutSlot,
+  PalRewardLoadoutState,
   PalRoadmapWeek,
   PalWeekStatus,
   PalWidgetSnapshot,
@@ -31,6 +34,7 @@ const MAX_REWARDS = 100;
 const MAX_COLLECTION_ITEMS = 50;
 const MAX_COLLECTIBLES = 32;
 const MAX_TITLES = 32;
+const MAX_LOADOUT_OPTIONS = 32;
 const ACHIEVEMENT_KEYS = Object.values(PAL_ACHIEVEMENT_KEYS);
 
 export interface PalSnapshotValidationOptions {
@@ -409,6 +413,11 @@ function parseReward(
     `${path}.assetUrl`,
     assetPolicy,
   );
+  const darkAssetUrl = optionalAssetUrl(
+    source.darkAssetUrl,
+    `${path}.darkAssetUrl`,
+    assetPolicy,
+  );
   const kind = source.kind === undefined
     ? undefined
     : member(source.kind, `${path}.kind`, ["standard", "story"] as const);
@@ -430,6 +439,13 @@ function parseReward(
         `${path}.collectibleFinish`,
         ["sketch", "color"],
       );
+  const rewardCategory = source.rewardCategory === undefined
+    ? undefined
+    : member<PalRewardCategory>(
+        source.rewardCategory,
+        `${path}.rewardCategory`,
+        ["companion", "keepsake", "wallpaper"],
+      );
   const titleAward = optionalText(source.titleAward, `${path}.titleAward`);
   const titleRevealCopy = optionalText(
     source.titleRevealCopy,
@@ -442,10 +458,12 @@ function parseReward(
     ...(kind === undefined ? {} : { kind }),
     ...(collectibleTitle === undefined ? {} : { collectibleTitle }),
     ...(collectibleFinish === undefined ? {} : { collectibleFinish }),
+    ...(rewardCategory === undefined ? {} : { rewardCategory }),
     ...(titleAward === undefined ? {} : { titleAward }),
     ...(titleRevealCopy === undefined ? {} : { titleRevealCopy }),
     ...(icon === undefined ? {} : { icon }),
     ...(assetUrl === undefined ? {} : { assetUrl }),
+    ...(darkAssetUrl === undefined ? {} : { darkAssetUrl }),
   };
   return achievement === undefined
     ? reward
@@ -454,6 +472,86 @@ function parseReward(
         kind: "standard",
         achievement,
       };
+}
+
+function parseRewardLoadout(
+  value: unknown,
+  path: string,
+  assetPolicy: AssetPolicy,
+): PalRewardLoadoutState {
+  const source = record(value, path);
+  const grantIds = new Set<string>();
+  const parseSlot = (slot: PalRewardLoadoutSlot) => {
+    const slotPath = `${path}.${slot}`;
+    const slotSource = record(source[slot], slotPath);
+    const options = boundedArray(
+      slotSource.options,
+      `${slotPath}.options`,
+      MAX_LOADOUT_OPTIONS,
+    ).map((value, index) => {
+      const optionPath = `${slotPath}.options[${index}]`;
+      const option = record(value, optionPath);
+      const assetUrl = optionalAssetUrl(
+        option.assetUrl,
+        `${optionPath}.assetUrl`,
+        assetPolicy,
+      );
+      const darkAssetUrl = optionalAssetUrl(
+        option.darkAssetUrl,
+        `${optionPath}.darkAssetUrl`,
+        assetPolicy,
+      );
+      if (assetUrl === undefined) fail(`${optionPath}.assetUrl`, "expected an asset URL");
+      return {
+        grantId: uniqueId(
+          text(option.grantId, `${optionPath}.grantId`),
+          grantIds,
+          `${optionPath}.grantId`,
+        ),
+        rewardId: text(option.rewardId, `${optionPath}.rewardId`),
+        category: member<PalRewardLoadoutSlot>(
+          option.category,
+          `${optionPath}.category`,
+          [slot],
+        ),
+        title: text(option.title, `${optionPath}.title`),
+        assetUrl,
+        ...(darkAssetUrl === undefined ? {} : { darkAssetUrl }),
+      };
+    });
+    const equippedGrantId = optionalText(
+      slotSource.equippedGrantId,
+      `${slotPath}.equippedGrantId`,
+    );
+    const fallbackGrantId = optionalText(
+      slotSource.fallbackGrantId,
+      `${slotPath}.fallbackGrantId`,
+    );
+    if (fallbackGrantId !== undefined && slot !== "companion") {
+      fail(`${slotPath}.fallbackGrantId`, "is only supported for companions");
+    }
+    if (
+      fallbackGrantId !== undefined &&
+      !options.some((option) => option.grantId === fallbackGrantId)
+    ) {
+      fail(`${slotPath}.fallbackGrantId`, "must identify an owned option in this slot");
+    }
+    if (
+      equippedGrantId !== undefined &&
+      !options.some((option) => option.grantId === equippedGrantId)
+    ) {
+      fail(`${slotPath}.equippedGrantId`, "must identify an owned option in this slot");
+    }
+    return {
+      ...(fallbackGrantId === undefined ? {} : { fallbackGrantId }),
+      ...(equippedGrantId === undefined ? {} : { equippedGrantId }),
+      options,
+    };
+  };
+  return {
+    companion: parseSlot("companion"),
+    wallpaper: parseSlot("wallpaper"),
+  };
 }
 
 function parseCollectionItem(
@@ -537,6 +635,7 @@ function parseCollectible(
       "kind",
       "finish",
       "assetUrl",
+      "darkAssetUrl",
     ];
     if (concealedFields.some((field) => source[field] !== undefined)) {
       fail(path, "expected concealed collectible content while locked");
@@ -553,6 +652,11 @@ function parseCollectible(
   const assetUrl = optionalAssetUrl(
     source.assetUrl,
     `${path}.assetUrl`,
+    assetPolicy,
+  );
+  const darkAssetUrl = optionalAssetUrl(
+    source.darkAssetUrl,
+    `${path}.darkAssetUrl`,
     assetPolicy,
   );
   if (assetUrl === undefined) fail(`${path}.assetUrl`, "expected an asset URL");
@@ -593,6 +697,7 @@ function parseCollectible(
     status,
     statusLabel,
     assetUrl,
+    ...(darkAssetUrl === undefined ? {} : { darkAssetUrl }),
     ...(progress === undefined ? {} : { progress }),
   };
 }
@@ -783,6 +888,13 @@ export function parsePalWidgetSnapshot(
           weekNumbers,
           assetPolicy,
         );
+  const rewardLoadout = source.rewardLoadout === undefined
+    ? undefined
+    : parseRewardLoadout(
+        source.rewardLoadout,
+        "snapshot.rewardLoadout",
+        assetPolicy,
+      );
   return {
     schemaVersion: 1,
     roadmap: {
@@ -812,5 +924,6 @@ export function parsePalWidgetSnapshot(
       ),
     ),
     ...(progression === undefined ? {} : { progression }),
+    ...(rewardLoadout === undefined ? {} : { rewardLoadout }),
   };
 }

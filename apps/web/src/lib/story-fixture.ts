@@ -11,7 +11,7 @@ import type {
 import type { FixtureStoryRequest } from "@/app/sandbox/fixture-story-contract";
 import {
   STORY_REGISTRY,
-  storyForTermStartDay,
+  storyForTerm,
 } from "@/lib/story-catalog";
 import type { BehaviorTitleId } from "@/lib/reward-grants";
 import { mergePendingRewardQueues } from "@/lib/reward-queue";
@@ -113,7 +113,7 @@ const FIXTURE_TERM_START_DAY = "2026-04-13";
 function fixturePlan(totalPeriods: number): PersistedStoryPlan {
   const generated = STORY_REGISTRY.createPlan(
     totalPeriods,
-    storyForTermStartDay(FIXTURE_TERM_START_DAY),
+    storyForTerm(FIXTURE_TERM_START_DAY, totalPeriods),
   );
   return {
     ...generated,

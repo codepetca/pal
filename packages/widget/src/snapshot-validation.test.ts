@@ -15,6 +15,47 @@ test("snapshot parser accepts the bounded v1 fixture", () => {
   assert.deepEqual(parsePalWidgetSnapshot(fixture), fixture);
 });
 
+test("snapshot parser accepts owned loadout options and rejects cross-slot equipment", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.rewardLoadout = {
+    companion: {
+      fallbackGrantId: "grant-pip",
+      equippedGrantId: "grant-pip",
+      options: [{
+        grantId: "grant-pip",
+        rewardId: "young-pip-v1",
+        category: "companion",
+        title: "Pip",
+        assetUrl: "/assets/pets/young-pip-v1.png",
+      }],
+    },
+    wallpaper: {
+      options: [{
+        grantId: "grant-courtyard",
+        rewardId: "courtyard-afternoons-v1",
+        category: "wallpaper",
+        title: "Courtyard Afternoons",
+        assetUrl: "/assets/world/courtyard-afternoons-v1.png",
+        darkAssetUrl: "/assets/world/courtyard-afternoons-dark-v1.png",
+      }],
+    },
+  };
+  assert.deepEqual(parsePalWidgetSnapshot(fixture).rewardLoadout, fixture.rewardLoadout);
+
+  fixture.rewardLoadout.wallpaper.fallbackGrantId = "grant-courtyard";
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /fallbackGrantId.*only supported for companions/i,
+  );
+  delete fixture.rewardLoadout.wallpaper.fallbackGrantId;
+
+  fixture.rewardLoadout.wallpaper.equippedGrantId = "grant-pip";
+  assert.throws(
+    () => parsePalWidgetSnapshot(fixture),
+    /equippedGrantId.*owned option in this slot/i,
+  );
+});
+
 test("snapshot parser preserves the v1 current-week domain", () => {
   const fixture = JSON.parse(
     JSON.stringify(createFixtureSnapshot()),
