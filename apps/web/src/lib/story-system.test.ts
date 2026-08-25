@@ -1181,11 +1181,14 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       }
     }
     const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
-    const consumedGrants = await getDb().select().from(learnerRewardGrants)
+    const projectedGrants = await getDb().select().from(learnerRewardGrants)
       .where(eq(learnerRewardGrants.learnerId, learnerId));
-    assert.ok(consumedGrants.find((grant) => grant.kind === "behavior_title")?.seenAt);
     assert.equal(
-      consumedGrants.find((grant) => grant.kind === "story_chapter")?.seenAt,
+      projectedGrants.find((grant) => grant.kind === "behavior_title")?.seenAt,
+      null,
+    );
+    assert.equal(
+      projectedGrants.find((grant) => grant.kind === "story_chapter")?.seenAt,
       null,
     );
     assert.deepEqual(fixture.progression(), snapshot.progression);
@@ -1216,6 +1219,12 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
     const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
     assert.deepEqual(afterBreak.progression?.titles, []);
     assert.equal(afterBreak.progression?.currentTitle, undefined);
+    const afterRepeatedSnapshot = await getDb().select().from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId));
+    assert.equal(
+      afterRepeatedSnapshot.find((grant) => grant.kind === "behavior_title")?.seenAt,
+      null,
+    );
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
