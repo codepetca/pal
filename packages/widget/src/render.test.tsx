@@ -296,7 +296,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Semester Legend/);
 });
 
-test("an earned week shows its story beside the week, expanded by default", () => {
+test("an earned week keeps its story readable on wide and narrow hosts", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles[0] = {
     id: "earned-week-one",
@@ -340,12 +340,11 @@ test("an earned week shows its story beside the week, expanded by default", () =
       <PalAchievements />
     </PalProvider>,
   );
-  assert.doesNotMatch(narrowHtml, /class="pal-week-story"/);
-  assert.doesNotMatch(narrowHtml, /Something Found You/);
-  assert.doesNotMatch(
-    narrowHtml,
-    /A heavy storm passed over the town during the night\./,
-  );
+  assert.match(narrowHtml, /class="pal-week-story" data-expanded="false"/);
+  assert.match(narrowHtml, />Something Found You</);
+  assert.match(narrowHtml, /aria-expanded="false"/);
+  assert.match(narrowHtml, /class="pal-week-story-panel" hidden=""/);
+  assert.match(narrowHtml, /A heavy storm passed over the town during the night\./);
 });
 
 test("a week with no earned collectible has no story bubble", () => {
