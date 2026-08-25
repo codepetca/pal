@@ -176,14 +176,6 @@ export function PalRewardCelebration({
         </div>
       ) : null}
       <h2 id={titleId}>{title}</h2>
-      {rewardKind === "story" && grantReward?.description ? (
-        <div className="pal-celebration-story">
-          {grantReward.title ? (
-            <p className="pal-celebration-story-headline">{grantReward.title}</p>
-          ) : null}
-          <p className="pal-celebration-story-copy">{grantReward.description}</p>
-        </div>
-      ) : null}
       {rewardError || relevantLoadoutError ? (
         <p className="pal-celebration-error" role="alert">
           We could not save that yet. Try again.

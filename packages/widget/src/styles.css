@@ -293,13 +293,8 @@
 }
 
 /* Story beat for the week, filling the otherwise empty left column of the week
-   grid, with a tail pointing right at that week's collectible.
-
-   Two constraints shape this. The collapsed bar is a single line, kept well
-   under the collectible's height so the collectible alone sets the row height.
-   And the passage is taken out of flow, so opening a story overlays whatever is
-   below rather than pushing the trail down - the spine holds still whether a
-   story is folded or open. */
+   grid, with a tail pointing right at that week's collectible. The passage stays
+   in flow so the expanded-by-default chapters never overlap one another. */
 .pal-week-story {
   position: relative;
   grid-column: 1;
@@ -392,13 +387,8 @@
   border-left-color: var(--pal-effective-color-surface-selected);
 }
 
-/* Out of flow on purpose: the trail must not move when this opens. */
 .pal-week-story-panel {
-  position: absolute;
-  top: calc(100% + 0.4rem);
-  right: 0;
-  left: 0;
-  z-index: 3;
+  margin-top: 0.4rem;
   padding: 0.7rem 0.85rem;
   border: 1px solid var(--pal-effective-color-border-strong);
   border-radius: var(--pal-effective-radius-control);
@@ -834,34 +824,6 @@
   line-height: 1.2;
 }
 
-/* A story celebration carries the chapter's passage, so it needs a wider card
-   and a readable measure - the collectible-only kinds stay narrow. */
-.pal-celebration[data-pal-reward-kind="story"] {
-  width: min(28rem, calc(100vw - 2rem));
-}
-
-.pal-celebration-story {
-  display: grid;
-  max-width: 34ch;
-  gap: 0.35rem;
-}
-
-.pal-celebration-story-headline {
-  margin: 0;
-  color: var(--pal-effective-color-primary);
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.pal-celebration-story-copy {
-  margin: 0;
-  color: var(--pal-effective-color-text-muted);
-  font-size: 0.9rem;
-  line-height: 1.65;
-  text-wrap: pretty;
-}
-
 .pal-celebration[data-pal-reward-kind="title"] {
   width: min(20rem, calc(100vw - 2rem));
   padding-block: 2rem;
@@ -1165,18 +1127,6 @@
   .pal-week[data-week-status="current"]
   .pal-week-collectible-stack {
   transform: scale(1.1);
-}
-
-.pal-surface[data-pal-viewport="narrow"] .pal-week-story {
-  grid-column: 1 / -1;
-  margin-top: 0;
-  max-width: 100%;
-  justify-self: stretch;
-}
-
-.pal-surface[data-pal-viewport="narrow"] .pal-week-story::before,
-.pal-surface[data-pal-viewport="narrow"] .pal-week-story::after {
-  display: none;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-content {

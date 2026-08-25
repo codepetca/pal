@@ -14,10 +14,9 @@ import type {
  * carrying the chapter headline, short enough that the collectible - not the
  * story - keeps setting the row height.
  *
- * The passage itself is positioned out of flow, so opening a story overlays the
- * trail instead of pushing the weeks below it down: the spine stays put whether
- * a story is folded or not. The first reveal happens in the reward celebration
- * when the week is claimed; this is where the reader comes back to re-read it.
+ * Stories start open because this page owns the chapter narrative. The passage
+ * participates in the row layout so several open chapters never overlap;
+ * narrow hosts omit stories entirely to preserve the centered trail.
  */
 function WeekStory({
   headline,
@@ -28,7 +27,7 @@ function WeekStory({
   storyCopy: string;
   weekLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const panelId = useId();
 
   return (
@@ -322,7 +321,7 @@ export function PalAchievements() {
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
             >
-              {storyHeadline && storyCopy ? (
+              {viewport !== "narrow" && storyHeadline && storyCopy ? (
                 <WeekStory
                   headline={storyHeadline}
                   storyCopy={storyCopy}
