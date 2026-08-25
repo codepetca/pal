@@ -209,9 +209,11 @@ export const achievementPeriods = pgTable(
 );
 
 // One stable story identity per learner and opaque academic term. The first
-// story release pins the authoritative term start, catalog version, and one
-// supported term length. Migration triggers make that identity immutable; the
-// normalized rows and deferred checks require a complete plan at commit.
+// story release pins the authoritative term start, catalog version, and the
+// story-assignment count selected for that term. A story may end before a
+// longer academic term does. Migration triggers make that identity immutable;
+// the normalized rows and deferred checks require the selected story plan to
+// be complete at commit.
 // No student work or PII is stored.
 export const storyPlans = pgTable(
   "story_plans",
@@ -329,6 +331,7 @@ export const learnerRewardGrants = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    unique("learner_reward_grants_id_learner_uq").on(t.id, t.learnerId),
     unique("learner_reward_grants_order_uq").on(t.grantOrder),
     foreignKey({
       columns: [t.sourceFactId, t.learnerId],
@@ -377,6 +380,36 @@ export const learnerRewardGrants = pgTable(
       t.grantOrder.desc(),
     ),
     index("learner_reward_grants_unseen_idx").on(t.learnerId, t.seenAt),
+  ],
+);
+
+// Mutable equipped state for the two story-reward surfaces that are usable in
+// the first implementation. Durable ownership remains in learner_reward_grants;
+// keepsakes intentionally have no loadout row and continue through the existing
+// earn-and-reveal presentation path. The composite foreign key prevents a
+// learner from equipping another learner's grant.
+export const learnerRewardLoadouts = pgTable(
+  "learner_reward_loadouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    learnerId: uuid("learner_id").notNull(),
+    slot: text("slot").notNull(),
+    rewardGrantId: uuid("reward_grant_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.rewardGrantId, t.learnerId],
+      foreignColumns: [learnerRewardGrants.id, learnerRewardGrants.learnerId],
+      name: "learner_reward_loadouts_grant_owner_fk",
+    }).onDelete("cascade"),
+    unique("learner_reward_loadouts_learner_slot_uq").on(t.learnerId, t.slot),
+    unique("learner_reward_loadouts_grant_uq").on(t.rewardGrantId),
+    check(
+      "learner_reward_loadouts_slot_supported",
+      sql`${t.slot} IN ('companion', 'wallpaper')`,
+    ),
+    index("learner_reward_loadouts_learner_idx").on(t.learnerId),
   ],
 );
 
@@ -584,6 +617,7 @@ export const learnersRelations = relations(learners, ({ one, many }) => ({
   periods: many(achievementPeriods),
   storyPlans: many(storyPlans),
   rewardGrants: many(learnerRewardGrants),
+  rewardLoadouts: many(learnerRewardLoadouts),
   weeklyRhythmConfigs: many(weeklyRhythmConfigs),
   achievementInstances: many(achievementInstances),
   rewardNotices: many(rewardNotices),
@@ -668,7 +702,7 @@ export const storyPlanChaptersRelations = relations(
 
 export const learnerRewardGrantsRelations = relations(
   learnerRewardGrants,
-  ({ one }) => ({
+  ({ one, many }) => ({
     learner: one(learners, {
       fields: [learnerRewardGrants.learnerId],
       references: [learners.id],
@@ -692,6 +726,24 @@ export const learnerRewardGrantsRelations = relations(
         storyPlanChapters.storyPlanId,
         storyPlanChapters.learnerId,
       ],
+    }),
+    loadouts: many(learnerRewardLoadouts),
+  }),
+);
+
+export const learnerRewardLoadoutsRelations = relations(
+  learnerRewardLoadouts,
+  ({ one }) => ({
+    learner: one(learners, {
+      fields: [learnerRewardLoadouts.learnerId],
+      references: [learners.id],
+    }),
+    rewardGrant: one(learnerRewardGrants, {
+      fields: [
+        learnerRewardLoadouts.rewardGrantId,
+        learnerRewardLoadouts.learnerId,
+      ],
+      references: [learnerRewardGrants.id, learnerRewardGrants.learnerId],
     }),
   }),
 );
@@ -757,6 +809,7 @@ export type AchievementPeriod = typeof achievementPeriods.$inferSelect;
 export type StoryPlan = typeof storyPlans.$inferSelect;
 export type StoryPlanChapter = typeof storyPlanChapters.$inferSelect;
 export type LearnerRewardGrant = typeof learnerRewardGrants.$inferSelect;
+export type LearnerRewardLoadout = typeof learnerRewardLoadouts.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;
