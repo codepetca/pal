@@ -631,13 +631,14 @@ export function createFixturePalClient(
         return "daily_log.completed applied to fixture state";
       }
       if (action === "classroom-joined") {
+        const week = currentWeek();
         const achievement = fixtureAchievement(
           "joined-class",
           PAL_ACHIEVEMENT_KEYS.joinedClass,
           "earned",
           "Earned",
         );
-        if (addAchievement(snapshot.roadmap.weeks[0]!, achievement)) {
+        if (addAchievement(week, achievement)) {
           queueAchievementCelebration(achievement);
         }
         return "classroom.joined applied to fixture state";
@@ -709,13 +710,14 @@ export function createFixturePalClient(
         return "learning_item.completed (late) applied to fixture state";
       }
       if (action === "session-started") {
+        const week = currentWeek();
         const achievement = fixtureAchievement(
           "first-pika-login",
           PAL_ACHIEVEMENT_KEYS.firstLogin,
           "earned",
           "Earned",
         );
-        if (addAchievement(snapshot.roadmap.weeks[0]!, achievement)) {
+        if (addAchievement(week, achievement)) {
           queueAchievementCelebration(achievement);
         }
         return "platform.session.started applied to fixture state";

@@ -1,10 +1,55 @@
 "use client";
 
+import { useId, useState } from "react";
+
 import { usePalWidget } from "./provider";
 import type {
   PalAchievement,
   PalProgressionState,
 } from "./types";
+
+/**
+ * The story beat for one week, spanning the empty left column of the week grid
+ * and pointing at that week's collectible. Collapsed it is a single thin line
+ * carrying the chapter headline, short enough that the collectible - not the
+ * story - keeps setting the row height.
+ *
+ * The passage itself is positioned out of flow, so opening a story overlays the
+ * trail instead of pushing the weeks below it down: the spine stays put whether
+ * a story is folded or not. The first reveal happens in the reward celebration
+ * when the week is claimed; this is where the reader comes back to re-read it.
+ */
+function WeekStory({
+  headline,
+  storyCopy,
+  weekLabel,
+}: {
+  headline: string;
+  storyCopy: string;
+  weekLabel: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
+
+  return (
+    <div className="pal-week-story" data-expanded={expanded ? "true" : "false"}>
+      <button
+        aria-controls={panelId}
+        aria-expanded={expanded}
+        aria-label={`${weekLabel}: ${headline}. ${expanded ? "Hide" : "Read"} the story.`}
+        className="pal-week-story-bubble"
+        onClick={() => setExpanded((open) => !open)}
+        type="button"
+      >
+        <span className="pal-week-story-headline">{headline}</span>
+        <span aria-hidden="true" className="pal-week-story-caret" />
+      </button>
+      <div className="pal-week-story-panel" hidden={!expanded} id={panelId}>
+        <p>{storyCopy}</p>
+      </div>
+    </div>
+  );
+}
 
 function AchievementBadge({
   achievement,
@@ -163,6 +208,9 @@ export function PalAchievements() {
               ? collectible
               : undefined;
 
+          const storyHeadline = earnedReward?.revealHeadline;
+          const storyCopy = earnedReward?.storyCopy;
+
           return (
             <li
               className="pal-week"
@@ -170,6 +218,13 @@ export function PalAchievements() {
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
             >
+              {storyHeadline && storyCopy ? (
+                <WeekStory
+                  headline={storyHeadline}
+                  storyCopy={storyCopy}
+                  weekLabel={week.label}
+                />
+              ) : null}
               <div className="pal-week-collectible-stack">
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>

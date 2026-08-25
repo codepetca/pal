@@ -195,6 +195,59 @@ function calendarDayInTimeZone(date: Date, timeZone: string): string {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
+function periodlessAchievementWeek(
+  instance: AchievementRow,
+  input: {
+    termStartDay: string | undefined;
+    termEndDay: string | undefined;
+    termTimezone: string | undefined;
+    termWeekCount: number;
+    authoritativeWeekNumbers: ReadonlyMap<string, number>;
+    authoritativeWeekStarts: ReadonlyMap<string, string>;
+  },
+): number {
+  if (
+    instance.achievementKey !== ACHIEVEMENT_KEYS.firstLogin &&
+    instance.achievementKey !== ACHIEVEMENT_KEYS.joinedClass
+  ) {
+    return 1;
+  }
+  if (
+    !instance.earnedAt ||
+    !input.termStartDay ||
+    !input.termEndDay ||
+    !input.termTimezone
+  ) {
+    return 1;
+  }
+
+  const earnedDay = calendarDayInTimeZone(
+    instance.earnedAt,
+    input.termTimezone,
+  );
+  if (earnedDay < input.termStartDay || earnedDay > input.termEndDay) {
+    return 1;
+  }
+
+  const authoritativeWeek = [...input.authoritativeWeekStarts.entries()]
+    .flatMap(([periodKey, startDay]) => {
+      const weekNumber = input.authoritativeWeekNumbers.get(periodKey);
+      return weekNumber && startDay <= earnedDay
+        ? [{ startDay, weekNumber }]
+        : [];
+    })
+    .toSorted((left, right) => right.startDay.localeCompare(left.startDay))[0]
+    ?.weekNumber;
+  if (authoritativeWeek) return authoritativeWeek;
+
+  const elapsedDays = Math.floor(
+    (Date.parse(`${earnedDay}T00:00:00.000Z`) -
+      Date.parse(`${input.termStartDay}T00:00:00.000Z`)) /
+      86_400_000,
+  );
+  return Math.min(input.termWeekCount, Math.floor(elapsedDays / 7) + 1);
+}
+
 function nextCalendarDay(day: string): string {
   return new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000)
     .toISOString()
@@ -614,7 +667,17 @@ export async function loadLearnerSnapshot(
       for (const instance of instances) {
         const weekNumber = instance.periodKey
           ? periodNumbers.get(instance.periodKey)
-          : 1;
+          : periodlessAchievementWeek(instance, {
+              termStartDay:
+                typeof termStartDay === "string" ? termStartDay : undefined,
+              termEndDay:
+                typeof termEndDay === "string" ? termEndDay : undefined,
+              termTimezone:
+                typeof termTimezone === "string" ? termTimezone : undefined,
+              termWeekCount,
+              authoritativeWeekNumbers,
+              authoritativeWeekStarts,
+            });
         if (!weekNumber || weekNumber > termWeekCount) continue;
         const achievement = achievementFromRow(
           instance,
