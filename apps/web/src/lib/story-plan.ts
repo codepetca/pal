@@ -35,6 +35,14 @@ export interface PersistedStoryPlan extends StoryReference {
 type StoryPlanRow = typeof storyPlans.$inferSelect;
 type StoryPlanChapterRow = typeof storyPlanChapters.$inferSelect;
 
+export function storyPlanPeriodCountMatchesTerm(
+  persistedPeriods: number,
+  termPeriods: number,
+  catalogPeriods: number,
+): boolean {
+  return persistedPeriods === termPeriods || persistedPeriods === catalogPeriods;
+}
+
 function termPeriodFromMetadata(metadata: Record<string, unknown>): TermPeriod | null {
   if (
     typeof metadata.term_token !== "string" ||
@@ -168,13 +176,25 @@ export async function ensureStoryPlanForEvent(
       );
     }
   }
+  const pinnedReference = { storyId: plan.storyId, version: plan.storyVersion };
+  const pinnedCatalog = STORY_REGISTRY.getCatalog(pinnedReference);
+  const expectedStoryPeriods = pinnedCatalog
+    ?.createPlan(termPeriod.totalPeriods).totalPeriods;
   if (
     plan.termStartDay !== termPeriod.termStartDay ||
-    plan.totalPeriods !== termPeriod.totalPeriods ||
-    !STORY_REGISTRY.getCatalog({ storyId: plan.storyId, version: plan.storyVersion })
+    !pinnedCatalog ||
+    expectedStoryPeriods === undefined ||
+    !storyPlanPeriodCountMatchesTerm(
+      plan.totalPeriods,
+      termPeriod.totalPeriods,
+      expectedStoryPeriods,
+    )
   ) {
     throw new Error("Configured term does not match its persisted story plan");
   }
+  // A story may intentionally finish before its academic term. Those later
+  // periods have no chapter to bind, but their normal events remain valid.
+  if (termPeriod.periodNumber > plan.totalPeriods) return;
   const [assignment] = await db
     .select()
     .from(storyPlanChapters)
