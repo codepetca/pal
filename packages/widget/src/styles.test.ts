@@ -154,6 +154,8 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
     /grid-template-columns: minmax\(0, 1fr\) 5\.65rem minmax\(0, 1fr\)/,
   );
   assert.match(collectibleStackRule, /grid-column: 2/);
+  assert.match(collectibleStackRule, /align-content: start/);
+  assert.match(collectibleStackRule, /align-self: start/);
   assert.match(weekContentRule, /grid-column: 3/);
 });
 

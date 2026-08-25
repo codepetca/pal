@@ -219,6 +219,8 @@
   grid-column: 2;
   width: 5.65rem;
   gap: 0.5rem;
+  align-content: start;
+  align-self: start;
   justify-items: center;
 }
 
