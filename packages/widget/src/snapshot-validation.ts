@@ -654,6 +654,8 @@ function parseCollectible(
       "finish",
       "assetUrl",
       "darkAssetUrl",
+      "previewAssetUrl",
+      "darkPreviewAssetUrl",
     ];
     if (concealedFields.some((field) => source[field] !== undefined)) {
       fail(path, "expected concealed collectible content while locked");
@@ -675,6 +677,16 @@ function parseCollectible(
   const darkAssetUrl = optionalAssetUrl(
     source.darkAssetUrl,
     `${path}.darkAssetUrl`,
+    assetPolicy,
+  );
+  const previewAssetUrl = optionalAssetUrl(
+    source.previewAssetUrl,
+    `${path}.previewAssetUrl`,
+    assetPolicy,
+  );
+  const darkPreviewAssetUrl = optionalAssetUrl(
+    source.darkPreviewAssetUrl,
+    `${path}.darkPreviewAssetUrl`,
     assetPolicy,
   );
   if (assetUrl === undefined) fail(`${path}.assetUrl`, "expected an asset URL");
@@ -716,6 +728,8 @@ function parseCollectible(
     statusLabel,
     assetUrl,
     ...(darkAssetUrl === undefined ? {} : { darkAssetUrl }),
+    ...(previewAssetUrl === undefined ? {} : { previewAssetUrl }),
+    ...(darkPreviewAssetUrl === undefined ? {} : { darkPreviewAssetUrl }),
     ...(progress === undefined ? {} : { progress }),
   };
 }

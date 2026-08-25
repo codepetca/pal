@@ -298,6 +298,7 @@ test("snapshot parser accepts a capped Home projection inside a longer term", ()
     kind: "keepsake",
     finish: "sketch",
     assetUrl: "/assets/world/reward-warming-lantern-v1.png",
+    previewAssetUrl: "/assets/world/reward-warming-lantern-v1-preview.webp",
   };
   fixture.progression!.collectibles[7] = {
     id: "courtyard-afternoons-v1",
@@ -309,11 +310,19 @@ test("snapshot parser accepts a capped Home projection inside a longer term", ()
     kind: "wallpaper",
     finish: "color",
     assetUrl: "/assets/world/wallpaper-courtyard-afternoons-v4.png",
+    darkAssetUrl: "/assets/world/wallpaper-courtyard-afternoons-dark-v4.png",
+    previewAssetUrl: "/assets/world/wallpaper-courtyard-afternoons-v4-preview.webp",
+    darkPreviewAssetUrl: "/assets/world/wallpaper-courtyard-afternoons-dark-v4-preview.webp",
   };
 
   const parsed = parsePalWidgetSnapshot(fixture);
   assert.equal(parsed.roadmap.weeks.length, 20);
   assert.equal(parsed.progression?.collectibles.length, 16);
+  const wallpaper = parsed.progression?.collectibles[7];
+  assert.equal(
+    wallpaper?.status === "earned" ? wallpaper.darkPreviewAssetUrl : undefined,
+    "/assets/world/wallpaper-courtyard-afternoons-dark-v4-preview.webp",
+  );
 });
 
 test("snapshot parser keeps progression references inside the supplied roadmap", () => {
@@ -452,6 +461,23 @@ test("snapshot parser rejects unsafe and unapproved asset URLs", () => {
   assert.throws(
     () => parsePalWidgetSnapshot(unsafeCollectible),
     /progression.*assetUrl.*HTTPS origin|root-relative/i,
+  );
+
+  const unsafePreview = createFixtureSnapshot();
+  unsafePreview.progression!.collectibles[0] = {
+    id: "earned-preview",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Earned collectible",
+    description: "Already earned.",
+    kind: "room",
+    assetUrl: "/assets/world/safe.png",
+    previewAssetUrl: "javascript:alert(1)",
+  };
+  assert.throws(
+    () => parsePalWidgetSnapshot(unsafePreview),
+    /progression.*previewAssetUrl.*HTTPS origin|root-relative/i,
   );
 });
 

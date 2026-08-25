@@ -275,6 +275,65 @@ test("narrow achievement stories expand from a compact disclosure", async () => 
   }
 });
 
+test("achievement trail prefers previews and lazy-loads past collectible art", async () => {
+  const snapshot = createFixtureSnapshot(3);
+  snapshot.progression!.collectibles[0] = {
+    id: "past-preview",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Past collectible",
+    description: "A past collectible.",
+    kind: "keepsake",
+    assetUrl: "/past-full.png",
+    previewAssetUrl: "/past-preview.webp",
+  };
+  snapshot.progression!.collectibles[2] = {
+    id: "current-preview",
+    roadmapWeek: 3,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Current collectible",
+    description: "The current collectible.",
+    kind: "wallpaper",
+    assetUrl: "/current-full.png",
+    darkAssetUrl: "/current-dark-full.png",
+    previewAssetUrl: "/current-preview.webp",
+    darkPreviewAssetUrl: "/current-dark-preview.webp",
+  };
+  const client = createFixturePalClient(snapshot);
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="preview-art"
+        theme="dark"
+      >
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const past = renderer!.root.find(
+      (node) => node.type === "img" && node.props.src === "/past-preview.webp",
+    );
+    const current = renderer!.root.find(
+      (node) => node.type === "img" &&
+        node.props.src === "/current-dark-preview.webp",
+    );
+    assert.equal(past.props.loading, "lazy");
+    assert.equal(past.props.decoding, "async");
+    assert.equal(current.props.loading, "eager");
+    assert.equal(current.props.decoding, "async");
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
 test("past weeks keep explicit non-earned outcomes without claiming an earned badge", async () => {
   const snapshot = createFixtureSnapshot();
   const weekThree = snapshot.roadmap.weeks.find((week) => week.number === 3)!;

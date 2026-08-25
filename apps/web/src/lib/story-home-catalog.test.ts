@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   HOME_STORY_ID,
@@ -46,6 +48,23 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
   assert.match(plan.chapters[0]?.collectible.assetUrl ?? "", /home-warming-lantern-v1\.png$/);
   assert.match(plan.chapters[1]?.collectible.assetUrl ?? "", /home-mystery-egg-v1\.png$/);
   assert.match(plan.chapters[10]?.collectible.assetUrl ?? "", /home-lumi-v1\.png$/);
+
+  const previews = plan.chapters.flatMap((chapter) => [
+    chapter.collectible.previewAssetUrl,
+    chapter.collectible.darkPreviewAssetUrl,
+  ]).filter((assetUrl): assetUrl is string => Boolean(assetUrl));
+  assert.equal(previews.length, 18);
+  const previewSizes = previews.map((assetUrl) => {
+    const assetPath = path.resolve(process.cwd(), "public", assetUrl.slice(1));
+    assert.equal(fs.existsSync(assetPath), true, `Missing preview asset: ${assetUrl}`);
+    const size = fs.statSync(assetPath).size;
+    assert.ok(size <= 100_000, `${assetUrl} exceeds the 100 KB preview budget`);
+    return size;
+  });
+  assert.ok(
+    previewSizes.reduce((total, size) => total + size, 0) <= 300_000,
+    "Home preview assets exceed the 300 KB aggregate budget",
+  );
 });
 
 test("the Story V2 feature activates the Home catalog writer", () => {

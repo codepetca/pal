@@ -54,6 +54,12 @@ its edge spacing from that scrollport and stops before the document root; it nev
 moves the host page. A host that wants initial centering must therefore mount the
 roadmap in its own content scrollport.
 
+Earned collectibles may include optional `previewAssetUrl` and
+`darkPreviewAssetUrl` fields. The roadmap prefers these trail-sized assets,
+eagerly loads only the current week, and lazy-loads past weeks. Celebrations and
+equipped wallpapers continue to use the canonical full-resolution asset URLs;
+older schema-v1 snapshots without previews remain valid.
+
 Pal also resolves the snapshot's optional `featurePolicy`. Its achievement keys
 control learner-facing projection, not canonical earning: for example, disabling
 `achievements.titles` removes title inventory and notices before reward pagination

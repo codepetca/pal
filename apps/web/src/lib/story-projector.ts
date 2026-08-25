@@ -151,8 +151,14 @@ export function projectStoryProgression(
         kind: collectibleKind(chapter.collectible.kind, options),
         finish,
         assetUrl: chapter.collectible.assetUrl,
+        ...(chapter.collectible.previewAssetUrl
+          ? { previewAssetUrl: chapter.collectible.previewAssetUrl }
+          : {}),
         ...(chapter.collectible.darkAssetUrl
           ? { darkAssetUrl: chapter.collectible.darkAssetUrl }
+          : {}),
+        ...(chapter.collectible.darkPreviewAssetUrl
+          ? { darkPreviewAssetUrl: chapter.collectible.darkPreviewAssetUrl }
           : {}),
       };
     }

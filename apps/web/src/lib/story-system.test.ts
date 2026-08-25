@@ -313,6 +313,28 @@ test("legacy widget projection maps new Story V2 categories without changing the
   if (legacy?.status === "earned") assert.equal(legacy.kind, "cosmetic");
 });
 
+test("the Home projector exposes optional trail previews only after earning", () => {
+  const plan = persistedPlan(HOME_STORY_PERIODS);
+  const first = plan.chapters[0]!;
+  const plans = new Map([[plan.id, plan]]);
+  const locked = projectStoryProgression(plan, [], plans).collectibles[0];
+  const earned = projectStoryProgression(
+    plan,
+    [grant(1, {
+      kind: "story_chapter",
+      storyPlanId: plan.id,
+      storyPlanChapterId: first.assignmentId,
+    })],
+    plans,
+  ).collectibles[0];
+
+  assert.equal(JSON.stringify(locked).includes("preview"), false);
+  assert.equal(
+    earned?.status === "earned" ? earned.previewAssetUrl : undefined,
+    "/assets/world/reward-home-warming-lantern-v1-preview.webp",
+  );
+});
+
 test("the concealed Pip v1 egg notice never advertises a loadout action", () => {
   const plan = persistedPlan(6);
   const egg = plan.chapters[0]!;
