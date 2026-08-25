@@ -18,7 +18,8 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
 
   assert.equal(plan.totalPeriods, HOME_STORY_PERIODS);
   assert.equal(plan.chapters.length, HOME_STORY_PERIODS);
-  assert.equal(plan.chapters[7]?.collectible.kind, "wallpaper");
+  assert.equal(plan.chapters[6]?.collectible.kind, "cosmetic");
+  assert.equal(plan.chapters[7]?.collectible.kind, "room");
   assert.match(plan.chapters[7]?.collectible.darkAssetUrl ?? "", /-dark-v4\.png$/);
   assert.equal(plan.chapters[10]?.collectible.kind, "companion");
 });
