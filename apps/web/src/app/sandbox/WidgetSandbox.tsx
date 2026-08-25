@@ -32,7 +32,6 @@ import {
 import Image from "next/image";
 import {
   type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -45,6 +44,7 @@ import {
   createSandboxPalClient,
   type SandboxPalClient,
 } from "./sandbox-client";
+import { browserRandomUuid } from "./browser-random-id";
 import { createStoryFixturePalClient } from "./fixture-story-client";
 import {
   addDays,
@@ -265,7 +265,7 @@ function SandboxControls({
             : action === "item-opened-early" ||
                 action === "on-time-finish" ||
                 action === "late-finish"
-              ? { itemToken: crypto.randomUUID() }
+              ? { itemToken: browserRandomUuid() }
               : undefined;
         client.dispatch(action as PalFixtureAction, context);
         if (action === "reset") {
@@ -558,36 +558,17 @@ function PalSettings({
 function CompanionOverlay({
   visible,
   scale,
-  dragging,
   overlayRef,
-  onPointerDown,
-  onPointerMove,
-  onPointerEnd,
 }: {
   visible: boolean;
   scale: number;
-  dragging: boolean;
   overlayRef: RefObject<HTMLDivElement | null>;
-  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
-  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
-  onPointerEnd: () => void;
 }) {
   if (!visible) return null;
 
   return (
-    <div
-      ref={overlayRef}
-      className={styles.companionOverlay}
-      data-dragging={dragging ? "true" : "false"}
-    >
-      <PalCompanion
-        scale={scale}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
-        onDragStart={(event) => event.preventDefault()}
-      />
+    <div ref={overlayRef} className={styles.companionOverlay}>
+      <PalCompanion scale={scale} />
     </div>
   );
 }
@@ -654,124 +635,11 @@ function SandboxExperience({
     if (sandboxError) setSidebarCollapsed(false);
   }, [sandboxError]);
 
-  // Host-owned placement (per the widget's boundary: "the host owns
-  // placement, Pal owns everything rendered inside"). Position is written
-  // straight to the DOM node during drag rather than through setState:
-  // this component's subtree is large, and re-rendering it on every
-  // pointermove was what made dragging feel laggy. State only records
-  // whether a drag is in progress, for the grab/grabbing cursor.
+  // The host owns placement and keeps the pet anchored in one predictable
+  // spot. The refs below only measure its footprint so nearby content can
+  // reserve enough space as the widget is resized or hidden.
   const companionOverlayRef = useRef<HTMLDivElement>(null);
   const sandboxRef = useRef<HTMLDivElement>(null);
-  const [companionDragging, setCompanionDragging] = useState(false);
-  const companionPosition = useRef<{ x: number; y: number } | null>(null);
-  // Width/height are the public pet widget's complete visual footprint,
-  // captured once at drag start so each move only clamps against them instead
-  // of re-measuring the DOM every pointer event.
-  const companionDragOffset = useRef<{
-    dx: number;
-    dy: number;
-    width: number;
-    height: number;
-  } | null>(null);
-
-  useEffect(() => {
-    const overlay = companionOverlayRef.current;
-    if (!overlay) return;
-
-    const clampToContainer = () => {
-      const rect = overlay.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-
-      const container = overlay.offsetParent;
-      const containerRect = container instanceof HTMLElement
-        ? container.getBoundingClientRect()
-        : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-      const maxX = Math.max(containerRect.width - rect.width, 0);
-      const maxY = Math.max(containerRect.height - rect.height, 0);
-      const x = Math.min(Math.max(rect.left - containerRect.left, 0), maxX);
-      const y = Math.min(Math.max(rect.top - containerRect.top, 0), maxY);
-
-      overlay.style.left = `${x}px`;
-      overlay.style.top = `${y}px`;
-      overlay.style.right = "auto";
-      overlay.style.bottom = "auto";
-    };
-
-    clampToContainer();
-    window.addEventListener("resize", clampToContainer);
-    const resizeObserver = new ResizeObserver(clampToContainer);
-    resizeObserver.observe(overlay);
-
-    return () => {
-      window.removeEventListener("resize", clampToContainer);
-      resizeObserver.disconnect();
-    };
-  }, [widgetScale, widgetVisible]);
-
-  // Pal owns the surface's internal alpha hit-test. Pointer capture and the
-  // resulting viewport placement remain host responsibilities.
-  const handleCompanionPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
-    const el = companionOverlayRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const container = el.offsetParent;
-    const containerRect = container instanceof HTMLElement
-      ? container.getBoundingClientRect()
-      : { left: 0, top: 0 };
-    companionDragOffset.current = {
-      dx: e.clientX - rect.left,
-      dy: e.clientY - rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
-    const x = rect.left - containerRect.left;
-    const y = rect.top - containerRect.top;
-    companionPosition.current = { x, y };
-    // Pin the current on-screen position as explicit left/top before
-    // anything else — rect already IS wherever it's sitting right now
-    // (whether that's the CSS default right/bottom corner or a previous
-    // drag's left/top), so this is a no-op visually. It guarantees the
-    // sprite cannot move on press itself, only from here on with the
-    // pointer, regardless of how that position was arrived at.
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.right = "auto";
-    el.style.bottom = "auto";
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setCompanionDragging(true);
-  };
-
-  const handleCompanionPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
-    const el = companionOverlayRef.current;
-    const offset = companionDragOffset.current;
-    if (!el || !offset) return;
-    // Convert viewport pointer coordinates to the positioned classroom shell's
-    // coordinate space before clamping against its visible bounds.
-    const container = el.offsetParent;
-    const containerRect = container instanceof HTMLElement
-      ? container.getBoundingClientRect()
-      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    const maxX = Math.max(containerRect.width - offset.width, 0);
-    const maxY = Math.max(containerRect.height - offset.height, 0);
-    const x = Math.min(
-      Math.max(e.clientX - offset.dx - containerRect.left, 0),
-      maxX,
-    );
-    const y = Math.min(
-      Math.max(e.clientY - offset.dy - containerRect.top, 0),
-      maxY,
-    );
-    companionPosition.current = { x, y };
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.right = "auto";
-    el.style.bottom = "auto";
-  };
-
-  const endCompanionDrag = () => {
-    companionDragOffset.current = null;
-    setCompanionDragging(false);
-  };
 
   useEffect(() => {
     const sandbox = sandboxRef.current;
@@ -786,17 +654,8 @@ function SandboxExperience({
 
     const syncCompanionLayout = () => {
       const companionRect = el.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
       sandbox.style.setProperty("--companion-width", `${companionRect.width}px`);
       sandbox.style.setProperty("--companion-height", `${companionRect.height}px`);
-
-      const position = companionPosition.current;
-      if (!position) return;
-
-      const maxX = Math.max(containerRect.width - companionRect.width, 0);
-      const maxY = Math.max(containerRect.height - companionRect.height, 0);
-      el.style.left = `${Math.min(Math.max(position.x, 0), maxX)}px`;
-      el.style.top = `${Math.min(Math.max(position.y, 0), maxY)}px`;
     };
 
     syncCompanionLayout();
@@ -996,11 +855,7 @@ function SandboxExperience({
           <CompanionOverlay
             visible={widgetVisible}
             scale={widgetScale}
-            dragging={companionDragging}
             overlayRef={companionOverlayRef}
-            onPointerDown={handleCompanionPointerDown}
-            onPointerMove={handleCompanionPointerMove}
-            onPointerEnd={endCompanionDrag}
           />
 
           </div>
@@ -1063,7 +918,7 @@ export function WidgetSandbox({
   buildInfo: SandboxBuildInfo;
   mode: SandboxMode;
 }) {
-  const [learnerId] = useState(() => `sandbox-${crypto.randomUUID()}`);
+  const [learnerId] = useState(() => `sandbox-${browserRandomUuid()}`);
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null);
   const [clientGeneration, setClientGeneration] = useState(0);
   const [theme, setTheme] = useState<PalTheme>("dark");
