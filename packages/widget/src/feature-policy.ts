@@ -1,14 +1,20 @@
 import type {
   PalCollectibleUnlock,
+  PalFeaturePolicy,
   PalRewardNotice,
   PalWidgetSnapshot,
 } from "./types";
 
 /**
- * Temporary product policy. Keep title ownership in canonical state while the
- * learner-facing presentation is being redesigned.
+ * Backward-compatible policy for snapshots produced before featurePolicy was
+ * added to schema v1. Title ownership stays canonical while its learner-facing
+ * presentation is redesigned.
  */
-export const PAL_ACHIEVEMENT_TITLES_VISIBLE = false;
+export const DEFAULT_PAL_FEATURE_POLICY: PalFeaturePolicy = Object.freeze({
+  achievements: Object.freeze({
+    titles: false,
+  }),
+});
 
 function collectibleWithoutTitle(
   collectible: PalCollectibleUnlock,
@@ -21,26 +27,17 @@ function collectibleWithoutTitle(
 }
 
 function rewardWithoutTitle(reward: PalRewardNotice): PalRewardNotice | undefined {
-  if (isConcealedTitleReward(reward)) return undefined;
+  if (
+    reward.achievement === undefined &&
+    reward.kind !== "story" &&
+    reward.titleAward !== undefined
+  ) {
+    return undefined;
+  }
   const visible = { ...reward };
   delete visible.titleAward;
   delete visible.titleRevealCopy;
   return visible;
-}
-
-function isConcealedTitleReward(reward: PalRewardNotice): boolean {
-  return !PAL_ACHIEVEMENT_TITLES_VISIBLE &&
-    reward.achievement === undefined &&
-    reward.kind !== "story" &&
-    reward.titleAward !== undefined;
-}
-
-export function concealedPalTitleRewardIds(
-  snapshot: PalWidgetSnapshot,
-): string[] {
-  return snapshot.rewards
-    .filter(isConcealedTitleReward)
-    .map((reward) => reward.id);
 }
 
 /**
@@ -50,7 +47,8 @@ export function concealedPalTitleRewardIds(
 export function applyPalFeaturePolicy(
   snapshot: PalWidgetSnapshot,
 ): PalWidgetSnapshot {
-  if (PAL_ACHIEVEMENT_TITLES_VISIBLE) return snapshot;
+  const policy = snapshot.featurePolicy ?? DEFAULT_PAL_FEATURE_POLICY;
+  if (policy.achievements.titles) return snapshot;
   const progression = snapshot.progression
     ? {
         ...snapshot.progression,

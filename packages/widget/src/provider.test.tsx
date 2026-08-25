@@ -244,37 +244,31 @@ test("successful acknowledgement refills the bounded reward page", async () => {
   );
 });
 
-test("a concealed FIFO title notice is consumed before showing the next reward", async () => {
+test("disabled title projection does not acknowledge canonical grants", async () => {
   const snapshot = createFixtureSnapshot();
-  const titleNotice = {
-    id: "title-notice",
-    title: "Rhythm Builder earned",
-    description: "Show up three days in a row.",
-    titleAward: "Rhythm Builder",
-  };
-  const storyNotice = {
-    id: "story-notice",
-    kind: "story" as const,
-    title: "Keep the light on",
-    description: "The coldest night arrived.",
-    collectibleTitle: "Warming Lantern",
-  };
-  snapshot.rewards = [titleNotice];
-  let titleConsumed = false;
+  snapshot.rewards = [
+    {
+      id: "title-notice",
+      title: "Rhythm Builder earned",
+      description: "Show up three days in a row.",
+      titleAward: "Rhythm Builder",
+    },
+    {
+      id: "story-notice",
+      kind: "story",
+      title: "Keep the light on",
+      description: "The coldest night arrived.",
+      collectibleTitle: "Warming Lantern",
+    },
+  ];
   const acknowledgements: string[] = [];
   const client: PalClient = {
-    async getSnapshot() {
-      const next = structuredClone(snapshot);
-      next.rewards = [titleConsumed ? storyNotice : titleNotice];
-      return next;
-    },
-    async markRewardSeen(rewardId) {
+    getSnapshot: async () => structuredClone(snapshot),
+    markRewardSeen: async (rewardId) => {
       acknowledgements.push(rewardId);
-      if (rewardId === titleNotice.id) titleConsumed = true;
     },
   };
   let widget!: ReturnType<typeof usePalWidget>;
-  let renderer!: ReactTestRenderer;
 
   function Probe() {
     widget = usePalWidget();
@@ -282,95 +276,18 @@ test("a concealed FIFO title notice is consumed before showing the next reward",
   }
 
   await act(async () => {
-    renderer = create(
-      <PalProvider
-        client={client}
-        initialSnapshot={snapshot}
-        scopeKey="concealed-title-fifo"
-      >
+    create(
+      <PalProvider client={client} initialSnapshot={snapshot} scopeKey="policy-only">
         <Probe />
       </PalProvider>,
     );
   });
 
-  assert.deepEqual(acknowledgements, ["title-notice"]);
-  assert.deepEqual(widget.snapshot?.rewards.map((reward) => reward.id), ["story-notice"]);
-  const rendered = JSON.stringify(renderer.toJSON());
-  assert.doesNotMatch(rendered, /Rhythm Builder/);
-  assert.match(rendered, /Warming Lantern/);
-});
-
-test("concealed title consumption retries after a transient acknowledgement failure", async () => {
-  const snapshot = createFixtureSnapshot();
-  const titleNotice = {
-    id: "retry-title-notice",
-    title: "Rhythm Builder earned",
-    description: "Show up three days in a row.",
-    titleAward: "Rhythm Builder",
-  };
-  const storyNotice = {
-    id: "retry-story-notice",
-    kind: "story" as const,
-    title: "Keep the light on",
-    description: "The coldest night arrived.",
-    collectibleTitle: "Warming Lantern",
-  };
-  snapshot.rewards = [titleNotice];
-  let titleConsumed = false;
-  let acknowledgementCalls = 0;
-  const client: PalClient = {
-    async getSnapshot() {
-      const next = structuredClone(snapshot);
-      next.rewards = [titleConsumed ? storyNotice : titleNotice];
-      return next;
-    },
-    async markRewardSeen(rewardId) {
-      assert.equal(rewardId, titleNotice.id);
-      acknowledgementCalls += 1;
-      if (acknowledgementCalls === 1) {
-        throw new Error("Temporary acknowledgement failure");
-      }
-      titleConsumed = true;
-    },
-  };
-  let widget!: ReturnType<typeof usePalWidget>;
-  let renderer!: ReactTestRenderer;
-  const originalWindow = globalThis.window;
-
-  function Probe() {
-    widget = usePalWidget();
-    return <PalRewardCelebration />;
-  }
-
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    value: { clearTimeout, setTimeout },
-  });
-  try {
-    await act(async () => {
-      renderer = create(
-        <PalProvider
-          client={client}
-          initialSnapshot={snapshot}
-          scopeKey="concealed-title-retry"
-        >
-          <Probe />
-        </PalProvider>,
-      );
-    });
-
-    assert.equal(acknowledgementCalls, 2);
-    assert.deepEqual(widget.snapshot?.rewards.map((reward) => reward.id), ["retry-story-notice"]);
-    const rendered = JSON.stringify(renderer.toJSON());
-    assert.doesNotMatch(rendered, /Rhythm Builder/);
-    assert.match(rendered, /Warming Lantern/);
-  } finally {
-    await act(async () => renderer?.unmount());
-    Object.defineProperty(globalThis, "window", {
-      configurable: true,
-      value: originalWindow,
-    });
-  }
+  assert.deepEqual(acknowledgements, []);
+  assert.deepEqual(
+    widget.snapshot?.rewards.map((reward) => reward.id),
+    ["story-notice"],
+  );
 });
 
 test("a failed automatic refill retries until the next reward loads", async () => {
