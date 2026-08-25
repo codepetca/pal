@@ -143,9 +143,9 @@ test("achievement trail centers once for each learner scope", async () => {
         </PalProvider>,
         {
           createNodeMock(element) {
-            return element.type === "li" &&
-              (element.props as Record<string, unknown>)["data-week-status"] ===
-                "current"
+            return element.type === "div" &&
+              (element.props as Record<string, unknown>).className ===
+                "pal-week-collectible-stack"
               ? {
                   scrollIntoView(options: ScrollIntoViewOptions) {
                     scrollCalls.push(options);

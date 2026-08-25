@@ -157,7 +157,7 @@ export function PalAchievements() {
     theme,
     viewport,
   } = usePalWidget();
-  const currentWeekRef = useRef<HTMLLIElement>(null);
+  const currentWeekFocalRef = useRef<HTMLDivElement>(null);
   const centeredScopeKeyRef = useRef<string | null>(null);
   const currentWeekNumber = snapshot?.roadmap.currentWeek;
 
@@ -172,14 +172,14 @@ export function PalAchievements() {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      const currentWeek = currentWeekRef.current;
-      if (!currentWeek) return;
+      const currentWeekFocal = currentWeekFocalRef.current;
+      if (!currentWeekFocal) return;
 
       centeredScopeKeyRef.current = scopeKey;
       const prefersReducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches ?? false;
-      currentWeek.scrollIntoView({
+      currentWeekFocal.scrollIntoView({
         behavior: motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
         block: "center",
         inline: "nearest",
@@ -321,7 +321,6 @@ export function PalAchievements() {
               data-week-status={isCurrent ? "current" : "past"}
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
-              ref={isCurrent ? currentWeekRef : undefined}
             >
               {storyHeadline && storyCopy ? (
                 <WeekStory
@@ -330,7 +329,10 @@ export function PalAchievements() {
                   weekLabel={week.label}
                 />
               ) : null}
-              <div className="pal-week-collectible-stack">
+              <div
+                className="pal-week-collectible-stack"
+                ref={isCurrent ? currentWeekFocalRef : undefined}
+              >
                 <header className="pal-week-header">
                   {isCurrent ? (
                     <span className="pal-week-current-label">Current week</span>
