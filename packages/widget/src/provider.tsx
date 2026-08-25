@@ -21,6 +21,7 @@ import type {
   PalViewport,
   PalWidgetSnapshot,
 } from "./types";
+import { applyPalFeaturePolicy } from "./feature-policy";
 
 type PalLoadState = "loading" | "ready" | "error";
 
@@ -131,11 +132,14 @@ export function PalProvider({
   refreshIntervalMs = 0,
   onError,
 }: PalProviderProps) {
+  const visibleInitialSnapshot = initialSnapshot
+    ? applyPalFeaturePolicy(initialSnapshot)
+    : undefined;
   const [resource, setResource] = useState<PalResourceState>({
     error: null,
     scopeKey,
-    snapshot: initialSnapshot ?? null,
-    state: initialSnapshot ? "ready" : "loading",
+    snapshot: visibleInitialSnapshot ?? null,
+    state: visibleInitialSnapshot ? "ready" : "loading",
   });
   const [rewardState, setRewardState] = useState<PalRewardState>({
     error: null,
@@ -157,7 +161,7 @@ export function PalProvider({
     scopeKey,
   });
   const visibleRewardQueueRef = useRef<PalVisibleRewardQueue>({
-    rewards: initialSnapshot?.rewards ?? [],
+    rewards: visibleInitialSnapshot?.rewards ?? [],
     scopeKey,
   });
   const rewardRefillRef = useRef<PalRewardRefill>({
@@ -289,7 +293,7 @@ export function PalProvider({
         },
     );
     try {
-      const nextSnapshot = await client.getSnapshot(signal);
+      const nextSnapshot = applyPalFeaturePolicy(await client.getSnapshot(signal));
       if (
         signal.aborted ||
         sequence !== requestSequence.current ||

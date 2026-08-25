@@ -152,11 +152,15 @@ older widget/API pair.
   never rebuilds eligibility from roadmap weeks or duplicate unlock flags.
 - Current Home story titles are Undeterred, Gentle Friend, Pathmaker, and
   Homekeeper. Behavior titles remain Rhythm Builder, On-Time Pro, and Level Leader.
-  Each award stores both source occurrence and PAL grant order. The display
-  keeps the most recently granted title across later snapshots without delayed
-  delivery rewriting the learner's visible history; a story title wins when
+  Each award stores both source occurrence and PAL grant order. When title
+  presentation is enabled, the display keeps the most recently granted title
+  across later snapshots without delayed delivery rewriting the learner's
+  visible history; a story title wins when
   one action awards multiple titles at the same time. Historical achievements
-  never create reward grants; every new grant has an exact source fact.
+  never create reward grants; every new grant has an exact source fact. Title
+  presentation is temporarily disabled: ownership continues to be recorded,
+  while snapshots and the portable widget conceal title inventories, equipped
+  titles, title-only notices, and title copy attached to story rewards.
 - The widget gives every roadmap week with a story chapter a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once the chapter is granted, that week's slot reveals one

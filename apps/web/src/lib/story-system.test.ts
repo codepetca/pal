@@ -329,7 +329,7 @@ test("the concealed Pip v1 egg notice never advertises a loadout action", () => 
   assert.equal(notice.rewardCategory, undefined);
 });
 
-test("projector keeps prior-term titles without unlocking current-term collectibles", () => {
+test("projector conceals prior-term titles without unlocking current-term collectibles", () => {
   const plan = persistedPlan();
   const priorPlan: PersistedStoryPlan = {
     ...plan,
@@ -352,9 +352,10 @@ test("projector keeps prior-term titles without unlocking current-term collectib
   ]);
   const projection = projectStoryProgression(plan, [priorTermGrant], plans);
   assert.equal(projection.collectibles[0]?.status, "next");
-  assert.equal(projection.currentTitle, "Gentle Keeper");
-  assert.equal(projection.titles.some((title) => title.id === "gentle-keeper"), true);
+  assert.equal(projection.currentTitle, undefined);
+  assert.deepEqual(projection.titles, []);
   assert.equal(projectUnseenGrantRewards([priorTermGrant], plans).length, 1);
+  assert.equal(projectUnseenGrantRewards([priorTermGrant], plans)[0]?.titleAward, undefined);
   const raw = JSON.stringify(projection);
   assert.equal(raw.includes(plan.storyId), false);
   for (const chapter of plan.chapters) {
@@ -365,7 +366,7 @@ test("projector keeps prior-term titles without unlocking current-term collectib
   }
 });
 
-test("server fixture replays grants, titles, and acknowledgement without future content", async () => {
+test("server fixture replays grants with titles concealed and supports acknowledgement", async () => {
   const rhythmCommands = ["2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16"].map(
     (activityDay, index) => ({
       type: "action" as const,
@@ -393,10 +394,7 @@ test("server fixture replays grants, titles, and acknowledgement without future 
       : undefined,
     "color",
   );
-  assert.equal(
-    earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
-    true,
-  );
+  assert.deepEqual(earned.progression?.titles, []);
   const storyReward = earned.rewards.find((reward) => reward.kind === "story");
   assert.ok(storyReward);
 
@@ -413,10 +411,7 @@ test("server fixture replays grants, titles, and acknowledgement without future 
     ],
   });
   assert.equal(afterBreak.companion.streak, 1);
-  assert.equal(
-    afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"),
-    true,
-  );
+  assert.deepEqual(afterBreak.progression?.titles, []);
 
   const laterBehavior = await projectStoryFixture({
     termWeeks: 16,
@@ -430,7 +425,11 @@ test("server fixture replays grants, titles, and acknowledgement without future 
       },
     ],
   });
-  assert.equal(laterBehavior.progression?.currentTitle, "On-Time Pro");
+  assert.equal(laterBehavior.progression?.currentTitle, undefined);
+  assert.equal(
+    laterBehavior.rewards.some((reward) => reward.titleAward !== undefined),
+    false,
+  );
 
   const acknowledged = await projectStoryFixture({
     termWeeks: 16,
@@ -443,7 +442,7 @@ test("server fixture replays grants, titles, and acknowledgement without future 
   assert.equal(acknowledged.progression?.collectibles[0]?.status, "earned");
 });
 
-test("durable action order selects titles and a story title wins only its same-action tie", () => {
+test("durable title grants stay concealed while titles are disabled", () => {
   const plan = persistedPlan();
   const story = grant(1, {
     kind: "story_chapter",
@@ -456,16 +455,28 @@ test("durable action order selects titles and a story title wins only its same-a
     sourceFactId: "fact-shared",
     behaviorTitleId: "rhythm-builder",
   });
-  assert.equal(
-    projectStoryProgression(plan, [story, sameActionBehavior]).currentTitle,
-    "Gentle Keeper",
-  );
+  assert.equal(projectStoryProgression(plan, [story, sameActionBehavior]).currentTitle, undefined);
   const laterBehavior = grant(3, {
     sourceFactId: "fact-later",
     behaviorTitleId: "on-time-pro",
   });
+  const projection = projectStoryProgression(plan, [story, sameActionBehavior, laterBehavior]);
+  assert.equal(projection.currentTitle, undefined);
+  assert.deepEqual(projection.titles, []);
+
+  const enabled = projectStoryProgression(
+    plan,
+    [story, sameActionBehavior, laterBehavior],
+    undefined,
+    { titlesVisible: true },
+  );
+  assert.equal(enabled.currentTitle, "On-Time Pro");
   assert.equal(
-    projectStoryProgression(plan, [story, sameActionBehavior, laterBehavior]).currentTitle,
+    projectUnseenGrantRewards(
+      [laterBehavior],
+      undefined,
+      { titlesVisible: true },
+    )[0]?.titleAward,
     "On-Time Pro",
   );
 });
@@ -478,7 +489,8 @@ test("fixture uses the production projector and seen state never removes ownersh
   fixture.grantStoryChapter(plan.chapters[0]!.assignmentId, "fact-retry");
   assert.equal(fixture.grants().length, 2);
   assert.deepEqual(fixture.progression(), projectStoryProgression(plan, fixture.grants()));
-  assert.equal(fixture.progression().currentTitle, "Gentle Keeper");
+  assert.equal(fixture.progression().currentTitle, undefined);
+  assert.deepEqual(fixture.progression().titles, []);
   const storyReward = fixture.rewards().find((reward) => reward.kind === "story");
   assert.ok(storyReward);
   fixture.markSeen(storyReward.id);
@@ -1166,12 +1178,13 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
         .filter((reward) => reward.achievement === undefined)
         .map(displayReward),
     );
-    assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
+    assert.equal(snapshot.progression?.currentTitle, undefined);
+    assert.deepEqual(snapshot.progression?.titles, []);
 
     await getDb().update(economy).set({ streakCurrent: 0, streakLastDay: null }).where(eq(economy.learnerId, learnerId));
     const afterBreak = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
-    assert.equal(afterBreak.progression?.titles.some((title) => title.id === "rhythm-builder"), true);
-    assert.equal(afterBreak.progression?.currentTitle, "Gentle Keeper");
+    assert.deepEqual(afterBreak.progression?.titles, []);
+    assert.equal(afterBreak.progression?.currentTitle, undefined);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
@@ -1227,18 +1240,15 @@ test("a prior-term story title and unseen reveal remain durable in a later term"
       { asOf: new Date("2026-10-20T12:00:00.000Z") },
     );
     assert.equal(snapshot.progression?.collectibles[0]?.status, "next");
-    assert.equal(snapshot.progression?.currentTitle, "Gentle Keeper");
-    assert.equal(
-      snapshot.progression?.titles.some((title) => title.id === "gentle-keeper"),
-      true,
-    );
+    assert.equal(snapshot.progression?.currentTitle, undefined);
+    assert.deepEqual(snapshot.progression?.titles, []);
     assert.equal(snapshot.rewards.some((reward) => reward.kind === "story"), true);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }
 });
 
-test("a calendarless behavior title is revealed and acknowledged without losing ownership", { skip: !process.env.DATABASE_URL }, async () => {
+test("a calendarless behavior title is stored but concealed without losing ownership", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
   const externalLearnerId = `calendarless-title-${crypto.randomUUID()}`;
   try {
@@ -1277,10 +1287,7 @@ test("a calendarless behavior title is revealed and acknowledged without losing 
     const snapshot = await loadLearnerSnapshot(integration.id, learnerId);
     assert.equal(snapshot.progression, undefined);
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
-    assert.ok(notice);
-    assert.equal(notice.achievement, undefined);
-    if (notice.achievement) throw new Error("Expected a title notice");
-    assert.equal(notice.titleAward, "On-Time Pro");
+    assert.equal(notice, undefined);
 
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
     const after = await loadLearnerSnapshot(integration.id, learnerId);

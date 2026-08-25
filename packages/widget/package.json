@@ -46,6 +46,10 @@
       "types": "./dist/achievement-presentation.d.ts",
       "import": "./dist/achievement-presentation.js"
     },
+    "./feature-policy": {
+      "types": "./dist/feature-policy.d.ts",
+      "import": "./dist/feature-policy.js"
+    },
     "./fixture": {
       "types": "./dist/fixture-client.d.ts",
       "import": "./dist/fixture-client.js"

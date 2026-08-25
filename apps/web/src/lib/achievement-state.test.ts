@@ -414,14 +414,14 @@ test(
           badge: mapped.badge,
         });
       }
-      assert.equal(snapshot.rewards.length, 6);
+      assert.equal(snapshot.rewards.length, 5);
       assert.equal(
         snapshot.rewards.some(
           (reward) =>
             reward.achievement === undefined &&
             reward.titleAward === "On-Time Pro",
         ),
-        true,
+        false,
       );
       const noticeRows = await getDb()
         .select()

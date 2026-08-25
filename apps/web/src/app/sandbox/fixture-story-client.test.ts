@@ -38,8 +38,8 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
     "color",
   );
   assert.equal(
-    earned.progression?.titles.some((title) => title.id === "rhythm-builder"),
-    true,
+    earned.progression?.titles.length,
+    0,
   );
   const storyReward = earned.rewards.find((reward) => reward.kind === "story");
   assert.ok(storyReward);
@@ -56,12 +56,6 @@ test("interactive fixture uses the server projector and keeps acknowledged owner
         kind: "standard",
         achievement: "weekly-rhythm",
         titleAward: undefined,
-      },
-      {
-        id: "fixture-grant-1",
-        kind: "standard",
-        achievement: undefined,
-        titleAward: "Rhythm Builder",
       },
       {
         id: "fixture-grant-2",
