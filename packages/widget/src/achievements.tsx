@@ -150,6 +150,7 @@ export function PalAchievements() {
     loadoutPending,
     motion,
     refresh,
+    scopeKey,
     setRewardLoadout,
     snapshot,
     state,
@@ -157,12 +158,12 @@ export function PalAchievements() {
     viewport,
   } = usePalWidget();
   const currentWeekRef = useRef<HTMLLIElement>(null);
-  const hasCenteredCurrentWeekRef = useRef(false);
+  const centeredScopeKeyRef = useRef<string | null>(null);
   const currentWeekNumber = snapshot?.roadmap.currentWeek;
 
   useEffect(() => {
     if (
-      hasCenteredCurrentWeekRef.current ||
+      centeredScopeKeyRef.current === scopeKey ||
       currentWeekNumber === undefined ||
       typeof window === "undefined" ||
       typeof window.requestAnimationFrame !== "function"
@@ -174,7 +175,7 @@ export function PalAchievements() {
       const currentWeek = currentWeekRef.current;
       if (!currentWeek) return;
 
-      hasCenteredCurrentWeekRef.current = true;
+      centeredScopeKeyRef.current = scopeKey;
       const prefersReducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches ?? false;
@@ -186,7 +187,7 @@ export function PalAchievements() {
     });
 
     return () => window.cancelAnimationFrame?.(frame);
-  }, [currentWeekNumber, motion]);
+  }, [currentWeekNumber, motion, scopeKey]);
 
   const appearance = {
     "data-pal-density": density,

@@ -110,6 +110,72 @@ test("achievement trail omits future weeks and orders visible weeks chronologica
   }
 });
 
+test("achievement trail centers once for each learner scope", async () => {
+  const learnerA = createFixtureSnapshot(4);
+  const learnerB = createFixtureSnapshot(4);
+  const clientA = createFixturePalClient(learnerA);
+  const clientB = createFixturePalClient(learnerB);
+  const scrollCalls: ScrollIntoViewOptions[] = [];
+  const originalWindow = globalThis.window;
+  let renderer: ReactTestRenderer | undefined;
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      cancelAnimationFrame() {},
+      matchMedia: () => ({ matches: false }),
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        callback(0);
+        return 1;
+      },
+    },
+  });
+
+  try {
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          scopeKey="learner-a"
+        >
+          <PalAchievements />
+        </PalProvider>,
+        {
+          createNodeMock(element) {
+            return element.type === "li" &&
+              (element.props as Record<string, unknown>)["data-week-status"] ===
+                "current"
+              ? {
+                  scrollIntoView(options: ScrollIntoViewOptions) {
+                    scrollCalls.push(options);
+                  },
+                }
+              : null;
+          },
+        },
+      );
+    });
+    assert.equal(scrollCalls.length, 1);
+
+    await act(async () => {
+      renderer!.update(
+        <PalProvider client={clientB} scopeKey="learner-b">
+          <PalAchievements />
+        </PalProvider>,
+      );
+      await Promise.resolve();
+    });
+    assert.equal(scrollCalls.length, 2);
+  } finally {
+    await act(async () => renderer?.unmount());
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
 test("past weeks keep explicit non-earned outcomes without claiming an earned badge", async () => {
   const snapshot = createFixtureSnapshot();
   const weekThree = snapshot.roadmap.weeks.find((week) => week.number === 3)!;

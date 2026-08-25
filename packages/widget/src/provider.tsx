@@ -41,6 +41,7 @@ interface PalContextValue {
     slot: PalRewardLoadoutSlot,
     rewardGrantId: string | null,
   ) => Promise<boolean>;
+  scopeKey: string;
   snapshot: PalWidgetSnapshot | null;
   state: PalLoadState;
   density: PalDensity;
@@ -635,6 +636,7 @@ export function PalProvider({
       loadoutPending: currentLoadoutState.pending,
       refresh,
       rewardError: currentRewardState.error,
+      scopeKey,
       setRewardLoadout,
       snapshot: currentResource.snapshot,
       state: currentResource.state,
@@ -656,6 +658,7 @@ export function PalProvider({
       isRewardPending,
       motion,
       refresh,
+      scopeKey,
       setRewardLoadout,
       theme,
       viewport,
