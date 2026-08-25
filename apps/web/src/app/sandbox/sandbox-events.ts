@@ -1,3 +1,5 @@
+import { browserRandomUuid } from "./browser-random-id";
+
 export type SandboxAction =
   | "session-started"
   | "classroom-joined"
@@ -51,7 +53,7 @@ export function eventForAction(
   learnerId: string,
   now = new Date(),
 ): SandboxEventRequest | null {
-  const nonce = crypto.randomUUID();
+  const nonce = browserRandomUuid();
   const simulatedOccurredAt = simulatedDate.toISOString();
   const reactionOccurredAt = now.toISOString();
   const periodKey = periodKeyForDate(simulatedDate);

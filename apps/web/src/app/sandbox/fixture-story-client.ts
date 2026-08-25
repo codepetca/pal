@@ -14,6 +14,7 @@ import {
   type FixtureStoryCommand,
   type FixtureStoryRequest,
 } from "./fixture-story-contract";
+import { browserRandomUuid } from "./browser-random-id";
 
 export function createStoryFixturePalClient(
   apiBaseUrl: string,
@@ -75,7 +76,7 @@ export function createStoryFixturePalClient(
       } else {
         recordCommand({
           type: "action",
-          id: crypto.randomUUID(),
+          id: browserRandomUuid(),
           action,
           ...(context ? { context: structuredClone(context) } : {}),
         });
