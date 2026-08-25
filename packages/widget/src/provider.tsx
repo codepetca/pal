@@ -16,6 +16,7 @@ import type {
   PalMotion,
   PalProviderProps,
   PalRewardNotice,
+  PalRewardLoadoutSlot,
   PalTheme,
   PalViewport,
   PalWidgetSnapshot,
@@ -29,6 +30,13 @@ interface PalContextValue {
   isRewardPending: (rewardId: string) => boolean;
   refresh: () => Promise<void>;
   rewardError: Error | null;
+  loadoutError: Error | null;
+  loadoutErrorSlot: PalRewardLoadoutSlot | null;
+  loadoutPending: boolean;
+  setRewardLoadout: (
+    slot: PalRewardLoadoutSlot,
+    rewardGrantId: string | null,
+  ) => Promise<boolean>;
   snapshot: PalWidgetSnapshot | null;
   state: PalLoadState;
   density: PalDensity;
@@ -50,6 +58,13 @@ interface PalRewardState {
   error: Error | null;
   pendingIds: Set<string>;
   scopeKey: string;
+}
+
+interface PalLoadoutState {
+  error: Error | null;
+  pending: boolean;
+  scopeKey: string;
+  slot: PalRewardLoadoutSlot | null;
 }
 
 interface PalRequestScope {
@@ -127,6 +142,12 @@ export function PalProvider({
     pendingIds: new Set(),
     scopeKey,
   });
+  const [loadoutState, setLoadoutState] = useState<PalLoadoutState>({
+    error: null,
+    pending: false,
+    scopeKey,
+    slot: null,
+  });
   const pendingRewardIdsRef = useRef({
     ids: new Set<string>(),
     scopeKey,
@@ -194,6 +215,7 @@ export function PalProvider({
         pendingIds: new Set(),
         scopeKey,
       });
+      setLoadoutState({ error: null, pending: false, scopeKey, slot: null });
     }
     const committedRequestScope = requestScopeRef.current;
     activeScopeRef.current = scopeKey;
@@ -230,6 +252,10 @@ export function PalProvider({
           pendingIds: new Set(),
           scopeKey,
         };
+  const currentLoadoutState: PalLoadoutState =
+    loadoutState.scopeKey === scopeKey
+      ? loadoutState
+      : { error: null, pending: false, scopeKey, slot: null };
 
   const refreshSnapshot = useCallback(async (): Promise<boolean> => {
     const requestScope = requestScopeRef.current;
@@ -517,13 +543,64 @@ export function PalProvider({
     [currentRewardState.pendingIds],
   );
 
+  const setRewardLoadout = useCallback(
+    async (slot: PalRewardLoadoutSlot, rewardGrantId: string | null) => {
+      const requestScope = requestScopeRef.current;
+      if (
+        requestScope.client !== client ||
+        requestScope.scopeKey !== scopeKey ||
+        requestScope.controller.signal.aborted
+      ) return false;
+      const setter = requestScope.client.setRewardLoadout;
+      if (!setter) {
+        const nextError = new Error("This Pal client does not support reward customization");
+        setLoadoutState({ error: nextError, pending: false, scopeKey, slot });
+        onErrorRef.current?.(nextError);
+        return false;
+      }
+      const { signal } = requestScope.controller;
+      setLoadoutState({ error: null, pending: true, scopeKey, slot });
+      try {
+        await setter(slot, rewardGrantId, signal);
+        if (signal.aborted || activeScopeRef.current !== scopeKey) return false;
+        const refreshed = await refreshSnapshot();
+        if (mountedRef.current && activeScopeRef.current === scopeKey) {
+          setLoadoutState(refreshed
+            ? { error: null, pending: false, scopeKey, slot: null }
+            : {
+                error: new Error("Pal saved the customization but could not refresh it"),
+                pending: false,
+                scopeKey,
+                slot,
+              });
+        }
+        return refreshed;
+      } catch (cause) {
+        if (isAbortError(cause, signal)) return false;
+        const nextError = cause instanceof Error
+          ? cause
+          : new Error("Pal could not update reward customization");
+        if (mountedRef.current && activeScopeRef.current === scopeKey) {
+          setLoadoutState({ error: nextError, pending: false, scopeKey, slot });
+          onErrorRef.current?.(nextError);
+        }
+        return false;
+      }
+    },
+    [client, refreshSnapshot, scopeKey],
+  );
+
   const value = useMemo(
     () => ({
       dismissReward,
       error: currentResource.error,
       isRewardPending,
+      loadoutError: currentLoadoutState.error,
+      loadoutErrorSlot: currentLoadoutState.slot,
+      loadoutPending: currentLoadoutState.pending,
       refresh,
       rewardError: currentRewardState.error,
+      setRewardLoadout,
       snapshot: currentResource.snapshot,
       state: currentResource.state,
       density,
@@ -536,11 +613,15 @@ export function PalProvider({
       currentResource.snapshot,
       currentResource.state,
       currentRewardState.error,
+      currentLoadoutState.error,
+      currentLoadoutState.pending,
+      currentLoadoutState.slot,
       density,
       dismissReward,
       isRewardPending,
       motion,
       refresh,
+      setRewardLoadout,
       theme,
       viewport,
     ],

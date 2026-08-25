@@ -26,7 +26,7 @@ test("mints a short-lived learner-scoped token without the external learner toke
   assert.equal(payload.integration_id, integrationId);
   assert.equal(payload.iss, "pal");
   assert.equal(payload.aud, "pal-widget");
-  assert.equal(payload.scope, "learner:read reward:ack");
+  assert.equal(payload.scope, "learner:read reward:ack reward:equip");
   assert.equal(payload.exp! - payload.iat!, PAL_READ_TOKEN_TTL_SECONDS);
   assert.equal(result.token.includes(externalLearnerToken), false);
 
@@ -38,6 +38,7 @@ test("mints a short-lived learner-scoped token without the external learner toke
   assert.equal(verified.learnerId, learnerId);
   assert.equal(verified.integrationId, integrationId);
   assert.equal(verified.scopes.has("reward:ack"), true);
+  assert.equal(verified.scopes.has("reward:equip"), true);
 });
 
 test("rejects altered and expired tokens", async () => {

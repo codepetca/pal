@@ -142,8 +142,20 @@ function Lock() {
 }
 
 export function PalAchievements() {
-  const { density, error, motion, refresh, snapshot, state, theme, viewport } =
-    usePalWidget();
+  const {
+    density,
+    error,
+    loadoutError,
+    loadoutErrorSlot,
+    loadoutPending,
+    motion,
+    refresh,
+    setRewardLoadout,
+    snapshot,
+    state,
+    theme,
+    viewport,
+  } = usePalWidget();
 
   const appearance = {
     "data-pal-density": density,
@@ -179,13 +191,33 @@ export function PalAchievements() {
     .filter((week) => week.number <= snapshot.roadmap.currentWeek)
     .sort((a, b) => b.number - a.number);
   const progression: PalProgressionState | undefined = snapshot.progression;
+  const wallpaper = snapshot.rewardLoadout?.wallpaper;
+  const equippedWallpaper = wallpaper?.options.find(
+    (option) => option.grantId === wallpaper.equippedGrantId,
+  );
+  const equippedWallpaperUrl = theme === "dark"
+    ? equippedWallpaper?.darkAssetUrl ?? equippedWallpaper?.assetUrl
+    : equippedWallpaper?.assetUrl;
 
   return (
     <section
       className="pal-surface pal-achievements"
       {...appearance}
       aria-label="Achievement trail"
+      data-pal-wallpaper={equippedWallpaper ? "equipped" : "default"}
+      style={equippedWallpaperUrl
+        ? { backgroundImage: theme === "dark"
+            ? `linear-gradient(rgba(8, 18, 45, .42), rgba(8, 18, 45, .72)), url("${equippedWallpaperUrl}")`
+            : `linear-gradient(rgba(255, 250, 243, .72), rgba(255, 250, 243, .9)), url("${equippedWallpaperUrl}")` }
+        : undefined}
     >
+      {loadoutError && loadoutErrorSlot ? (
+        <p className="pal-loadout-error" role="alert">
+          {loadoutErrorSlot === "wallpaper"
+            ? "Could not change wallpaper."
+            : "Could not change companion."}
+        </p>
+      ) : null}
       {visibleWeeks.length === 0 ? (
         <p className="pal-roadmap-empty">Your story begins when Week 1 opens.</p>
       ) : null}
@@ -207,6 +239,46 @@ export function PalAchievements() {
             collectible.assetUrl
               ? collectible
               : undefined;
+          const usableReward = earnedReward
+            ? [
+                ...(snapshot.rewardLoadout?.wallpaper.options ?? []),
+                ...(snapshot.rewardLoadout?.companion.options ?? []),
+              ].find((option) => option.rewardId === earnedReward.id)
+            : undefined;
+          const equippedGrantId = usableReward
+            ? snapshot.rewardLoadout?.[usableReward.category].equippedGrantId
+            : undefined;
+          const equipped = Boolean(
+            usableReward && usableReward.grantId === equippedGrantId,
+          );
+          const fallbackCompanion = Boolean(
+            usableReward?.category === "companion" &&
+            usableReward.grantId === snapshot.rewardLoadout?.companion.fallbackGrantId,
+          );
+          const collectibleArtwork = (
+            <>
+              <span className="pal-week-collectible-art" aria-hidden="true">
+                {earnedReward ? (
+                  <img
+                    src={theme === "dark" ? earnedReward.darkAssetUrl ?? earnedReward.assetUrl : earnedReward.assetUrl}
+                    alt=""
+                    width="64"
+                    height="64"
+                  />
+                ) : (
+                  <Lock />
+                )}
+              </span>
+              {earnedReward ? (
+                <strong aria-hidden="true">{earnedReward.title}</strong>
+              ) : null}
+              {equipped ? (
+                <span className="pal-week-collectible-status" aria-hidden="true">
+                  {fallbackCompanion ? "Default companion" : "Equipped"}
+                </span>
+              ) : null}
+            </>
+          );
 
           const storyHeadline = earnedReward?.revealHeadline;
           const storyCopy = earnedReward?.storyCopy;
@@ -229,31 +301,38 @@ export function PalAchievements() {
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>
                 </header>
-                <div
-                  className="pal-week-collectible"
-                  data-unlock-status={earnedReward ? "earned" : "locked"}
-                  data-collectible-finish={earnedReward?.finish ?? "color"}
-                  aria-label={earnedReward
-                    ? `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
-                    : `${week.label} collectible locked`}
-                  role="img"
-                >
-                  <span className="pal-week-collectible-art" aria-hidden="true">
-                    {earnedReward ? (
-                      <img
-                        src={earnedReward.assetUrl}
-                        alt=""
-                        width="64"
-                        height="64"
-                      />
-                    ) : (
-                      <Lock />
+                {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (
+                  <button
+                    className="pal-week-collectible"
+                    type="button"
+                    disabled={loadoutPending}
+                    data-unlock-status="earned"
+                    data-collectible-finish={earnedReward.finish ?? "color"}
+                    data-loadout-equipped={equipped ? "true" : "false"}
+                    aria-pressed={equipped}
+                    aria-label={`${equipped ? "Stop using" : "Use"} ${earnedReward.title} as ${usableReward.category === "wallpaper" ? "the achievements wallpaper" : "the active companion"}`}
+                    onClick={() => void setRewardLoadout(
+                      usableReward.category,
+                      equipped ? null : usableReward.grantId,
                     )}
-                  </span>
-                  {earnedReward ? (
-                    <strong aria-hidden="true">{earnedReward.title}</strong>
-                  ) : null}
-                </div>
+                  >
+                    {collectibleArtwork}
+                  </button>
+                ) : collectible ? (
+                  <div
+                    className="pal-week-collectible"
+                    data-unlock-status={earnedReward ? "earned" : "locked"}
+                    data-collectible-finish={earnedReward?.finish ?? "color"}
+                    aria-label={earnedReward
+                      ? equipped && fallbackCompanion
+                        ? `${earnedReward.title} is the default active companion`
+                        : `${week.label} collectible: ${earnedReward.title}, ${earnedReward.finish === "sketch" ? "storybook sketch" : "full color"}`
+                      : `${week.label} collectible locked`}
+                    role="img"
+                  >
+                    {collectibleArtwork}
+                  </div>
+                ) : null}
               </div>
               <div className="pal-week-content">
                 {visibleAchievements.length > 0 ? (

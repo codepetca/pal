@@ -1,5 +1,5 @@
 import { parsePalWidgetSnapshot } from "./snapshot-validation";
-import type { PalClient } from "./types";
+import type { PalClient, PalRewardLoadoutSlot } from "./types";
 
 export interface PalHttpClientOptions {
   apiBaseUrl: string;
@@ -7,6 +7,7 @@ export interface PalHttpClientOptions {
   getAccessToken: (signal?: AbortSignal) => Promise<string>;
   snapshotPath?: string;
   rewardSeenPath?: (rewardId: string) => string;
+  rewardLoadoutPath?: string;
   fetchImplementation?: typeof fetch;
 }
 
@@ -72,6 +73,7 @@ export function createPalHttpClient({
   snapshotPath = "/api/v1/learner/snapshot",
   rewardSeenPath = (rewardId) =>
     `/api/v1/learner/rewards/${encodeURIComponent(rewardId)}/seen`,
+  rewardLoadoutPath = "/api/v1/learner/reward-loadout",
   fetchImplementation = fetch,
 }: PalHttpClientOptions): PalClient {
   const baseUrl = secureApiBaseUrl(apiBaseUrl);
@@ -106,7 +108,7 @@ export function createPalHttpClient({
       const response = await authorizedFetch(snapshotPath, {
         method: "GET",
         signal,
-        headers: { "X-Pal-Collectible-Finish": "1" },
+        headers: { "X-Pal-Collectible-Finish": "2" },
       });
       return parsePalWidgetSnapshot(await response.json(), {
         assetBaseUrl: baseUrl.toString(),
@@ -117,6 +119,14 @@ export function createPalHttpClient({
       await authorizedFetch(rewardSeenPath(rewardId), {
         method: "POST",
         signal,
+      });
+    },
+    async setRewardLoadout(slot: PalRewardLoadoutSlot, rewardGrantId, signal) {
+      await authorizedFetch(rewardLoadoutPath, {
+        method: "POST",
+        signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slot, rewardGrantId }),
       });
     },
   };

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { NextRequest } from "next/server";
-import { getDb, getPool, storyPlanChapters, storyPlans } from "@pal/db";
+import {
+  getDb,
+  getPool,
+  learnerRewardGrants,
+  storyPlanChapters,
+  storyPlans,
+} from "@pal/db";
+import { and, eq } from "drizzle-orm";
 import {
   getOrCreateLearnerIdentity,
   processEventInDb,
@@ -20,6 +27,10 @@ import {
   OPTIONS as rewardOptions,
   POST as acknowledgeReward,
 } from "./rewards/[rewardId]/seen/route";
+import {
+  OPTIONS as loadoutOptions,
+  POST as setRewardLoadout,
+} from "./reward-loadout/route";
 
 const secret = "learner-routes-sandbox-secret-at-least-32-characters";
 const pikaSecret = "learner-routes-pika-secret-at-least-32-characters";
@@ -42,6 +53,21 @@ function request(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (origin) headers.set("Origin", origin);
   return new NextRequest(`http://localhost${path}`, { method, headers });
+}
+
+function loadoutRequest(
+  token: string,
+  body: { slot: "companion" | "wallpaper"; rewardGrantId: string | null },
+): NextRequest {
+  return new NextRequest("http://localhost/api/v1/learner/reward-loadout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: allowedOrigin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 test("rejects missing authentication and unapproved widget origins", async () => {
@@ -110,6 +136,102 @@ test("rejects missing authentication and unapproved widget origins", async () =>
     preflight.headers.get("access-control-allow-headers") ?? "",
     /Authorization/,
   );
+});
+
+test("loadout writes require an allowed origin, equip scope, and bounded valid body", async () => {
+  const denied = await setRewardLoadout(
+    request(
+      "/api/v1/learner/reward-loadout",
+      "untrusted-token",
+      "https://attacker.example",
+      "POST",
+    ),
+  );
+  assert.equal(denied.status, 403);
+
+  const unauthenticated = await setRewardLoadout(
+    request(
+      "/api/v1/learner/reward-loadout",
+      undefined,
+      allowedOrigin,
+      "POST",
+    ),
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const preflight = await loadoutOptions(
+    request(
+      "/api/v1/learner/reward-loadout",
+      undefined,
+      allowedOrigin,
+      "OPTIONS",
+    ),
+  );
+  assert.equal(preflight.status, 204);
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/);
+
+  const { token } = await mintPalReadToken({ learnerId: "00000000-0000-4000-8000-000000000001", integrationId: "00000000-0000-4000-8000-000000000002" });
+  const invalid = new NextRequest("http://localhost/api/v1/learner/reward-loadout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: allowedOrigin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ slot: "keepsake", rewardGrantId: "not-a-uuid" }),
+  });
+  const invalidResponse = await setRewardLoadout(invalid);
+  assert.equal(invalidResponse.status, 422);
+  assert.equal((await invalidResponse.json()).error, "invalid_request");
+
+  const oversized = new NextRequest("http://localhost/api/v1/learner/reward-loadout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: allowedOrigin,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      slot: "wallpaper",
+      rewardGrantId: null,
+      padding: "x".repeat(2_048),
+    }),
+  });
+  oversized.headers.delete("content-length");
+  const oversizedResponse = await setRewardLoadout(oversized);
+  assert.equal(oversizedResponse.status, 422);
+  assert.equal((await oversizedResponse.json()).error, "invalid_request");
+
+  let chunksProduced = 0;
+  let streamCancelled = false;
+  const chunkedBody = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      chunksProduced += 1;
+      controller.enqueue(new Uint8Array(1_024));
+      if (chunksProduced === 100) controller.close();
+    },
+    cancel() {
+      streamCancelled = true;
+    },
+  });
+  const chunked = new NextRequest(
+    "http://localhost/api/v1/learner/reward-loadout",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: allowedOrigin,
+        "Content-Type": "application/json",
+      },
+      body: chunkedBody,
+      duplex: "half",
+    } as never,
+  );
+  const chunkedResponse = await setRewardLoadout(chunked);
+  assert.equal(chunkedResponse.status, 422);
+  assert.equal((await chunkedResponse.json()).error, "invalid_request");
+  assert.equal(streamCancelled, true);
+  assert.ok(chunksProduced < 100);
 });
 
 test(
@@ -275,6 +397,7 @@ test(
       const legacy = (await legacyResponse.json()) as {
         progression?: { collectibles: Array<{ status: string; kind?: string }> };
         rewards: Array<{ kind?: string }>;
+        rewardLoadout?: unknown;
       };
       assert.equal(legacy.progression?.collectibles.length, 20);
       assert.equal(
@@ -284,6 +407,7 @@ test(
         false,
       );
       assert.equal(legacy.rewards.some((reward) => reward.kind === "story"), false);
+      assert.equal(legacy.rewardLoadout, undefined);
 
       const capableRequest = request(
         "/api/v1/learner/snapshot",
@@ -331,6 +455,7 @@ test(
         progression?: {
           collectibles: Array<{ status: string; finish?: string; kind?: string }>;
         };
+        rewardLoadout?: unknown;
       };
       assert.equal(current.progression?.collectibles.length, 16);
       assert.deepEqual(
@@ -346,6 +471,7 @@ test(
         ),
         true,
       );
+      assert.ok(current.rewardLoadout);
     } finally {
       await resetLearnerInDb(integration.id, externalLearnerId);
     }
@@ -386,6 +512,134 @@ test(
     } finally {
       await resetLearnerInDb(sandbox.id, externalLearnerId);
       await resetLearnerInDb(pika.id, externalLearnerId);
+    }
+  },
+);
+
+test(
+  "equips and clears an owned wallpaper through the learner-scoped API",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    openedDatabase = true;
+    const externalLearnerId = `route-loadout-${crypto.randomUUID()}`;
+    const termKey = `route-loadout-term-${crypto.randomUUID()}`;
+    const integration = await resolveIntegration({
+      slug: "sandbox",
+      name: "Sandbox",
+      secret,
+    });
+    try {
+      let learnerId = "";
+      for (let week = 1; week <= 8; week += 1) {
+        const weekStart = new Date(Date.UTC(2026, 4, 4 + ((week - 1) * 7)));
+        const day = weekStart.toISOString().slice(0, 10);
+        const periodKey = `route-loadout-period-${week}-${crypto.randomUUID()}`;
+        const configured = await processEventInDb(
+          integration.id,
+          externalLearnerId,
+          {
+            event_type: "daily_log_week.configured",
+            occurred_at: `${day}T12:00:00.000Z`,
+            metadata: {
+              period_key: periodKey,
+              config_version: 1,
+              period_status: "open",
+              eligible_days: 1,
+              term_token: termKey,
+              term_start_day: "2026-05-04",
+              term_end_day: "2026-08-21",
+              term_timezone: "America/Toronto",
+              term_week_count: 16,
+              week_start_day: day,
+              week_index: week,
+            },
+          },
+          `route-loadout-config-${week}-${crypto.randomUUID()}`,
+          { storyGrantAsOf: weekStart },
+        );
+        assert.equal(configured.status, "processed");
+        learnerId ||= await getOrCreateLearnerIdentity(
+          getDb(),
+          integration.id,
+          externalLearnerId,
+        );
+        const worker = await runStoryGrantWorker({
+          asOf: new Date(weekStart.getTime() + (5 * 86_400_000) + 43_200_000),
+          onlyLearnerIds: [learnerId],
+        });
+        assert.equal(worker.grants, 1);
+      }
+
+      const { token } = await mintPalReadToken({
+        learnerId,
+        integrationId: integration.id,
+      });
+      const snapshotRequest = () => {
+        const next = request("/api/v1/learner/snapshot", token, allowedOrigin);
+        next.headers.set("X-Pal-Collectible-Finish", "2");
+        return next;
+      };
+      const before = (await (await getSnapshot(snapshotRequest())).json()) as {
+        rewardLoadout: {
+          wallpaper: {
+            equippedGrantId?: string;
+            options: Array<{ grantId: string; rewardId: string }>;
+          };
+        };
+      };
+      const wallpaper = before.rewardLoadout.wallpaper.options.find(
+        (option) => option.rewardId === "courtyard-afternoons-v1",
+      );
+      assert.ok(wallpaper);
+      assert.equal(before.rewardLoadout.wallpaper.equippedGrantId, undefined);
+
+      const equipped = await setRewardLoadout(loadoutRequest(token, {
+        slot: "wallpaper",
+        rewardGrantId: wallpaper.grantId,
+      }));
+      assert.equal(equipped.status, 204);
+      const afterEquip = (await (await getSnapshot(snapshotRequest())).json()) as typeof before;
+      assert.equal(
+        afterEquip.rewardLoadout.wallpaper.equippedGrantId,
+        wallpaper.grantId,
+      );
+
+      const wrongSlot = await setRewardLoadout(loadoutRequest(token, {
+        slot: "companion",
+        rewardGrantId: wallpaper.grantId,
+      }));
+      assert.equal(wrongSlot.status, 422);
+      assert.equal((await wrongSlot.json()).error, "reward_not_usable");
+
+      const [concealedGrant] = await getDb()
+        .select({ id: learnerRewardGrants.id })
+        .from(learnerRewardGrants)
+        .innerJoin(
+          storyPlanChapters,
+          eq(learnerRewardGrants.storyPlanChapterId, storyPlanChapters.id),
+        )
+        .where(and(
+          eq(learnerRewardGrants.learnerId, learnerId),
+          eq(storyPlanChapters.chapterId, "dusty-discovery"),
+        ))
+        .limit(1);
+      assert.ok(concealedGrant);
+      const concealed = await setRewardLoadout(loadoutRequest(token, {
+        slot: "companion",
+        rewardGrantId: concealedGrant.id,
+      }));
+      assert.equal(concealed.status, 422);
+      assert.equal((await concealed.json()).error, "reward_not_usable");
+
+      const cleared = await setRewardLoadout(loadoutRequest(token, {
+        slot: "wallpaper",
+        rewardGrantId: null,
+      }));
+      assert.equal(cleared.status, 204);
+      const afterClear = (await (await getSnapshot(snapshotRequest())).json()) as typeof before;
+      assert.equal(afterClear.rewardLoadout.wallpaper.equippedGrantId, undefined);
+    } finally {
+      await resetLearnerInDb(integration.id, externalLearnerId);
     }
   },
 );

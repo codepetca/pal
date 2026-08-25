@@ -32,8 +32,12 @@ export function PalRewardCelebration({
     dismissReward,
     density,
     isRewardPending,
+    loadoutError,
+    loadoutErrorSlot,
+    loadoutPending,
     motion,
     rewardError,
+    setRewardLoadout,
     snapshot,
     theme,
     viewport,
@@ -82,6 +86,7 @@ export function PalRewardCelebration({
 
   if (!reward) return null;
   const pending = isRewardPending(reward.id);
+  const saving = pending || loadoutPending;
   const achievement = reward.achievement;
   const grantReward = achievement ? undefined : reward;
   const storyReward = grantReward?.kind === "story";
@@ -96,13 +101,25 @@ export function PalRewardCelebration({
   const title = titleReward
     ? grantReward?.titleAward
     : achievement?.title ?? grantReward?.collectibleTitle ?? grantReward?.title ?? "";
-  const assetUrl = achievement?.badge.assetUrl ?? grantReward?.assetUrl;
+  const assetUrl = achievement?.badge.assetUrl ?? (
+    theme === "dark"
+      ? grantReward?.darkAssetUrl ?? grantReward?.assetUrl
+      : grantReward?.assetUrl
+  );
   const icon = achievement?.badge.icon ?? grantReward?.icon;
   const showArtwork = !titleReward;
+  const usableSlot = reward.rewardCategory === "companion" || reward.rewardCategory === "wallpaper"
+    ? reward.rewardCategory
+    : undefined;
+  const relevantLoadoutError = usableSlot === loadoutErrorSlot ? loadoutError : null;
+  const actionVisible = Boolean(
+    rewardError || relevantLoadoutError || (!hostManaged && !modal) ||
+    (hostManaged && showDismissAction),
+  );
 
   const celebration = (
     <section
-      aria-busy={pending || undefined}
+      aria-busy={saving || undefined}
       aria-labelledby={hostManaged ? undefined : titleId}
       aria-modal={!hostManaged && modal ? "true" : undefined}
       className="pal-celebration"
@@ -121,7 +138,7 @@ export function PalRewardCelebration({
           } else {
             dialogRef.current?.focus();
           }
-        } else if (event.key === "Escape" && !pending) {
+        } else if (event.key === "Escape" && !saving) {
           event.preventDefault();
           void dismissReward(reward.id);
         }
@@ -167,23 +184,37 @@ export function PalRewardCelebration({
           <p className="pal-celebration-story-copy">{grantReward.description}</p>
         </div>
       ) : null}
-      {rewardError ? (
+      {rewardError || relevantLoadoutError ? (
         <p className="pal-celebration-error" role="alert">
           We could not save that yet. Try again.
         </p>
       ) : null}
-      {rewardError ||
-      (!hostManaged && !modal) ||
-      (hostManaged && showDismissAction) ? (
-        <button
-          className="pal-button"
-          type="button"
-          disabled={pending}
-          onClick={() => void dismissReward(reward.id)}
-          ref={actionButtonRef}
-        >
-          {pending ? "Saving…" : rewardError ? "Try again" : "Continue"}
-        </button>
+      {actionVisible ? (
+        <div className="pal-celebration-actions">
+          {usableSlot ? (
+            <button
+              className="pal-button"
+              type="button"
+              disabled={saving}
+              onClick={() => void (async () => {
+                if (await setRewardLoadout(usableSlot, reward.id)) {
+                  await dismissReward(reward.id);
+                }
+              })()}
+            >
+              {loadoutPending ? "Using…" : "Use now"}
+            </button>
+          ) : null}
+          <button
+            className="pal-button"
+            type="button"
+            disabled={saving}
+            onClick={() => void dismissReward(reward.id)}
+            ref={actionButtonRef}
+          >
+            {pending ? "Saving…" : rewardError ? "Try again" : usableSlot ? "Save for later" : "Continue"}
+          </button>
+        </div>
       ) : null}
     </section>
   );
@@ -193,9 +224,9 @@ export function PalRewardCelebration({
   return (
     <div
       className="pal-celebration-backdrop"
-      data-pal-pending={pending ? "true" : "false"}
+      data-pal-pending={saving ? "true" : "false"}
       onClick={(event) => {
-        if (event.target !== event.currentTarget || pending) return;
+        if (event.target !== event.currentTarget || saving) return;
         void dismissReward(reward.id);
       }}
     >

@@ -12,12 +12,13 @@ export type PalAchievementStatus =
 export type PalWeekStatus = "past" | "current" | "future";
 export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
 export type PalUnlockStatus = "earned" | "next" | "locked";
-export type PalCollectibleKind =
-  | "companion"
-  | "keepsake"
-  | "wallpaper"
-  | "room"
-  | "cosmetic";
+/** Product category for story rewards. Only companions and wallpapers have loadout state. */
+export type PalRewardCategory = "companion" | "keepsake" | "wallpaper";
+/**
+ * Story reward category. `room` and `cosmetic` remain accepted for older
+ * schema-v1 snapshots, while current catalogs emit PalRewardCategory values.
+ */
+export type PalCollectibleKind = PalRewardCategory | "room" | "cosmetic";
 export type PalCollectibleFinish = "sketch" | "color";
 
 export interface PalProgress {
@@ -103,10 +104,14 @@ export interface PalRewardNotice {
   collectibleTitle?: string;
   /** Sketch is the guaranteed story keepsake; color marks an earned Weekly Rhythm. */
   collectibleFinish?: PalCollectibleFinish;
+  /** Present for story rewards so the reveal can offer an applicable action. */
+  rewardCategory?: PalRewardCategory;
   titleAward?: string;
   titleRevealCopy?: string;
   icon?: string;
   assetUrl?: string;
+  /** Optional theme-specific counterpart for artwork shown on dark surfaces. */
+  darkAssetUrl?: string;
   achievement?: PalAchievementPresentation & {
     /** Stable earned achievement-instance identity used by the roadmap. */
     id: string;
@@ -164,6 +169,7 @@ export type PalCollectibleUnlock =
       /** Presentation tier. Older schema-v1 producers omit this and render in color. */
       finish?: PalCollectibleFinish;
       assetUrl: string;
+      darkAssetUrl?: string;
     }
   | PalCollectibleUnlockBase & {
       status: "next" | "locked";
@@ -204,6 +210,30 @@ export interface PalProgressionState {
   titles: PalTitleUnlock[];
 }
 
+export type PalRewardLoadoutSlot = "companion" | "wallpaper";
+
+export interface PalUsableStoryReward {
+  /** Durable ownership grant used by the learner-scoped equip endpoint. */
+  grantId: string;
+  rewardId: string;
+  category: PalRewardLoadoutSlot;
+  title: string;
+  assetUrl: string;
+  darkAssetUrl?: string;
+}
+
+export interface PalRewardLoadoutSlotState {
+  /** Default companion restored when no explicit companion is selected. */
+  fallbackGrantId?: string;
+  equippedGrantId?: string;
+  options: PalUsableStoryReward[];
+}
+
+export interface PalRewardLoadoutState {
+  companion: PalRewardLoadoutSlotState;
+  wallpaper: PalRewardLoadoutSlotState;
+}
+
 export interface PalWidgetSnapshot {
   schemaVersion: 1;
   roadmap: PalRoadmapSnapshot;
@@ -213,11 +243,19 @@ export interface PalWidgetSnapshot {
   rewards: PalRewardNotice[];
   /** Optional in schema v1 so older Pal APIs remain compatible. */
   progression?: PalProgressionState;
+  /** Owned usable rewards and the independently equipped slot values. */
+  rewardLoadout?: PalRewardLoadoutState;
 }
 
 export interface PalClient {
   getSnapshot(signal?: AbortSignal): Promise<PalWidgetSnapshot>;
   markRewardSeen(rewardId: string, signal?: AbortSignal): Promise<void>;
+  /** Optional for older schema-v1 clients that only support read/acknowledge. */
+  setRewardLoadout?(
+    slot: PalRewardLoadoutSlot,
+    rewardGrantId: string | null,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 export interface PalProviderProps {

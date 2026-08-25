@@ -48,9 +48,9 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
   assert.match(plan.chapters[10]?.collectible.assetUrl ?? "", /home-lumi-v1\.png$/);
 });
 
-test("adding the Home catalog does not activate its writer", () => {
+test("the Story V2 feature activates the Home catalog writer", () => {
   assert.deepEqual(storyForTermStartDay("9999-12-31"), {
-    storyId: PIP_STORY_ID,
-    version: PIP_STORY_VERSION,
+    storyId: HOME_STORY_ID,
+    version: HOME_STORY_VERSION,
   });
 });

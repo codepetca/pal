@@ -87,15 +87,25 @@ function siblingAssetUrl(restUrl: string, file: string): string {
   return `${restUrl.slice(0, restUrl.lastIndexOf("/") + 1)}${file}`;
 }
 
+function hasSiblingAnimationSet(restUrl: string): boolean {
+  const assetPath = restUrl.split(/[?#]/, 1)[0] ?? "";
+  const fileName = assetPath.slice(assetPath.lastIndexOf("/") + 1);
+  // The deployed Pip set uses default.png. `rest.png` remains supported for
+  // portable integrations and existing package consumers. Named companion
+  // art such as lumi-v1.png is a self-contained still until it ships its own
+  // explicit animation manifest; it must never borrow Pip's sibling frames.
+  return fileName === "default.png" || fileName === "rest.png";
+}
+
 /**
  * Builds the frame table from the resting pose the snapshot points at.
  *
  * The animation frames live beside that file and are named after it, so the
  * URLs are derived rather than hardcoded: an integration serving Pal's art from
  * its own origin keeps working, and the widget needs no knowledge of where
- * Pal's public directory sits. The cost is that the naming convention is
- * implicit — a snapshot whose companion art does not ship the sibling frames
- * 404s on them, and the pet holds its resting pose.
+ * Pal's public directory sits. Only canonical `default.png`/`rest.png` assets
+ * opt into that convention; named collectible companions remain still images
+ * until they ship an explicit animation contract.
  */
 function buildSprites(restUrl: string): SpriteSet {
   const toFrame = (spec: FrameSpec): Frame => ({
@@ -109,11 +119,14 @@ function buildSprites(restUrl: string): SpriteSet {
   // The resting pose is the registration reference, so its offsets are zero by
   // definition, and it is the one frame addressed by the snapshot's own URL.
   const rest: Frame = { src: restUrl, w: REST_W, h: REST_H, dx: 0, dy: 0 };
-  const blink: Frame[] = BLINK_SPECS.map(toFrame);
+  const animated = hasSiblingAnimationSet(restUrl);
+  const blink: Frame[] = animated ? BLINK_SPECS.map(toFrame) : [];
 
   const byMood: Partial<Record<PalCompanionMood, Frame[]>> = {};
-  for (const [mood, specs] of Object.entries(MOOD_SPECS)) {
-    byMood[mood as PalCompanionMood] = specs.map(toFrame);
+  if (animated) {
+    for (const [mood, specs] of Object.entries(MOOD_SPECS)) {
+      byMood[mood as PalCompanionMood] = specs.map(toFrame);
+    }
   }
 
   return { rest, blink, byMood };
