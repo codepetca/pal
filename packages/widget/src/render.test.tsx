@@ -258,7 +258,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
 
   assert.doesNotMatch(html, />Achievements</);
   assert.doesNotMatch(html, />Your collection</);
-  assert.match(html, />Rhythm Builder</);
+  assert.doesNotMatch(html, />Rhythm Builder</);
   assert.match(
     html,
     /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 1<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="earned" data-collectible-finish="sketch" aria-label="Week 1 collectible: Mystery Egg, storybook sketch" role="img"><span class="pal-week-collectible-art" aria-hidden="true"><img src="\/assets\/world\/reward-mystery-egg-v1\.png"/,
@@ -634,7 +634,7 @@ test("standalone content always retains a dismissal action", () => {
   assert.match(html, />Continue<\/button>/);
 });
 
-test("a title reward shows only the earned title and its action", () => {
+test("a story reward ignores its title award while titles are disabled", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({
     id: "story-reveal",
@@ -658,13 +658,13 @@ test("a title reward shows only the earned title and its action", () => {
   );
 
   const celebration = html.slice(html.indexOf('class="pal-celebration"'));
-  assert.match(celebration, /data-pal-reward-kind="title"/);
-  assert.match(celebration, /<h2[^>]*>Gentle Keeper<\/h2>/);
+  assert.match(celebration, /data-pal-reward-kind="story"/);
+  assert.match(celebration, /<h2[^>]*>Warming Lantern<\/h2>/);
   assert.match(celebration, />Continue<\/button>/);
-  assert.doesNotMatch(celebration, /Keep the light on/);
-  assert.doesNotMatch(celebration, /reward-warming-lantern-v1\.png/);
-  assert.doesNotMatch(celebration, /Warming Lantern/);
-  assert.doesNotMatch(celebration, /The coldest night arrived/);
+  assert.match(celebration, /Keep the light on/);
+  assert.match(celebration, /reward-warming-lantern-v1\.png/);
+  assert.match(celebration, /The coldest night arrived/);
+  assert.doesNotMatch(celebration, /Gentle Keeper/);
   assert.doesNotMatch(celebration, /Story unlocked/);
   assert.doesNotMatch(celebration, /New title/);
 });

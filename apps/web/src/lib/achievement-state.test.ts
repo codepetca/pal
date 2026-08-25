@@ -414,14 +414,14 @@ test(
           badge: mapped.badge,
         });
       }
-      assert.equal(snapshot.rewards.length, 6);
+      assert.equal(snapshot.rewards.length, 5);
       assert.equal(
         snapshot.rewards.some(
           (reward) =>
             reward.achievement === undefined &&
             reward.titleAward === "On-Time Pro",
         ),
-        true,
+        false,
       );
       const noticeRows = await getDb()
         .select()
@@ -3747,7 +3747,7 @@ test(
       await acknowledgeLearnerReward(sandbox.id, sandboxAId, rewardB.id);
       assert.equal(
         (await loadLearnerSnapshot(sandbox.id, sandboxBId)).rewards.length,
-        2,
+        1,
       );
       await assert.rejects(
         loadLearnerSnapshot(pika.id, sandboxAId),
@@ -3833,7 +3833,7 @@ test(
       const duringCommit = await inFlightSnapshot;
       const afterCommit = await loadLearnerSnapshot(integration.id, learnerId);
       assert.deepEqual(duringCommit, before);
-      assert.equal(afterCommit.rewards.length, before.rewards.length + 2);
+      assert.equal(afterCommit.rewards.length, before.rewards.length + 1);
       assert.equal(
         afterCommit.roadmap.weeks.some((week) =>
           week.achievements.some(

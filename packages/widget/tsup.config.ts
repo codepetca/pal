@@ -9,6 +9,7 @@ export default defineConfig([
     entry: [
       "src/index.ts",
       "src/achievement-presentation.ts",
+      "src/feature-policy.ts",
       "src/theme-contract.ts",
       "src/fixture-client.ts",
     ],

@@ -149,6 +149,7 @@ test("package metadata exposes only compiled public entry points", () => {
     ".",
     "./theme-contract",
     "./achievement-presentation",
+    "./feature-policy",
     "./fixture",
     "./styles.css",
     "./package.json",

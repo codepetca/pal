@@ -35,6 +35,7 @@ import type {
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
 import { resolvePalAchievementPresentation } from "@codepet/pal-widget/achievement-presentation";
+import { PAL_ACHIEVEMENT_TITLES_VISIBLE } from "@codepet/pal-widget/feature-policy";
 import { PROGRESSION_POLICY } from "@pal/engine";
 import {
   ACHIEVEMENT_KEYS,
@@ -372,6 +373,17 @@ export async function loadLearnerSnapshot(
         .limit(1);
       if (!learner) throw new LearnerScopeError();
       await options.afterScopeVerified?.();
+
+      if (!PAL_ACHIEVEMENT_TITLES_VISIBLE) {
+        await tx
+          .update(learnerRewardGrants)
+          .set({ seenAt: new Date() })
+          .where(and(
+            eq(learnerRewardGrants.learnerId, learnerId),
+            eq(learnerRewardGrants.kind, "behavior_title"),
+            isNull(learnerRewardGrants.seenAt),
+          ));
+      }
 
       const economyRows = await tx
         .select()
@@ -831,7 +843,7 @@ export async function loadLearnerSnapshot(
       };
     },
     {
-      accessMode: "read only",
+      accessMode: "read write",
       isolationLevel: "repeatable read",
     },
   );
