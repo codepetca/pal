@@ -447,7 +447,10 @@ export function PalProvider({
     };
 
     const loadThenSchedule = async () => {
-      await refresh();
+      const loaded = await refreshSnapshot();
+      if (!cancelled && !loaded && typeof window !== "undefined") {
+        refillEmptyRewardPage();
+      }
       if (!cancelled && refreshIntervalMs > 0) scheduleNext();
     };
     void loadThenSchedule();
@@ -456,7 +459,7 @@ export function PalProvider({
       cancelled = true;
       if (timeout !== undefined) window.clearTimeout(timeout);
     };
-  }, [refresh, refreshIntervalMs]);
+  }, [refillEmptyRewardPage, refresh, refreshIntervalMs, refreshSnapshot]);
 
   const dismissReward = useCallback(
     async (rewardId: string) => {
