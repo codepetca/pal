@@ -11,6 +11,11 @@ export {
   createFixtureSnapshot,
 } from "./fixture-client";
 export { createPalHttpClient, type PalHttpClientOptions } from "./http-client";
+export {
+  applyPalFeaturePolicy,
+  concealedPalTitleRewardIds,
+  PAL_ACHIEVEMENT_TITLES_VISIBLE,
+} from "./feature-policy";
 export { PalProvider, usePalWidget } from "./provider";
 export { PalRewardCelebration } from "./reward-celebration";
 export {
