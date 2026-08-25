@@ -14,6 +14,8 @@ export type PalCompanionMood = "neutral" | "happy" | "excited" | "sleeping";
 export type PalUnlockStatus = "earned" | "next" | "locked";
 export type PalCollectibleKind =
   | "companion"
+  | "keepsake"
+  | "wallpaper"
   | "room"
   | "cosmetic";
 export type PalCollectibleFinish = "sketch" | "color";

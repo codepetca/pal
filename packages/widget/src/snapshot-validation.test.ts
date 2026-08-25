@@ -202,14 +202,53 @@ test("snapshot parser allows at most one collectible reward per roadmap week", (
   );
 });
 
-test("snapshot parser requires one collectible decision for every roadmap week", () => {
+test("snapshot parser allows a completed story to end before the roadmap", () => {
   const fixture = createFixtureSnapshot();
   fixture.progression!.collectibles.pop();
 
+  const parsed = parsePalWidgetSnapshot(fixture);
+  assert.equal(parsed.progression?.collectibles.length, fixture.progression!.collectibles.length);
+});
+
+test("snapshot parser rejects a hole inside a shortened story", () => {
+  const fixture = createFixtureSnapshot();
+  fixture.progression!.collectibles.splice(5, 1);
+
   assert.throws(
     () => parsePalWidgetSnapshot(fixture),
-    /collectibles.*exactly one decision for every roadmap week/i,
+    /contiguous prefix starting at 1/i,
   );
+});
+
+test("snapshot parser accepts a capped Home projection inside a longer term", () => {
+  const fixture = createFixtureSnapshot(17, 20);
+  fixture.progression!.collectibles.splice(16);
+  fixture.progression!.collectibles[0] = {
+    id: "warming-lantern-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Story sketch from Week 1",
+    title: "Trusty Lantern",
+    description: "Warm light spreads through the room.",
+    kind: "keepsake",
+    finish: "sketch",
+    assetUrl: "/assets/world/reward-warming-lantern-v1.png",
+  };
+  fixture.progression!.collectibles[7] = {
+    id: "courtyard-afternoons-v1",
+    roadmapWeek: 8,
+    status: "earned",
+    statusLabel: "Brought to life in Week 8",
+    title: "Courtyard Afternoons",
+    description: "Warm afternoons in the courtyard.",
+    kind: "wallpaper",
+    finish: "color",
+    assetUrl: "/assets/world/wallpaper-courtyard-afternoons-v4.png",
+  };
+
+  const parsed = parsePalWidgetSnapshot(fixture);
+  assert.equal(parsed.roadmap.weeks.length, 20);
+  assert.equal(parsed.progression?.collectibles.length, 16);
 });
 
 test("snapshot parser keeps progression references inside the supplied roadmap", () => {
@@ -293,6 +332,30 @@ test("snapshot parser accepts only sketch or color collectible finishes", () => 
     () => parsePalWidgetSnapshot(fixture),
     /collectibles\[0\]\.finish/i,
   );
+});
+
+test("snapshot parser accepts every public collectible kind", () => {
+  for (const kind of [
+    "companion",
+    "keepsake",
+    "wallpaper",
+    "room",
+    "cosmetic",
+  ] as const) {
+    const fixture = createFixtureSnapshot(2);
+    fixture.progression!.collectibles[0] = {
+      id: `story-v2-${kind}`,
+      roadmapWeek: 1,
+      status: "earned",
+      statusLabel: "Earned",
+      title: `Story V2 ${kind}`,
+      description: "A registered Story V2 reward.",
+      kind,
+      assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+    };
+    const parsed = parsePalWidgetSnapshot(fixture).progression?.collectibles[0];
+    assert.equal(parsed?.status === "earned" ? parsed.kind : undefined, kind);
+  }
 });
 
 test("snapshot parser rejects unsafe and unapproved asset URLs", () => {

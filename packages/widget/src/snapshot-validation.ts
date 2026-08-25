@@ -587,7 +587,7 @@ function parseCollectible(
     kind: member<PalCollectibleKind>(
       source.kind,
       `${path}.kind`,
-      ["companion", "room", "cosmetic"],
+      ["companion", "keepsake", "wallpaper", "room", "cosmetic"],
     ),
     ...(finish === undefined ? {} : { finish }),
     status,
@@ -698,8 +698,8 @@ function parseProgression(
       assetPolicy,
     ),
   );
-  if (collectibleRoadmapWeeks.size !== validRoadmapWeeks.size) {
-    fail(`${path}.collectibles`, "expected exactly one decision for every roadmap week");
+  if (collectibles.some((collectible, index) => collectible.roadmapWeek !== index + 1)) {
+    fail(`${path}.collectibles`, "roadmap weeks must form a contiguous prefix starting at 1");
   }
   return {
     companionReveal: parseCompanionReveal(

@@ -295,6 +295,14 @@ test("sandbox reset rotates provider identity and controls start collapsed", () 
   assert.match(sandboxSource, /setSimulatedDate\(new Date\(FICTIONAL_SEMESTER_START_ISO\)\)/);
 });
 
+test("sandbox labels the authenticated session action as Logged in", () => {
+  assert.match(
+    sandboxSource,
+    /\{ action: "session-started", label: "Logged in" \}/,
+  );
+  assert.doesNotMatch(sandboxSource, /label: "Start session"/);
+});
+
 test("sandbox navigation keeps accessible names when labels are visually hidden", () => {
   assert.match(sandboxSource, /aria-label=\{label\}/);
 });

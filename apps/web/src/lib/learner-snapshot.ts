@@ -29,6 +29,7 @@ import type {
   PalAchievementCelebrationNotice,
   PalCollectionItem,
   PalCompanionMood,
+  PalProgressionState,
   PalRoadmapWeek,
   PalWidgetSnapshot,
 } from "@codepet/pal-widget";
@@ -74,6 +75,31 @@ export class LearnerScopeError extends Error {
     super("Learner token scope does not match persisted state");
     this.name = "LearnerScopeError";
   }
+}
+
+function legacyProgressionCardinality(
+  progression: PalProgressionState | undefined,
+  roadmapWeeks: number,
+): PalProgressionState | undefined {
+  if (!progression || progression.collectibles.length >= roadmapWeeks) return progression;
+  return {
+    ...progression,
+    collectibles: [
+      ...progression.collectibles,
+      ...Array.from(
+        { length: roadmapWeeks - progression.collectibles.length },
+        (_, index) => {
+          const roadmapWeek = progression.collectibles.length + index + 1;
+          return {
+            id: `story-slot-${roadmapWeek}`,
+            roadmapWeek,
+            status: "locked" as const,
+            statusLabel: "Story complete",
+          };
+        },
+      ),
+    ],
+  };
 }
 
 function companionMood(value: string, expiresAt: Date | null): PalCompanionMood {
@@ -271,6 +297,8 @@ export async function loadLearnerSnapshot(
     asOf?: Date;
     /** False for schema-v1 widget builds that cannot render sketch ownership. */
     supportsCollectibleFinish?: boolean;
+    /** True for schema-v1 widgets that require legacy kinds and one slot per term week. */
+    legacyStoryShape?: boolean;
   } = {},
 ): Promise<PalWidgetSnapshot> {
   return db.transaction(
@@ -620,7 +648,10 @@ export async function loadLearnerSnapshot(
           ),
         ),
       );
-      const storyProjectionOptions = { colorChapterAssignmentIds };
+      const storyProjectionOptions = {
+        colorChapterAssignmentIds,
+        legacyCollectibleKinds: options.legacyStoryShape === true,
+      };
       const projectableGrantRows = options.supportsCollectibleFinish === false
         ? grantRows.filter((grant) =>
             grant.kind !== "story_chapter" ||
@@ -636,6 +667,9 @@ export async function loadLearnerSnapshot(
             storyProjectionOptions,
           )
         : undefined;
+      const responseProgression = options.legacyStoryShape === true
+        ? legacyProgressionCardinality(progression, weeks.length)
+        : progression;
 
       const eco = economyRows[0];
       const pet = petRows[0];
@@ -696,7 +730,7 @@ export async function loadLearnerSnapshot(
             }];
           }),
         ),
-        ...(progression ? { progression } : {}),
+        ...(responseProgression ? { progression: responseProgression } : {}),
       };
     },
     {
