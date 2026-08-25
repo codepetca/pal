@@ -14,20 +14,23 @@ import type {
  * carrying the chapter headline, short enough that the collectible - not the
  * story - keeps setting the row height.
  *
- * Stories start open because this page owns the chapter narrative. The passage
- * participates in the row layout so several open chapters never overlap;
- * narrow hosts omit stories entirely to preserve the centered trail.
+ * Stories start open in wide hosts because this page owns the chapter narrative.
+ * Narrow hosts keep the same durable narrative in a compact, collapsed
+ * disclosure above the week's collectible and achievements so visual and
+ * keyboard focus order remain aligned.
  */
 function WeekStory({
   headline,
+  initiallyExpanded,
   storyCopy,
   weekLabel,
 }: {
   headline: string;
+  initiallyExpanded: boolean;
   storyCopy: string;
   weekLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const panelId = useId();
 
   return (
@@ -321,9 +324,11 @@ export function PalAchievements() {
               key={week.id}
               aria-current={isCurrent ? "step" : undefined}
             >
-              {viewport !== "narrow" && storyHeadline && storyCopy ? (
+              {storyHeadline && storyCopy ? (
                 <WeekStory
                   headline={storyHeadline}
+                  initiallyExpanded={viewport !== "narrow"}
+                  key={`${week.id}:${viewport}`}
                   storyCopy={storyCopy}
                   weekLabel={week.label}
                 />

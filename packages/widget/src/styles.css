@@ -1125,6 +1125,24 @@
   padding-block-end: max(5rem, calc(50vh - 5rem));
 }
 
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  width: min(100%, 22rem);
+  margin-top: 0.35rem;
+  justify-self: center;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story-bubble {
+  width: 100%;
+  margin-left: 0;
+}
+
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story::after,
+.pal-surface[data-pal-viewport="narrow"] .pal-week-story::before {
+  display: none;
+}
+
 .pal-surface[data-pal-viewport="narrow"]
   .pal-week[data-week-status="current"]
   .pal-week-collectible-stack {

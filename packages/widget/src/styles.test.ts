@@ -107,6 +107,12 @@ test("responsive behavior follows the host viewport contract", () => {
   assert.match(narrowTooltipRule, /right: 0/);
   assert.match(narrowTooltipRule, /left: auto/);
   assert.match(styles, /data-week-status="current"[\s\S]*transform: scale\(1\.1\)/);
+  const narrowStoryRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-week-story \{([^}]+)\}/,
+    )?.[1] ?? "";
+  assert.match(narrowStoryRule, /grid-column: 1 \/ -1/);
+  assert.match(narrowStoryRule, /grid-row: 1/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
