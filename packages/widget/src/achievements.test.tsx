@@ -176,6 +176,58 @@ test("achievement trail centers once for each learner scope", async () => {
   }
 });
 
+test("narrow achievement stories expand from a compact disclosure", async () => {
+  const snapshot = createFixtureSnapshot(2);
+  snapshot.progression!.collectibles[0] = {
+    id: "earned-week-one",
+    chapterId: "egg-arrives",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Earned",
+    title: "Mystery Egg",
+    description: "An earned keepsake.",
+    revealHeadline: "Something Found You",
+    storyCopy: "A heavy storm passed over the town during the night.",
+    kind: "room",
+    finish: "color",
+    assetUrl: "/assets/world/reward-mystery-egg-v1.png",
+  };
+  const client = createFixturePalClient(snapshot);
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="narrow-story-disclosure"
+        viewport="narrow"
+      >
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const storyButton = renderer!.root.find(
+      (node) => node.type === "button" &&
+        /Week 1: Something Found You/.test(node.props["aria-label"] ?? ""),
+    );
+    const storyPanel = renderer!.root.find(
+      (node) => node.props.className === "pal-week-story-panel",
+    );
+    assert.equal(storyButton.props["aria-expanded"], false);
+    assert.equal(storyPanel.props.hidden, true);
+
+    await act(async () => storyButton.props.onClick());
+
+    assert.equal(storyButton.props["aria-expanded"], true);
+    assert.equal(storyPanel.props.hidden, false);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
 test("past weeks keep explicit non-earned outcomes without claiming an earned badge", async () => {
   const snapshot = createFixtureSnapshot();
   const weekThree = snapshot.roadmap.weeks.find((week) => week.number === 3)!;
