@@ -649,7 +649,7 @@ test("standalone content always retains a dismissal action", () => {
   assert.match(html, />Continue<\/button>/);
 });
 
-test("a story reward ignores its title award while titles are disabled", () => {
+test("a story reward omits narrative and title-award copy while titles are disabled", () => {
   const snapshot = createFixtureSnapshot(3);
   snapshot.rewards.unshift({
     id: "story-reveal",
@@ -676,9 +676,9 @@ test("a story reward ignores its title award while titles are disabled", () => {
   assert.match(celebration, /data-pal-reward-kind="story"/);
   assert.match(celebration, /<h2[^>]*>Warming Lantern<\/h2>/);
   assert.match(celebration, />Continue<\/button>/);
-  assert.match(celebration, /Keep the light on/);
+  assert.doesNotMatch(celebration, /Keep the light on/);
   assert.match(celebration, /reward-warming-lantern-v1\.png/);
-  assert.match(celebration, /The coldest night arrived/);
+  assert.doesNotMatch(celebration, /The coldest night arrived/);
   assert.doesNotMatch(celebration, /Gentle Keeper/);
   assert.doesNotMatch(celebration, /Story unlocked/);
   assert.doesNotMatch(celebration, /New title/);
