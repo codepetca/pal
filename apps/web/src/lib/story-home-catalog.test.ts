@@ -22,6 +22,21 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
   assert.equal(plan.chapters[7]?.collectible.kind, "room");
   assert.match(plan.chapters[7]?.collectible.darkAssetUrl ?? "", /-dark-v4\.png$/);
   assert.equal(plan.chapters[10]?.collectible.kind, "companion");
+
+  const pipPlan = STORY_REGISTRY.createPlan(20, {
+    storyId: PIP_STORY_ID,
+    version: PIP_STORY_VERSION,
+  });
+  const pipCollectibleIds = new Set(
+    pipPlan.chapters.map((chapter) => chapter.collectible.id),
+  );
+  assert.equal(
+    plan.chapters.some((chapter) => pipCollectibleIds.has(chapter.collectible.id)),
+    false,
+  );
+  assert.match(plan.chapters[0]?.collectible.assetUrl ?? "", /home-warming-lantern-v1\.png$/);
+  assert.match(plan.chapters[1]?.collectible.assetUrl ?? "", /home-mystery-egg-v1\.png$/);
+  assert.match(plan.chapters[10]?.collectible.assetUrl ?? "", /home-lumi-v1\.png$/);
 });
 
 test("adding the Home catalog does not activate its writer", () => {
