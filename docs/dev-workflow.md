@@ -85,6 +85,13 @@ For manual/local-Docker configuration, set:
 
 ### Story-collectible scheduler activation
 
+Deploy Story V2 in this order: migrations, capped-plan reader, dormant art
+catalog, snapshot compatibility, then writer/loadout activation. Fully deploy
+the snapshot compatibility layer before activation. Once a Home plan has been
+persisted, that layer is the minimum rollback floor: earlier releases cannot
+resolve the Home catalog and cannot safely shape its capped progression for
+both legacy and current widgets.
+
 The production Vercel project runs `GET /api/cron/story-collectibles` daily at
 `00:00 UTC`, as declared in `apps/web/vercel.json`. Vercel's UTC trigger is only
 a wake-up: each candidate is evaluated against the term's authoritative IANA

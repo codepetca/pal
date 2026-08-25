@@ -25,8 +25,8 @@ test("registers the dormant 16-chapter Home catalog and its selectable art", () 
     ),
     true,
   );
-  assert.equal(plan.chapters[6]?.collectible.kind, "cosmetic");
-  assert.equal(plan.chapters[7]?.collectible.kind, "room");
+  assert.equal(plan.chapters[6]?.collectible.kind, "keepsake");
+  assert.equal(plan.chapters[7]?.collectible.kind, "wallpaper");
   assert.match(plan.chapters[7]?.collectible.darkAssetUrl ?? "", /-dark-v4\.png$/);
   assert.equal(plan.chapters[10]?.collectible.kind, "companion");
 

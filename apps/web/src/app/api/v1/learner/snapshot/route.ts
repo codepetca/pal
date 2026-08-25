@@ -49,13 +49,15 @@ export async function GET(request: NextRequest) {
   }
   try {
     const claims = await verifyPalReadToken(token, "learner:read");
+    const collectibleCapability = request.headers.get("x-pal-collectible-finish");
     const snapshot = await loadLearnerSnapshot(
       claims.integrationId,
       claims.learnerId,
       undefined,
       {
         supportsCollectibleFinish:
-          request.headers.get("x-pal-collectible-finish") === "1",
+          collectibleCapability === "1" || collectibleCapability === "2",
+        legacyStoryShape: collectibleCapability !== "2",
       },
     );
     return NextResponse.json(snapshot, { headers: responseHeaders(cors) });
