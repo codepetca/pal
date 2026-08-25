@@ -84,7 +84,8 @@ type SpriteSet = {
 };
 
 function siblingAssetUrl(restUrl: string, file: string): string {
-  return `${restUrl.slice(0, restUrl.lastIndexOf("/") + 1)}${file}`;
+  const assetPath = restUrl.split(/[?#]/, 1)[0] ?? restUrl;
+  return `${assetPath.slice(0, assetPath.lastIndexOf("/") + 1)}${file}`;
 }
 
 /**

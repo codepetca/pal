@@ -217,7 +217,8 @@ test("the young Pip collectible uses Pip's animated widget presentation", async 
     snapshot.companion.mood = "happy";
     snapshot.progression!.companionReveal = {
       status: "earned",
-      assetUrl: "https://pal.example/assets/pets/young-pip-v1.png",
+      assetUrl:
+        "https://pal.example/assets/pets/young-pip-v1.png?credential=key/20260825/region",
     };
 
     await act(async () => {
@@ -242,7 +243,7 @@ test("the young Pip collectible uses Pip's animated widget presentation", async 
       )
       .map((image) => image.props.src);
     assert.deepEqual(sources, [
-      "https://pal.example/assets/pets/default.png",
+      "https://pal.example/assets/pets/default.png?credential=key/20260825/region",
       "https://pal.example/assets/pets/happy-1.png",
       "https://pal.example/assets/pets/happy-2.png",
     ]);
