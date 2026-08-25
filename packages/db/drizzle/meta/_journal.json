@@ -78,6 +78,20 @@
       "when": 1787060046685,
       "tag": "0010_story_source_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787429981704,
+      "tag": "0011_story_reward_loadouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787584385000,
+      "tag": "0012_cap_story_schedule_at_plan_end",
+      "breakpoints": true
     }
   ]
 }
