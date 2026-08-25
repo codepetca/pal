@@ -348,12 +348,13 @@ test("sandbox keeps its launcher reachable in short viewports", () => {
   );
 });
 
-test("sandbox keeps the companion in its positioned container after size changes", () => {
-  assert.match(sandboxSource, /window\.addEventListener\("resize", clampToContainer\)/);
-  assert.match(sandboxSource, /new ResizeObserver\(clampToContainer\)/);
-  assert.match(sandboxSource, /rect\.left - containerRect\.left/);
-  assert.match(sandboxSource, /e\.clientY - offset\.dy - containerRect\.top/);
-  assert.match(sandboxSource, /\[widgetScale, widgetVisible\]/);
+test("sandbox pins the companion to the bottom-right instead of making it draggable", () => {
+  assert.match(
+    sandboxStyles,
+    /\.companionOverlay \{[\s\S]*?position: absolute;[\s\S]*?right: 1rem;[\s\S]*?bottom: 1rem;/,
+  );
+  assert.doesNotMatch(sandboxSource, /setPointerCapture|onPointerMove/);
+  assert.doesNotMatch(sandboxStyles, /cursor: (grab|grabbing)/);
 });
 
 test("sandbox settings stack in narrow viewports", () => {

@@ -648,18 +648,6 @@
   bottom: 1rem;
 }
 
-.companionOverlay :global(.pal-companion) {
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.companionOverlay[data-dragging="true"]
-  :global(.pal-companion) {
-  cursor: grabbing;
-}
-
 .celebrationLayer {
   position: absolute;
   z-index: 60;

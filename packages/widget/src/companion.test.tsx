@@ -145,7 +145,7 @@ test("the companion mounts only frames used by the current mood", async () => {
   }
 });
 
-test("a named companion never borrows the default companion animation set", async () => {
+test("a non-Pip companion never borrows Pip's animation set", async () => {
   const originalWindow = globalThis.window;
   let renderer: ReturnType<typeof create> | undefined;
   Object.defineProperty(globalThis, "window", {
@@ -189,6 +189,64 @@ test("a named companion never borrows the default companion animation set", asyn
       )
       .map((image) => image.props.src);
     assert.deepEqual(sources, ["/assets/pets/lumi-v1.png"]);
+  } finally {
+    await act(async () => renderer?.unmount());
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+  }
+});
+
+test("the young Pip collectible uses Pip's animated widget presentation", async () => {
+  const originalWindow = globalThis.window;
+  let renderer: ReturnType<typeof create> | undefined;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener() {},
+        removeEventListener() {},
+      }),
+    },
+  });
+
+  try {
+    const snapshot = createFixtureSnapshot(5);
+    snapshot.companion.mood = "happy";
+    snapshot.progression!.companionReveal = {
+      status: "earned",
+      assetUrl:
+        "https://pal.example/assets/pets/young-pip-v1.png?credential=key/20260825/region",
+    };
+
+    await act(async () => {
+      renderer = create(
+        <PalProvider
+          client={{
+            getSnapshot: async () => snapshot,
+            markRewardSeen: async () => undefined,
+          }}
+          initialSnapshot={snapshot}
+          motion="system"
+          scopeKey="animated-young-pip"
+        >
+          <PalCompanion />
+        </PalProvider>,
+      );
+    });
+
+    const sources = renderer!.root
+      .findAll(
+        (node) => node.type === "img" && node.props.className === "pal-companion-sprite",
+      )
+      .map((image) => image.props.src);
+    assert.deepEqual(sources, [
+      "https://pal.example/assets/pets/default.png?credential=key/20260825/region",
+      "https://pal.example/assets/pets/happy-1.png",
+      "https://pal.example/assets/pets/happy-2.png",
+    ]);
   } finally {
     await act(async () => renderer?.unmount());
     Object.defineProperty(globalThis, "window", {
