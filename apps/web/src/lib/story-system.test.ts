@@ -9,10 +9,13 @@ import {
   economy,
   getDb,
   learnerRewardGrants,
+  storyCollectibleSchedules,
   storyPlanChapters,
   storyPlans,
 } from "@pal/db";
 import {
+  HOME_STORY_ID,
+  HOME_STORY_VERSION,
   STORY_REGISTRY,
   storyForTermStartDay,
 } from "@/lib/story-catalog";
@@ -346,6 +349,139 @@ function dailyLogOn(periodKey: string, activityDay: string) {
     metadata: { period_key: periodKey, activity_day: activityDay },
   };
 }
+
+function configuredTwentyWeekTerm(
+  periodKey: string,
+  termKey: string,
+  weekIndex: number,
+  weekStartDay: string,
+) {
+  const event = configuredWeek(periodKey, termKey);
+  event.occurred_at = `${weekStartDay}T12:00:00.000Z`;
+  event.metadata.term_start_day = "2026-01-05";
+  event.metadata.term_end_day = "2026-05-24";
+  event.metadata.term_week_count = 20;
+  event.metadata.week_start_day = weekStartDay;
+  event.metadata.week_index = weekIndex;
+  return event;
+}
+
+test("legacy and capped story plans both accept a 20-week term's week 17", { skip: !process.env.DATABASE_URL }, async () => {
+  const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
+  const legacyExternalId = `legacy-week-17-${crypto.randomUUID()}`;
+  const cappedExternalId = `capped-week-17-${crypto.randomUUID()}`;
+  const legacyTermKey = `legacy-term-${crypto.randomUUID()}`;
+  const cappedTermKey = `capped-term-${crypto.randomUUID()}`;
+  const legacyWeek17Key = `legacy-period-${crypto.randomUUID()}`;
+  const cappedWeek17Key = `capped-period-${crypto.randomUUID()}`;
+  try {
+    await processEventInDb(
+      integration.id,
+      legacyExternalId,
+      configuredTwentyWeekTerm(
+        `legacy-period-${crypto.randomUUID()}`,
+        legacyTermKey,
+        1,
+        "2026-01-05",
+      ),
+      crypto.randomUUID(),
+    );
+    const legacyWeek17 = await processEventInDb(
+      integration.id,
+      legacyExternalId,
+      configuredTwentyWeekTerm(
+        legacyWeek17Key,
+        legacyTermKey,
+        17,
+        "2026-04-27",
+      ),
+      crypto.randomUUID(),
+    );
+    assert.equal(legacyWeek17.status, "processed");
+    const legacyLearnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      legacyExternalId,
+    );
+    const [legacyPlan] = await getDb()
+      .select()
+      .from(storyPlans)
+      .where(eq(storyPlans.learnerId, legacyLearnerId));
+    assert.equal(legacyPlan?.totalPeriods, 20);
+    const legacyAssignments = await getDb()
+      .select()
+      .from(storyPlanChapters)
+      .where(eq(storyPlanChapters.storyPlanId, legacyPlan!.id));
+    assert.equal(
+      legacyAssignments.find((chapter) => chapter.periodNumber === 17)?.periodKey,
+      legacyWeek17Key,
+    );
+
+    const cappedLearnerId = await getOrCreateLearnerIdentity(
+      getDb(),
+      integration.id,
+      cappedExternalId,
+    );
+    const homePlan = STORY_REGISTRY.createPlan(20, {
+      storyId: HOME_STORY_ID,
+      version: HOME_STORY_VERSION,
+    });
+    await getDb().transaction(async (tx) => {
+      const [persisted] = await tx
+        .insert(storyPlans)
+        .values({
+          learnerId: cappedLearnerId,
+          termKey: cappedTermKey,
+          termStartDay: "2026-01-05",
+          storyId: homePlan.storyId,
+          storyVersion: homePlan.version,
+          totalPeriods: homePlan.totalPeriods,
+        })
+        .returning({ id: storyPlans.id });
+      await tx.insert(storyPlanChapters).values(
+        homePlan.chapters.map((chapter) => ({
+          storyPlanId: persisted!.id,
+          learnerId: cappedLearnerId,
+          periodNumber: chapter.roadmapWeek,
+          chapterId: chapter.id,
+        })),
+      );
+    });
+    const cappedWeek17 = await processEventInDb(
+      integration.id,
+      cappedExternalId,
+      configuredTwentyWeekTerm(
+        cappedWeek17Key,
+        cappedTermKey,
+        17,
+        "2026-04-27",
+      ),
+      crypto.randomUUID(),
+    );
+    assert.equal(cappedWeek17.status, "processed");
+    const [cappedPlan] = await getDb()
+      .select()
+      .from(storyPlans)
+      .where(eq(storyPlans.learnerId, cappedLearnerId));
+    assert.equal(cappedPlan?.totalPeriods, 16);
+    const cappedAssignments = await getDb()
+      .select()
+      .from(storyPlanChapters)
+      .where(eq(storyPlanChapters.storyPlanId, cappedPlan!.id));
+    assert.equal(cappedAssignments.length, 16);
+    assert.equal(cappedAssignments.some((chapter) => chapter.periodKey === cappedWeek17Key), false);
+    const cappedSchedules = await getDb()
+      .select()
+      .from(storyCollectibleSchedules)
+      .where(eq(storyCollectibleSchedules.learnerId, cappedLearnerId));
+    assert.equal(cappedSchedules.some((schedule) => schedule.periodKey === cappedWeek17Key), false);
+  } finally {
+    await Promise.all([
+      resetLearnerInDb(integration.id, legacyExternalId),
+      resetLearnerInDb(integration.id, cappedExternalId),
+    ]);
+  }
+});
 
 test("two learners receive the same persisted sequence for the same term boundary", { skip: !process.env.DATABASE_URL }, async () => {
   const integration = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret });
