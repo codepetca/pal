@@ -21,7 +21,10 @@ import type {
   PalViewport,
   PalWidgetSnapshot,
 } from "./types";
-import { applyPalFeaturePolicy } from "./feature-policy";
+import {
+  applyPalFeaturePolicy,
+  concealedPalTitleRewardIds,
+} from "./feature-policy";
 
 type PalLoadState = "loading" | "ready" | "error";
 
@@ -85,6 +88,7 @@ interface PalRewardRefill {
 }
 
 const MAX_VISIBLE_REWARDS = 100;
+const MAX_CONCEALED_TITLE_PAGES = 100;
 const REWARD_REFILL_RETRY_BASE_MS = 1_000;
 const REWARD_REFILL_RETRY_MAX_MS = 30_000;
 
@@ -118,6 +122,27 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<boolean> {
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+async function loadSnapshotWithConcealedTitlesConsumed(
+  client: PalProviderProps["client"],
+  signal: AbortSignal,
+): Promise<PalWidgetSnapshot> {
+  const consumedIds = new Set<string>();
+  for (let page = 0; page < MAX_CONCEALED_TITLE_PAGES; page += 1) {
+    const snapshot = await client.getSnapshot(signal);
+    const concealedIds = concealedPalTitleRewardIds(snapshot);
+    if (concealedIds.length === 0) return applyPalFeaturePolicy(snapshot);
+    const newIds = concealedIds.filter((id) => !consumedIds.has(id));
+    if (newIds.length === 0) {
+      throw new Error("Pal could not advance past a concealed title reward");
+    }
+    for (const rewardId of newIds) {
+      await client.markRewardSeen(rewardId, signal);
+      consumedIds.add(rewardId);
+    }
+  }
+  throw new Error("Pal returned too many concealed title reward pages");
 }
 
 export function PalProvider({
@@ -293,7 +318,10 @@ export function PalProvider({
         },
     );
     try {
-      const nextSnapshot = applyPalFeaturePolicy(await client.getSnapshot(signal));
+      const nextSnapshot = await loadSnapshotWithConcealedTitlesConsumed(
+        client,
+        signal,
+      );
       if (
         signal.aborted ||
         sequence !== requestSequence.current ||

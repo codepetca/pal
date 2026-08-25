@@ -4,6 +4,7 @@ import test from "node:test";
 import { createEmptyFixtureSnapshot } from "./fixture-client";
 import {
   applyPalFeaturePolicy,
+  concealedPalTitleRewardIds,
   PAL_ACHIEVEMENT_TITLES_VISIBLE,
 } from "./feature-policy";
 
@@ -37,6 +38,7 @@ test("title policy conceals titles without dropping story rewards", () => {
   const visible = applyPalFeaturePolicy(snapshot);
 
   assert.equal(PAL_ACHIEVEMENT_TITLES_VISIBLE, false);
+  assert.deepEqual(concealedPalTitleRewardIds(snapshot), ["behavior-title"]);
   assert.equal(visible.progression?.currentTitle, undefined);
   assert.equal("currentTitle" in visible.progression!, false);
   assert.deepEqual(visible.progression?.titles, []);

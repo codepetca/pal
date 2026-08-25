@@ -244,6 +244,62 @@ test("successful acknowledgement refills the bounded reward page", async () => {
   );
 });
 
+test("a concealed FIFO title notice is consumed before showing the next reward", async () => {
+  const snapshot = createFixtureSnapshot();
+  const titleNotice = {
+    id: "title-notice",
+    title: "Rhythm Builder earned",
+    description: "Show up three days in a row.",
+    titleAward: "Rhythm Builder",
+  };
+  const storyNotice = {
+    id: "story-notice",
+    kind: "story" as const,
+    title: "Keep the light on",
+    description: "The coldest night arrived.",
+    collectibleTitle: "Warming Lantern",
+  };
+  snapshot.rewards = [titleNotice];
+  let titleConsumed = false;
+  const acknowledgements: string[] = [];
+  const client: PalClient = {
+    async getSnapshot() {
+      const next = structuredClone(snapshot);
+      next.rewards = [titleConsumed ? storyNotice : titleNotice];
+      return next;
+    },
+    async markRewardSeen(rewardId) {
+      acknowledgements.push(rewardId);
+      if (rewardId === titleNotice.id) titleConsumed = true;
+    },
+  };
+  let widget!: ReturnType<typeof usePalWidget>;
+  let renderer!: ReactTestRenderer;
+
+  function Probe() {
+    widget = usePalWidget();
+    return <PalRewardCelebration />;
+  }
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={client}
+        initialSnapshot={snapshot}
+        scopeKey="concealed-title-fifo"
+      >
+        <Probe />
+      </PalProvider>,
+    );
+  });
+
+  assert.deepEqual(acknowledgements, ["title-notice"]);
+  assert.deepEqual(widget.snapshot?.rewards.map((reward) => reward.id), ["story-notice"]);
+  const rendered = JSON.stringify(renderer.toJSON());
+  assert.doesNotMatch(rendered, /Rhythm Builder/);
+  assert.match(rendered, /Warming Lantern/);
+});
+
 test("a failed automatic refill retries until the next reward loads", async () => {
   const firstPage = createFixtureSnapshot();
   firstPage.rewards = [{

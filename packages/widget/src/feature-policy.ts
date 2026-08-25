@@ -21,15 +21,26 @@ function collectibleWithoutTitle(
 }
 
 function rewardWithoutTitle(reward: PalRewardNotice): PalRewardNotice | undefined {
-  const titleOnly =
-    reward.achievement === undefined &&
-    reward.kind !== "story" &&
-    reward.titleAward !== undefined;
-  if (titleOnly) return undefined;
+  if (isConcealedTitleReward(reward)) return undefined;
   const visible = { ...reward };
   delete visible.titleAward;
   delete visible.titleRevealCopy;
   return visible;
+}
+
+function isConcealedTitleReward(reward: PalRewardNotice): boolean {
+  return !PAL_ACHIEVEMENT_TITLES_VISIBLE &&
+    reward.achievement === undefined &&
+    reward.kind !== "story" &&
+    reward.titleAward !== undefined;
+}
+
+export function concealedPalTitleRewardIds(
+  snapshot: PalWidgetSnapshot,
+): string[] {
+  return snapshot.rewards
+    .filter(isConcealedTitleReward)
+    .map((reward) => reward.id);
 }
 
 /**
