@@ -1157,6 +1157,13 @@ test("in-memory and persisted ledgers share story/title projection and streak lo
       }
     }
     const snapshot = await loadLearnerSnapshot(integration.id, learnerId, getDb(), { asOf: new Date("2026-09-05T12:00:00Z") });
+    const consumedGrants = await getDb().select().from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.learnerId, learnerId));
+    assert.ok(consumedGrants.find((grant) => grant.kind === "behavior_title")?.seenAt);
+    assert.equal(
+      consumedGrants.find((grant) => grant.kind === "story_chapter")?.seenAt,
+      null,
+    );
     assert.deepEqual(fixture.progression(), snapshot.progression);
     const displayReward = (reward: PalRewardNotice) => {
       assert.equal(reward.achievement, undefined);
@@ -1289,6 +1296,13 @@ test("a calendarless behavior title is stored but concealed without losing owner
     const notice = snapshot.rewards.find((reward) => reward.id === grant.id);
     assert.equal(notice, undefined);
 
+    const [consumed] = await getDb()
+      .select()
+      .from(learnerRewardGrants)
+      .where(eq(learnerRewardGrants.id, grant.id));
+    assert.ok(consumed?.seenAt);
+    const consumedAt = consumed.seenAt.getTime();
+
     await acknowledgeLearnerReward(integration.id, learnerId, grant.id);
     const after = await loadLearnerSnapshot(integration.id, learnerId);
     assert.equal(after.rewards.some((reward) => reward.id === grant.id), false);
@@ -1297,6 +1311,7 @@ test("a calendarless behavior title is stored but concealed without losing owner
       .from(learnerRewardGrants)
       .where(eq(learnerRewardGrants.id, grant.id));
     assert.ok(owned?.seenAt);
+    assert.equal(owned.seenAt.getTime(), consumedAt);
   } finally {
     await resetLearnerInDb(integration.id, externalLearnerId);
   }

@@ -160,7 +160,10 @@ older widget/API pair.
   never create reward grants; every new grant has an exact source fact. Title
   presentation is temporarily disabled: ownership continues to be recorded,
   while snapshots and the portable widget conceal title inventories, equipped
-  titles, title-only notices, and title copy attached to story rewards.
+  titles, title-only notices, and title copy attached to story rewards. The
+  authenticated snapshot transaction idempotently consumes concealed
+  behavior-title notices so they cannot block later rewards or reappear after
+  title presentation is restored; the ownership grant itself remains durable.
 - The widget gives every roadmap week with a story chapter a collectible-style slot while concealing
   locked art, names, story copy, and title definitions in the raw projection as
   well as the UI. Once the chapter is granted, that week's slot reveals one
