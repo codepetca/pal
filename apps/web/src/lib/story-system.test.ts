@@ -17,6 +17,8 @@ import {
   HOME_STORY_ID,
   HOME_STORY_PERIODS,
   HOME_STORY_VERSION,
+  PIP_STORY_ID,
+  PIP_STORY_VERSION,
   STORY_REGISTRY,
   storyForTerm,
   storyForTermStartDay,
@@ -152,18 +154,20 @@ test("all supported plans are deterministic, complete, and deeply immutable", ()
     assert.ok(Object.isFrozen(left.chapters));
     assert.ok(left.chapters.every((chapter) => Object.isFrozen(chapter) && Object.isFrozen(chapter.collectible)));
     const finale = left.chapters[left.chapters.length - 1];
-    assert.equal(finale?.roadmapWeek, weeks);
-    assert.equal(finale?.sourceChapterIds.includes("lumi-returns"), true);
-    assert.deepEqual(finale?.collectible, {
-      id: "lumi-companion-v1",
-      title: "Meet Lumi",
-      kind: "companion",
-      assetUrl: "/assets/pets/lumi-v1.png",
-    });
-    assert.equal(
-      left.chapters.slice(0, -1).some((chapter) => chapter.collectible.id === "lumi-companion-v1"),
-      false,
-    );
+    assert.equal(finale?.roadmapWeek, Math.min(weeks, HOME_STORY_PERIODS));
+    if (reference.storyId === PIP_STORY_ID) {
+      assert.equal(finale?.sourceChapterIds.includes("lumi-returns"), true);
+      assert.deepEqual(finale?.collectible, {
+        id: "lumi-companion-v1",
+        title: "Meet Lumi",
+        kind: "companion",
+        assetUrl: "/assets/pets/lumi-v1.png",
+      });
+      assert.equal(
+        left.chapters.slice(0, -1).some((chapter) => chapter.collectible.id === "lumi-companion-v1"),
+        false,
+      );
+    }
   }
   const catalog = STORY_REGISTRY.requireCatalog(storyForTermStartDay("2026-08-31"));
   assert.ok(Object.isFrozen(catalog));
@@ -544,17 +548,36 @@ test("legacy and capped story plans both accept a 20-week term's week 17", { ski
   const legacyWeek17Key = `legacy-period-${crypto.randomUUID()}`;
   const cappedWeek17Key = `capped-period-${crypto.randomUUID()}`;
   try {
-    await processEventInDb(
+    const legacyLearnerId = await getOrCreateLearnerIdentity(
+      getDb(),
       integration.id,
       legacyExternalId,
-      configuredTwentyWeekTerm(
-        `legacy-period-${crypto.randomUUID()}`,
-        legacyTermKey,
-        1,
-        "2026-01-05",
-      ),
-      crypto.randomUUID(),
     );
+    const pipPlan = STORY_REGISTRY.createPlan(20, {
+      storyId: PIP_STORY_ID,
+      version: PIP_STORY_VERSION,
+    });
+    await getDb().transaction(async (tx) => {
+      const [persisted] = await tx
+        .insert(storyPlans)
+        .values({
+          learnerId: legacyLearnerId,
+          termKey: legacyTermKey,
+          termStartDay: "2026-01-05",
+          storyId: pipPlan.storyId,
+          storyVersion: pipPlan.version,
+          totalPeriods: pipPlan.totalPeriods,
+        })
+        .returning({ id: storyPlans.id });
+      await tx.insert(storyPlanChapters).values(
+        pipPlan.chapters.map((chapter) => ({
+          storyPlanId: persisted!.id,
+          learnerId: legacyLearnerId,
+          periodNumber: chapter.roadmapWeek,
+          chapterId: chapter.id,
+        })),
+      );
+    });
     const legacyWeek17 = await processEventInDb(
       integration.id,
       legacyExternalId,
@@ -567,11 +590,6 @@ test("legacy and capped story plans both accept a 20-week term's week 17", { ski
       crypto.randomUUID(),
     );
     assert.equal(legacyWeek17.status, "processed");
-    const legacyLearnerId = await getOrCreateLearnerIdentity(
-      getDb(),
-      integration.id,
-      legacyExternalId,
-    );
     const [legacyPlan] = await getDb()
       .select()
       .from(storyPlans)
