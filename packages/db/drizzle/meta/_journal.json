@@ -92,6 +92,13 @@
       "when": 1787584385000,
       "tag": "0012_cap_story_schedule_at_plan_end",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787665341098,
+      "tag": "0013_companion_visibility",
+      "breakpoints": true
     }
   ]
 }

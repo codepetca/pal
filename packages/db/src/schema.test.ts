@@ -587,11 +587,18 @@ test(
         });
       assert.ok(behaviorGrant.grantOrder > storyGrant.grantOrder);
 
-      await db.insert(learnerRewardLoadouts).values({
+      const [companionLoadout] = await db.insert(learnerRewardLoadouts).values({
         learnerId: learnerA.id,
         slot: "companion",
         rewardGrantId: storyGrant.id,
-      });
+      }).returning();
+      assert.equal(companionLoadout.hidden, false);
+      const [hiddenCompanionLoadout] = await db
+        .update(learnerRewardLoadouts)
+        .set({ hidden: true })
+        .where(eq(learnerRewardLoadouts.id, companionLoadout.id))
+        .returning();
+      assert.equal(hiddenCompanionLoadout.hidden, true);
       await assert.rejects(
         db.insert(learnerRewardLoadouts).values({
           learnerId: learnerA.id,
@@ -607,6 +614,15 @@ test(
           rewardGrantId: behaviorGrant.id,
         }),
         (error) => postgresViolation(error, "23505"),
+      );
+      await assert.rejects(
+        db.insert(learnerRewardLoadouts).values({
+          learnerId: learnerA.id,
+          slot: "wallpaper",
+          rewardGrantId: behaviorGrant.id,
+          hidden: true,
+        }),
+        (error) => postgresViolation(error, "23514"),
       );
       await assert.rejects(
         db.insert(learnerRewardLoadouts).values({

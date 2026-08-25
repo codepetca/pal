@@ -395,6 +395,7 @@ export const learnerRewardLoadouts = pgTable(
     learnerId: uuid("learner_id").notNull(),
     slot: text("slot").notNull(),
     rewardGrantId: uuid("reward_grant_id").notNull(),
+    hidden: boolean("hidden").notNull().default(false),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -408,6 +409,10 @@ export const learnerRewardLoadouts = pgTable(
     check(
       "learner_reward_loadouts_slot_supported",
       sql`${t.slot} IN ('companion', 'wallpaper')`,
+    ),
+    check(
+      "learner_reward_loadouts_hidden_companion_only",
+      sql`${t.hidden} = false OR ${t.slot} = 'companion'`,
     ),
     index("learner_reward_loadouts_learner_idx").on(t.learnerId),
   ],
