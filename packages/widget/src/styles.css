@@ -307,13 +307,8 @@
   min-width: 0;
   padding: 0.75rem 0.85rem;
   align-self: start;
-  border-left: 2px solid var(--pal-effective-color-border-strong);
   color: var(--pal-effective-color-text-muted);
   text-align: left;
-}
-
-.pal-week[data-week-status="current"] .pal-week-story {
-  border-left-color: var(--pal-effective-color-primary-solid);
 }
 
 .pal-week-story-headline {
