@@ -475,6 +475,77 @@ test("clicking the equipped wallpaper collectible clears its loadout slot", asyn
   }
 });
 
+test("clicking the equipped companion leaves the companion slot empty", async () => {
+  const before = createFixtureSnapshot();
+  before.progression!.collectibles[0] = {
+    id: "young-pip-v1",
+    roadmapWeek: 1,
+    status: "earned",
+    statusLabel: "Brought to life in Week 1",
+    title: "Pip",
+    description: "Your first companion.",
+    kind: "companion",
+    finish: "color",
+    assetUrl: "/pip.png",
+  };
+  before.rewardLoadout = {
+    companion: {
+      equippedGrantId: "grant-pip",
+      options: [{
+        grantId: "grant-pip",
+        rewardId: "young-pip-v1",
+        category: "companion",
+        title: "Pip",
+        assetUrl: "/pip.png",
+      }],
+    },
+    wallpaper: { options: [] },
+  };
+  const after = structuredClone(before);
+  delete after.rewardLoadout!.companion.equippedGrantId;
+  const calls: Array<[string, string | null]> = [];
+  let cleared = false;
+  const client: PalClient = {
+    getSnapshot: async () => cleared ? after : before,
+    markRewardSeen: async () => undefined,
+    async setRewardLoadout(slot, rewardGrantId) {
+      calls.push([slot, rewardGrantId]);
+      cleared = true;
+    },
+  };
+  let renderer: ReactTestRenderer | undefined;
+
+  await act(async () => {
+    renderer = create(
+      <PalProvider client={client} initialSnapshot={before} scopeKey="unequip-companion">
+        <PalAchievements />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    const equippedButton = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        /Stop using Pip as the active companion/.test(node.props["aria-label"] ?? ""),
+    );
+    await act(async () => {
+      equippedButton.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(calls, [["companion", null]]);
+    const availableButton = renderer!.root.find(
+      (node) =>
+        node.type === "button" &&
+        /Use Pip as the active companion/.test(node.props["aria-label"] ?? ""),
+    );
+    assert.equal(availableButton.props["aria-pressed"], false);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
 test("clicking another usable collectible replaces the active slot selection", async () => {
   const before = createFixtureSnapshot();
   before.progression!.collectibles[0] = {

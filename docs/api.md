@@ -113,7 +113,9 @@ Usable story rewards are equipped with
 `{ "slot": "companion" | "wallpaper", "rewardGrantId": <owned UUID> | null }`.
 The route requires `reward:equip`, verifies the token's integration/learner pair,
 rejects unowned and reveal-only grants, and treats `null` as restoring the default
-for that slot. Keepsakes never call this endpoint.
+presentation for wallpapers or leaving the companion slot empty. An empty companion
+slot displays no companion; equipping an owned companion makes it visible again.
+Keepsakes never call this endpoint.
 
 The widget receives no raw learner identifier. Pika's backend uses its integration
 credential to mint the learner-scoped token; that credential never enters the

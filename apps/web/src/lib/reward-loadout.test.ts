@@ -99,7 +99,7 @@ test("loadout projection remains bounded while retaining the equipped reward", (
   assert.ok(projected.wallpaper.options.some((option) => option.grantId === "grant-0"));
 });
 
-test("companion projection identifies Pip as the fallback without making it toggleable", () => {
+test("companion projection leaves the slot empty until a companion is selected", () => {
   const storyPlan = plan("companion-plan", [
     { assignmentId: "pip", rewardId: "pip", kind: "companion" },
     { assignmentId: "lumi", rewardId: "lumi", kind: "companion" },
@@ -110,20 +110,24 @@ test("companion projection identifies Pip as the fallback without making it togg
   ] as never;
   const plans = new Map([[storyPlan.id, storyPlan]]);
 
-  const fallback = projectRewardLoadout(grants, plans, []);
-  assert.equal(fallback.companion.fallbackGrantId, "grant-pip");
-  assert.equal(fallback.companion.equippedGrantId, "grant-pip");
+  const empty = projectRewardLoadout(grants, plans, []);
+  assert.equal(empty.companion.fallbackGrantId, undefined);
+  assert.equal(empty.companion.equippedGrantId, undefined);
+  assert.deepEqual(
+    empty.companion.options.map((option) => option.grantId),
+    ["grant-lumi", "grant-pip"],
+  );
 
   const selected = projectRewardLoadout(
     grants,
     plans,
     [{ slot: "companion", rewardGrantId: "grant-lumi" }] as never,
   );
-  assert.equal(selected.companion.fallbackGrantId, "grant-pip");
+  assert.equal(selected.companion.fallbackGrantId, undefined);
   assert.equal(selected.companion.equippedGrantId, "grant-lumi");
 });
 
-test("bounded companion projection retains distinct equipped and fallback options", () => {
+test("bounded companion projection retains the explicitly equipped option", () => {
   const rewards = Array.from({ length: 35 }, (_, index) => ({
     assignmentId: `companion-assignment-${index}`,
     rewardId: index === 0 ? "pip" : `companion-${index}`,
@@ -152,10 +156,7 @@ test("bounded companion projection retains distinct equipped and fallback option
 
   assert.equal(projected.companion.options.length, 32);
   assert.equal(projected.companion.equippedGrantId, "companion-grant-34");
-  assert.equal(projected.companion.fallbackGrantId, "companion-grant-0");
-  assert.ok(projected.companion.options.some(
-    (option) => option.grantId === projected.companion.fallbackGrantId,
-  ));
+  assert.equal(projected.companion.fallbackGrantId, undefined);
   const snapshot = createFixtureSnapshot();
   snapshot.rewardLoadout = projected;
   assert.deepEqual(parsePalWidgetSnapshot(snapshot).rewardLoadout, projected);
