@@ -109,6 +109,12 @@ test("achievement trail scrolls to the bottom for each learner and current week"
   const learnerB = createFixtureSnapshot(4);
   const clientA = createFixturePalClient(learnerA);
   const clientB = createFixturePalClient(learnerB);
+  const getClientASnapshot = clientA.getSnapshot.bind(clientA);
+  let clientASnapshotCalls = 0;
+  clientA.getSnapshot = async (signal) => {
+    clientASnapshotCalls += 1;
+    return getClientASnapshot(signal);
+  };
   const scrollCalls: ScrollToOptions[] = [];
   const originalWindow = globalThis.window;
   let refresh: (() => Promise<void>) | undefined;
@@ -187,7 +193,24 @@ test("achievement trail scrolls to the bottom for each learner and current week"
     assert.equal(scrollCalls.length, 1);
     assert.deepEqual(scrollCalls[0], { behavior: "smooth", top: 800 });
 
+    const snapshotCallsBeforeRefresh = clientASnapshotCalls;
     await act(async () => refresh?.());
+    assert.equal(clientASnapshotCalls, snapshotCallsBeforeRefresh + 1);
+
+    await act(async () => {
+      renderer!.update(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          motion="reduced"
+          scopeKey="learner-a"
+        >
+          <PalAchievements />
+          <RefreshCapture />
+        </PalProvider>,
+      );
+      await Promise.resolve();
+    });
     assert.equal(scrollCalls.length, 1);
 
     clientA.dispatch("advance-week");
