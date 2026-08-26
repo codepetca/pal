@@ -36,7 +36,7 @@ test("public surfaces render meaningful status without relying on color", () => 
 
   assert.doesNotMatch(html, />Achievements</);
   assert.match(html, /aria-current="step"/);
-  assert.match(html, /class="pal-week-current-label">Current week</);
+  assert.doesNotMatch(html, />Current week</);
   assert.match(html, /4 of 4 eligible days/);
   assert.match(html, /class="pal-badge-progress-ring"/);
   assert.match(html, /stroke-dasharray="100 0"/);
@@ -266,7 +266,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   );
   assert.match(
     html,
-    /class="pal-week-collectible-stack"><header class="pal-week-header"><span class="pal-week-current-label">Current week<\/span><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
+    /class="pal-week-collectible-stack"><header class="pal-week-header"><h3>Week 2<\/h3><\/header><div class="pal-week-collectible" data-unlock-status="locked" data-collectible-finish="color" aria-label="Week 2 collectible locked" role="img">.*?<\/div>/,
   );
   assert.doesNotMatch(html, /<strong aria-hidden="true">Locked<\/strong>/);
   assert.doesNotMatch(html, />Equipped</);
@@ -296,7 +296,7 @@ test("each week has a collectible slot that reveals only earned rewards", () => 
   assert.doesNotMatch(html, /Semester Legend/);
 });
 
-test("an earned week keeps its story readable on wide and narrow hosts", () => {
+test("an earned week shows its story permanently on wide and narrow hosts", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles[0] = {
     id: "earned-week-one",
@@ -325,10 +325,10 @@ test("an earned week keeps its story readable on wide and narrow hosts", () => {
 
   assert.match(html, /class="pal-week-story"/);
   assert.match(html, />Something Found You</);
-  assert.match(html, /aria-expanded="true"/);
-  assert.match(html, /class="pal-week-story-panel"/);
-  assert.doesNotMatch(html, /class="pal-week-story-panel" hidden=""/);
   assert.match(html, /A heavy storm passed over the town during the night\./);
+  assert.doesNotMatch(html, /aria-expanded/);
+  assert.doesNotMatch(html, /pal-week-story-bubble/);
+  assert.doesNotMatch(html, /pal-week-story-caret/);
 
   const narrowHtml = renderToStaticMarkup(
     <PalProvider
@@ -340,18 +340,14 @@ test("an earned week keeps its story readable on wide and narrow hosts", () => {
       <PalAchievements />
     </PalProvider>,
   );
-  assert.match(narrowHtml, /class="pal-week-story" data-expanded="false"/);
+  assert.match(narrowHtml, /class="pal-week-story"/);
   assert.match(narrowHtml, />Something Found You</);
-  assert.match(narrowHtml, /aria-expanded="false"/);
-  assert.match(narrowHtml, /class="pal-week-story-panel" hidden=""/);
   assert.match(narrowHtml, /A heavy storm passed over the town during the night\./);
-  assert.ok(
-    narrowHtml.indexOf("pal-week-story-bubble") <
-      narrowHtml.indexOf("pal-week-collectible-stack"),
-  );
+  assert.doesNotMatch(narrowHtml, /aria-expanded/);
+  assert.doesNotMatch(narrowHtml, /pal-week-story-bubble/);
 });
 
-test("a week with no earned collectible has no story bubble", () => {
+test("a week with no earned collectible has no story", () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles = snapshot.progression!.collectibles.map(
     (collectible) => ({ ...collectible, status: "locked" as const }),

@@ -111,8 +111,16 @@ test("responsive behavior follows the host viewport contract", () => {
     styles.match(
       /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-week-story \{([^}]+)\}/,
     )?.[1] ?? "";
+  const narrowWeekContentRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-week-content \{([^}]+)\}/,
+    )?.[1] ?? "";
   assert.match(narrowStoryRule, /grid-column: 1 \/ -1/);
   assert.match(narrowStoryRule, /grid-row: 1/);
+  assert.match(narrowStoryRule, /text-align: center/);
+  assert.match(narrowWeekContentRule, /grid-column: 1 \/ -1/);
+  assert.match(narrowWeekContentRule, /margin-top: 0/);
+  assert.match(narrowWeekContentRule, /justify-content: center/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
@@ -144,17 +152,17 @@ test("roadmap muted text preserves contrast in both themes", () => {
 });
 
 test("roadmap centers the collectible branch and keeps badges to its right", () => {
-  const connectorRule =
-    styles.match(/\.pal-week:not\(:last-child\)::before \{([^}]+)\}/)?.[1] ??
-    "";
   const weekRule = styles.match(/\n\.pal-week \{([^}]+)\}/)?.[1] ?? "";
   const collectibleStackRule =
     styles.match(/\.pal-week-collectible-stack \{([^}]+)\}/)?.[1] ?? "";
+  const collectibleLabelRule =
+    styles.match(/\.pal-week-collectible strong \{([^}]+)\}/)?.[1] ?? "";
+  const storyRule =
+    styles.match(/\n\.pal-week-story \{([^}]+)\}/)?.[1] ?? "";
   const weekContentRule =
     styles.match(/\.pal-week-content \{([^}]+)\}/)?.[1] ?? "";
 
-  assert.match(connectorRule, /left: 50%/);
-  assert.match(connectorRule, /transform: translateX\(-50%\)/);
+  assert.doesNotMatch(styles, /\.pal-week:not\(:last-child\)::before/);
   assert.match(
     weekRule,
     /grid-template-columns: minmax\(0, 1fr\) 5\.65rem minmax\(0, 1fr\)/,
@@ -162,7 +170,15 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   assert.match(collectibleStackRule, /grid-column: 2/);
   assert.match(collectibleStackRule, /align-content: start/);
   assert.match(collectibleStackRule, /align-self: start/);
+  assert.match(collectibleLabelRule, /-webkit-line-clamp: 2/);
+  assert.match(collectibleLabelRule, /white-space: normal/);
+  assert.doesNotMatch(
+    styles,
+    /\.pal-week-story[^{]*\{[^}]*border-left/,
+  );
+  assert.match(storyRule, /text-align: right/);
   assert.match(weekContentRule, /grid-column: 3/);
+  assert.match(weekContentRule, /align-self: start/);
 });
 
 test("roadmap gives the current week a larger focal treatment without scroll trapping", () => {
