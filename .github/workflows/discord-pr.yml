@@ -1,0 +1,32 @@
+name: Discord PR notification
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.event.action == 'ready_for_review' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout trusted notification code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Post concise notification
+        env:
+          DISCORD_PR_WEBHOOK_URL: ${{ secrets.DISCORD_PR_WEBHOOK_URL }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/notify-discord-pr.mjs

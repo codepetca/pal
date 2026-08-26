@@ -179,6 +179,20 @@ Every change goes through a PR — no direct pushes to `main`.
 - Asset registry changes never touch game logic PRs
 - AI review (`/code-review --comment`) must be run before requesting human approval
 
+### Discord PR notifications
+
+The `#pal` Discord channel gets one quiet, clickable line when a non-draft PR is
+opened or reopened. Drafts wait until they are marked ready for review. The PR
+title is the summary; bodies and rich previews are not posted.
+
+```text
+🔀 pal #99: Make Discord PR updates concise
+```
+
+The workflow uses the repository Actions secret `DISCORD_PR_WEBHOOK_URL`. It
+must contain a standard incoming Discord webhook for `#pal`, not Discord's
+GitHub-formatted `/github` webhook URL. Treat the URL like a password.
+
 ---
 
 ## Test strategy
