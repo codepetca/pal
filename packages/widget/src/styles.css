@@ -1014,7 +1014,7 @@
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-content {
   grid-column: 1 / -1;
-  margin-top: 1.75rem;
+  margin-top: 0;
   justify-content: center;
 }
 
