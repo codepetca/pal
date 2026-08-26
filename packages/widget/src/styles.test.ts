@@ -111,9 +111,15 @@ test("responsive behavior follows the host viewport contract", () => {
     styles.match(
       /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-week-story \{([^}]+)\}/,
     )?.[1] ?? "";
+  const narrowWeekContentRule =
+    styles.match(
+      /\.pal-surface\[data-pal-viewport="narrow"\] \.pal-week-content \{([^}]+)\}/,
+    )?.[1] ?? "";
   assert.match(narrowStoryRule, /grid-column: 1 \/ -1/);
   assert.match(narrowStoryRule, /grid-row: 1/);
   assert.match(narrowStoryRule, /text-align: center/);
+  assert.match(narrowWeekContentRule, /grid-column: 1 \/ -1/);
+  assert.match(narrowWeekContentRule, /justify-content: center/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 

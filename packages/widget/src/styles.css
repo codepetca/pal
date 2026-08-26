@@ -1013,7 +1013,9 @@
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-week-content {
+  grid-column: 1 / -1;
   margin-top: 1.75rem;
+  justify-content: center;
 }
 
 .pal-surface[data-pal-viewport="narrow"] .pal-badge-control,
