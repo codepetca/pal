@@ -196,16 +196,16 @@ test("roadmap gives the current week a larger focal treatment without scroll tra
 
   assert.match(
     roadmapRule,
-    /padding-block-start: max\(7rem, var\(--pal-achievement-scroll-padding\)\)/,
+    /padding-block-start: 7rem/,
   );
   assert.match(
     roadmapRule,
-    /padding-block-end: max\(7rem, var\(--pal-achievement-scroll-padding\)\)/,
+    /padding-block-end: 7rem/,
   );
   assert.doesNotMatch(roadmapRule, /28rem/);
   assert.match(
     narrowRoadmapRule,
-    /padding-block-end: max\(5rem, var\(--pal-achievement-scroll-padding\)\)/,
+    /padding-block-end: 5rem/,
   );
   assert.doesNotMatch(roadmapRule, /vh/);
   assert.doesNotMatch(narrowRoadmapRule, /vh/);

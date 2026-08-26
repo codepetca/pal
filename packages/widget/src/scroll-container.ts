@@ -21,26 +21,12 @@ export function findNearestVerticalScrollContainer(
   return null;
 }
 
-export function centerElementWithinScrollContainer(
-  target: HTMLElement,
+export function scrollContainerToBottom(
   container: HTMLElement,
   behavior: ScrollBehaviorOption,
 ): void {
-  const targetRect = target.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const targetCenter =
-    targetRect.top -
-    containerRect.top -
-    container.clientTop +
-    container.scrollTop +
-    targetRect.height / 2;
-  const top = Math.max(
-    0,
-    Math.min(
-      container.scrollHeight - container.clientHeight,
-      targetCenter - container.clientHeight / 2,
-    ),
-  );
-
-  container.scrollTo({ behavior, top });
+  container.scrollTo({
+    behavior,
+    top: Math.max(0, container.scrollHeight - container.clientHeight),
+  });
 }
