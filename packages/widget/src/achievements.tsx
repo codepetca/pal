@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 
 import { usePalWidget } from "./provider";
 import {
-  centerElementWithinScrollContainer,
   findNearestVerticalScrollContainer,
+  scrollContainerToBottom,
 } from "./scroll-container";
 import type {
   PalAchievement,
@@ -136,15 +136,17 @@ export function PalAchievements() {
     theme,
     viewport,
   } = usePalWidget();
-  const currentWeekFocalRef = useRef<HTMLDivElement>(null);
   const roadmapRef = useRef<HTMLOListElement>(null);
-  const centeredScopeKeyRef = useRef<string | null>(null);
+  const scrolledWeekKeyRef = useRef<string | null>(null);
   const currentWeekNumber = snapshot?.roadmap.currentWeek;
+  const scrollWeekKey = currentWeekNumber === undefined
+    ? null
+    : `${scopeKey}:${currentWeekNumber}`;
 
   useEffect(() => {
     if (
-      centeredScopeKeyRef.current === scopeKey ||
-      currentWeekNumber === undefined ||
+      scrollWeekKey === null ||
+      scrolledWeekKeyRef.current === scrollWeekKey ||
       typeof window === "undefined" ||
       typeof window.requestAnimationFrame !== "function"
     ) {
@@ -152,30 +154,23 @@ export function PalAchievements() {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      const currentWeekFocal = currentWeekFocalRef.current;
       const roadmap = roadmapRef.current;
-      if (!currentWeekFocal || !roadmap) return;
+      if (!roadmap) return;
 
-      centeredScopeKeyRef.current = scopeKey;
-      const scrollContainer = findNearestVerticalScrollContainer(currentWeekFocal);
+      const scrollContainer = findNearestVerticalScrollContainer(roadmap);
       if (!scrollContainer) return;
-      const focalHeight = currentWeekFocal.getBoundingClientRect().height;
-      roadmap.style.setProperty(
-        "--pal-achievement-scroll-padding",
-        `${Math.max(0, (scrollContainer.clientHeight - focalHeight) / 2)}px`,
-      );
+      scrolledWeekKeyRef.current = scrollWeekKey;
       const prefersReducedMotion = window.matchMedia?.(
         "(prefers-reduced-motion: reduce)",
       ).matches ?? false;
-      centerElementWithinScrollContainer(
-        currentWeekFocal,
+      scrollContainerToBottom(
         scrollContainer,
         motion === "reduced" || prefersReducedMotion ? "auto" : "smooth",
       );
     });
 
     return () => window.cancelAnimationFrame?.(frame);
-  }, [currentWeekNumber, motion, scopeKey]);
+  }, [motion, scrollWeekKey]);
 
   const appearance = {
     "data-pal-density": density,
@@ -329,7 +324,6 @@ export function PalAchievements() {
               ) : null}
               <div
                 className="pal-week-collectible-stack"
-                ref={isCurrent ? currentWeekFocalRef : undefined}
               >
                 <header className="pal-week-header">
                   <h3>{week.label}</h3>

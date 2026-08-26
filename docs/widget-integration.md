@@ -48,11 +48,11 @@ The public client returns a versioned learner snapshot. The widget renders store
 Pal state; it never interprets Pika events or calculates achievement progress in the
 browser.
 
-`PalAchievements` centers the current week once per learner scope inside the
-nearest ancestor with explicit `overflow-y: auto` or `scroll`. The widget derives
-its edge spacing from that scrollport and stops before the document root; it never
-moves the host page. A host that wants initial centering must therefore mount the
-roadmap in its own content scrollport.
+`PalAchievements` scrolls the nearest ancestor with explicit `overflow-y: auto`
+or `scroll` to the bottom when the learner's current week first loads or advances.
+Future weeks are omitted, so the bottom is the current week. The widget stops
+before the document root and never moves the host page. A host that wants this
+behavior must therefore mount the roadmap in its own content scrollport.
 
 Earned collectibles may include optional `previewAssetUrl` and
 `darkPreviewAssetUrl` fields. The roadmap prefers these trail-sized assets,
