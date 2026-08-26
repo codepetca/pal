@@ -1,6 +1,6 @@
 {
   "name": "@codepet/pal-widget",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Portable React surfaces for Pal achievements, companion state, and rewards.",
   "license": "MIT",
   "type": "module",

@@ -8,7 +8,7 @@ import {
   createFixturePalClient,
   createFixtureSnapshot,
 } from "./fixture-client";
-import { PalProvider } from "./provider";
+import { PalProvider, usePalWidget } from "./provider";
 import type { PalClient } from "./types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
@@ -104,15 +104,26 @@ test("achievement trail omits future weeks and orders visible weeks chronologica
   }
 });
 
-test("achievement trail centers once for each learner scope", async () => {
+test("achievement trail scrolls to the bottom for each learner and current week", async () => {
   const learnerA = createFixtureSnapshot(4);
   const learnerB = createFixtureSnapshot(4);
   const clientA = createFixturePalClient(learnerA);
   const clientB = createFixturePalClient(learnerB);
+  const getClientASnapshot = clientA.getSnapshot.bind(clientA);
+  let clientASnapshotCalls = 0;
+  clientA.getSnapshot = async (signal) => {
+    clientASnapshotCalls += 1;
+    return getClientASnapshot(signal);
+  };
   const scrollCalls: ScrollToOptions[] = [];
-  const paddingCalls: Array<[string, string]> = [];
   const originalWindow = globalThis.window;
+  let refresh: (() => Promise<void>) | undefined;
   let renderer: ReactTestRenderer | undefined;
+
+  function RefreshCapture() {
+    refresh = usePalWidget().refresh;
+    return null;
+  }
 
   const body = {} as HTMLElement;
   const documentElement = {} as HTMLElement;
@@ -143,17 +154,7 @@ test("achievement trail centers once for each learner scope", async () => {
   const roadmapNode = {
     ownerDocument,
     parentElement: scrollContainer,
-    style: {
-      setProperty(name: string, value: string) {
-        paddingCalls.push([name, value]);
-      },
-    },
   } as unknown as HTMLOListElement;
-  const focalNode = {
-    getBoundingClientRect: () => ({ height: 100, top: 500 }) as DOMRect,
-    ownerDocument,
-    parentElement: roadmapNode,
-  } as unknown as HTMLDivElement;
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -176,6 +177,7 @@ test("achievement trail centers once for each learner scope", async () => {
           scopeKey="learner-a"
         >
           <PalAchievements />
+          <RefreshCapture />
         </PalProvider>,
         {
           createNodeMock(element) {
@@ -183,31 +185,48 @@ test("achievement trail centers once for each learner scope", async () => {
               (element.props as Record<string, unknown>).className === "pal-roadmap-list") {
               return roadmapNode;
             }
-            return element.type === "div" &&
-              (element.props as Record<string, unknown>).className ===
-                "pal-week-collectible-stack"
-              ? focalNode
-              : null;
+            return null;
           },
         },
       );
     });
     assert.equal(scrollCalls.length, 1);
-    assert.deepEqual(scrollCalls[0], { behavior: "smooth", top: 250 });
-    assert.deepEqual(paddingCalls[0], [
-      "--pal-achievement-scroll-padding",
-      "150px",
-    ]);
+    assert.deepEqual(scrollCalls[0], { behavior: "smooth", top: 800 });
+
+    const snapshotCallsBeforeRefresh = clientASnapshotCalls;
+    await act(async () => refresh?.());
+    assert.equal(clientASnapshotCalls, snapshotCallsBeforeRefresh + 1);
+
+    await act(async () => {
+      renderer!.update(
+        <PalProvider
+          client={clientA}
+          initialSnapshot={learnerA}
+          motion="reduced"
+          scopeKey="learner-a"
+        >
+          <PalAchievements />
+          <RefreshCapture />
+        </PalProvider>,
+      );
+      await Promise.resolve();
+    });
+    assert.equal(scrollCalls.length, 1);
+
+    clientA.dispatch("advance-week");
+    await act(async () => refresh?.());
+    assert.equal(scrollCalls.length, 2);
 
     await act(async () => {
       renderer!.update(
         <PalProvider client={clientB} scopeKey="learner-b">
           <PalAchievements />
+          <RefreshCapture />
         </PalProvider>,
       );
       await Promise.resolve();
     });
-    assert.equal(scrollCalls.length, 2);
+    assert.equal(scrollCalls.length, 3);
   } finally {
     await act(async () => renderer?.unmount());
     Object.defineProperty(globalThis, "window", {

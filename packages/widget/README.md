@@ -44,9 +44,11 @@ import {
 ```
 
 The host owns placement. Pal owns everything rendered inside each component.
-`PalAchievements` centers the current week only inside its nearest ancestor with
-explicit `overflow-y: auto` or `scroll`. It never scrolls the document, so hosts
-that want initial centering should mount it in their owned content scrollport.
+`PalAchievements` scrolls its nearest ancestor with explicit `overflow-y: auto`
+or `scroll` to the bottom when a learner's current week first loads or advances.
+Because future weeks are omitted, that reveals the current week without moving
+the document. Hosts that want this behavior must mount the roadmap in their own
+content scrollport.
 `PalCollection` renders the optional durable keepsakes in a v1 learner snapshot;
 older snapshots without `collection` remain valid.
 The optional `featurePolicy` is resolved by Pal and controls learner-facing

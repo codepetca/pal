@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  centerElementWithinScrollContainer,
   findNearestVerticalScrollContainer,
+  scrollContainerToBottom,
 } from "./scroll-container";
 
 type MockElement = {
@@ -71,41 +71,31 @@ test("finds the nearest explicit scrollport without selecting the page root", ()
   );
 });
 
-test("centers within the scrollport and clamps to its scroll range", () => {
+test("scrolls to the bottom of the scrollport", () => {
   const { element } = createTree();
   const calls: ScrollToOptions[] = [];
   const scrollport = element("auto");
   scrollport.clientHeight = 300;
   scrollport.scrollHeight = 1_000;
-  scrollport.scrollTop = 100;
-  scrollport.getBoundingClientRect = () => rect(50, 300);
   scrollport.scrollTo = (options) => calls.push(options);
-  const target = element();
-  target.getBoundingClientRect = () => rect(500, 100);
 
-  centerElementWithinScrollContainer(
-    target as unknown as HTMLElement,
+  scrollContainerToBottom(
     scrollport as unknown as HTMLElement,
     "smooth",
   );
 
-  assert.deepEqual(calls, [{ behavior: "smooth", top: 450 }]);
+  assert.deepEqual(calls, [{ behavior: "smooth", top: 700 }]);
 });
 
-test("measures from the inner edge of a bordered scrollport", () => {
+test("clamps a short scrollport to the top", () => {
   const { element } = createTree();
   const calls: ScrollToOptions[] = [];
   const scrollport = element("auto");
   scrollport.clientHeight = 300;
-  scrollport.clientTop = 10;
-  scrollport.scrollHeight = 1_000;
-  scrollport.getBoundingClientRect = () => rect(50, 320);
+  scrollport.scrollHeight = 200;
   scrollport.scrollTo = (options) => calls.push(options);
-  const target = element();
-  target.getBoundingClientRect = () => rect(160, 100);
 
-  centerElementWithinScrollContainer(
-    target as unknown as HTMLElement,
+  scrollContainerToBottom(
     scrollport as unknown as HTMLElement,
     "auto",
   );

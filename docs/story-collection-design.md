@@ -17,8 +17,8 @@ including older Pip plans with story chapters after Week 16.
 
 The current schema has three story-reward categories:
 
-- `companion`: a character the learner can equip in the pet widget. Exactly one
-  companion is equipped at a time.
+- `companion`: a character the learner can equip in the pet widget. At most one
+  companion is equipped at a time; an empty slot hides the pet widget.
 - `wallpaper`: a background the learner can equip on the Achievements page.
   Exactly one wallpaper is equipped at a time. Each wallpaper has real light
   and dark artwork.
@@ -30,10 +30,10 @@ On the Achievements page, each owned companion or wallpaper reward is itself a
 toggle button: selecting it equips that reward, selecting a different reward
 replaces the slot, and selecting the active reward clears the custom choice.
 Clearing a wallpaper restores the themed page background. Clearing a companion
-returns the widget to the story's default companion rather than hiding the pet;
-visibility remains a separate host setting. Keepsakes retain the existing
-reveal-and-continue flow. The narrative may show Pip and Lumi together, but the
-pet widget displays only the single active companion.
+leaves the slot empty and hides the pet. Equipping any owned companion makes it
+visible again. Keepsakes retain the existing reveal-and-continue flow. The
+narrative may show Pip and Lumi together, but the pet widget displays at most the
+single active companion.
 
 ## The 16-scene catalog
 
