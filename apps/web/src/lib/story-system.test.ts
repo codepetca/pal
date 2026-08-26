@@ -202,7 +202,7 @@ test("A Place to Call Home is the default and caps longer terms at 16 chapters",
   assert.deepEqual(
     plan.chapters.map((chapter) => chapter.revealHeadline),
     [
-      "New Start",
+      "A New Adventure",
       "Dusty Discovery",
       "Keeping warm",
       "Room for One More",
@@ -219,6 +219,10 @@ test("A Place to Call Home is the default and caps longer terms at 16 chapters",
       "Job done",
       "Epilogue",
     ],
+  );
+  assert.equal(
+    plan.chapters[0]?.storyCopy,
+    "You find yourself in an unfamiliar place, but you have your trusty lantern. Warm light spreads, and it begins to feel full of possibility.",
   );
   assert.deepEqual(
     plan.chapters.map((chapter) => chapter.collectible.kind),

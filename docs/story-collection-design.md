@@ -39,7 +39,7 @@ pet widget displays only the single active companion.
 
 | Week | Reveal heading | Reward | Category | Bonus title | Production asset |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | New Start | Trusty Lantern | keepsake | — | `reward-warming-lantern-v1.png` |
+| 1 | A New Adventure | Trusty Lantern | keepsake | — | `reward-warming-lantern-v1.png` |
 | 2 | Dusty Discovery | Strange Egg | keepsake | — | `reward-mystery-egg-v1.png` |
 | 3 | Keeping warm | Makeshift Bed | keepsake | — | `reward-makeshift-bed-v2.png` |
 | 4 | Room for One More | Pip | companion | — | `young-pip-v1.png` |
