@@ -49,6 +49,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Discord PR notification tests
+        run: pnpm test:discord-pr
+
       # The service container starts empty, so this proves the committed
       # migrations take a database from zero to the full schema.
       - name: Migrate from zero
