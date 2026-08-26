@@ -308,7 +308,7 @@
   padding: 0.75rem 0.85rem;
   align-self: start;
   color: var(--pal-effective-color-text-muted);
-  text-align: left;
+  text-align: right;
 }
 
 .pal-week-story-headline {
