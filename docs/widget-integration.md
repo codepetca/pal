@@ -243,8 +243,12 @@ backward-compatible; current Pal snapshots derive it from durable world unlock I
 The optional `progression` field is already a redacted, display-ready projection
 from Pal. Hosts and widget components must not reconstruct story eligibility from
 roadmap position or combine parallel unlock flags. `companionReveal` is the sole
-companion display decision; locked collectible and title records contain no hidden
-names, story copy, or asset URLs.
+story eligibility and companion-art decision. For loadout-aware snapshots,
+`rewardLoadout.companion.equippedGrantId` independently controls whether that
+earned companion is visible; an empty slot hides `PalCompanion`. Older schema-v1
+snapshots that omit `rewardLoadout` retain the original reveal-driven display.
+Locked collectible and title records contain no hidden names, story copy, or asset
+URLs.
 
 Persisted sandbox routes are local-only and fail closed with 404 in Vercel previews and
 production. Preview deployments therefore need no database, sandbox integration secret,
