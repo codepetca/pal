@@ -152,7 +152,6 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
     styles.match(/\.pal-week-collectible-stack \{([^}]+)\}/)?.[1] ?? "";
   const collectibleLabelRule =
     styles.match(/\.pal-week-collectible strong \{([^}]+)\}/)?.[1] ?? "";
-  const storyRule = styles.match(/\.pal-week-story \{([^}]+)\}/)?.[1] ?? "";
   const weekContentRule =
     styles.match(/\.pal-week-content \{([^}]+)\}/)?.[1] ?? "";
 
@@ -167,7 +166,10 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   assert.match(collectibleStackRule, /align-self: start/);
   assert.match(collectibleLabelRule, /-webkit-line-clamp: 2/);
   assert.match(collectibleLabelRule, /white-space: normal/);
-  assert.doesNotMatch(storyRule, /border-left/);
+  assert.doesNotMatch(
+    styles,
+    /\.pal-week-story[^{]*\{[^}]*border-left/,
+  );
   assert.match(weekContentRule, /grid-column: 3/);
   assert.match(weekContentRule, /align-self: start/);
 });
