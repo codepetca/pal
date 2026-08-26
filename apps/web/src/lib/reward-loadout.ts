@@ -94,25 +94,12 @@ export function projectRewardLoadout(
     const persistedCandidate = persisted
       ? candidates[slot].find((candidate) => candidate.grantId === persisted.rewardGrantId)
       : undefined;
-    const firstCompanion = slot === "companion"
-      ? candidates.companion.toSorted((left, right) =>
-          left.grantOrder === right.grantOrder
-            ? 0
-            : left.grantOrder < right.grantOrder ? -1 : 1,
-        )[0]
-      : undefined;
-    const fallbackOption = newestByReward.find(
-      (candidate) => candidate.rewardId === firstCompanion?.rewardId,
-    );
-    const equippedRewardId = persistedCandidate?.rewardId ?? fallbackOption?.rewardId;
+    const equippedRewardId = persistedCandidate?.rewardId;
     const equippedOption = newestByReward.find(
       (candidate) => candidate.rewardId === equippedRewardId,
     );
     const retained: LoadoutCandidate[] = [];
     if (equippedOption) retained.push(equippedOption);
-    if (fallbackOption && fallbackOption !== equippedOption) {
-      retained.push(fallbackOption);
-    }
     const bounded = [
       ...retained,
       ...newestByReward.filter((candidate) => !retained.includes(candidate)),
@@ -127,9 +114,6 @@ export function projectRewardLoadout(
     }));
     return {
       options: projected,
-      ...(fallbackOption && bounded.includes(fallbackOption)
-        ? { fallbackGrantId: fallbackOption.grantId }
-        : {}),
       ...(equippedOption ? { equippedGrantId: equippedOption.grantId } : {}),
     };
   };

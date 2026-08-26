@@ -233,7 +233,7 @@ export interface PalUsableStoryReward {
 }
 
 export interface PalRewardLoadoutSlotState {
-  /** Default companion restored when no explicit companion is selected. */
+  /** Legacy host-projected default companion, retained for wire compatibility. */
   fallbackGrantId?: string;
   equippedGrantId?: string;
   options: PalUsableStoryReward[];

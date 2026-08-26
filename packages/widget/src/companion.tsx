@@ -365,6 +365,13 @@ function PalCompanion(
 ) {
   const { density, motion, snapshot, state, theme, viewport } = usePalWidget();
   if (state === "error" || !snapshot) return null;
+  // Loadout-aware hosts use the equipped grant as the companion visibility
+  // decision. Older schema-v1 hosts omit rewardLoadout, so they retain the
+  // original story-reveal behavior until they adopt the loadout capability.
+  if (
+    snapshot.rewardLoadout &&
+    snapshot.rewardLoadout.companion.equippedGrantId === undefined
+  ) return null;
 
   const companion = snapshot.companion;
   const progression = snapshot.progression;

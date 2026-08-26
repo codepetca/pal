@@ -9,6 +9,48 @@ import { PalProvider } from "./provider";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
+test("an empty companion loadout hides the companion", async () => {
+  const snapshot = createFixtureSnapshot(5);
+  snapshot.progression!.companionReveal = {
+    status: "earned",
+    assetUrl: "/assets/pets/young-pip-v1.png",
+  };
+  snapshot.rewardLoadout = {
+    companion: {
+      options: [{
+        grantId: "grant-pip",
+        rewardId: "young-pip-v1",
+        category: "companion",
+        title: "Pip",
+        assetUrl: "/assets/pets/young-pip-v1.png",
+      }],
+    },
+    wallpaper: { options: [] },
+  };
+
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(
+      <PalProvider
+        client={{
+          getSnapshot: async () => snapshot,
+          markRewardSeen: async () => undefined,
+        }}
+        initialSnapshot={snapshot}
+        scopeKey="unequipped-companion"
+      >
+        <PalCompanion />
+      </PalProvider>,
+    );
+  });
+
+  try {
+    assert.equal(renderer!.toJSON(), null);
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
 test("a missing mood frame falls back to the supplied rest image", async () => {
   const originalWindow = globalThis.window;
   let renderer: ReturnType<typeof create> | undefined;
