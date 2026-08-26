@@ -187,6 +187,9 @@ test("achievement trail scrolls to the bottom for each learner and current week"
     assert.equal(scrollCalls.length, 1);
     assert.deepEqual(scrollCalls[0], { behavior: "smooth", top: 800 });
 
+    await act(async () => refresh?.());
+    assert.equal(scrollCalls.length, 1);
+
     clientA.dispatch("advance-week");
     await act(async () => refresh?.());
     assert.equal(scrollCalls.length, 2);
