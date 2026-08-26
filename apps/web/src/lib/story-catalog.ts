@@ -32,6 +32,8 @@ export interface StoryChapterDefinition {
     kind: PalCollectibleKind;
     assetUrl: string;
     darkAssetUrl?: string;
+    previewAssetUrl?: string;
+    darkPreviewAssetUrl?: string;
   };
   title?: StoryTitleDefinition;
 }
@@ -121,6 +123,7 @@ const HOME_CHAPTER_ROWS: readonly ChapterRow[] = [
 function chaptersFromRows(
   rows: readonly ChapterRow[],
   defaultKind: PalCollectibleKind,
+  includePreviews = false,
 ): readonly StoryChapterDefinition[] {
   return rows.map((row): StoryChapterDefinition => ({
     id: row[0],
@@ -134,6 +137,19 @@ function chaptersFromRows(
       assetUrl: row[7],
       kind: row[8] ?? defaultKind,
       ...(row[10] ? { darkAssetUrl: row[10] } : {}),
+      ...(includePreviews
+        ? {
+            previewAssetUrl: row[7].replace(/\.png$/, "-preview.webp"),
+            ...(row[10]
+              ? {
+                  darkPreviewAssetUrl: row[10].replace(
+                    /\.png$/,
+                    "-preview.webp",
+                  ),
+                }
+              : {}),
+          }
+        : {}),
     },
     ...(row[9]
       ? {
@@ -149,7 +165,7 @@ function chaptersFromRows(
 }
 
 const chapters = chaptersFromRows(CHAPTER_ROWS, "room");
-const homeChapters = chaptersFromRows(HOME_CHAPTER_ROWS, "keepsake");
+const homeChapters = chaptersFromRows(HOME_CHAPTER_ROWS, "keepsake", true);
 const chapterById = new Map(chapters.map((chapter) => [chapter.id, chapter]));
 const homeChapterById = new Map(homeChapters.map((chapter) => [chapter.id, chapter]));
 

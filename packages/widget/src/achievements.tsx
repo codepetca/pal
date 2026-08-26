@@ -302,15 +302,25 @@ export function PalAchievements() {
             usableReward?.category === "companion" &&
             usableReward.grantId === snapshot.rewardLoadout?.companion.fallbackGrantId,
           );
+          const collectiblePreviewUrl = earnedReward
+            ? theme === "dark"
+              ? earnedReward.darkPreviewAssetUrl ??
+                earnedReward.darkAssetUrl ??
+                earnedReward.previewAssetUrl ??
+                earnedReward.assetUrl
+              : earnedReward.previewAssetUrl ?? earnedReward.assetUrl
+            : undefined;
           const collectibleArtwork = (
             <>
               <span className="pal-week-collectible-art" aria-hidden="true">
                 {earnedReward ? (
                   <img
-                    src={theme === "dark" ? earnedReward.darkAssetUrl ?? earnedReward.assetUrl : earnedReward.assetUrl}
+                    src={collectiblePreviewUrl}
                     alt=""
+                    decoding="async"
                     width="64"
                     height="64"
+                    loading={isCurrent ? "eager" : "lazy"}
                   />
                 ) : (
                   <Lock />

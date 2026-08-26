@@ -177,6 +177,9 @@ export type PalCollectibleUnlock =
       finish?: PalCollectibleFinish;
       assetUrl: string;
       darkAssetUrl?: string;
+      /** Optional trail-sized asset; older producers omit it. */
+      previewAssetUrl?: string;
+      darkPreviewAssetUrl?: string;
     }
   | PalCollectibleUnlockBase & {
       status: "next" | "locked";
