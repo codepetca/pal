@@ -150,6 +150,8 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   const weekRule = styles.match(/\n\.pal-week \{([^}]+)\}/)?.[1] ?? "";
   const collectibleStackRule =
     styles.match(/\.pal-week-collectible-stack \{([^}]+)\}/)?.[1] ?? "";
+  const collectibleLabelRule =
+    styles.match(/\.pal-week-collectible strong \{([^}]+)\}/)?.[1] ?? "";
   const weekContentRule =
     styles.match(/\.pal-week-content \{([^}]+)\}/)?.[1] ?? "";
 
@@ -162,7 +164,10 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   assert.match(collectibleStackRule, /grid-column: 2/);
   assert.match(collectibleStackRule, /align-content: start/);
   assert.match(collectibleStackRule, /align-self: start/);
+  assert.match(collectibleLabelRule, /-webkit-line-clamp: 2/);
+  assert.match(collectibleLabelRule, /white-space: normal/);
   assert.match(weekContentRule, /grid-column: 3/);
+  assert.match(weekContentRule, /align-self: start/);
 });
 
 test("roadmap gives the current week a larger focal treatment without scroll trapping", () => {

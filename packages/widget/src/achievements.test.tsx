@@ -51,16 +51,10 @@ test("achievement trail omits future weeks and orders visible weeks chronologica
     const currentWeek = weeks.at(-1)!;
     assert.equal(currentWeek.props["aria-current"], "step");
     assert.equal(
-      currentWeek.findAll(
+      renderer!.root.findAll(
         (node) => node.props.className === "pal-week-current-label",
       ).length,
-      1,
-    );
-    assert.equal(
-      currentWeek.find(
-        (node) => node.props.className === "pal-week-current-label",
-      ).children.join(""),
-      "Current week",
+      0,
     );
     assert.equal(
       weeks.slice(0, -1).some((week) => week.props["aria-current"]),
@@ -223,7 +217,7 @@ test("achievement trail centers once for each learner scope", async () => {
   }
 });
 
-test("narrow achievement stories expand from a compact disclosure", async () => {
+test("narrow achievement stories remain permanently visible", async () => {
   const snapshot = createFixtureSnapshot(2);
   snapshot.progression!.collectibles[0] = {
     id: "earned-week-one",
@@ -256,20 +250,15 @@ test("narrow achievement stories expand from a compact disclosure", async () => 
   });
 
   try {
-    const storyButton = renderer!.root.find(
-      (node) => node.type === "button" &&
-        /Week 1: Something Found You/.test(node.props["aria-label"] ?? ""),
+    const story = renderer!.root.find(
+      (node) => node.props.className === "pal-week-story",
     );
-    const storyPanel = renderer!.root.find(
-      (node) => node.props.className === "pal-week-story-panel",
+    assert.equal(story.props["aria-label"], "Week 1 story");
+    assert.equal(story.findAll((node) => node.type === "button").length, 0);
+    assert.equal(
+      story.find((node) => node.type === "p").children.join(""),
+      "A heavy storm passed over the town during the night.",
     );
-    assert.equal(storyButton.props["aria-expanded"], false);
-    assert.equal(storyPanel.props.hidden, true);
-
-    await act(async () => storyButton.props.onClick());
-
-    assert.equal(storyButton.props["aria-expanded"], true);
-    assert.equal(storyPanel.props.hidden, false);
   } finally {
     await act(async () => renderer?.unmount());
   }

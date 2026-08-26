@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { usePalWidget } from "./provider";
 import {
@@ -12,47 +12,20 @@ import type {
   PalProgressionState,
 } from "./types";
 
-/**
- * The story beat for one week, spanning the empty left column of the week grid
- * and pointing at that week's collectible. Collapsed it is a single thin line
- * carrying the chapter headline, short enough that the collectible - not the
- * story - keeps setting the row height.
- *
- * Stories start open in wide hosts because this page owns the chapter narrative.
- * Narrow hosts keep the same durable narrative in a compact, collapsed
- * disclosure above the week's collectible and achievements so visual and
- * keyboard focus order remain aligned.
- */
+/** The permanently visible story beat beside one week's collectible. */
 function WeekStory({
   headline,
-  initiallyExpanded,
   storyCopy,
   weekLabel,
 }: {
   headline: string;
-  initiallyExpanded: boolean;
   storyCopy: string;
   weekLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const panelId = useId();
-
   return (
-    <div className="pal-week-story" data-expanded={expanded ? "true" : "false"}>
-      <button
-        aria-controls={panelId}
-        aria-expanded={expanded}
-        aria-label={`${weekLabel}: ${headline}. ${expanded ? "Hide" : "Read"} the story.`}
-        className="pal-week-story-bubble"
-        onClick={() => setExpanded((open) => !open)}
-        type="button"
-      >
-        <span className="pal-week-story-headline">{headline}</span>
-        <span aria-hidden="true" className="pal-week-story-caret" />
-      </button>
-      <div className="pal-week-story-panel" hidden={!expanded} id={panelId}>
-        <p>{storyCopy}</p>
-      </div>
+    <div className="pal-week-story" aria-label={`${weekLabel} story`}>
+      <strong className="pal-week-story-headline">{headline}</strong>
+      <p>{storyCopy}</p>
     </div>
   );
 }
@@ -350,8 +323,6 @@ export function PalAchievements() {
               {storyHeadline && storyCopy ? (
                 <WeekStory
                   headline={storyHeadline}
-                  initiallyExpanded={viewport !== "narrow"}
-                  key={`${week.id}:${viewport}`}
                   storyCopy={storyCopy}
                   weekLabel={week.label}
                 />
@@ -361,9 +332,6 @@ export function PalAchievements() {
                 ref={isCurrent ? currentWeekFocalRef : undefined}
               >
                 <header className="pal-week-header">
-                  {isCurrent ? (
-                    <span className="pal-week-current-label">Current week</span>
-                  ) : null}
                   <h3>{week.label}</h3>
                 </header>
                 {collectible && earnedReward && usableReward && !(equipped && fallbackCompanion) ? (
