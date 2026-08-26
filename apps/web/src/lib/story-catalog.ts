@@ -102,7 +102,7 @@ const CHAPTER_ROWS: readonly ChapterRow[] = [
 ];
 
 const HOME_CHAPTER_ROWS: readonly ChapterRow[] = [
-  ["new-start", 1, "core", "A New Adventure", "You enter a dimly-lit, unfamiliar place with your trusty lantern. Warm light spreads, and it begins to feel full of possibility.", "home-warming-lantern-v1", "Trusty Lantern", "/assets/world/reward-home-warming-lantern-v1.png"],
+  ["new-start", 1, "core", "A New Adventure", "You find yourself in an unfamiliar place, but you have your trusty lantern. Warm light spreads, and it begins to feel full of possibility.", "home-warming-lantern-v1", "Trusty Lantern", "/assets/world/reward-home-warming-lantern-v1.png"],
   ["dusty-discovery", 1, "core", "Dusty Discovery", "A small shadow flits around the lantern and disappears behind a dusty cloth. You pull back the cloth. Something beneath it gleams in the lantern light.", "home-mystery-egg-v1", "Strange Egg", "/assets/world/reward-home-mystery-egg-v1.png"],
   ["warm-place", 1, "core", "Keeping warm", "You fold pieces of soft cloth around a pillow to make a warm bed. You place the egg in the middle and set your lantern nearby to keep it warm. Each night, you check on it before going to sleep.", "makeshift-bed-v1", "Makeshift Bed", "/assets/world/reward-makeshift-bed-v2.png"],
   ["room-for-one-more", 1, "core", "Room for One More", "Once your space is tidy, you climb into bed and drift off to sleep. In the morning, you wake to something warm and furry tucked beneath the covers. The cushion beside the lantern is empty. Pip has found a new place to sleep.", "young-pip-v1", "Pip", "/assets/pets/young-pip-v1.png", "companion"],
