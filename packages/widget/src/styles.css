@@ -196,17 +196,6 @@
   padding-block-end: max(7rem, var(--pal-achievement-scroll-padding));
 }
 
-.pal-week:not(:last-child)::before {
-  position: absolute;
-  top: 5rem;
-  bottom: calc(-5rem - clamp(1.5rem, 3vw, 2.5rem));
-  left: 50%;
-  width: 1px;
-  background: var(--pal-effective-color-border-strong);
-  content: "";
-  transform: translateX(-50%);
-}
-
 .pal-week {
   position: relative;
   display: grid;

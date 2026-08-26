@@ -144,9 +144,6 @@ test("roadmap muted text preserves contrast in both themes", () => {
 });
 
 test("roadmap centers the collectible branch and keeps badges to its right", () => {
-  const connectorRule =
-    styles.match(/\.pal-week:not\(:last-child\)::before \{([^}]+)\}/)?.[1] ??
-    "";
   const weekRule = styles.match(/\n\.pal-week \{([^}]+)\}/)?.[1] ?? "";
   const collectibleStackRule =
     styles.match(/\.pal-week-collectible-stack \{([^}]+)\}/)?.[1] ?? "";
@@ -157,8 +154,7 @@ test("roadmap centers the collectible branch and keeps badges to its right", () 
   const weekContentRule =
     styles.match(/\.pal-week-content \{([^}]+)\}/)?.[1] ?? "";
 
-  assert.match(connectorRule, /left: 50%/);
-  assert.match(connectorRule, /transform: translateX\(-50%\)/);
+  assert.doesNotMatch(styles, /\.pal-week:not\(:last-child\)::before/);
   assert.match(
     weekRule,
     /grid-template-columns: minmax\(0, 1fr\) 5\.65rem minmax\(0, 1fr\)/,
