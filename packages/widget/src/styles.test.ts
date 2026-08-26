@@ -113,6 +113,7 @@ test("responsive behavior follows the host viewport contract", () => {
     )?.[1] ?? "";
   assert.match(narrowStoryRule, /grid-column: 1 \/ -1/);
   assert.match(narrowStoryRule, /grid-row: 1/);
+  assert.match(narrowStoryRule, /text-align: center/);
   assert.doesNotMatch(styles, /@media\s*\(\s*max-width/);
 });
 
