@@ -240,6 +240,56 @@ it("gives nothing for a repeated raw daily log when settlement is not re-emitted
     assert.equal(state.economy.xp, 4); // one seed + three cascade rounds, then stopped
   });
 
+  it("does not double-apply a synthetic event that two branches derive in the same round", () => {
+    // Derived-event dedup only happens inside one applyMutations() call. If two
+    // *different* pending events in the same cascade round each independently
+    // derive XP_CHANGED, the next round's queue holds two XP_CHANGED entries for
+    // what was really one XP change — and each gets evaluated (and can re-fire
+    // XP_GRANT/LEVEL_GRANT) against the other's already-updated state. A custom
+    // rule pack can trigger this by routing two distinct events (here XP_CHANGED
+    // and STREAK_MILESTONE, both produced by the same seed event) into rules that
+    // both grant XP, fanning one seed event into a duplicated XP_CHANGED pair.
+    const fanInPack: RulePack = {
+      id: "fan-in",
+      rules: [
+        {
+          id: "seed",
+          trigger: { event_type: "daily_log.completed" },
+          conditions: [],
+          effects: [
+            { type: "XP_GRANT", amount: 10 },
+            { type: "STREAK", continue_streak: true },
+          ],
+        },
+        {
+          id: "xp-branch",
+          trigger: { event_type: "XP_CHANGED" },
+          conditions: [],
+          effects: [{ type: "XP_GRANT", amount: 5 }],
+        },
+        {
+          id: "streak-branch",
+          trigger: { event_type: "STREAK_MILESTONE" },
+          conditions: [],
+          effects: [{ type: "XP_GRANT", amount: 5 }],
+        },
+        {
+          id: "level-up",
+          trigger: { event_type: "XP_CHANGED" },
+          conditions: [{ field: "economy.xp", op: "gte", value: 20 }],
+          effects: [{ type: "LEVEL_GRANT", levels: 1 }],
+        },
+      ],
+    };
+
+    const { state } = processEvent(log("2026-03-01"), baseState, fanInPack);
+    // 10 (seed) + 5 (xp-branch) + 5 (streak-branch) = 20 XP crosses the
+    // threshold exactly once — the learner should level up once, not once per
+    // duplicated XP_CHANGED in the queue.
+    assert.equal(state.economy.xp, 20);
+    assert.equal(state.economy.level, 2);
+  });
+
   it("records a trace of every evaluation in the cascade", () => {
     const { trace } = processEvent(
       completedItem("2026-03-01", "on_time"),
