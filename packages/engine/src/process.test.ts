@@ -241,14 +241,16 @@ it("gives nothing for a repeated raw daily log when settlement is not re-emitted
   });
 
   it("does not double-apply a synthetic event that two branches derive in the same round", () => {
-    // Derived-event dedup only happens inside one applyMutations() call. If two
-    // *different* pending events in the same cascade round each independently
-    // derive XP_CHANGED, the next round's queue holds two XP_CHANGED entries for
-    // what was really one XP change — and each gets evaluated (and can re-fire
-    // XP_GRANT/LEVEL_GRANT) against the other's already-updated state. A custom
-    // rule pack can trigger this by routing two distinct events (here XP_CHANGED
-    // and STREAK_MILESTONE, both produced by the same seed event) into rules that
-    // both grant XP, fanning one seed event into a duplicated XP_CHANGED pair.
+    // Derived-event dedup happens inside one applyMutations() call, but a single
+    // cascade round evaluates several pending events. Here the seed derives both
+    // XP_CHANGED and STREAK_MILESTONE; each of those grants XP, so each derives
+    // XP_CHANGED again — two copies of one XP change landing in the next round.
+    // Evaluated separately, `level-up` reads the same qualifying balance twice
+    // and grants two levels for one crossing.
+    //
+    // `xp-branch` is capped by a condition so XP stops moving after the fan-in:
+    // this test pins the duplicate-event bug, not the runaway-cascade behaviour
+    // covered above.
     const fanInPack: RulePack = {
       id: "fan-in",
       rules: [
@@ -264,7 +266,7 @@ it("gives nothing for a repeated raw daily log when settlement is not re-emitted
         {
           id: "xp-branch",
           trigger: { event_type: "XP_CHANGED" },
-          conditions: [],
+          conditions: [{ field: "economy.xp", op: "lte", value: 10 }],
           effects: [{ type: "XP_GRANT", amount: 5 }],
         },
         {
@@ -282,12 +284,22 @@ it("gives nothing for a repeated raw daily log when settlement is not re-emitted
       ],
     };
 
-    const { state } = processEvent(log("2026-03-01"), baseState, fanInPack);
-    // 10 (seed) + 5 (xp-branch) + 5 (streak-branch) = 20 XP crosses the
-    // threshold exactly once — the learner should level up once, not once per
-    // duplicated XP_CHANGED in the queue.
+    const { state, trace } = processEvent(log("2026-03-01"), baseState, fanInPack);
+    // 10 (seed) + 5 (xp-branch) + 5 (streak-branch) = 20, which crosses the
+    // threshold exactly once.
     assert.equal(state.economy.xp, 20);
     assert.equal(state.economy.level, 2);
+    // The round that fans in must evaluate the shared derived event once.
+    assert.deepEqual(
+      trace.map((entry) => [entry.depth, entry.event_type]),
+      [
+        [0, "daily_log.completed"],
+        [1, "XP_CHANGED"],
+        [1, "STREAK_MILESTONE"],
+        [2, "XP_CHANGED"],
+        [3, "LEVEL_UP"],
+      ]
+    );
   });
 
   it("records a trace of every evaluation in the cascade", () => {
