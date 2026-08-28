@@ -135,6 +135,11 @@ Rules of the cascade:
 
 - **The engine stays pure.** It never emits events and never knows about the cascade — only the applier (`processEvent`) orchestrates re-evaluation.
 - **Depth limit: 4.** The original event plus three rounds of derived events, then stop. A rule pack that cascades deeper is usually a config bug; the applier reports what it dropped (`ProcessResult.truncated`) for the AuditLog and stops, rather than looping forever. The limit is *also* what bounds the economy: levelling spends XP, which changes XP, which can level again — so one event can raise a learner at most three levels, and any surplus XP stays banked for their next event.
+- **One evaluation per derived event type per round.** A round evaluates several pending
+  events, and two of them can derive the same type — two rules that both grant XP each
+  derive `XP_CHANGED`. That is still one change to the learner, so the applier collapses
+  them and queues the type once. Without this, a rule keyed to that type (`level-up`)
+  would fire once per copy, the second time against state the first copy already moved.
 - **Internal and derived events are synthetic** — they carry `SCREAMING_SNAKE` event types to distinguish them from integration events (`assignment.completed`), and they are **never accepted on the ingest API**. An integration that could POST `LEVEL_UP` or `DAILY_LOG_REWARD_SETTLED` could hand itself progression; the ingest allow-list rejects them.
 
 ---
