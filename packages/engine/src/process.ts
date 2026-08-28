@@ -56,7 +56,16 @@ export function processEvent(
       break;
     }
 
-    const next: IncomingEvent[] = [];
+    // A single round can derive the same event type from more than one pending
+    // event — two rules that both grant XP each produce XP_CHANGED. That is
+    // still one change to the learner, so it must be evaluated once: feeding
+    // both copies back would let a rule keyed to that type (level-up) fire
+    // twice, the second time against state the first copy already moved.
+    //
+    // Keying on event_type alone is sound because every derived event within a
+    // cascade inherits occurred_at from the original event and carries empty
+    // metadata (see applyMutations), so same type means same event.
+    const next = new Map<string, IncomingEvent>();
     for (const pending of queue) {
       const mutations = evaluate(pending, current, rulePack);
       trace.push({ depth, event_type: pending.event_type, mutations });
@@ -65,9 +74,11 @@ export function processEvent(
       const result = applyMutations(current, mutations, pending);
       current = result.state;
       applied.push(...mutations);
-      next.push(...result.derived);
+      for (const derived of result.derived) {
+        if (!next.has(derived.event_type)) next.set(derived.event_type, derived);
+      }
     }
-    queue = next;
+    queue = [...next.values()];
   }
 
   return { state: current, mutations: applied, trace, truncated };
