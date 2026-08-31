@@ -3,16 +3,102 @@ import test from "node:test";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import { PalAchievements } from "./achievements";
+import { resolvePalAchievementPresentation } from "./achievement-presentation";
 import {
   createEmptyFixtureSnapshot,
   createFixturePalClient,
   createFixtureSnapshot,
 } from "./fixture-client";
 import { PalProvider, usePalWidget } from "./provider";
-import type { PalClient } from "./types";
+import type { PalAchievement, PalAchievementKey, PalClient } from "./types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
+
+const badgeLabelCases: Array<{
+  key: PalAchievementKey;
+  status: PalAchievement["status"];
+  statusLabel: string;
+  progress?: PalAchievement["progress"];
+  expectedLabel: string;
+}> = [
+  { key: "joined-class", status: "earned", statusLabel: "Earned", expectedLabel: "Joined the Class" },
+  { key: "first-pika-login", status: "earned", statusLabel: "Earned", expectedLabel: "First Pika Login" },
+  { key: "ready-early", status: "earned", statusLabel: "Earned early", expectedLabel: "Ready Early" },
+  { key: "on-time-finish", status: "earned", statusLabel: "Earned on time", expectedLabel: "On-Time Finish" },
+  {
+    key: "weekly-rhythm", status: "earned", statusLabel: "Earned",
+    progress: { current: 4, target: 4, label: "4 of 4 eligible days" },
+    expectedLabel: "Weekly Rhythm",
+  },
+  {
+    key: "weekly-rhythm", status: "in-progress", statusLabel: "In progress",
+    progress: { current: 2, target: 4, label: "2 of 4 eligible days" },
+    expectedLabel: "Weekly Rhythm — 2 of 4 eligible days",
+  },
+  {
+    key: "weekly-rhythm", status: "in-progress", statusLabel: "Waiting for a schedule update",
+    expectedLabel: "Weekly Rhythm — Waiting for a schedule update",
+  },
+  {
+    key: "weekly-rhythm", status: "incomplete", statusLabel: "Not completed",
+    progress: { current: 2, target: 4, label: "2 of 4 eligible days" },
+    expectedLabel: "Weekly Rhythm — Not completed (2 of 4 eligible days)",
+  },
+  { key: "ready-early", status: "incomplete", statusLabel: "Opened later", expectedLabel: "Ready Early — Not completed" },
+  { key: "on-time-finish", status: "incomplete", statusLabel: "Completed late", expectedLabel: "On-Time Finish — Not completed" },
+  { key: "weekly-rhythm", status: "upcoming", statusLabel: "Upcoming", expectedLabel: "Weekly Rhythm — Upcoming" },
+];
+
+for (const { key, status, statusLabel, progress, expectedLabel } of badgeLabelCases) {
+  test(`badge tooltip and accessible label: ${key}, ${status}, ${progress ? "with" : "without"} progress`, async () => {
+    const presentation = resolvePalAchievementPresentation(key)!;
+    const snapshot = createEmptyFixtureSnapshot();
+    snapshot.roadmap.weeks[0]!.achievements = [{
+      id: `badge-label-${key}`,
+      ...presentation,
+      status,
+      statusLabel,
+      ...(progress ? { progress } : {}),
+    }];
+    const client = createFixturePalClient(snapshot);
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <PalProvider client={client} initialSnapshot={client.peek()} scopeKey="badge-label">
+          <PalAchievements />
+        </PalProvider>,
+      );
+    });
+
+    try {
+      const badge = renderer!.root.findByProps({ className: "pal-badge-control" });
+      assert.equal(badge.props["aria-label"], expectedLabel);
+      const tooltip = badge.findByProps({ className: "pal-badge-tooltip" });
+      assert.equal(tooltip.children.join(""), expectedLabel);
+      assert.equal(tooltip.props["aria-hidden"], "true");
+      assert.equal(badge.props.role, "img");
+      assert.equal(badge.props.tabIndex, 0);
+      assert.equal(badge.props["data-achievement-result"], status === "incomplete" ? "not-earned" : status);
+      const artwork = badge.findByType("img");
+      assert.equal(artwork.props.src, presentation.badge.assetUrl);
+      assert.equal(artwork.props.width, "80");
+      assert.equal(artwork.props.height, "80");
+      assert.equal(artwork.props.alt, "");
+      assert.equal(badge.props["data-has-progress"], progress ? "true" : undefined);
+      if (progress) {
+        assert.equal(badge.findByProps({ className: "pal-badge-progress-label" }).children.join(""), status === "earned" ? "4/4" : "2/4");
+        assert.equal(badge.findByProps({ className: "pal-badge-progress-value" }).props.strokeDasharray, status === "earned" ? "100 0" : "50 50");
+      } else {
+        assert.equal(badge.findAllByProps({ className: "pal-badge-progress-ring" }).length, 0);
+        assert.equal(badge.findAllByProps({ className: "pal-badge-progress-label" }).length, 0);
+      }
+    } finally {
+      await act(async () => renderer?.unmount());
+    }
+  });
+}
 
 test("achievement trail omits future weeks and orders visible weeks chronologically", async () => {
   const snapshot = createFixtureSnapshot();
