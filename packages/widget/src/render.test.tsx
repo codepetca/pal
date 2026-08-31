@@ -37,11 +37,13 @@ test("public surfaces render meaningful status without relying on color", () => 
   assert.doesNotMatch(html, />Achievements</);
   assert.match(html, /aria-current="step"/);
   assert.doesNotMatch(html, />Current week</);
-  assert.match(html, /4 of 4 eligible days/);
+  assert.match(html, /aria-label="Weekly Rhythm" data-achievement-result="earned"/);
+  assert.match(html, /class="pal-badge-tooltip" aria-hidden="true">Weekly Rhythm</);
+  assert.doesNotMatch(html, /Weekly Rhythm —/);
   assert.match(html, /class="pal-badge-progress-ring"/);
   assert.match(html, /stroke-dasharray="100 0"/);
   assert.match(html, /class="pal-badge-progress-label" aria-hidden="true">4\/4</);
-  assert.match(html, /Earned/);
+  assert.match(html, /aria-label="First Pika Login"/);
   assert.match(html, /Mystery companion/);
   assert.match(html, /Weekly Rhythm/);
   assert.match(html, /data-pal-reward-kind="achievement"/);

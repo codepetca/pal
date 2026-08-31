@@ -37,9 +37,11 @@ function AchievementBadge({
 }) {
   const notEarned = achievement.status === "incomplete";
   const detail = achievement.progress?.label ?? achievement.statusLabel;
-  const tooltip = notEarned
-    ? `${achievement.title} — Not completed${achievement.progress ? ` (${detail})` : ""}`
-    : `${achievement.title} — ${detail}`;
+  const tooltip = achievement.status === "earned"
+    ? achievement.title
+    : notEarned
+      ? `${achievement.title} — Not completed${achievement.progress ? ` (${detail})` : ""}`
+      : `${achievement.title} — ${detail}`;
   const progress = achievement.progress;
   const progressCurrent = progress
     ? Math.min(Math.max(progress.current, 0), Math.max(progress.target, 0))
