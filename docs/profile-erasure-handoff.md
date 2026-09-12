@@ -12,7 +12,10 @@ Pika cleanup, copy handling, or Phase 3.
 - Migration: `packages/db/drizzle/0013_profile_erasure_operations.sql` plus
   generated Drizzle snapshot/journal. One dormant table; no current learner or
   gameplay/API changes, backfill, flags, dependencies, or deployment.
-- Implementation SHA: `816d277013389342e8dc8dd7408a3fa2e21033f0`.
+- Initial implementation SHA: `816d277013389342e8dc8dd7408a3fa2e21033f0`.
+  Scope-test correction SHA: `1a9940bb0e604f79f9cf9f66217bd002a2e8454c`.
+  These are evidence checkpoints, not a substitute for verifying the actual
+  PR head at publication/CI/merge time. Subsequent commits may update this ledger.
   PR publication remains pending exact disposable-CI migration approval.
 - Source verification: full workspace typecheck and lint passed; migration history
   check passed; regeneration reports no schema drift; `git diff --check` passed.
@@ -47,9 +50,14 @@ Initial full-diff review of `69c3c91..816d277` on 2026-09-12:
   UPDATE statements. One correction batch now checks every ALTER/CREATE TABLE
   target, both trigger targets, and data UPDATE statements.
 - Budget: initial wave used 2 reviewer launches and approximately 6 minutes;
-  one correction batch. Targeted review of that correction is pending. Limits
+  one correction batch. Terra targeted review of `816d277..1a9940b` found the
+  test correction sound; its remaining handoff-label correction is recorded
+  above. Final cumulative Sol integration review is next. Limits
   remain 5 launches, 3 remediation batches, and 45 elapsed review minutes.
 
 No database test, schema application, production erasure, or Claude review is
 claimed by these source reviews. The future runtime fences and copy/retention
 policy gates remain mandatory even after this schema PR passes CI and merges.
+
+Migration 0013 SHA-256 (unchanged by review corrections):
+`778cf0cf9ed9f700017a40d2359a88f3c3ec4b53afb3f1b01a9d02ec58a8d98b`.
