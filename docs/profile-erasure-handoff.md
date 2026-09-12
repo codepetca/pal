@@ -49,10 +49,11 @@ Initial full-diff review of `69c3c91..816d277` on 2026-09-12:
   rejected learner alterations but did not cover other existing tables or
   UPDATE statements. One correction batch now checks every ALTER/CREATE TABLE
   target, both trigger targets, and data UPDATE statements.
-- Budget: initial wave used 2 reviewer launches and approximately 6 minutes;
-  one correction batch. Terra targeted review of `816d277..1a9940b` found the
+- Budget: 4 of 5 reviewer launches used (initial Sol/Terra, targeted Terra,
+  final Sol), 2 correction commits, approximately 10 elapsed review minutes. Terra targeted review of `816d277..1a9940b` found the
   test correction sound; its remaining handoff-label correction is recorded
-  above. Final cumulative Sol integration review is next. Limits
+  above. Final cumulative Sol integration review of `69c3c91..97d34e8`
+  returned clean with no actionable findings. Limits
   remain 5 launches, 3 remediation batches, and 45 elapsed review minutes.
 
 No database test, schema application, production erasure, or Claude review is
@@ -61,3 +62,7 @@ policy gates remain mandatory even after this schema PR passes CI and merges.
 
 Migration 0013 SHA-256 (unchanged by review corrections):
 `778cf0cf9ed9f700017a40d2359a88f3c3ec4b53afb3f1b01a9d02ec58a8d98b`.
+
+Final reviewed source checkpoint: `97d34e8eab8009cee1a62861ea13387daeacbf40`.
+This subsequent evidence-only ledger update changes no migration, schema,
+contract, or tests. Publication and database verification remain pending.
