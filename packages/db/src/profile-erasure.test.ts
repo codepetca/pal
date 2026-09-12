@@ -42,7 +42,15 @@ test("inventory covers every persisted table and every owned table has a root ca
 
 test("migration adds only dormant evidence storage, with no existing-table writer or privilege grants", async () => {
   const migration = await readFile(new URL("../drizzle/0013_profile_erasure_operations.sql", import.meta.url), "utf8");
-  assert.doesNotMatch(migration, /CREATE OR REPLACE|GRANT\s|ALTER TABLE\s+"?learners|INSERT INTO\s|DELETE FROM\s/i);
+  const sql = migration.replace(/--[^\n]*/g, "").replace(/\bON UPDATE no action/gi, "");
+  assert.doesNotMatch(sql, /CREATE OR REPLACE|GRANT\s|INSERT INTO\s|DELETE FROM\s|\bUPDATE\s+(?!OR\b|ON\b)/i);
+  const alteredTables = [...sql.matchAll(/ALTER TABLE\s+"?([a-z_]+)"?/gi)];
+  assert.deepEqual(alteredTables.map((match) => match[1]), ["profile_erasure_operations"]);
+  const createdTables = [...sql.matchAll(/CREATE TABLE\s+"?([a-z_]+)"?/gi)];
+  assert.deepEqual(createdTables.map((match) => match[1]), ["profile_erasure_operations"]);
+  const triggerTargets = [...sql.matchAll(/CREATE TRIGGER\s+\w+\s+BEFORE [\s\S]*? ON ([\w.]+)/gi)];
+  assert.deepEqual(triggerTargets.map((match) => match[1]),
+    ["public.profile_erasure_operations", "public.profile_erasure_operations"]);
   assert.match(migration, /REVOKE ALL ON TABLE public\.profile_erasure_operations FROM PUBLIC/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.preserve_profile_erasure_operation\(\) FROM PUBLIC/);
   assert.equal((migration.match(/CREATE TRIGGER/g) ?? []).length, 2);
