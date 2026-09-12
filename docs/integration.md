@@ -104,7 +104,8 @@ Any learning platform can integrate by:
 1. Contacting the Pal operator to register
 2. Agreeing to the pseudonymous ID spec and event allow-list
 3. Installing `@codepet/pal-widget`
-4. Implementing the three backend calls: ingest, read-token mint, and learner delete (for consent withdrawal)
+4. Implementing ingest and read-token mint. Production learner erasure is not yet
+   available; see the [proposed membership erasure contract](profile-erasure-contract.md).
 
 An integration reports authoritative, privacy-safe learning facts. Pal owns achievement thresholds, recurrence, badge awards, and rewards; integrations do not report that an achievement was earned.
 
