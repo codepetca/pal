@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -60,6 +61,29 @@ export const learners = pgTable(
     unique("learners_integration_external_uq").on(t.integrationId, t.externalLearnerId),
     unique("learners_id_integration_uq").on(t.id, t.integrationId),
   ]
+);
+
+// Dormant erasure receipt/guard for one opaque membership generation. No caller
+// writes this yet. Its presence is terminal for identity reuse in the future
+// lifecycle API, even while completedAt is null. Deliberately no learner FK:
+// the exact external binding must survive deletion of all learner-owned data.
+export const profileErasureOperations = pgTable(
+  "profile_erasure_operations",
+  {
+    integrationId: uuid("integration_id").notNull()
+      .references(() => integrations.id, { onDelete: "restrict" }),
+    operationId: uuid("operation_id").notNull(),
+    externalLearnerId: text("external_learner_id").notNull(),
+    begunAt: timestamp("begun_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.integrationId, t.operationId] }),
+    unique("profile_erasure_operations_profile_uq")
+      .on(t.integrationId, t.externalLearnerId),
+    check("profile_erasure_operations_membership_ref", sql`${t.externalLearnerId} ~ '^pika-membership-v1-[0-9a-f]{32}$'`),
+    check("profile_erasure_operations_completion_order", sql`${t.completedAt} IS NULL OR ${t.completedAt} >= ${t.begunAt}`),
+  ],
 );
 
 // A learning signal received from an integration. Immutable once written.
@@ -813,3 +837,5 @@ export type LearnerRewardLoadout = typeof learnerRewardLoadouts.$inferSelect;
 export type WeeklyRhythmConfig = typeof weeklyRhythmConfigs.$inferSelect;
 export type AchievementInstance = typeof achievementInstances.$inferSelect;
 export type RewardNotice = typeof rewardNotices.$inferSelect;
+
+export type ProfileErasureOperation = typeof profileErasureOperations.$inferSelect;

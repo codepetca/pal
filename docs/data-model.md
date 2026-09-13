@@ -84,4 +84,12 @@ This is why `@pal/db` connects with node-postgres over a pooled connection rathe
 
 ## Privacy
 
-No column holds a name, email, raw student ID, grade, score, ranking, or student writing. The only free-form field is `events.metadata`, gated at the API boundary by a per-event-type allow-list. Deleting a learner cascades to their events and all three state rows, so consent withdrawal is a single `DELETE`.
+No column holds a name, email, raw student ID, grade, score, ranking, or student writing. The only free-form field is `events.metadata`, gated at the API boundary by a per-event-type allow-list. Deleting a learner cascades to their events and all three state rows, but a cascade alone is not a verified erasure operation.
+
+## Dormant membership erasure foundation
+
+Migration 0013 adds `profile_erasure_operations`: immutable integration/operation/
+opaque membership bindings with monotonic completion. It retains no learner FK,
+so evidence survives the learner cascade; integration deletion is restricted once
+a receipt exists. No runtime path uses this table yet. See the [inventory, future
+contract, locking requirements, and retained-copy limits](profile-erasure-contract.md).

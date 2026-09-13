@@ -15,7 +15,7 @@
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
 | GET | `/api/cron/story-collectibles` | Vercel Cron | Reconcile overdue post-rollout story ownership in bounded learner batches |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
-| POST | `/api/v1/learner/delete` | Integration backend | Purge a learner on consent withdrawal |
+| POST | `/api/v1/learner/delete` | Integration backend | Historical placeholder; not implemented |
 
 The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
@@ -168,3 +168,10 @@ Responses:
 
 > Version 1 request schemas are implemented in [@pal/contract](../packages/contract/README.md).
 > Response schemas are still prose above.
+
+## Proposed membership erasure operation
+
+The historical learner-delete row is not a production API. The narrow future
+integration-authenticated begin/status operation is specified in
+[Membership profile erasure foundation](profile-erasure-contract.md). Migration
+0013 adds only dormant receipt storage; it does not enable erasure or revocation.

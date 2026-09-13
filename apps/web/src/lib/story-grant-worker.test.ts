@@ -931,6 +931,8 @@ test(
           externalLearnerId,
           dailyLog(periodKey, activityDay),
           crypto.randomUUID(),
+          // Leave the due grant for the explicit Saturday worker below.
+          { storyGrantAsOf: new Date(`${activityDay}T15:00:00.000Z`) },
         );
         assert.equal(activity.status, "processed");
       }
