@@ -30,7 +30,7 @@ test("inventory covers every persisted table and every owned table has a root ca
   assert.deepEqual([...reachable].sort(), ownedTables);
   const guard = getTableConfig(schema.profileErasureOperations);
   assert.deepEqual(guard.columns.map((column) => column.name).sort(),
-    ["begun_at", "completed_at", "external_learner_id", "integration_id", "operation_id"]);
+    ["begun_at", "completed_at", "external_learner_id", "integration_id", "operation_id", "policy_version"]);
   assert.equal(guard.foreignKeys.length, 1);
   assert.equal(guard.foreignKeys[0].onDelete, "restrict");
   assert.equal(getTableName(guard.foreignKeys[0].reference().foreignTable), "integrations");
@@ -94,7 +94,8 @@ test("database bindings, monotonic evidence, complete root cascade, and tenant i
     const retried = await client.query(`${insert} ON CONFLICT DO NOTHING RETURNING *`, [tenant, operation, ref]);
     assert.equal(retried.rowCount, 0);
     const receipt = (await client.query("SELECT * FROM profile_erasure_operations WHERE integration_id=$1 AND operation_id=$2", [tenant, operation])).rows[0];
-    for (const [column, value] of [["integration_id", otherTenant], ["operation_id", crypto.randomUUID()], ["external_learner_id", otherRef], ["begun_at", "2000-01-01"]]) {
+    assert.equal(receipt.policy_version, "strict-v1");
+    for (const [column, value] of [["policy_version", "pika-live-v1"], ["integration_id", otherTenant], ["operation_id", crypto.randomUUID()], ["external_learner_id", otherRef], ["begun_at", "2000-01-01"]]) {
       await violation(client, `UPDATE profile_erasure_operations SET ${column}=$1 WHERE integration_id=$2 AND operation_id=$3`, [value, tenant, operation], "23514");
     }
     await violation(client, "DELETE FROM profile_erasure_operations WHERE integration_id=$1", [tenant], "23514");
@@ -162,5 +163,36 @@ test("database bindings, monotonic evidence, complete root cascade, and tenant i
     await client.query("ROLLBACK");
     client.release();
     await pool.end();
+  }
+});
+
+
+test("policy migration is additive and does not rewrite old evidence or grant privileges", async () => {
+  const migration = await readFile(new URL("../drizzle/0014_profile-erasure-policy.sql", import.meta.url), "utf8");
+  const sql = migration.replace(/--[^\n]*/g, "");
+  assert.match(sql, /ADD COLUMN "policy_version" text DEFAULT 'strict-v1' NOT NULL/);
+  assert.doesNotMatch(sql, /CREATE OR REPLACE|GRANT\s|INSERT INTO|DELETE FROM|UPDATE public|DROP\s/i);
+  assert.match(sql, /NEW.policy_version IS DISTINCT FROM OLD.policy_version/);
+});
+
+test("both pending and completed policy bindings are permanent", { skip: !process.env.DATABASE_URL }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const tenant = crypto.randomUUID();
+    await client.query("INSERT INTO integrations(id,slug,name,secret_hash) VALUES ($1,$2,'Synthetic policy',$2)", [tenant, tenant]);
+    for (const policy of ["strict-v1", "pika-live-v1"]) {
+      const operation = crypto.randomUUID();
+      const ref = `pika-membership-v1-${crypto.randomUUID().replace(/-/g, "")}`;
+      await client.query("INSERT INTO profile_erasure_operations(integration_id,operation_id,external_learner_id,policy_version) VALUES ($1,$2,$3,$4)", [tenant, operation, ref, policy]);
+      for (const complete of [false, true]) {
+        if (complete) await client.query("UPDATE profile_erasure_operations SET completed_at=clock_timestamp() WHERE integration_id=$1 AND operation_id=$2", [tenant, operation]);
+        await violation(client, "UPDATE profile_erasure_operations SET policy_version=$1 WHERE integration_id=$2 AND operation_id=$3", [policy === "strict-v1" ? "pika-live-v1" : "strict-v1", tenant, operation], "23514");
+      }
+    }
+    await violation(client, "INSERT INTO profile_erasure_operations(integration_id,operation_id,external_learner_id,policy_version) VALUES ($1,$2,$3,'unknown')", [tenant, crypto.randomUUID(), `pika-membership-v1-${crypto.randomUUID().replace(/-/g, "")}`], "23514");
+  } finally {
+    await client.query("ROLLBACK"); client.release(); await pool.end();
   }
 });
