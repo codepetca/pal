@@ -3,11 +3,19 @@ export const canonicalUuid = (value: unknown): value is string =>
 export const membershipReference = (value: unknown): value is string =>
   typeof value === "string" && /^pika-membership-v1-[0-9a-f]{32}$/.test(value);
 
+export type ErasurePolicy = "strict-v1" | "pika-live-v1";
 export type ErasureRequest = { operation_id: string; learner_id: string };
+export type LiveErasureRequest = ErasureRequest & { schema_version: 2; policy: "pika-live-v1" };
+export type AnyErasureRequest = ErasureRequest | LiveErasureRequest;
 export type ErasureReceipt = ErasureRequest & {
   schema_version: 1; status: "pending" | "completed";
   begun_at: string; completed_at: string | null;
 };
+export type LiveErasureReceipt = Omit<ErasureReceipt, "schema_version"> & {
+  schema_version: 2; policy: "pika-live-v1";
+  historical_backups: "excluded"; backup_retention: "not_attested";
+};
+export type AnyErasureReceipt = ErasureReceipt | LiveErasureReceipt;
 function exactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) &&
     Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -15,6 +23,17 @@ function exactKeys(value: unknown, keys: string[]): value is Record<string, unkn
 export function validErasureRequest(value: unknown): value is ErasureRequest {
   return exactKeys(value, ["operation_id", "learner_id"]) &&
     canonicalUuid(value.operation_id) && membershipReference(value.learner_id);
+}
+export function validLiveErasureRequest(value: unknown): value is LiveErasureRequest {
+  return exactKeys(value, ["schema_version", "policy", "operation_id", "learner_id"]) &&
+    value.schema_version === 2 && value.policy === "pika-live-v1" &&
+    canonicalUuid(value.operation_id) && membershipReference(value.learner_id);
+}
+export function validAnyErasureRequest(value: unknown): value is AnyErasureRequest {
+  return validErasureRequest(value) || validLiveErasureRequest(value);
+}
+export function requestPolicy(value: AnyErasureRequest): ErasurePolicy {
+  return "policy" in value ? value.policy : "strict-v1";
 }
 const utcTimestamp = (value: unknown): value is string =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
@@ -25,6 +44,14 @@ export function validErasureReceipt(value: unknown): value is ErasureReceipt {
     utcTimestamp(value.begun_at) &&
     ((value.status === "pending" && value.completed_at === null) ||
       (value.status === "completed" && utcTimestamp(value.completed_at) && value.completed_at >= value.begun_at));
+}
+/** v1 validators deliberately continue rejecting this different claim. */
+export function validLiveErasureReceipt(value: unknown): value is LiveErasureReceipt {
+  return exactKeys(value, ["schema_version", "policy", "operation_id", "learner_id", "status", "begun_at", "completed_at", "historical_backups", "backup_retention"]) &&
+    value.schema_version === 2 && value.policy === "pika-live-v1" &&
+    value.historical_backups === "excluded" && value.backup_retention === "not_attested" &&
+    validErasureReceipt({ schema_version: 1, operation_id: value.operation_id, learner_id: value.learner_id,
+      status: value.status, begun_at: value.begun_at, completed_at: value.completed_at });
 }
 
 /** Explicit tenant UUID allowlist, absent/malformed = deny all. No wildcard. */

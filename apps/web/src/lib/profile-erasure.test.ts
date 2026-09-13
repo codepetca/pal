@@ -4,7 +4,7 @@ import { after, test } from "node:test";
 import { NextRequest } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb, getPool } from "@pal/db";
-import { validErasureRequest, validErasureReceipt, erasureEnabled } from "./profile-erasure-contract";
+import { validErasureRequest, validErasureReceipt, validLiveErasureRequest, validLiveErasureReceipt, erasureEnabled } from "./profile-erasure-contract";
 import { beginProfileErasure, getProfileErasure, progressProfileErasure, PROFILE_RESOURCES, assertErasureInventory, type ManagedCopyPolicy } from "./profile-erasure";
 import { profileLockKey, lockProfileIdentity, lockActiveLearner, lifecycleTransaction, ProfileErasedError, LearnerScopeError, isLifecycleLockFailure } from "./profile-lifecycle";
 import { getOrCreateLearnerIdentity, provisionActiveLearner, processEventInDb, resetLearnerInDb, loadLearnerFromDb } from "./db-learner";
@@ -357,4 +357,175 @@ test("an event already holding the identity fence commits before begin is accept
     if (!released) { await client.query("ROLLBACK"); client.release(); }
     throw error;
   }
+});
+
+
+const liveRequest = () => ({ ...request(), schema_version: 2 as const, policy: "pika-live-v1" as const });
+const pikaTenant = async () => (await resolveIntegration({ slug: "pika", name: "Pika", secret })).id;
+const liveProgress = (id: string, operation: string, db = getDb()) =>
+  progressProfileErasure(db, id, operation, { verify: async () => { throw new Error("historical backup policy must not run"); } }, "pika-live-v1");
+const liveStatus = (id: string, operation: string) => getProfileErasure(getDb(), id, operation, "pika-live-v1");
+
+test("v2 explicitly excludes backup attestation and never validates as strict v1", () => {
+  const input = liveRequest();
+  assert.ok(validLiveErasureRequest(input));
+  assert.equal(validErasureRequest(input), false);
+  for (const invalid of [request(), { ...input, policy: "strict-v1" }, { ...input, schema_version: 1 }, { ...input, tenant: randomUUID() }]) assert.equal(validLiveErasureRequest(invalid), false);
+  const receipt = { ...input, status: "completed", begun_at: "2026-09-01T12:00:00.000Z", completed_at: "2026-09-01T12:00:01.000Z", historical_backups: "excluded", backup_retention: "not_attested" };
+  assert.ok(validLiveErasureReceipt(receipt));
+  assert.equal(validErasureReceipt(receipt), false);
+  for (const key of Object.keys(receipt)) {
+    const incomplete: Record<string, unknown> = { ...receipt }; delete incomplete[key];
+    assert.equal(validLiveErasureReceipt(incomplete), false, key);
+  }
+  for (const invalid of [{ ...receipt, historical_backups: "erased" }, { ...receipt, backup_retention: "48h" }, { ...receipt, schema_version: 1 }, { ...receipt, extra: true }, { ...receipt, completed_at: null }, { ...receipt, completed_at: "2026-08-01T12:00:00.000Z" }, { ...receipt, status: "pending" }]) assert.equal(validLiveErasureReceipt(invalid), false);
+});
+
+test("policy negotiation cannot upgrade existing v1, downgrade v2, or select another integration", dbTest, async () => {
+  const id = await pikaTenant(); const foreign = await tenant();
+  const old = request(); const legacy = await beginProfileErasure(getDb(), id, old);
+  const attemptedUpgrade = { ...old, schema_version: 2 as const, policy: "pika-live-v1" as const };
+  for (const complete of [false, true]) {
+    if (complete) await progressProfileErasure(getDb(), id, old.operation_id, syntheticProof);
+    await assert.rejects(beginProfileErasure(getDb(), id, attemptedUpgrade), /erasure_policy_conflict/);
+    await assert.rejects(liveProgress(id, old.operation_id), /erasure_policy_conflict/);
+    await assert.rejects(liveStatus(id, old.operation_id), /erasure_policy_conflict/);
+    assert.ok(validErasureReceipt(await getProfileErasure(getDb(), id, old.operation_id)));
+  }
+  assert.equal(legacy.schema_version, 1);
+  const input = liveRequest(); const begun = await beginProfileErasure(getDb(), id, input);
+  const plain = { operation_id: input.operation_id, learner_id: input.learner_id };
+  assert.ok(validLiveErasureReceipt(begun));
+  assert.deepEqual(await beginProfileErasure(getDb(), id, input), begun);
+  assert.deepEqual(await liveStatus(id, input.operation_id), begun);
+  assert.equal(await liveStatus(foreign, input.operation_id), null);
+  await assert.rejects(beginProfileErasure(getDb(), foreign, input), /pika_erasure_scope_required/);
+  for (const complete of [false, true]) {
+    if (complete) await liveProgress(id, input.operation_id);
+    await assert.rejects(beginProfileErasure(getDb(), id, plain), /erasure_policy_conflict/);
+    await assert.rejects(getProfileErasure(getDb(), id, input.operation_id), /erasure_policy_conflict/);
+    await assert.rejects(progressProfileErasure(getDb(), id, input.operation_id, syntheticProof), /erasure_policy_conflict/);
+  }
+  // A different policy cannot bypass either existing identity binding.
+  await assert.rejects(beginProfileErasure(getDb(), id, { ...plain, learner_id: ref() }), /operation_binding_conflict/);
+  await assert.rejects(beginProfileErasure(getDb(), id, { ...plain, operation_id: randomUUID() }), /profile_operation_conflict/);
+  // Concurrent exact retries preserve one saved policy and begun time.
+  const racing = liveRequest();
+  const result = await Promise.allSettled([beginProfileErasure(getDb(), id, racing), beginProfileErasure(getDb(), id, { operation_id: racing.operation_id, learner_id: racing.learner_id })]);
+  assert.equal(result.filter(value => value.status === "fulfilled").length, 1);
+  assert.match(String(result.find(value => value.status === "rejected")?.reason), /erasure_policy_conflict/);
+});
+
+test("live policy deletes all15 resources atomically without backup proof, preserves neighbors and permanently fences the generation", dbTest, async () => {
+  const id = await pikaTenant(); const other = await tenant(); const input = liveRequest();
+  const learner = await getOrCreateLearnerIdentity(getDb(), id, input.learner_id);
+  const foreign = await getOrCreateLearnerIdentity(getDb(), other, input.learner_id);
+  const classmate = await getOrCreateLearnerIdentity(getDb(), id, ref());
+  const otherMembership = await getOrCreateLearnerIdentity(getDb(), id, ref());
+  for (const [owner, target] of [[id, learner], [other, foreign], [id, classmate], [id, otherMembership]]) await populateAll(owner, target);
+  const before = await rows(learner);
+  for (const name of PROFILE_RESOURCES) assert.ok(before[name].length, name);
+  const neighbors = await Promise.all([foreign, classmate, otherMembership].map(rows));
+  const catalogs = (await getPool().query("SELECT * FROM integrations WHERE id=ANY($1::uuid[]) ORDER BY id", [[id, other]])).rows;
+  const stale = await findLearnersWithDueStoryGrants(getDb(), { asOf: new Date("2026-10-10"), onlyLearnerIds: [learner], limit: 1 });
+  const delivery = (before.events[0] as { idempotency_key: string }).idempotency_key;
+  const pending = await beginProfileErasure(getDb(), id, input);
+  // A newly discovered active resource (not a historical backup) fails closed.
+  await assert.rejects(getDb().transaction(async tx => {
+    await tx.execute(sql`CREATE TABLE public.synthetic_active_profile_copy (learner_id uuid)`);
+    await liveProgress(id, input.operation_id, tx);
+  }), /erasure_inventory_unverified/);
+  await assert.rejects(getDb().transaction(async tx => {
+    await tx.execute(sql`CREATE MATERIALIZED VIEW public.synthetic_active_profile_cache AS SELECT id AS learner_id FROM public.learners`);
+    await liveProgress(id, input.operation_id, tx);
+  }), /erasure_inventory_unverified/);
+  assert.deepEqual(await rows(learner), before);
+  // Database/provider deletion failure and lost transaction response cannot complete.
+  await assert.rejects(getDb().transaction(async tx => {
+    await tx.execute(sql`CREATE FUNCTION pg_temp.synthetic_delete_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic provider failure'; END; $$`);
+    await tx.execute(sql`CREATE TRIGGER synthetic_delete_failure BEFORE DELETE ON public.learners FOR EACH ROW EXECUTE FUNCTION pg_temp.synthetic_delete_failure()`);
+    await liveProgress(id, input.operation_id, tx);
+  }), (error: unknown) => {
+    const cause = error as { cause?: { message?: string } };
+    return cause.cause?.message === "synthetic provider failure";
+  });
+  await assert.rejects(getDb().transaction(async tx => {
+    assert.equal((await liveProgress(id, input.operation_id, tx))?.status, "completed");
+    for (const values of Object.values(await rowsInTransaction(tx, learner))) assert.equal(values.length, 0);
+    throw new Error("synthetic rollback after cleanup");
+  }), /synthetic rollback after cleanup/);
+  assert.deepEqual(await rows(learner), before);
+  assert.deepEqual(await liveStatus(id, input.operation_id), pending);
+  const release = await holdIdentity(id, input.learner_id);
+  try { await assert.rejects(liveProgress(id, input.operation_id), isLifecycleLockFailure); }
+  finally { await release(); }
+  assert.deepEqual(await liveStatus(id, input.operation_id), pending);
+  const completed = await liveProgress(id, input.operation_id);
+  assert.ok(validLiveErasureReceipt(completed));
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.begun_at, pending.begun_at);
+  for (const values of Object.values(await rows(learner))) assert.equal(values.length, 0);
+  for (let i = 0; i < neighbors.length; i++) assert.deepEqual(await rows([foreign, classmate, otherMembership][i]), neighbors[i]);
+  assert.deepEqual((await getPool().query("SELECT * FROM integrations WHERE id=ANY($1::uuid[]) ORDER BY id", [[id, other]])).rows, catalogs);
+  assert.deepEqual(await liveProgress(id, input.operation_id), completed);
+  assert.deepEqual(await beginProfileErasure(getDb(), id, input), completed);
+  assert.equal((await reconcileDueStoryGrantsForLearner(stale.learnerIds[0], { asOf: new Date("2026-10-10") })).granted, 0);
+  await assert.rejects(getOrCreateLearnerIdentity(getDb(), id, input.learner_id), ProfileErasedError);
+  await assert.rejects(processEventInDb(id, input.learner_id, event, delivery), ProfileErasedError);
+  await assert.rejects(resetLearnerInDb(id, input.learner_id), ProfileErasedError);
+  await assert.rejects(loadLearnerSnapshot(id, learner), LearnerScopeError);
+  const fresh = await getOrCreateLearnerIdentity(getDb(), id, ref());
+  assert.notEqual(fresh, learner);
+  const freshRows = await rows(fresh);
+  assert.equal(freshRows.learners.length, 1);
+  for (const name of PROFILE_RESOURCES.filter(name => name !== "learners")) assert.equal(freshRows[name].length, 0);
+});
+
+test("HTTP live opt-in, exact Pika gate, status negotiation, lost response and old JWT denial after completion", dbTest, async () => {
+  const id = await pikaTenant(); const path = "/api/v1/integration/profile-erasures";
+  const input = liveRequest();
+  const learner = await getOrCreateLearnerIdentity(getDb(), id, input.learner_id);
+  const { token } = await mintPalReadToken({ integrationId: id, learnerId: learner });
+  const statusRequest = (policy?: string) => {
+    const req = http(`${path}/${input.operation_id}`);
+    if (policy) req.headers.set("Pal-Erasure-Policy", policy);
+    return statusHttp(req, { params: Promise.resolve({ operation_id: input.operation_id }) });
+  };
+  delete process.env.PAL_PROFILE_ERASURE_INTEGRATION_IDS;
+  assert.equal((await beginHttp(http(path, secret, input))).status, 403);
+  assert.equal(await liveStatus(id, input.operation_id), null);
+  process.env.SANDBOX_INTEGRATION_SECRET = "synthetic-other-integration-secret-32";
+  const sandbox = await resolveIntegration({ slug: "sandbox", name: "Sandbox", secret: process.env.SANDBOX_INTEGRATION_SECRET });
+  process.env.PAL_PROFILE_ERASURE_INTEGRATION_IDS = `${id},${sandbox.id}`;
+  assert.equal((await beginHttp(http(path, process.env.SANDBOX_INTEGRATION_SECRET, input))).status, 403);
+  const response = await beginHttp(http(path, secret, input));
+  assert.equal(response.status, 200); assert.equal(response.headers.get("cache-control"), "no-store");
+  const receipt = await response.json(); assert.ok(validLiveErasureReceipt(receipt));
+  assert.equal(receipt.status, "completed");
+  assert.deepEqual(await (await beginHttp(http(path, secret, input))).json(), receipt);
+  assert.equal((await statusRequest()).status, 409);
+  assert.equal((await statusRequest("unknown")).status, 422);
+  const status = await statusRequest("pika-live-v1");
+  assert.equal(status.status, 200); assert.equal(status.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await status.json(), receipt);
+  const plain = { operation_id: input.operation_id, learner_id: input.learner_id };
+  assert.equal((await beginHttp(http(path, secret, plain))).status, 409);
+  const ambiguous = http(path, secret, input); ambiguous.headers.set("Pal-Erasure-Policy", "pika-live-v1");
+  assert.equal((await beginHttp(ambiguous)).status, 422);
+  delete process.env.PAL_PROFILE_ERASURE_INTEGRATION_IDS;
+  assert.equal((await statusRequest("pika-live-v1")).status, 403);
+  assert.equal((await mintHttp(http("/api/v1/integration/read-token", secret, { learner_id: input.learner_id }))).status, 410);
+  assert.equal((await eventHttp(http("/api/v1/events", secret, { schema_version: 1, learner_id: input.learner_id, idempotency_key: randomUUID(), ...event }))).status, 410);
+  // Deleted mappings follow the existing learner_not_found response; pending
+  // guards with a retained mapping are tested above as unauthorized instead.
+  for (const denied of [
+    await snapshotHttp(http("/api/v1/learner/snapshot", token)),
+    await ackHttp(http("/api/v1/learner/rewards/seen", token, {}), { params: Promise.resolve({ rewardId: randomUUID() }) }),
+    await equipHttp(http("/api/v1/learner/reward-loadout", token, { slot: "companion", rewardGrantId: null })),
+  ]) {
+    assert.equal(denied.status, 404);
+    assert.equal(denied.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await denied.json(), { error: "learner_not_found" });
+  }
+  delete process.env.SANDBOX_INTEGRATION_SECRET;
 });
