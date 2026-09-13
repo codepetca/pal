@@ -184,14 +184,14 @@ test("both pending and completed policy bindings are permanent", { skip: !proces
     await client.query("INSERT INTO integrations(id,slug,name,secret_hash) VALUES ($1,$2,'Synthetic policy',$2)", [tenant, tenant]);
     for (const policy of ["strict-v1", "pika-live-v1"]) {
       const operation = crypto.randomUUID();
-      const ref = `pika-membership-v1-${crypto.randomUUID().replaceAll("-", "")}`;
+      const ref = `pika-membership-v1-${crypto.randomUUID().replace(/-/g, "")}`;
       await client.query("INSERT INTO profile_erasure_operations(integration_id,operation_id,external_learner_id,policy_version) VALUES ($1,$2,$3,$4)", [tenant, operation, ref, policy]);
       for (const complete of [false, true]) {
         if (complete) await client.query("UPDATE profile_erasure_operations SET completed_at=clock_timestamp() WHERE integration_id=$1 AND operation_id=$2", [tenant, operation]);
         await violation(client, "UPDATE profile_erasure_operations SET policy_version=$1 WHERE integration_id=$2 AND operation_id=$3", [policy === "strict-v1" ? "pika-live-v1" : "strict-v1", tenant, operation], "23514");
       }
     }
-    await violation(client, "INSERT INTO profile_erasure_operations(integration_id,operation_id,external_learner_id,policy_version) VALUES ($1,$2,$3,'unknown')", [tenant, crypto.randomUUID(), `pika-membership-v1-${crypto.randomUUID().replaceAll("-", "")}`], "23514");
+    await violation(client, "INSERT INTO profile_erasure_operations(integration_id,operation_id,external_learner_id,policy_version) VALUES ($1,$2,$3,'unknown')", [tenant, crypto.randomUUID(), `pika-membership-v1-${crypto.randomUUID().replace(/-/g, "")}`], "23514");
   } finally {
     await client.query("ROLLBACK"); client.release(); await pool.end();
   }
