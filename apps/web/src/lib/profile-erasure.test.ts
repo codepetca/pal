@@ -516,8 +516,16 @@ test("HTTP live opt-in, exact Pika gate, status negotiation, lost response and o
   assert.equal((await statusRequest("pika-live-v1")).status, 403);
   assert.equal((await mintHttp(http("/api/v1/integration/read-token", secret, { learner_id: input.learner_id }))).status, 410);
   assert.equal((await eventHttp(http("/api/v1/events", secret, { schema_version: 1, learner_id: input.learner_id, idempotency_key: randomUUID(), ...event }))).status, 410);
-  assert.equal((await snapshotHttp(http("/api/v1/learner/snapshot", token))).status, 401);
-  assert.equal((await ackHttp(http("/api/v1/learner/rewards/seen", token, {}), { params: Promise.resolve({ rewardId: randomUUID() }) })).status, 401);
-  assert.equal((await equipHttp(http("/api/v1/learner/reward-loadout", token, { slot: "companion", rewardGrantId: null }))).status, 401);
+  // Deleted mappings follow the existing learner_not_found response; pending
+  // guards with a retained mapping are tested above as unauthorized instead.
+  for (const denied of [
+    await snapshotHttp(http("/api/v1/learner/snapshot", token)),
+    await ackHttp(http("/api/v1/learner/rewards/seen", token, {}), { params: Promise.resolve({ rewardId: randomUUID() }) }),
+    await equipHttp(http("/api/v1/learner/reward-loadout", token, { slot: "companion", rewardGrantId: null })),
+  ]) {
+    assert.equal(denied.status, 404);
+    assert.equal(denied.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await denied.json(), { error: "learner_not_found" });
+  }
   delete process.env.SANDBOX_INTEGRATION_SECRET;
 });
