@@ -63,9 +63,9 @@ export const learners = pgTable(
   ]
 );
 
-// Dormant erasure receipt/guard for one opaque membership generation. No caller
-// writes this yet. Its presence is terminal for identity reuse in the future
-// lifecycle API, even while completedAt is null. Deliberately no learner FK:
+// Erasure receipt/guard for one opaque membership generation. Its presence
+// is terminal for identity reuse, even while completedAt is null. The immutable
+// policy discriminator preserves existing strict receipt semantics. No learner FK:
 // the exact external binding must survive deletion of all learner-owned data.
 export const profileErasureOperations = pgTable(
   "profile_erasure_operations",
@@ -73,6 +73,7 @@ export const profileErasureOperations = pgTable(
     integrationId: uuid("integration_id").notNull()
       .references(() => integrations.id, { onDelete: "restrict" }),
     operationId: uuid("operation_id").notNull(),
+    policyVersion: text("policy_version").notNull().default("strict-v1"),
     externalLearnerId: text("external_learner_id").notNull(),
     begunAt: timestamp("begun_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -81,6 +82,7 @@ export const profileErasureOperations = pgTable(
     primaryKey({ columns: [t.integrationId, t.operationId] }),
     unique("profile_erasure_operations_profile_uq")
       .on(t.integrationId, t.externalLearnerId),
+    check("profile_erasure_operations_policy", sql`${t.policyVersion} IN ('strict-v1', 'pika-live-v1')`),
     check("profile_erasure_operations_membership_ref", sql`${t.externalLearnerId} ~ '^pika-membership-v1-[0-9a-f]{32}$'`),
     check("profile_erasure_operations_completion_order", sql`${t.completedAt} IS NULL OR ${t.completedAt} >= ${t.begunAt}`),
   ],
