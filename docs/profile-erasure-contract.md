@@ -1,7 +1,10 @@
 # Membership profile erasure foundation
 
-Status: proposed provider contract; schema-only foundation. No erasure endpoint,
-revocation, ingestion fence, or cleanup worker is implemented by this increment.
+Status: provider runtime implemented, disabled by default; hosted completion and
+activation remain blocked by the unapproved copy/restore policy. See the
+[runtime release boundary](profile-erasure-runtime.md). Migration 0013 was
+released separately in PR #103. The schema-only future-tense sections below
+record that foundation's obligations; the runtime implements its server paths.
 The selected cross-project plan is the single [Pika classroom cleanup roadmap](https://github.com/codepetca/pika/blob/main/docs/guidance/classroom-pal-and-student-cleanup-plan.md)
 (source checkpoint `6c8ab914`; until published, the coordinator's Pika worktree
 contains the authoritative document). This is its first bounded Pal Phase 3
@@ -16,7 +19,7 @@ IDs. Two integrations may use the same reference without sharing a learner.
 A later re-add uses a new random reference; an erased generation never reopens.
 Legacy account profiles are excluded. There is no reward copying or backfill.
 
-Proposed endpoints (not available today):
+Backend endpoints (disabled by default):
 
 - `POST /api/v1/integration/profile-erasures`: strict JSON body containing only
   `operation_id` (canonical lowercase UUID) and `learner_id` (the reference above).

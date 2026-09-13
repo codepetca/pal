@@ -1,3 +1,4 @@
+import { assertProfileActive, lifecycleTransaction, lockProfileIdentity, type LifecycleTx } from "@/lib/profile-lifecycle";
 import { and, eq, sql } from "drizzle-orm";
 import {
   getDb,
@@ -52,12 +53,24 @@ export async function getOrCreateLearnerIdentity(
   integrationId: string,
   externalLearnerId: string
 ): Promise<string> {
+  return lifecycleTransaction(db, (tx) => provisionActiveLearner(tx, integrationId, externalLearnerId));
+}
+
+// Transaction-only primitive: the caller retains the identity fence through
+// its entire event or token mint, including signing.
+export async function provisionActiveLearner(
+  db: LifecycleTx, integrationId: string, externalLearnerId: string,
+): Promise<string> {
+  const identity = { integrationId, externalLearnerId };
+  await lockProfileIdentity(db, identity);
+  await assertProfileActive(db, identity);
   const [existing] = await db
     .select({ id: learners.id })
     .from(learners)
     .where(
       sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
     )
+    .for("update")
     .limit(1);
 
   if (existing) return existing.id;
@@ -158,9 +171,9 @@ export async function processEventInDb(
 ): Promise<ProcessEventResult> {
   const db = getDb();
 
-  return await db.transaction(async (tx) => {
+  return await lifecycleTransaction(db, async (tx) => {
     // 1. Get or create the learner inside the transaction so the lock works
-    const learnerId = await getOrCreateLearnerIdentity(
+    const learnerId = await provisionActiveLearner(
       tx,
       integrationId,
       externalLearnerId,
@@ -524,7 +537,7 @@ export async function processEventInDb(
 
 /**
  * Read-only: loads a learner's state from the DB for the world endpoint.
- * No lock, no transaction — just a read.
+ * Holds the same identity/learner fence as snapshot readers.
  */
 export async function loadLearnerFromDb(
   integrationId: string,
@@ -532,35 +545,41 @@ export async function loadLearnerFromDb(
 ): Promise<LearnerState | null> {
   const db = getDb();
 
-  const [learner] = await db
-    .select({ id: learners.id })
-    .from(learners)
-    .where(
-      sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
-    )
-    .limit(1);
+  return lifecycleTransaction(db, async (tx) => {
+    const identity = { integrationId, externalLearnerId };
+    await lockProfileIdentity(tx, identity);
+    await assertProfileActive(tx, identity);
+    const [learner] = await tx
+      .select({ id: learners.id })
+      .from(learners)
+      .where(
+        sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
+      )
+      .for("update")
+      .limit(1);
 
-  if (!learner) return null;
+    if (!learner) return null;
 
-  const [eco] = await db
-    .select()
-    .from(economy)
-    .where(eq(economy.learnerId, learner.id))
-    .limit(1);
+    const [eco] = await tx
+      .select()
+      .from(economy)
+      .where(eq(economy.learnerId, learner.id))
+      .limit(1);
 
-  const [pet] = await db
-    .select()
-    .from(petState)
-    .where(eq(petState.learnerId, learner.id))
-    .limit(1);
+    const [pet] = await tx
+      .select()
+      .from(petState)
+      .where(eq(petState.learnerId, learner.id))
+      .limit(1);
 
-  const [world] = await db
-    .select()
-    .from(worldState)
-    .where(eq(worldState.learnerId, learner.id))
-    .limit(1);
+    const [world] = await tx
+      .select()
+      .from(worldState)
+      .where(eq(worldState.learnerId, learner.id))
+      .limit(1);
 
-  return toLearnerState(eco, pet, world);
+    return toLearnerState(eco, pet, world);
+  });
 }
 
 /**
@@ -573,9 +592,13 @@ export async function resetLearnerInDb(
 ): Promise<void> {
   const db = getDb();
 
-  await db
-    .delete(learners)
-    .where(
-      sql`${learners.integrationId} = ${integrationId} AND ${learners.externalLearnerId} = ${externalLearnerId}`
-    );
+  await lifecycleTransaction(db, async (tx) => {
+    const identity = { integrationId, externalLearnerId };
+    await lockProfileIdentity(tx, identity);
+    await assertProfileActive(tx, identity);
+    await tx.delete(learners).where(and(
+      eq(learners.integrationId, integrationId),
+      eq(learners.externalLearnerId, externalLearnerId),
+    ));
+  });
 }

@@ -3814,8 +3814,7 @@ test(
       );
 
       await scopeVerified;
-      try {
-        await processEventInDb(
+      const concurrentWrite = processEventInDb(
           integration.id,
           externalLearnerId,
           event("learning_item.completed", {
@@ -3826,11 +3825,10 @@ test(
           }),
           key(),
         );
-      } finally {
-        releaseRead();
-      }
+      releaseRead();
 
       const duringCommit = await inFlightSnapshot;
+      await concurrentWrite;
       const afterCommit = await loadLearnerSnapshot(integration.id, learnerId);
       assert.deepEqual(duringCommit, before);
       assert.equal(afterCommit.rewards.length, before.rewards.length + 1);
