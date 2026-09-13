@@ -1,3 +1,4 @@
+import { lockActiveLearner, LearnerScopeError, ProfileErasedError } from "@/lib/profile-lifecycle";
 import { createHash } from "node:crypto";
 import {
   and,
@@ -9,11 +10,9 @@ import {
   lte,
   notInArray,
   or,
-  sql,
 } from "drizzle-orm";
 import {
   getDb,
-  learners,
   storyCollectibleSchedules,
   type Db,
 } from "@pal/db";
@@ -146,21 +145,12 @@ export async function reconcileDueStoryGrantsForLearner(
     if (isPastDeadline()) {
       return { candidates: 0, due: 0, granted: 0, hasMore: true };
     }
-    const [learner] = await tx
-      .select({ id: learners.id })
-      .from(learners)
-      .where(eq(learners.id, learnerId))
-      .limit(1);
-    if (!learner) {
+    try {
+      await lockActiveLearner(tx, undefined, learnerId);
+    } catch (error) {
+      if (!(error instanceof LearnerScopeError || error instanceof ProfileErasedError)) throw error;
       return { candidates: 0, due: 0, granted: 0, hasMore: false };
     }
-    // Do not spend the connection's full statement timeout waiting behind an
-    // accepted event or concurrent cron. lock_timeout produces 55P03, which the
-    // bounded worker retry loop can recover within this invocation.
-    await tx.execute(sql`SET LOCAL lock_timeout = '1500ms'`);
-    await tx.execute(
-      sql`SELECT id FROM ${learners} WHERE id = ${learnerId} FOR UPDATE`,
-    );
     if (isPastDeadline()) {
       return { candidates: 0, due: 0, granted: 0, hasMore: true };
     }
@@ -169,7 +159,7 @@ export async function reconcileDueStoryGrantsForLearner(
       asOf: input.asOf,
       shouldStop: isPastDeadline,
     });
-  });
+  }, { isolationLevel: "read committed" });
 }
 
 export async function runStoryGrantWorker(
