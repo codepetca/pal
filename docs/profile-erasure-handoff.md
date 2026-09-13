@@ -1,3 +1,9 @@
+> Historical schema-0013 handoff. Current policy/runtime and Pika adoption are
+> defined in [the contract](profile-erasure-contract.md) and
+> [runtime release preflight](profile-erasure-runtime.md). The Pika live-v1
+> contract explicitly excludes historical backup erasure and restore proof;
+> older strict-v1 operations retain their original requirements.
+
 # Pal profile erasure schema handoff
 
 This is a schema-only prerequisite for the Pal portion of Phase 3 in the single
