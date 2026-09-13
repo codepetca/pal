@@ -221,7 +221,7 @@ async function populateAll(tenant: string, learner: string) {
 
     await client.query("UPDATE economy SET xp=42,xp_lifetime=1042,level=3 WHERE learner_id=$1", [learner]);
     await client.query("UPDATE pet_state SET mood='happy' WHERE learner_id=$1", [learner]);
-    await client.query("UPDATE world_state SET stage=2,unlocked_object_ids='[\"synthetic-world\"]' WHERE learner_id=$1", [learner]);
+    await client.query("UPDATE world_state SET stage=2,unlocked_object_ids=ARRAY['synthetic-world'] WHERE learner_id=$1", [learner]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
@@ -325,4 +325,36 @@ test("HTTP auth, strict errors, tenant allowlist, stable receipts, no-store and 
   const completed = await check(await beginHttp(http(path, secret, input)), 200);
   assert.ok(validErasureReceipt(completed)); assert.equal(completed.status, "completed");
   delete process.env.PAL_PROFILE_ERASURE_INTEGRATION_IDS;
+});
+
+
+test("an event already holding the identity fence commits before begin is accepted", dbTest, async () => {
+  const id = await tenant(); const input = request();
+  const learner = await getOrCreateLearnerIdentity(getDb(), id, input.learner_id);
+  const client = await getPool().connect();
+  await client.query("BEGIN");
+  await client.query("SELECT id FROM learners WHERE id=$1 FOR UPDATE", [learner]);
+  const writing = processEventInDb(id, input.learner_id, event, randomUUID());
+  // The real event takes its identity advisory lock before waiting for the row.
+  const lock = BigInt.asUintN(64, BigInt(profileLockKey({ integrationId: id, externalLearnerId: input.learner_id })));
+  let holder = false;
+  let released = false;
+  try {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const state = await getPool().query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND granted AND classid=$1::oid AND objid=$2::oid", [(lock >> BigInt(32)).toString(), (lock & BigInt(0xffffffff)).toString()]);
+      if (state.rowCount) { holder = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(holder, "event did not acquire its identity fence");
+    const beginning = beginProfileErasure(getDb(), id, input);
+    await waitForWaiters(id, input.learner_id);
+    await client.query("ROLLBACK"); client.release(); released = true;
+    assert.equal((await writing).status, "processed");
+    assert.equal((await beginning).status, "pending");
+    assert.ok((await rows(learner)).events.length > 0);
+    await assert.rejects(processEventInDb(id, input.learner_id, event, randomUUID()), ProfileErasedError);
+  } catch (error) {
+    if (!released) { await client.query("ROLLBACK"); client.release(); }
+    throw error;
+  }
 });
