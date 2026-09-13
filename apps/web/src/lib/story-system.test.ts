@@ -1046,6 +1046,8 @@ test("the first calendar-bearing revision quarantines calendarless pending facts
           metadata: calendarMetadata,
         },
         crypto.randomUUID(),
+        // The assertion observes the revision before its story week is due.
+        { storyGrantAsOf: new Date("2026-08-04T12:00:00.000Z") },
       );
       assert.equal(calendarRevision.status, "processed");
       assert.deepEqual(
@@ -1095,7 +1097,9 @@ test("legacy calendar facts pin the implied immutable 16-week plan", { skip: !pr
   delete (legacy.metadata as { term_week_count?: number }).term_week_count;
   delete (legacy.metadata as { week_start_day?: string }).week_start_day;
   try {
-    await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID());
+    await processEventInDb(integration.id, externalLearnerId, legacy, crypto.randomUUID(), {
+      storyGrantAsOf: new Date("2026-09-01T12:00:00.000Z"),
+    });
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
     const [plan] = await getDb().select().from(storyPlans).where(eq(storyPlans.learnerId, learnerId));
     assert.equal(plan?.totalPeriods, 16);
@@ -1429,7 +1433,10 @@ test("historical achievement rows do not backfill grants or celebrations", { ski
   const externalLearnerId = `no-backfill-${crypto.randomUUID()}`;
   const periodKey = `period-${crypto.randomUUID()}`;
   try {
-    await processEventInDb(integration.id, externalLearnerId, configuredWeek(periodKey), crypto.randomUUID());
+    await processEventInDb(integration.id, externalLearnerId, configuredWeek(periodKey), crypto.randomUUID(), {
+      // Keep scheduled ownership out of this historical-achievement assertion.
+      storyGrantAsOf: new Date("2026-08-31T12:00:00.000Z"),
+    });
     const learnerId = await getOrCreateLearnerIdentity(getDb(), integration.id, externalLearnerId);
     await getDb().update(achievementInstances).set({ status: "earned" }).where(and(
       eq(achievementInstances.learnerId, learnerId),
