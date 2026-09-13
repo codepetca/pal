@@ -16,19 +16,19 @@ Pika cleanup, copy handling, or Phase 3.
   Scope-test correction SHA: `1a9940bb0e604f79f9cf9f66217bd002a2e8454c`.
   These are evidence checkpoints, not a substitute for verifying the actual
   PR head at publication/CI/merge time. Subsequent commits may update this ledger.
-  PR publication remains pending exact disposable-CI migration approval.
+  [PR #103](https://github.com/codepetca/pal/pull/103) was published as a draft
+  at `ff97d7ccb02148eb595d01a980614f17965ba2be` after exact CI approval.
 - Source verification: full workspace typecheck and lint passed; migration history
   check passed; regeneration reports no schema drift; `git diff --check` passed.
-  DB suite: 2 source tests passed, 8 PostgreSQL tests skipped without
-  `DATABASE_URL`. PostgreSQL execution remains pending. Existing event-contract tests (12) and
-  rule-engine tests (68) also pass.
+  Initially, DB suite: 2 source tests passed and 8 PostgreSQL tests skipped
+  without `DATABASE_URL`. Approved CI now passes all 10 DB tests with zero skips.
+  Existing event-contract tests (12) and rule-engine tests (68) also pass.
 - Prescribed Claude `/code-review --comment` is not available in this task's
   callable tools. Independent Sol/high security/concurrency and Terra/high
   compatibility reviews are the available alternative, not a Claude pass.
-- Schema application approval: pending for existing CI's fresh disposable
-  PostgreSQL 16 service only, running migrations `0000`–`0013` and synthetic
-  invariant/upgrade tests. Coordinator is requesting this exact permission;
-  publication is held because opening the PR triggers this CI automatically.
+- Schema application approval: user explicitly approved the existing CI's fresh
+  disposable PostgreSQL 16 service, migrations `0000`–`0013` and synthetic
+  invariant/upgrade tests; relayed by the coordinator on 2026-09-12.
   No existing local, shared sandbox, hosted, or production target is approved.
 - Merge: requires explicit approval after passing review and exact-head CI;
   no direct main writes or unapproved merge. Do not manually contact teammates.
@@ -65,4 +65,46 @@ Migration 0013 SHA-256 (unchanged by review corrections):
 
 Final reviewed source checkpoint: `97d34e8eab8009cee1a62861ea13387daeacbf40`.
 This subsequent evidence-only ledger update changes no migration, schema,
-contract, or tests. Publication and database verification remain pending.
+contract, or tests. The approved publication/CI evidence follows.
+
+## Approved CI and automatic preview evidence
+
+[CI run 34727450111](https://github.com/codepetca/pal/actions/runs/34727450111)
+at PR head `ff97d7c` applied `0000`–`0013` to its fresh PostgreSQL 16 service.
+All 10 DB tests passed, including the 8 previously skipped contracts: populated
+exact-scope erasure cascade, immutable bindings/receipt, tenant isolation, and
+existing schema/upgrade checks. History and generation/no-drift checks passed.
+Full CI failed four existing web assertions whose fixed 2026 fixtures omitted
+`storyGrantAsOf`, allowing today's reconciliation to create already-due rewards.
+The packed-widget check was consequently skipped; full CI was not green.
+
+One test-only correction batch in `story-system.test.ts` (three tests) and
+`story-grant-worker.test.ts` (one test) supplies the existing explicit clock seam.
+Every assertion is preserved. No engine, scheduler, API, schema, or migration SQL
+is changed by this batch. Source typecheck/lint are rerun; database execution is
+through the same approved disposable PR CI. The remaining targeted Terra review
+and corrected-head CI results must be checked on the PR before readiness.
+Review usage after this batch: 3 correction batches; 4 reviewer launches used,
+with the fifth and final targeted review reserved for this clock correction.
+
+The normal PR integration automatically built Vercel deployment
+`dpl_eHukZM8jCJhuMdNuUzjvYbVFQzkL` for `events/profile-erasure-schema`, alias
+`pal-git-events-profile-erasur-016610-stewarts-projects-cc2722c4.vercel.app`.
+Read-only `vercel inspect` reports target `preview`, status `READY`. Build logs
+show `node scripts/vercel-build.mjs` followed by widget/Next builds, with no
+migration invocation. The script invokes migrations only for exact
+`VERCEL_ENV=production`; preview skips that branch. Read-only preview environment
+metadata (general and this git branch) returned zero configured variables,
+including no `DATABASE_URL` or integration/read-token credentials. Persisted
+sandbox routes are gated off in preview and the database client fails closed
+without a URL. No credentials were read into the report or configured, and no
+manual deployment or hosted schema application was initiated.
+
+**Additional merge gate:** the existing production build automatically runs
+`pnpm --filter @pal/db migrate` before building the app. Therefore approving only
+a GitHub merge is insufficient here: before merging, verify the production
+target and pending migrations and obtain explicit approval for the resulting
+production deployment/schema application, or arrange a separately authorized
+way to prevent that effect. Current approval covers disposable CI only. Also
+required: one approving GitHub review under branch protection; independent
+agent reviews do not fulfill that GitHub approval rule. No merge is authorized.
