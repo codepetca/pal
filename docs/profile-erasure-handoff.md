@@ -82,10 +82,10 @@ One test-only correction batch in `story-system.test.ts` (three tests) and
 `story-grant-worker.test.ts` (one test) supplies the existing explicit clock seam.
 Every assertion is preserved. No engine, scheduler, API, schema, or migration SQL
 is changed by this batch. Source typecheck/lint are rerun; database execution is
-through the same approved disposable PR CI. The remaining targeted Terra review
-and corrected-head CI results must be checked on the PR before readiness.
-Review usage after this batch: 3 correction batches; 4 reviewer launches used,
-with the fifth and final targeted review reserved for this clock correction.
+through the same approved disposable PR CI. The fifth targeted Terra review returned clean: the fixed times preserve the
+tests' observation points and do not mask their original assertions. Review
+usage is now 5/5 launches and 3/3 correction batches; no further substantive
+correction or reviewer launch is authorized without a fresh budget checkpoint.
 
 The normal PR integration automatically built Vercel deployment
 `dpl_eHukZM8jCJhuMdNuUzjvYbVFQzkL` for `events/profile-erasure-schema`, alias
@@ -108,3 +108,30 @@ production deployment/schema application, or arrange a separately authorized
 way to prevent that effect. Current approval covers disposable CI only. Also
 required: one approving GitHub review under branch protection; independent
 agent reviews do not fulfill that GitHub approval rule. No merge is authorized.
+
+## Corrected source acceptance evidence
+
+Corrected source SHA: `652676a3817ee5ccbecf57f240eecb2bb7133c49`.
+[CI run 34727665102](https://github.com/codepetca/pal/actions/runs/34727665102)
+passed completely: migrations `0000`–`0013`, all 10 DB tests, 68 engine tests,
+170 widget tests, 253 web/API/persistence tests, 7 notification tests, workspace
+typecheck/lint, history/no-drift, and packed-widget React 18.3 verification.
+Every executed test suite reported zero failures and zero skips. The four
+previously failing assertions passed without changing assertions or runtime.
+
+Full diff scope: the new migration and generated metadata; its Drizzle table,
+exports and schema/inventory tests; provider contract/inventory and handoff docs;
+corrections to outdated deletion claims in API/integration/data-model/DB docs;
+and only the four fixture clocks in the two existing test files. There is no
+production behavior change, new dependency, backfill, existing learner mutation,
+erasure endpoint, or rollout activation. Migration 0013 still has the fingerprint
+recorded above. Source-independent Sol/Terra review covers the schema/contract;
+final targeted Terra covers the fixture correction. The final ledger-only commit
+records this evidence and changes no reviewed implementation or tests. Verify its
+actual PR-head CI result using PR #103's live checks before any merge decision.
+
+Implementation acceptance stops at a reviewed schema PR. Merge, one approving
+GitHub review, production-target preflight, and explicit authorization covering
+the production deploy/migration effect remain outstanding gates. Production
+schema has not been inspected or applied by this task. Provider erasure and full
+Phase 3 remain incomplete.
