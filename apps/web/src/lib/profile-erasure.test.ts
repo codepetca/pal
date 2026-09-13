@@ -204,7 +204,7 @@ async function populateAll(tenant: string, learner: string) {
     }
     await client.query("SET CONSTRAINTS ALL IMMEDIATE");
     await client.query("SET CONSTRAINTS ALL DEFERRED");
-    await client.query("INSERT INTO events (id,integration_id,learner_id,idempotency_key,event_type,occurred_at) VALUES ($1,$2,$3,'config-1','daily_log_week.configured','2026-08-31T12:00:00Z')", [event, tenant, learner]);
+    await client.query("INSERT INTO events (id,integration_id,learner_id,idempotency_key,event_type,occurred_at) VALUES ($1,$2,$3,$4,'daily_log_week.configured','2026-08-31T12:00:00Z')", [event, tenant, learner, `config-${learner}`]);
     await client.query("INSERT INTO learner_facts (id,integration_id,learner_id,source_event_id,event_type,semantic_key,period_key,occurred_at,metadata) VALUES ($1,$2,$3,$4,'daily_log_week.configured','config-1','week-1','2026-08-31T12:00:00Z',$5)", [fact, tenant, learner, event, {
       term_token: "term-1", term_start_day: "2026-08-31", term_end_day: "2026-10-09", term_timezone: "America/Toronto", term_week_count: 6, week_start_day: "2026-08-31", week_index: 1,
     }]);
