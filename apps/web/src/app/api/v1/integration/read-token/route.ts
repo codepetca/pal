@@ -1,6 +1,7 @@
+import { lifecycleTransaction, ProfileErasedError, isLifecycleLockFailure } from "@/lib/profile-lifecycle";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@pal/db";
-import { getOrCreateLearnerIdentity } from "@/lib/db-learner";
+import { provisionActiveLearner } from "@/lib/db-learner";
 import { identifyIntegration, resolveIntegration } from "@/lib/integration-auth";
 import { mintPalReadToken } from "@/lib/read-token";
 import { validateReadTokenRequest } from "@/lib/read-token-request";
@@ -39,16 +40,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const integration = await resolveIntegration(configuredIntegration);
-  const learnerId = await getOrCreateLearnerIdentity(
-    getDb(),
-    integration.id,
-    validation.learnerId,
-  );
-  const { token, expiresAt } = await mintPalReadToken({
-    learnerId,
-    integrationId: integration.id,
-  });
-
-  return noStore({ token, expires_at: expiresAt.toISOString() });
+  try {
+    const integration = await resolveIntegration(configuredIntegration);
+    const { token, expiresAt } = await lifecycleTransaction(getDb(), async (tx) => {
+      const learnerId = await provisionActiveLearner(
+        tx,
+        integration.id,
+        validation.learnerId,
+      );
+      return mintPalReadToken({
+        learnerId,
+        integrationId: integration.id,
+      });
+    });
+    return noStore({ token, expires_at: expiresAt.toISOString() });
+  } catch (error) {
+    if (error instanceof ProfileErasedError) return noStore({ error: "profile_erased" }, 410);
+    if (isLifecycleLockFailure(error)) return noStore({ error: "temporarily_unavailable" }, 503);
+    throw error;
+  }
 }

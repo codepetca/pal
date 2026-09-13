@@ -1,3 +1,5 @@
+import { lifecycleTransaction, lockActiveLearner } from "@/lib/profile-lifecycle";
+export { LearnerScopeError } from "@/lib/profile-lifecycle";
 import {
   and,
   asc,
@@ -18,7 +20,6 @@ import {
   learnerFacts,
   learnerRewardGrants,
   learnerRewardLoadouts,
-  learners,
   petState,
   rewardNotices,
   worldState,
@@ -72,13 +73,6 @@ function collectionItemsForUnlocks(unlockedObjectIds: readonly string[]) {
     const item = COLLECTION_ITEMS.get(id);
     return item ? [{ ...item }] : [];
   });
-}
-
-export class LearnerScopeError extends Error {
-  constructor() {
-    super("Learner token scope does not match persisted state");
-    this.name = "LearnerScopeError";
-  }
 }
 
 function legacyProgressionCardinality(
@@ -363,19 +357,9 @@ export async function loadLearnerSnapshot(
   } = {},
 ): Promise<PalWidgetSnapshot> {
   const featurePolicy = options.featurePolicy ?? resolvePalFeaturePolicy();
-  return db.transaction(
+  return lifecycleTransaction(db,
     async (tx) => {
-      const [learner] = await tx
-        .select({ id: learners.id })
-        .from(learners)
-        .where(
-          and(
-            eq(learners.id, learnerId),
-            eq(learners.integrationId, integrationId),
-          ),
-        )
-        .limit(1);
-      if (!learner) throw new LearnerScopeError();
+      await lockActiveLearner(tx, integrationId, learnerId);
       await options.afterScopeVerified?.();
 
       const economyRows = await tx
@@ -837,10 +821,6 @@ export async function loadLearnerSnapshot(
         ...(options.supportsRewardLoadout === false ? {} : { rewardLoadout }),
       };
     },
-    {
-      accessMode: "read only",
-      isolationLevel: "repeatable read",
-    },
   );
 }
 
@@ -850,20 +830,9 @@ export async function acknowledgeLearnerReward(
   rewardId: string,
   db: Db = getDb(),
 ): Promise<void> {
-  const [learner] = await db
-    .select({ id: learners.id })
-    .from(learners)
-    .where(
-      and(
-        eq(learners.id, learnerId),
-        eq(learners.integrationId, integrationId),
-      ),
-    )
-    .limit(1);
-  if (!learner) throw new LearnerScopeError();
-
   const seenAt = new Date();
-  await db.transaction(async (tx) => {
+  await lifecycleTransaction(db, async (tx) => {
+    await lockActiveLearner(tx, integrationId, learnerId);
     await tx
       .update(rewardNotices)
       .set({ seenAt })

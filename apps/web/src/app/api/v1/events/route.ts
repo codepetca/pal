@@ -1,3 +1,4 @@
+import { ProfileErasedError, isLifecycleLockFailure } from "@/lib/profile-lifecycle";
 import { NextRequest, NextResponse } from "next/server";
 import { v1 } from "@pal/contract";
 import type { IncomingEvent } from "@pal/engine";
@@ -14,7 +15,7 @@ const CLOCK_SKEW_MS = 60 * 60 * 1000;
 // POST /api/v1/events
 // Receives a learning signal from an integration (e.g. Pika).
 // See docs/api.md for the full contract.
-export async function POST(req: NextRequest) {
+async function ingest(req: NextRequest) {
   const configuredIntegration = identifyIntegration(
     req.headers.get("authorization"),
   );
@@ -131,4 +132,20 @@ export async function POST(req: NextRequest) {
     status: "processed",
     mutations: result.result.mutations,
   });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const response = await ingest(req);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  } catch (error) {
+    const erased = error instanceof ProfileErasedError;
+    if (erased || isLifecycleLockFailure(error)) {
+      return NextResponse.json({ error: erased ? "profile_erased" : "temporarily_unavailable" }, {
+        status: erased ? 410 : 503, headers: { "Cache-Control": "no-store" },
+      });
+    }
+    throw error;
+  }
 }

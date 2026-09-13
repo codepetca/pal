@@ -15,7 +15,8 @@
 | POST | `/api/v1/learner/rewards/:reward_id/seen` | `@codepet/pal-widget` client | Acknowledge one learner reward notice |
 | GET | `/api/cron/story-collectibles` | Vercel Cron | Reconcile overdue post-rollout story ownership in bounded learner batches |
 | POST | `/api/v1/admin/rule-preview` | Operator | Simulate an event against a rule pack |
-| POST | `/api/v1/learner/delete` | Integration backend | Historical placeholder; not implemented |
+| POST | `/api/v1/integration/profile-erasures` | Integration backend | Begin one membership-generation erasure; disabled by default |
+| GET | `/api/v1/integration/profile-erasures/:operation_id` | Integration backend | Read its durable tenant-scoped receipt |
 
 The read-token, authenticated learner-snapshot, and reward acknowledgement routes are
 implemented. The fixture client in `@codepet/pal-widget` powers visual development
@@ -175,3 +176,11 @@ The historical learner-delete row is not a production API. The narrow future
 integration-authenticated begin/status operation is specified in
 [Membership profile erasure foundation](profile-erasure-contract.md). Migration
 0013 adds only dormant receipt storage; it does not enable erasure or revocation.
+
+### Membership erasure
+
+See the [strict protocol](profile-erasure-contract.md) and
+[runtime/activation boundary](profile-erasure-runtime.md). The deployed copy policy
+keeps all new operations pending; this release must not be activated in hosting.
+Pending and completed guards deny all old-generation access even when the begin
+allowlist is subsequently turned off. No legacy account-profile deletion exists.

@@ -1,3 +1,4 @@
+import { ProfileErasedError, isLifecycleLockFailure } from "@/lib/profile-lifecycle";
 import { NextRequest, NextResponse } from "next/server";
 import {
   acknowledgeLearnerReward,
@@ -72,6 +73,12 @@ export async function POST(
     );
     return new NextResponse(null, { status: 204, headers: responseHeaders(cors) });
   } catch (error) {
+    if (error instanceof ProfileErasedError) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: responseHeaders(cors) });
+    }
+    if (isLifecycleLockFailure(error)) {
+      return NextResponse.json({ error: "temporarily_unavailable" }, { status: 503, headers: responseHeaders(cors) });
+    }
     if (error instanceof InvalidReadTokenError) {
       return NextResponse.json(
         { error: "unauthorized" },

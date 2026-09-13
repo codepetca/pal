@@ -1,8 +1,8 @@
+import { lifecycleTransaction, lockActiveLearner } from "@/lib/profile-lifecycle";
 import { and, eq } from "drizzle-orm";
 import {
   learnerRewardGrants,
   learnerRewardLoadouts,
-  learners,
   type Db,
   type LearnerRewardLoadout,
 } from "@pal/db";
@@ -238,22 +238,8 @@ export async function setStoryRewardLoadout(
     rewardGrantId: string | null;
   },
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    const [scopedLearner] = await tx
-      .select({ id: learners.id })
-      .from(learners)
-      .where(and(
-        eq(learners.id, input.learnerId),
-        eq(learners.integrationId, input.integrationId),
-      ))
-      .for("update")
-      .limit(1);
-    if (!scopedLearner) {
-      throw new RewardLoadoutWriteError(
-        "learner_not_found",
-        "Learner not found for this integration",
-      );
-    }
+  await lifecycleTransaction(db, async (tx) => {
+    await lockActiveLearner(tx, input.integrationId, input.learnerId);
 
     if (input.rewardGrantId === null) {
       await clearRewardLoadoutSlot(tx, input);
